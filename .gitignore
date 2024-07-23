@@ -1,0 +1,12 @@
+builder/
+configstore/
+fish/
+gh/
+menus/
+raycast/
+stripe/
+wireshark/
+yarn/
+zed/
+plugins/
+fabric/
