@@ -8,5 +8,5 @@ stripe/
 wireshark/
 yarn/
 zed/
-plugins/
+.config/tmux/plugins/
 fabric/
