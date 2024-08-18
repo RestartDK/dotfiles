@@ -11,7 +11,7 @@ opt.shiftwidth = 2
 opt.expandtab = true
 opt.autoindent = true
 
--- line wrapping 
+-- line wrapping
 opt.wrap = false
 
 -- search settings
@@ -32,7 +32,9 @@ opt.backspace = "indent,eol,start"
 -- clipboard
 opt.clipboard:append("unnamedplus")
 
+-- Concealer for obsidian
+vim.o.conceallevel = 2
+
 -- split windows
 opt.splitright = true
 opt.splitbelow = true
-
