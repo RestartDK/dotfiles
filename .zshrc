@@ -15,6 +15,9 @@ export PATH=/opt/homebrew/bin:$PATH
 # Path to pyenv installation
 export PATH="$HOME/.pyenv/bin:$PATH"
 
+# Path to psql 16
+export PATH="/opt/homebrew/Cellar/postgresql@16/16.4/bin:$PATH"
+
 # history setup
 HISTFILE=$HOME/.zhistory
 SAVEHIST=1000
@@ -44,3 +47,11 @@ eval "$(pyenv virtualenv-init -)"
 alias ls="eza --icons=always"
 
 if [ -f "/Users/danielkumlin/.config/fabric/fabric-bootstrap.inc" ]; then . "/Users/danielkumlin/.config/fabric/fabric-bootstrap.inc"; fi
+
+# pnpm
+export PNPM_HOME="/Users/danielkumlin/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# pnpm end
