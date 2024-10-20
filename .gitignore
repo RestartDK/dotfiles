@@ -8,6 +8,8 @@ neonctl/
 stripe/
 wireshark/
 yarn/
+NuGet/
 zed/
+.zfunc/
 .config/tmux/plugins/
 fabric/
