@@ -78,11 +78,64 @@ return {
       vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
     end
 
+    -- helper function to find the python path for the lsp
+    local function find_python()
+      -- Check for activated virtual environment first
+      if vim.env.VIRTUAL_ENV then
+        local path = vim.fs.joinpath(vim.env.VIRTUAL_ENV, "bin", "python")
+        return path
+      end
+
+      -- Check for Poetry environment
+      local poetry_env = vim.fn.trim(vim.fn.system("poetry env info -p 2>/dev/null"))
+      if vim.v.shell_error == 0 and poetry_env ~= "" then
+        local path = vim.fs.joinpath(poetry_env, "bin", "python")
+        return path
+      end
+
+      -- Check for .venv in the current directory or parent directories
+      local venv = vim.fs.find(".venv", {
+        upward = true,
+        type = "directory",
+        path = vim.fn.getcwd(),
+      })[1]
+      if venv then
+        local path = vim.fs.joinpath(venv, "bin", "python")
+        return path
+      end
+
+      -- Fallback to system Python
+      local path = vim.fn.exepath("python3") or vim.fn.exepath("python") or "python"
+      return path
+    end
+
     mason_lspconfig.setup_handlers({
       -- default handler for installed servers
       function(server_name)
         lspconfig[server_name].setup({
           capabilities = capabilities,
+        })
+      end,
+      ["pyright"] = function()
+        -- configure python language server for different virtual envs with poetry
+        lspconfig["pyright"].setup({
+          capabilities = capabilities,
+          before_init = function(_, config)
+            local python_path = find_python()
+            -- local python_path = "/Users/danielkumlin/Projects/smilewhite/.venv/bin/python"
+            config.settings.python.pythonPath = python_path
+          end,
+          settings = {
+            python = {
+              analysis = {
+                autoSearchPaths = true,
+                diagnosticMode = "workspace",
+                typeCheckingMode = "basic",
+                useLibraryCodeForTypes = true,
+                disableOrganizeImports = true,
+              },
+            },
+          },
         })
       end,
       ["emmet_ls"] = function()

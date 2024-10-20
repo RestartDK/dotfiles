@@ -35,6 +35,9 @@ opt.clipboard:append("unnamedplus")
 -- Concealer for obsidian
 vim.o.conceallevel = 2
 
+-- Python virtual-env
+vim.g.python3_host_prog = "/Users/danielkumlin/.pyenv/versions/neovim/bin/python"
+
 -- split windows
 opt.splitright = true
 opt.splitbelow = true
