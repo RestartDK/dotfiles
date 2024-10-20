@@ -13,6 +13,7 @@ return {
       red = "#ff5189",
       violet = "#d183e8",
       grey = "#303030",
+      yellow = "#fe8019",
     }
 
     local my_lualine_theme = {
@@ -25,7 +26,7 @@ return {
       insert = { a = { fg = colors.black, bg = colors.blue } },
       visual = { a = { fg = colors.black, bg = colors.cyan } },
       replace = { a = { fg = colors.black, bg = colors.red } },
-
+      command = { a = { fg = colors.black, bg = colors.yellow } },
       inactive = {
         a = { fg = colors.white, bg = colors.black },
         b = { fg = colors.white, bg = colors.black },
