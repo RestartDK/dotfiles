@@ -138,6 +138,12 @@ return {
           },
         })
       end,
+      -- ["dartls"] = function()
+      --   lspconfig["dartls"].setup({
+      --     capabilities = capabilities,
+      --     cmd = { "dart", "language-server", "--protocol=lsp" },
+      --   })
+      -- end,
       ["emmet_ls"] = function()
         -- configure emmet language server
         lspconfig["emmet_ls"].setup({
