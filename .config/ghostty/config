@@ -1,0 +1,9 @@
+shell-integration = zsh
+theme = Kanagawa Wave
+font-family = "MesloLGL Nerd Font Mono"
+font-size = 14
+
+macos-icon = "custom-style"
+macos-icon-frame = "plastic"
+macos-icon-ghost-color = "627D9A"
+macos-icon-screen-color = "BABBBD"
