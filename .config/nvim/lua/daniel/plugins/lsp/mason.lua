@@ -38,6 +38,7 @@ return {
         "volar",
         "bicep",
         "texlab",
+        "yamlls",
       },
     })
 

@@ -138,17 +138,28 @@ return {
           },
         })
       end,
-      -- ["dartls"] = function()
-      --   lspconfig["dartls"].setup({
-      --     capabilities = capabilities,
-      --     cmd = { "dart", "language-server", "--protocol=lsp" },
-      --   })
-      -- end,
       ["emmet_ls"] = function()
         -- configure emmet language server
         lspconfig["emmet_ls"].setup({
           capabilities = capabilities,
           filetypes = { "html", "typescriptreact", "javascriptreact", "css" },
+        })
+      end,
+      ["bicep"] = function()
+        -- configure bicep language server
+        local bicep_lsp_bin = "/opt/bicep-langserver/Bicep.LangServer.dll"
+        lspconfig["bicep"].setup({
+          capabilities = capabilities,
+          cmd = { "dotnet", bicep_lsp_bin },
+        })
+      end,
+      ["yamlls"] = function()
+        -- configure emmet language server
+        lspconfig["yamlls"].setup({
+          capabilities = capabilities,
+          on_attach = function(client, bufnr)
+            client.server_capabilities.documentFormattingProvider = true
+          end,
         })
       end,
       ["lua_ls"] = function()
