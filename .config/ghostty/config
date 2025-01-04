@@ -1,9 +1,18 @@
+# General config
 shell-integration = zsh
+desktop-notifications = true
+clipboard-read = allow
+clipboard-write = allow
+
+# Theming config
 theme = Kanagawa Wave
 font-family = "MesloLGL Nerd Font Mono"
 font-size = 14
+window-padding-x = 2
+window-padding-y = 2
 
+# Icon config
 macos-icon = "custom-style"
 macos-icon-frame = "plastic"
-macos-icon-ghost-color = "627D9A"
-macos-icon-screen-color = "BABBBD"
+macos-icon-ghost-color = #7393c9
+macos-icon-screen-color = #2a2a36,#957fb8
