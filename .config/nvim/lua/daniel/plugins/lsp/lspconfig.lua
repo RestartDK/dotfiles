@@ -86,12 +86,12 @@ return {
         return path
       end
 
-      -- Check for Poetry environment
-      local poetry_env = vim.fn.trim(vim.fn.system("poetry env info -p 2>/dev/null"))
-      if vim.v.shell_error == 0 and poetry_env ~= "" then
-        local path = vim.fs.joinpath(poetry_env, "bin", "python")
-        return path
-      end
+      -- -- Check for Poetry environment
+      -- local poetry_env = vim.fn.trim(vim.fn.system("poetry env info -p 2>/dev/null"))
+      -- if vim.v.shell_error == 0 and poetry_env ~= "" then
+      --   local path = vim.fs.joinpath(poetry_env, "bin", "python")
+      --   return path
+      -- end
 
       -- Check for .venv in the current directory or parent directories
       local venv = vim.fs.find(".venv", {
