@@ -39,6 +39,7 @@ return {
         "bicep",
         "texlab",
         "yamlls",
+        "gopls",
       },
     })
 
@@ -52,6 +53,8 @@ return {
         "djlint",
         "eslint_d",
         "codelldb",
+        "yamllint",
+        "golangci_lint_ls",
       },
     })
   end,
