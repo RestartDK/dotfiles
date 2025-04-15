@@ -54,6 +54,20 @@ outer.bottom =     10
 outer.top =        10
 outer.right =      10
 
+# Custom config for specific apps
+[[on-window-detected]]
+  if.app-id = 'com.timpler.screenstudio'
+  check-further-callbacks = true
+  run = 'layout floating'
+
+[[on-window-detected]]
+    if.app-id = 'com.mitchellh.ghostty'
+    run = 'move-node-to-workspace T' # mnemonics T - Terminal
+
+[[on-window-detected]]
+    if.app-id = 'company.thebrowser.Browser'
+    run = 'move-node-to-workspace B' # mnemonics B - Browser
+
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
 # 'main' binding mode must be always presented
