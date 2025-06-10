@@ -1,0 +1,457 @@
+{
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[python]": {
+    "editor.formatOnType": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "css.validate": false,
+  "editor.accessibilitySupport": "off",
+  "editor.cursorSurroundingLines": 8,
+  "editor.fontFamily": "SauceCodePro Nerd Fonts",
+  "editor.fontSize": 14,
+  "editor.inlineSuggest.enabled": true,
+  "editor.lineNumbers": "relative",
+  "editor.linkedEditing": true,
+  "editor.minimap.enabled": false,
+  "editor.mouseWheelZoom": true,
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "editor.snippetSuggestions": "top",
+  "editor.tabSize": 2,
+  "extensions.experimental.affinity": {
+    "vscodevim.vim": 1,
+    "asvetliakov.vscode-neovim": 1
+  },
+  "git.autofetch": true,
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "prettier.useTabs": true,
+  "python.defaultInterpreterPath": "/Users/danielkumlin/.pyenv/versions/3.12.0/bin/python",
+  "tailwindCSS.emmetCompletions": true,
+  "terminal.integrated.defaultProfile.osx": "zsh",
+  "terminal.integrated.fontFamily": "SauceCodePro Nerd Font",
+  "terminal.integrated.fontSize": 14,
+  "terminal.integrated.gpuAcceleration": "auto",
+  "terminal.integrated.profiles.osx": {
+    "zsh": {
+      "path": "/bin/zsh"
+    }
+  },
+  "breadcrumbs.enabled": false,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "vim.statusBarColorControl": true,
+  "vim.easymotion": true,
+  "vim.handleKeys": {
+    "<C-a>": false,
+    "<C-f>": false
+  },
+  "vim.highlightedyank.color": "#a9dc7660",
+  "vim.highlightedyank.duration": 250,
+  "vim.highlightedyank.enable": true,
+  "vim.hlsearch": true,
+  "vim.incsearch": true,
+  "vim.insertModeKeyBindings": [],
+  "vim.leader": "<space>",
+  "vim.normalModeKeyBindingsNonRecursive": [
+    {
+      "before": ["<space>"],
+      "commands": ["whichkey.show"]
+    },
+    {
+      "before": ["<leader>", "l", "g"],
+      "commands": ["lazygit.openLazygit"]
+    },
+    {
+      "after": ["d", "d"],
+      "before": ["<leader>", "d"],
+      "whichkey": "Delete line"
+    },
+    {
+      "before": ["<leader>", "n", "h"],
+      "commands": [":nohl"],
+      "whichkey": "Clear search highlighting"
+    },
+    {
+      "before": ["K"],
+      "commands": ["lineBreakInsert"],
+      "silent": true,
+      "whichkey": "Insert line break"
+    },
+    {
+      "before": ["<leader>", "e", "e"],
+      "commands": ["workbench.view.explorer"],
+      "whichkey": "Open explorer"
+    },
+    {
+      "before": ["g", "d"],
+      "commands": ["editor.action.revealDefinition"],
+      "whichkey": "Show LSP definitions"
+    },
+    {
+      "before": ["g", "D"],
+      "commands": ["editor.action.goToDeclaration"],
+      "whichkey": "Go to declaration"
+    },
+    {
+      "before": ["g", "i"],
+      "commands": ["editor.action.goToImplementation"],
+      "whichkey": "Show LSP implementations"
+    },
+    {
+      "before": ["g", "R"],
+      "commands": ["editor.action.goToReferences"],
+      "whichkey": "Show LSP references"
+    },
+    {
+      "before": ["g", "t"],
+      "commands": ["editor.action.goToTypeDefinition"],
+      "whichkey": "Show LSP type definitions"
+    },
+    {
+      "before": ["g", "e"],
+      "commands": ["editor.action.previousWordEndPosition"],
+      "whichkey": "Prev end of word"
+    },
+    {
+      "before": ["g", "f"],
+      "commands": ["workbench.action.gotoSymbol"],
+      "whichkey": "Go to file under cursor"
+    },
+    {
+      "before": ["<S-k>"],
+      "commands": ["editor.action.showDefinitionPreviewHover"],
+      "whichkey": "Peek type definition"
+    },
+    {
+      "before": ["<leader>", "m", "p"],
+      "commands": ["editor.action.formatDocument"],
+      "whichkey": "Format document"
+    },
+    {
+      "before": ["<leader>", "t", "n"],
+      "commands": ["workbench.action.nextEditor"],
+      "whichkey": "Next tab"
+    },
+    {
+      "before": ["<leader>", "t", "p"],
+      "commands": ["workbench.action.previousEditor"],
+      "whichkey": "Previous tab"
+    },
+    {
+      "before": ["<leader>", "f", "f"],
+      "commands": ["workbench.action.quickOpen"],
+      "whichkey": "Find file"
+    },
+    {
+      "before": ["<leader>", "f", "s"],
+      "commands": ["periscope.search"],
+      "whichkey": "Search in files"
+    },
+    {
+      "before": ["<leader>", "s", "v"],
+      "commands": ["workbench.action.splitEditorRight"],
+      "whichkey": "Split vertical"
+    },
+    {
+      "before": ["<leader>", "s", "h"],
+      "commands": ["workbench.action.splitEditorDown"],
+      "whichkey": "Split horizontal"
+    },
+    {
+      "before": ["<leader>", "s", "x"],
+      "commands": ["workbench.action.closeActiveEditor"],
+      "whichkey": "Close split"
+    },
+    {
+      "before": ["<leader>", "t", "x"],
+      "commands": ["workbench.action.closeActiveEditor"],
+      "whichkey": "Close tab"
+    }
+  ],
+  "vim.useCtrlKeys": true,
+  "vim.useSystemClipboard": true,
+  "workbench.editorAssociations": {
+    "*.pdf": "pdf.preview",
+    "*.mat": "default",
+    "{git,gitlens,git-graph}:/**/*.{md,csv,svg}": "default"
+  },
+  // which key bindings for my vim setup
+  "whichkey.bindings": [
+    {
+      "key": "l",
+      "name": "Lazy...",
+      "type": "bindings",
+      "bindings": [
+        {
+          "key": "g",
+          "name": "git",
+          "type": "command",
+          "command": "lazygit.openLazygit"
+        }
+      ]
+    },
+    {
+      "key": "d",
+      "name": "Delete line",
+      "type": "command",
+      "command": "editor.action.deleteLines"
+    },
+    {
+      "key": "e",
+      "name": "Explorer...",
+      "type": "bindings",
+      "bindings": [
+        {
+          "key": "e",
+          "name": "Open explorer",
+          "type": "command",
+          "command": "workbench.view.explorer"
+        }
+      ]
+    },
+    {
+      "key": "f",
+      "name": "Files/Find...",
+      "type": "bindings",
+      "bindings": [
+        {
+          "key": "f",
+          "name": "Find file",
+          "type": "command",
+          "command": "workbench.action.quickOpen"
+        },
+        {
+          "key": "s",
+          "name": "Search in files",
+          "type": "command",
+          "command": "periscope.search"
+        }
+      ]
+    },
+    {
+      "key": "m",
+      "name": "Modify/Format...",
+      "type": "bindings",
+      "bindings": [
+        {
+          "key": "p",
+          "name": "Format document",
+          "type": "command",
+          "command": "editor.action.formatDocument"
+        }
+      ]
+    },
+    {
+      "key": "s",
+      "name": "Split...",
+      "type": "bindings",
+      "bindings": [
+        {
+          "key": "v",
+          "name": "Split vertical",
+          "type": "command",
+          "command": "workbench.action.splitEditorRight"
+        },
+        {
+          "key": "h",
+          "name": "Split horizontal",
+          "type": "command",
+          "command": "workbench.action.splitEditorDown"
+        },
+        {
+          "key": "x",
+          "name": "Close split",
+          "type": "command",
+          "command": "workbench.action.closeActiveEditor"
+        }
+      ]
+    },
+    {
+      "key": "t",
+      "name": "Tabs...",
+      "type": "bindings",
+      "bindings": [
+        {
+          "key": "n",
+          "name": "Next tab",
+          "type": "command",
+          "command": "workbench.action.nextEditor"
+        },
+        {
+          "key": "p",
+          "name": "Previous tab",
+          "type": "command",
+          "command": "workbench.action.previousEditor"
+        },
+        {
+          "key": "x",
+          "name": "Close tab",
+          "type": "command",
+          "command": "workbench.action.closeActiveEditor"
+        }
+      ]
+    },
+    {
+      "key": "g",
+      "name": "Go/Navigation",
+      "type": "bindings",
+      "bindings": [
+        {
+          "key": "d",
+          "name": "Show LSP definitions",
+          "type": "command",
+          "command": "editor.action.revealDefinition"
+        },
+        {
+          "key": "D",
+          "name": "Go to declaration",
+          "type": "command",
+          "command": "editor.action.goToDeclaration"
+        },
+        {
+          "key": "i",
+          "name": "Show LSP implementations",
+          "type": "command",
+          "command": "editor.action.goToImplementation"
+        },
+        {
+          "key": "R",
+          "name": "Show LSP references",
+          "type": "command",
+          "command": "editor.action.goToReferences"
+        },
+        {
+          "key": "t",
+          "name": "Show LSP type definitions",
+          "type": "command",
+          "command": "editor.action.goToTypeDefinition"
+        },
+        {
+          "key": "e",
+          "name": "Prev end of word",
+          "type": "command",
+          "command": "editor.action.previousWordEndPosition"
+        },
+        {
+          "key": "f",
+          "name": "Go to file under cursor",
+          "type": "command",
+          "command": "workbench.action.gotoSymbol"
+        },
+        // Keep any existing "g" submenu items here
+        {
+          "key": "p",
+          "name": "Peek...",
+          "type": "bindings",
+          "bindings": [
+            {
+              "key": "d",
+              "name": "Peek definition",
+              "type": "command",
+              "command": "editor.action.peekDefinition"
+            },
+            {
+              "key": "i",
+              "name": "Peek implementation",
+              "type": "command",
+              "command": "editor.action.peekImplementation"
+            }
+          ]
+        },
+        {
+          "key": "h",
+          "name": "Show definition hover",
+          "type": "command",
+          "command": "editor.action.showDefinitionPreviewHover"
+        },
+        {
+          "key": "q",
+          "name": "Quick fix",
+          "type": "command",
+          "command": "editor.action.quickFix"
+        }
+      ]
+    }
+  ],
+  "workbench.iconTheme": "material-icon-theme",
+  "jupyter.widgetScriptSources": ["jsdelivr.com", "unpkg.com"],
+  "explorer.fileNesting.patterns": {
+    "*.ts": "${capture}.js",
+    "*.js": "${capture}.js.map, ${capture}.min.js, ${capture}.d.ts",
+    "*.jsx": "${capture}.js",
+    "*.tsx": "${capture}.ts",
+    "tsconfig.json": "tsconfig.*.json",
+    "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb",
+    "*.sqlite": "${capture}.${extname}-*",
+    "*.db": "${capture}.${extname}-*",
+    "*.sqlite3": "${capture}.${extname}-*",
+    "*.db3": "${capture}.${extname}-*",
+    "*.sdb": "${capture}.${extname}-*",
+    "*.s3db": "${capture}.${extname}-*"
+  },
+  "workbench.colorCustomizations": {
+    "statusBar.background": "#005f5f",
+    "statusBar.noFolderBackground": "#005f5f",
+    "statusBar.debuggingBackground": "#005f5f",
+    "statusBar.foreground": "#ffffff",
+    "statusBar.debuggingForeground": "#ffffff",
+    "[Kanagawa]": {
+      "editor.selectionBackground": "#223249ff",
+      "editorCursor.background": "#1F1F28FF"
+    }
+  },
+  "gitlens.plusFeatures.enabled": false,
+  "todohighlight.isEnable": true,
+  "markdown-pdf.headerTemplate": "<div style=\"font-size: 9px; margin-left: auto; margin-right: 1cm; \">%%ISO-DATE%%</div>",
+  "extensions.ignoreRecommendations": true,
+  "todo.file.name": "*.todo",
+  "[css]": {
+    "editor.defaultFormatter": "vscode.css-language-features"
+  },
+  "githubPullRequests.fileListLayout": "tree",
+  "cursor.composer.shouldAllowCustomModes": true,
+  "gitlens.graph.layout": "editor",
+  "[markdown]": {
+    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
+  },
+  "gitlens.ai.model": "gitkraken",
+  "gitlens.ai.gitkraken.model": "gemini:gemini-2.0-flash",
+  "editor.codeLensFontFamily": "SauceCodePro Nerd Fonts",
+  "[sql]": {
+    "editor.defaultFormatter": "inferrinizzard.prettier-sql-vscode"
+  },
+  "editor.cursorBlinking": "solid",
+  "workbench.sideBar.location": "right",
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [80],
+    "editor.selectionHighlight": false,
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off"
+  },
+  "dart.openDevTools": "flutter",
+  "diffEditor.ignoreTrimWhitespace": true,
+  "dart.debugExternalPackageLibraries": false,
+  "dart.debugSdkLibraries": false,
+  "workbench.colorTheme": "Kanso Zen",
+  "material-icon-theme.saturation": 0,
+  "[astro]": {
+    "editor.defaultFormatter": "astro-build.astro-vscode"
+  },
+  "material-icon-theme.folders.theme": "classic",
+  "material-icon-theme.activeIconPack": ""
+}

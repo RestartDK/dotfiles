@@ -1,0 +1,212 @@
+// Place your key bindings in this file to override the defaultsauto[]
+[
+  {
+    "key": "shift+alt+u",
+    "command": "javascript.removeUnusedImports"
+  },
+  {
+    "key": "space e e",
+    "command": "workbench.action.toggleSidebarVisibility",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  // h: Move divider left
+  {
+    "key": "cmd+ctrl+h",
+    "command": "workbench.action.decreaseViewWidth",
+    "when": "editorFocus && !activeEditorGroupLast" // Left or middle pane
+  },
+  {
+    "key": "cmd+ctrl+h",
+    "command": "workbench.action.increaseViewWidth",
+    "when": "editorFocus && activeEditorGroupLast" // Rightmost pane
+  },
+  // l: Move divider right
+  {
+    "key": "cmd+ctrl+l",
+    "command": "workbench.action.increaseViewWidth",
+    "when": "editorFocus && !activeEditorGroupLast" // Left or middle pane
+  },
+  {
+    "key": "cmd+ctrl+l",
+    "command": "workbench.action.decreaseViewWidth",
+    "when": "editorFocus && activeEditorGroupLast" // Rightmost pane
+  },
+  // j: Move divider down (expand top pane or shrink bottom pane)
+  {
+    "key": "cmd+ctrl+j",
+    "command": "workbench.action.increaseViewHeight",
+    "when": "editorFocus && !activeEditorGroupLast"
+  },
+  {
+    "key": "cmd+ctrl+j",
+    "command": "workbench.action.decreaseViewHeight",
+    "when": "editorFocus && activeEditorGroupLast"
+  },
+  // k: Move divider up (shrink top pane or expand bottom pane)
+  {
+    "key": "cmd+ctrl+k",
+    "command": "workbench.action.decreaseViewHeight",
+    "when": "editorFocus && !activeEditorGroupLast"
+  },
+  {
+    "key": "cmd+ctrl+k",
+    "command": "workbench.action.increaseViewHeight",
+    "when": "editorFocus && activeEditorGroupLast"
+  },
+  // Terminal: j - Move divider down (decrease terminal size)
+  {
+    "key": "cmd+ctrl+j",
+    "command": "workbench.action.decreaseViewSize"
+  },
+  // Terminal: k - Move divider up (increase terminal size)
+  {
+    "key": "cmd+ctrl+k",
+    "command": "workbench.action.increaseViewSize"
+  },
+  {
+    "key": "cmd+ctrl+m",
+    "command": "workbench.action.toggleMaximizedPanel"
+  },
+  {
+    "key": "a",
+    "command": "explorer.newFile",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "f",
+    "command": "explorer.newFolder",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "r",
+    "command": "renameFile",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "x",
+    "command": "filesExplorer.cut",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "d",
+    "command": "deleteFile",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "c",
+    "command": "filesExplorer.copy",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "p",
+    "command": "filesExplorer.paste",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "enter",
+    "command": "list.select",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  {
+    "key": "ctrl+h",
+    "command": "workbench.action.navigateLeft",
+    "when": "editorTextFocus && vim.active && vim.mode != 'Insert'"
+  },
+  {
+    "key": "ctrl+l",
+    "command": "workbench.action.navigateRight",
+    "when": "editorTextFocus && vim.active && vim.mode != 'Insert'"
+  },
+  {
+    "key": "ctrl+k",
+    "command": "workbench.action.navigateUp",
+    "when": "editorTextFocus && vim.active && vim.mode != 'Insert'"
+  },
+  {
+    "key": "ctrl+j",
+    "command": "workbench.action.navigateDown",
+    "when": "editorTextFocus && vim.active && vim.mode != 'Insert'"
+  },
+  {
+    "key": "ctrl+j",
+    "command": "selectNextSuggestion",
+    "when": "suggestWidgetMultipleSuggestions && suggestWidgetVisible && textInputFocus"
+  },
+  {
+    "key": "ctrl+j",
+    "command": "workbench.action.quickOpenNavigateNext",
+    "when": "inQuickOpen"
+  },
+  {
+    "key": "ctrl+j",
+    "command": "list.focusDown",
+    "when": "listFocus && !listSupportsTypeNavigation && !inputFocus"
+  },
+  {
+    "key": "ctrl+k",
+    "command": "selectPrevSuggestion",
+    "when": "suggestWidgetMultipleSuggestions && suggestWidgetVisible && textInputFocus"
+  },
+  {
+    "key": "ctrl+k",
+    "command": "workbench.action.quickOpenNavigatePrevious",
+    "when": "inQuickOpen"
+  },
+  {
+    "key": "ctrl+k",
+    "command": "list.focusUp",
+    "when": "listFocus && !listSupportsTypeNavigation && !inputFocus"
+  },
+  {
+    "key": "ctrl+h",
+    "command": "list.collapse",
+    "when": "listFocus && !inputFocus"
+  },
+  {
+    "key": "ctrl+l",
+    "command": "list.select",
+    "when": "listFocus && !inputFocus"
+  },
+  {
+    "key": "ctrl+l",
+    "command": "acceptSelectedSuggestion",
+    "when": "suggestWidgetVisible && textInputFocus"
+  },
+  {
+    "key": "space shift+t s",
+    "command": "todo.toggleStart",
+    "when": "editorTextFocus && editorLangId == 'todo' && vim.mode == 'Normal'"
+  },
+  {
+    "key": "space shift+t d",
+    "command": "todo.toggleDone",
+    "when": "editorTextFocus && editorLangId == 'todo' && vim.mode == 'Normal'"
+  },
+  {
+    "key": "space shift+t c",
+    "command": "todo.toggleCancelled",
+    "when": "editorTextFocus && editorLangId == 'todo' && vim.mode == 'Normal'"
+  },
+  {
+    "key": "space shift+t t",
+    "command": "todo.toggleBox",
+    "when": "editorTextFocus && editorLangId == 'todo' && vim.mode == 'Normal'"
+  },
+  {
+    "key": "space shift+t a",
+    "command": "todo.archive",
+    "when": "editorTextFocus && editorLangId == 'todo' && vim.mode == 'Normal'"
+  },
+  {
+    "key": "cmd+i",
+    "command": "composerMode.agent"
+  },
+  {
+    "key": "cmd+l",
+    "command": "composerMode.chat"
+  },
+  {
+    "key": "cmd+m",
+    "command": "composerMode.edit"
+  }
+]
