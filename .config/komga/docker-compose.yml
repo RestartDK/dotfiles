@@ -1,0 +1,23 @@
+---
+version: "3.3"
+services:
+  komga:
+    image: gotson/komga
+    container_name: komga
+    volumes:
+      - type: bind
+        source: ~/Applications/Komga
+        target: /config
+      - type: bind
+        source: ~/Documents/Manga
+        target: /data
+      - type: bind
+        source: /etc/timezone
+        target: /etc/timezone
+        read_only: true
+    ports:
+      - 25600:25600
+    user: "1000:1000"
+    environment:
+      - TZ=Europe/Paris
+    restart: unless-stopped
