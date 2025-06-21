@@ -20,8 +20,10 @@
   "css.validate": false,
   "editor.accessibilitySupport": "off",
   "editor.cursorSurroundingLines": 8,
-  "editor.fontFamily": "SauceCodePro Nerd Fonts",
+  "editor.fontFamily": "'SauceCodePro Nerd Font Mono', 'MesloLGL Nerd Font Mono', 'MesloLGL Nerd Font'",
+  "workbench.fontAliasing": "antialiased",
   "editor.fontSize": 14,
+  // "editor.fontWeight": 600,
   "editor.inlineSuggest.enabled": true,
   "editor.lineNumbers": "relative",
   "editor.linkedEditing": true,
@@ -42,7 +44,7 @@
   "python.defaultInterpreterPath": "/Users/danielkumlin/.pyenv/versions/3.12.0/bin/python",
   "tailwindCSS.emmetCompletions": true,
   "terminal.integrated.defaultProfile.osx": "zsh",
-  "terminal.integrated.fontFamily": "SauceCodePro Nerd Font",
+  "terminal.integrated.fontFamily": "'SauceCodePro Nerd Font Mono', 'MesloLGL Nerd Font Mono', 'MesloLGL Nerd Font'",
   "terminal.integrated.fontSize": 14,
   "terminal.integrated.gpuAcceleration": "auto",
   "terminal.integrated.profiles.osx": {
@@ -94,6 +96,21 @@
       "before": ["<leader>", "e", "e"],
       "commands": ["workbench.view.explorer"],
       "whichkey": "Open explorer"
+    },
+    {
+      "before": ["<leader>", "e", "d"],
+      "commands": ["workbench.view.debug"],
+      "whichkey": "Debug menu"
+    },
+    {
+      "before": ["<leader>", "e", "p"],
+      "commands": ["workbench.view.extension.github-pull-requests"],
+      "whichkey": "Pull Requests"
+    },
+    {
+      "before": ["<leader>", "e", "s"],
+      "commands": ["workbench.view.scm"],
+      "whichkey": "Source Control"
     },
     {
       "before": ["g", "d"],
@@ -219,6 +236,24 @@
           "name": "Open explorer",
           "type": "command",
           "command": "workbench.view.explorer"
+        },
+        {
+          "key": "d",
+          "name": "Debug menu",
+          "type": "command",
+          "command": "workbench.view.debug"
+        },
+        {
+          "key": "p",
+          "name": "Pull Requests",
+          "type": "command",
+          "command": "workbench.view.extension.github-pull-requests"
+        },
+        {
+          "key": "s",
+          "name": "Source Control",
+          "type": "command",
+          "command": "workbench.view.scm"
         }
       ]
     },
@@ -413,11 +448,11 @@
       "editorCursor.background": "#1F1F28FF"
     }
   },
-  "gitlens.plusFeatures.enabled": false,
   "todohighlight.isEnable": true,
   "markdown-pdf.headerTemplate": "<div style=\"font-size: 9px; margin-left: auto; margin-right: 1cm; \">%%ISO-DATE%%</div>",
   "extensions.ignoreRecommendations": true,
-  "todo.file.name": "*.todo",
+  "todo.file.name": ".todo",
+  "todo.embedded.provider": "rg",
   "[css]": {
     "editor.defaultFormatter": "vscode.css-language-features"
   },
@@ -427,9 +462,7 @@
   "[markdown]": {
     "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
   },
-  "gitlens.ai.model": "gitkraken",
-  "gitlens.ai.gitkraken.model": "gemini:gemini-2.0-flash",
-  "editor.codeLensFontFamily": "SauceCodePro Nerd Fonts",
+  "editor.codeLensFontFamily": "'MesloLGL Nerd Font', Menlo",
   "[sql]": {
     "editor.defaultFormatter": "inferrinizzard.prettier-sql-vscode"
   },
@@ -453,5 +486,9 @@
     "editor.defaultFormatter": "astro-build.astro-vscode"
   },
   "material-icon-theme.folders.theme": "classic",
-  "material-icon-theme.activeIconPack": ""
+  "material-icon-theme.activeIconPack": "",
+  "gitlens.plusFeatures.enabled": false,
+  "gitlens.ai.model": "gitkraken",
+  "gitlens.ai.gitkraken.model": "gemini:gemini-2.0-flash",
+  "gitlens.graph.minimap.enabled": false
 }
