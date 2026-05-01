@@ -1,3 +1,6 @@
+[username]
+format = '[$user]($style) on '
+
 [aws]
 symbol = "  "
 
@@ -53,7 +56,8 @@ symbol = " "
 symbol = " "
 
 [hostname]
-ssh_symbol = " "
+ssh_symbol = " "
+
 
 [java]
 symbol = " "
@@ -84,6 +88,9 @@ symbol = " "
 
 [ocaml]
 symbol = " "
+
+[os]
+disabled = false
 
 [os.symbols]
 Alpaquita = " "

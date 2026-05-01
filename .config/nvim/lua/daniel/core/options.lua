@@ -23,8 +23,11 @@ opt.cursorline = true
 
 -- appearance
 opt.termguicolors = true
-opt.background = "dark"
 opt.signcolumn = "yes"
+
+if vim.fn.has("gui_running") == 1 or vim.g.neovide then
+  opt.guifont = "JetBrainsMono Nerd Font Mono:h14"
+end
 
 -- backspace
 opt.backspace = "indent,eol,start"
@@ -35,8 +38,7 @@ opt.clipboard:append("unnamedplus")
 -- Concealer for obsidian
 vim.o.conceallevel = 2
 
--- Python virtual-env
-vim.g.python3_host_prog = "/Users/danielkumlin/.pyenv/versions/neovim/bin/python"
+vim.g.python3_host_prog = "/opt/homebrew/opt/python@3.14/bin/python3.14"
 
 -- split windows
 opt.splitright = true

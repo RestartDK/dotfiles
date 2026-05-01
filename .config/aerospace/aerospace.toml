@@ -54,7 +54,6 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
 [workspace-to-monitor-force-assignment]
 A = 'main'                       # Main monitor
-B = 'secondary'                  # Non-main monitor in case when there are only two monitors
 
 [gaps]
 inner.horizontal = 10

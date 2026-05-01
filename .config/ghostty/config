@@ -3,12 +3,48 @@ shell-integration = zsh
 desktop-notifications = true
 clipboard-read = allow
 clipboard-write = allow
+cursor-style-blink = false
+
 
 # Theming config
-theme = Kanagawa Wave
-font-family = "MesloLGL Nerd Font Mono"
+theme = dark:TokyoNight,light:TokyoNight Day
+font-family = "JetBrainsMono Nerd Font Mono"
 font-size = 14
 window-padding-x = 8
 window-padding-y = 6
 window-padding-balance = true
-macos-titlebar-style = hidden
+
+# Tmux emulation
+keybind = ctrl+h=goto_split:left
+keybind = ctrl+j=goto_split:bottom
+keybind = ctrl+k=goto_split:top
+keybind = ctrl+l=goto_split:right
+
+# Neovim activates this table through ghostty-navigator.nvim so Ctrl-h/j/k/l
+# are delivered to Neovim instead of being consumed by Ghostty. Neovim then
+# falls back to Ghostty pane navigation when it is at a window edge.
+keybind = nvim/
+keybind = nvim/ctrl+h=text:\x08
+keybind = nvim/ctrl+j=text:\x0a
+keybind = nvim/ctrl+k=text:\x0b
+keybind = nvim/ctrl+l=text:\x0c
+
+keybind = ctrl+space>h=new_split:left
+keybind = ctrl+space>j=new_split:down
+keybind = ctrl+space>k=new_split:up
+keybind = ctrl+space>l=new_split:right
+keybind = ctrl+space>l=new_split:right
+keybind = ctrl+space>f=toggle_split_zoom
+keybind = ctrl+space>e=equalize_splits
+
+keybind = ctrl+space>n=next_tab
+keybind = ctrl+space>p=previous_tab
+
+keybind = ctrl+space>x=close_surface
+
+keybind = super+r=reload_config
+
+window-save-state = always
+
+keybind = command+shift+p=toggle_command_palette
+keybind = shift+enter=text:\x1b\r

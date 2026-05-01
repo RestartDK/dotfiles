@@ -1,19 +1,38 @@
 return {
   "numToStr/Comment.nvim",
-  event = { "BufReadPre", "BufNewFile" },
+  keys = {
+    { "gc", mode = { "n", "x" } },
+    { "gb", mode = { "n", "x" } },
+    { "gcc", mode = "n" },
+    { "gbc", mode = "n" },
+    { "gco", mode = "n" },
+    { "gcO", mode = "n" },
+    { "gcA", mode = "n" },
+  },
   dependencies = {
     "JoosepAlviste/nvim-ts-context-commentstring",
   },
   config = function()
-    -- import comment plugin safely
     local comment = require("Comment")
-
     local ts_context_commentstring = require("ts_context_commentstring.integrations.comment_nvim")
+    local ts_pre_hook = ts_context_commentstring.create_pre_hook()
 
-    -- enable comment
     comment.setup({
-      -- for commenting tsx, jsx, svelte, html files
-      pre_hook = ts_context_commentstring.create_pre_hook(),
+      pre_hook = function(ctx)
+        local commentstring = ts_pre_hook(ctx)
+
+        if commentstring and commentstring ~= "" then
+          return commentstring
+        end
+
+        commentstring = vim.bo.commentstring
+
+        if commentstring ~= "" then
+          return commentstring
+        end
+
+        return "# %s"
+      end,
     })
   end,
 }

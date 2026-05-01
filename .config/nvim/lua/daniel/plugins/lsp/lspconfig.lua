@@ -7,12 +7,6 @@ return {
     { "folke/neodev.nvim", opts = {} },
   },
   config = function()
-    -- import lspconfig plugin
-    local lspconfig = require("lspconfig")
-
-    -- import mason_lspconfig plugin
-    local mason_lspconfig = require("mason-lspconfig")
-
     -- import cmp-nvim-lsp plugin
     local cmp_nvim_lsp = require("cmp_nvim_lsp")
 
@@ -59,8 +53,19 @@ return {
         opts.desc = "Go to next diagnostic"
         keymap.set("n", "]d", vim.diagnostic.goto_next, opts) -- jump to next diagnostic in buffer
 
-        opts.desc = "Show documentation for what is under cursor"
-        keymap.set("n", "K", vim.lsp.buf.hover, opts) -- show documentation for what is under cursor
+        opts.desc = "Show diagnostics or documentation for what is under cursor"
+        keymap.set("n", "K", function()
+          local cursor_diagnostics = vim.diagnostic.get(ev.buf, { lnum = vim.fn.line(".") - 1 })
+          if #cursor_diagnostics > 0 then
+            vim.diagnostic.open_float(nil, {
+              border = "rounded",
+              focus = false,
+              scope = "cursor",
+            })
+          else
+            vim.lsp.buf.hover({ border = "rounded" })
+          end
+        end, opts)
 
         opts.desc = "Restart LSP"
         keymap.set("n", "<leader>rs", ":LspRestart<CR>", opts) -- mapping to restart lsp if necessary
@@ -69,6 +74,13 @@ return {
 
     -- used to enable autocompletion (assign to every lsp server config)
     local capabilities = cmp_nvim_lsp.default_capabilities()
+
+    vim.diagnostic.config({
+      float = {
+        border = "rounded",
+        source = "if_many",
+      },
+    })
 
     -- Change the Diagnostic symbols in the sign column (gutter)
     -- (not in youtube nvim video)
@@ -109,20 +121,29 @@ return {
       return path
     end
 
-    mason_lspconfig.setup_handlers({
-      -- default handler for installed servers
-      function(server_name)
-        lspconfig[server_name].setup({
-          capabilities = capabilities,
-        })
-      end,
-      ["pyright"] = function()
+    local servers = {
+      "ts_ls",
+      "html",
+      "cssls",
+      "tailwindcss",
+      "lua_ls",
+      "emmet_ls",
+      "clangd",
+      "pyright",
+      "vue_ls",
+      "texlab",
+      "yamlls",
+      "gopls",
+      "rust_analyzer",
+    }
+
+    for _, server_name in ipairs(servers) do
+      if server_name == "pyright" then
         -- configure python language server for different virtual envs with poetry
-        lspconfig["pyright"].setup({
+        vim.lsp.config("pyright", {
           capabilities = capabilities,
           before_init = function(_, config)
             local python_path = find_python()
-            -- local python_path = "/Users/danielkumlin/Projects/smilewhite/.venv/bin/python"
             config.settings.python.pythonPath = python_path
           end,
           settings = {
@@ -137,38 +158,23 @@ return {
             },
           },
         })
-      end,
-      ["emmet_ls"] = function()
-        -- configure emmet language server
-        lspconfig["emmet_ls"].setup({
+      elseif server_name == "emmet_ls" then
+        vim.lsp.config("emmet_ls", {
           capabilities = capabilities,
           filetypes = { "html", "typescriptreact", "javascriptreact", "css" },
         })
-      end,
-      ["bicep"] = function()
-        -- configure bicep language server
-        local bicep_lsp_bin = "/opt/bicep-langserver/Bicep.LangServer.dll"
-        lspconfig["bicep"].setup({
+      elseif server_name == "yamlls" then
+        vim.lsp.config("yamlls", {
           capabilities = capabilities,
-          cmd = { "dotnet", bicep_lsp_bin },
-        })
-      end,
-      ["yamlls"] = function()
-        -- configure emmet language server
-        lspconfig["yamlls"].setup({
-          capabilities = capabilities,
-          on_attach = function(client, bufnr)
+          on_attach = function(client, _)
             client.server_capabilities.documentFormattingProvider = true
           end,
         })
-      end,
-      ["lua_ls"] = function()
-        -- configure lua server (with special settings)
-        lspconfig["lua_ls"].setup({
+      elseif server_name == "lua_ls" then
+        vim.lsp.config("lua_ls", {
           capabilities = capabilities,
           settings = {
             Lua = {
-              -- make the language server recognize "vim" global
               diagnostics = {
                 globals = { "vim" },
               },
@@ -178,7 +184,29 @@ return {
             },
           },
         })
-      end,
-    })
+      elseif server_name == "rust_analyzer" then
+        vim.lsp.config("rust_analyzer", {
+          capabilities = capabilities,
+          settings = {
+            ["rust-analyzer"] = {
+              cargo = {
+                allFeatures = true,
+              },
+              check = {
+                command = "clippy",
+              },
+            },
+          },
+        })
+      else
+        vim.lsp.config(server_name, {
+          capabilities = capabilities,
+        })
+      end
+
+      vim.lsp.enable(server_name)
+    end
+
+    vim.lsp.enable({ "bicep", "stylua", "golangci_lint_ls" }, false)
   end,
 }
