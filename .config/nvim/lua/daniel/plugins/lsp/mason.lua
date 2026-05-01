@@ -25,6 +25,7 @@ return {
     })
 
     mason_lspconfig.setup({
+      automatic_enable = false,
       -- list of servers for mason to install
       ensure_installed = {
         "ts_ls",
@@ -35,11 +36,11 @@ return {
         "emmet_ls",
         "clangd",
         "pyright",
-        "volar",
-        "bicep",
+        "vue_ls",
         "texlab",
         "yamlls",
         "gopls",
+        "rust_analyzer",
       },
     })
 

@@ -1,10 +1,13 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# local/cache/vendor dirs
 builder/
 configstore/
 fish/
-gh/
 menus/
 raycast/
-neonctl/
 stripe/
 wireshark/
 yarn/
@@ -12,4 +15,21 @@ NuGet/
 zed/
 .zfunc/
 .config/tmux/plugins/
+
+# secrets / machine-local app state
+gh/
+neonctl/
 fabric/
+.config/1Password/
+.config/op/
+.config/graphite/user_config
+.config/karabiner/automatic_backups/
+.config/spicetify/
+.config/vercel-plugin/
+.config/flutter/
+.config/agents/
+.config/opencode/skills/
+.config/opencode/package-lock.json
+
+# generated backups
+*.bak
