@@ -1,0 +1,2 @@
+prefix_rule(pattern=["bunx", "supabase"], decision="allow")
+prefix_rule(pattern=["bun", "run"], decision="allow")

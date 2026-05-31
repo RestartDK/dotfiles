@@ -25,6 +25,12 @@
     uv
     poetry
     lazygit
+
+    # Coding agents. These are user-facing CLIs, so they live in Home Manager.
+    codex
+    claude-code
+    pi-coding-agent
+    opencode
   ];
 
   programs.git = {
@@ -218,4 +224,19 @@
   xdg.configFile."git/ignore".source = ./files/git/ignore;
   xdg.configFile."btop/btop.conf".source = ./files/btop/btop.conf;
   home.file.".pi/agent/keybindings.json".source = ./files/pi/agent/keybindings.json;
+
+
+  home.file.".codex/AGENTS.md".source = ./files/codex/AGENTS.md;
+  home.file.".codex/hooks.json".source = ./files/codex/hooks.json;
+  home.file.".codex/herdr-agent-state.sh" = {
+    source = ./files/codex/herdr-agent-state.sh;
+    executable = true;
+  };
+  home.file.".codex/rules/default.rules".source = ./files/codex/rules/default.rules;
+
+  home.file.".claude/settings.json".source = ./files/claude/settings.json;
+  home.file.".claude/hooks/herdr-agent-state.sh" = {
+    source = ./files/claude/hooks/herdr-agent-state.sh;
+    executable = true;
+  };
 }
