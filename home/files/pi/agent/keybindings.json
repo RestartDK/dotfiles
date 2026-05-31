@@ -1,0 +1,5 @@
+{
+  "app.models.clearAll": "ctrl+shift+x",
+  "app.model.select": [],
+  "tui.input.newLine": "shift+enter"
+}
