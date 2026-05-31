@@ -1,0 +1,15 @@
+# secrets / machine-local state
+*.age
+*.key
+*.pem
+*.p12
+.env
+.env.*
+secrets.yaml
+secrets/*.yaml
+result
+result-*
+
+# editor/system noise
+.DS_Store
+*.swp
