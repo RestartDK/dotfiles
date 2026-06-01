@@ -49,6 +49,13 @@
     enableCompletion = true;
     autosuggestion.enable = true;
     syntaxHighlighting.enable = true;
+    plugins = [
+      {
+        name = "zsh-vi-mode";
+        src = pkgs.zsh-vi-mode;
+        file = "share/zsh-vi-mode/zsh-vi-mode.plugin.zsh";
+      }
+    ];
     shellAliases = {
       ls = "eza --icons=always";
     };
@@ -215,15 +222,61 @@
     recursive = true;
   };
 
-  xdg.configFile."opencode" = {
-    source = ./files/opencode;
+  xdg.configFile."opencode/opencode.json".source = ./files/opencode/opencode.json;
+  xdg.configFile."opencode/package.json".source = ./files/opencode/package.json;
+  xdg.configFile."opencode/plugins" = {
+    source = ./files/opencode/plugins;
+    recursive = true;
+  };
+  xdg.configFile."opencode/skills" = {
+    source = ./files/agents/skills;
     recursive = true;
   };
 
   xdg.configFile."herdr/config.toml".source = ./files/herdr/config.toml;
   xdg.configFile."git/ignore".source = ./files/git/ignore;
   xdg.configFile."btop/btop.conf".source = ./files/btop/btop.conf;
+  home.file.".agents" = {
+    source = ./files/agents;
+    recursive = true;
+  };
+  xdg.configFile."agents" = {
+    source = ./files/agents;
+    recursive = true;
+  };
+
+  home.file.".codex/skills" = {
+    source = ./files/agents/skills;
+    recursive = true;
+  };
+  home.file.".claude/skills" = {
+    source = ./files/agents/skills;
+    recursive = true;
+  };
+
   home.file.".pi/agent/keybindings.json".source = ./files/pi/agent/keybindings.json;
+  home.file.".pi/agent/settings.json".source = ./files/pi/agent/settings.json;
+  home.file.".pi/agent/models.json".source = ./files/pi/agent/models.json;
+  home.file.".pi/agent/extensions" = {
+    source = ./files/pi/agent/extensions;
+    recursive = true;
+  };
+  home.file.".pi/agent/npm" = {
+    source = ./files/pi/agent/npm;
+    recursive = true;
+  };
+  home.file.".pi/agent/prompts" = {
+    source = ./files/pi/agent/prompts;
+    recursive = true;
+  };
+  home.file.".pi/agent/themes" = {
+    source = ./files/pi/agent/themes;
+    recursive = true;
+  };
+  home.file.".pi/agent/skills" = {
+    source = ./files/agents/skills;
+    recursive = true;
+  };
 
 
   home.file.".codex/AGENTS.md".source = ./files/codex/AGENTS.md;

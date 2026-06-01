@@ -1,0 +1,61 @@
+{
+  "version": 3,
+  "skills": {
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/skills.git",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "skillFolderHash": "c2f31172b6f256272305a5e6e7228b258446899f",
+      "installedAt": "2026-02-04T14:58:52.036Z",
+      "updatedAt": "2026-02-04T14:58:52.036Z"
+    },
+    "babysit-pr": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/openai/codex.git",
+      "skillPath": ".codex/skills/babysit-pr/SKILL.md",
+      "skillFolderHash": "dd232b23f4c0545e82be474a5f7c93d1dea0d7d1",
+      "installedAt": "2026-04-11T16:17:40.621Z",
+      "updatedAt": "2026-04-11T16:17:40.621Z"
+    },
+    "sentry-cli": {
+      "source": "getsentry/cli",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/getsentry/cli.git",
+      "skillPath": "plugins/sentry-cli/skills/sentry-cli/SKILL.md",
+      "skillFolderHash": "b873a18e505fd4edbd61c008c8c45673ce98b65f",
+      "installedAt": "2026-05-21T07:58:08.210Z",
+      "updatedAt": "2026-05-21T07:58:08.210Z"
+    },
+    "impeccable": {
+      "source": "pbakaus/impeccable",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/pbakaus/impeccable.git",
+      "skillPath": "skill/SKILL.md",
+      "skillFolderHash": "6d2dbc37eccb5d89902bda605f1a8bdbad7f36d8",
+      "installedAt": "2026-05-27T13:23:50.849Z",
+      "updatedAt": "2026-05-27T13:23:50.849Z"
+    }
+  },
+  "dismissed": {
+    "findSkillsPrompt": true
+  },
+  "lastSelectedAgents": [
+    "amp",
+    "antigravity",
+    "cline",
+    "codex",
+    "cursor",
+    "deepagents",
+    "dexto",
+    "firebender",
+    "gemini-cli",
+    "github-copilot",
+    "kimi-cli",
+    "opencode",
+    "warp",
+    "claude-code",
+    "pi"
+  ]
+}

@@ -15,6 +15,7 @@
     gnupg
 
     google-chrome
+    spotify
     _1password-cli
     _1password-gui
 

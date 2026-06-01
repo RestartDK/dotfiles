@@ -1,0 +1,208 @@
+import { copyToClipboard, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isKeyRelease, matchesKey } from "@earendil-works/pi-tui";
+
+type LeaderAction = {
+  key: string;
+  id: string;
+  label: string;
+};
+
+const LEADER = "ctrl+x";
+const TIMEOUT_MS = 2000;
+
+// Pi/native-ish actions only; no powerline actions.
+const ACTIONS: LeaderAction[] = [
+  { key: "m", id: "model", label: "model" },
+  { key: "c", id: "compact", label: "compact" },
+  { key: "y", id: "copy", label: "copy last" },
+  { key: "a", id: "name", label: "name session" },
+  { key: "s", id: "session", label: "session info" },
+  { key: "h", id: "hotkeys", label: "leader help" },
+];
+
+function keyName(data: string): string | undefined {
+  if (isKeyRelease(data)) return undefined;
+  if (data.length === 1 && /^[a-zA-Z0-9]$/.test(data)) return data.toLowerCase();
+  if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) return "escape";
+  return undefined;
+}
+
+function hint(): string {
+  return ACTIONS.map((a) => `${a.key}:${a.label}`).join("  ");
+}
+
+async function chooseModel(pi: ExtensionAPI, ctx: ExtensionContext) {
+  ctx.modelRegistry.refresh();
+  const models = ctx.modelRegistry.getAvailable();
+  if (!models.length) {
+    ctx.ui.notify("No configured models available", "warning");
+    return;
+  }
+
+  const labels = models.map((model: any) => `${model.provider}/${model.id}${ctx.model?.provider === model.provider && ctx.model?.id === model.id ? " ✓" : ""}`);
+  const selected = await ctx.ui.select("Select model", labels);
+  if (!selected) return;
+
+  const index = labels.indexOf(selected);
+  const model = models[index];
+  if (!model) return;
+
+  const ok = await pi.setModel(model);
+  if (!ok) {
+    ctx.ui.notify(`No API key for ${model.provider}/${model.id}`, "error");
+    return;
+  }
+  ctx.ui.notify(`Model set to ${model.provider}/${model.id}`, "success");
+}
+
+function textFromMessage(message: any): string {
+  const content = message?.content;
+  if (Array.isArray(content)) {
+    return content.filter((part: any) => part?.type === "text").map((part: any) => part.text).join("\n");
+  }
+  return typeof content === "string" ? content : "";
+}
+
+function showSessionInfo(ctx: ExtensionContext) {
+  const file = ctx.sessionManager.getSessionFile?.() ?? "ephemeral";
+  const entries = ctx.sessionManager.getEntries?.().length ?? 0;
+  const leaf = ctx.sessionManager.getLeafId?.() ?? "unknown";
+  ctx.ui.notify(`Session: ${file}\nEntries: ${entries}\nLeaf: ${leaf}`, "info");
+}
+
+async function copyLastAssistant(ctx: ExtensionContext) {
+  const entries = [...ctx.sessionManager.getBranch()].reverse();
+  const assistant = entries.find((entry: any) => entry.type === "message" && entry.message?.role === "assistant") as any;
+  const text = textFromMessage(assistant?.message).trim();
+  if (!text) {
+    ctx.ui.notify("No assistant message to copy", "warning");
+    return;
+  }
+  await copyToClipboard(text);
+  ctx.ui.notify("Copied last assistant message", "success");
+}
+
+async function nameSession(pi: ExtensionAPI, ctx: ExtensionContext) {
+  const current = pi.getSessionName?.() ?? "";
+  const name = await ctx.ui.input("Session name", current);
+  if (name === undefined) return;
+  pi.setSessionName(name.trim());
+  ctx.ui.notify(name.trim() ? `Session named: ${name.trim()}` : "Session name cleared", "success");
+}
+
+
+export default function (pi: ExtensionAPI) {
+  let activeCtx: ExtensionContext | undefined;
+  let unsubscribeInput: (() => void) | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  function clear() {
+    if (timeout) clearTimeout(timeout);
+    timeout = undefined;
+    unsubscribeInput?.();
+    unsubscribeInput = undefined;
+    activeCtx?.ui.setStatus("leader", undefined);
+    activeCtx = undefined;
+  }
+
+  function runLeaderAction(action: LeaderAction, ctx: ExtensionContext) {
+    clear();
+
+    if (action.id === "compact") {
+      ctx.compact({
+        onComplete: () => ctx.ui.notify("Compaction completed", "success"),
+        onError: (error) => ctx.ui.notify(`Compaction failed: ${error.message}`, "error"),
+      });
+      return;
+    }
+
+    if (action.id === "session") {
+      showSessionInfo(ctx);
+      return;
+    }
+
+    if (action.id === "hotkeys") {
+      ctx.ui.notify(`${LEADER}: ${hint()}`, "info");
+      return;
+    }
+
+    if (action.id === "model") {
+      void chooseModel(pi, ctx);
+      return;
+    }
+
+    if (action.id === "copy") {
+      void copyLastAssistant(ctx);
+      return;
+    }
+
+    if (action.id === "name") {
+      void nameSession(pi, ctx);
+      return;
+    }
+
+    ctx.ui.notify(`Leader action '${action.id}' is not implemented`, "warning");
+  }
+
+  function activate(ctx: ExtensionContext) {
+    if (!ctx.hasUI) return;
+
+    clear();
+    activeCtx = ctx;
+    ctx.ui.setStatus("leader", `[leader] ${hint()}`);
+
+    const onInput = (data: string) => {
+      const key = keyName(data);
+      if (!key) return;
+
+      if (key === "escape") {
+        ctx.ui.notify("Leader cancelled", "info");
+        clear();
+        return;
+      }
+
+      const action = ACTIONS.find((item) => item.key === key);
+      if (!action) {
+        ctx.ui.notify(`No leader binding for '${key}'`, "warning");
+        clear();
+        return;
+      }
+
+      runLeaderAction(action, ctx);
+    };
+
+    unsubscribeInput = typeof ctx.ui.onTerminalInput === "function"
+      ? ctx.ui.onTerminalInput(onInput)
+      : undefined;
+
+    if (!unsubscribeInput) {
+      ctx.ui.notify("Leader key needs interactive terminal input support", "warning");
+      clear();
+      return;
+    }
+
+    timeout = setTimeout(() => {
+      ctx.ui.notify("Leader timed out", "info");
+      clear();
+    }, TIMEOUT_MS);
+  }
+
+  pi.registerShortcut(LEADER, {
+    description: "Leader key",
+    handler: async (ctx) => activate(ctx),
+  });
+
+  pi.registerCommand("leader", {
+    description: "Show leader key bindings",
+    handler: async (_args, ctx) => {
+      ctx.ui.notify(`${LEADER}: ${hint()}`, "info");
+    },
+  });
+
+  pi.registerCommand("leader-model", {
+    description: "Leader: select model",
+    handler: async (_args, ctx) => chooseModel(pi, ctx),
+  });
+
+  pi.on("session_shutdown", async () => clear());
+}

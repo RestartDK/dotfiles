@@ -1,0 +1,110 @@
+{
+  "project": {
+    "id": "replace-with-project-id",
+    "name": "Flox",
+    "githubId": "replace-with-github-provider-id",
+    "owner": "RestartDK",
+    "repository": "flox",
+    "branch": "main"
+  },
+  "services": [
+    {
+      "kind": "postgres",
+      "name": "postgres",
+      "displayName": "Flox Postgres",
+      "databaseName": "app",
+      "databaseUser": "postgres",
+      "databasePassword": "replace-me"
+    },
+    {
+      "kind": "redis",
+      "name": "redis",
+      "displayName": "Flox Redis",
+      "databasePassword": "replace-me"
+    },
+    {
+      "kind": "app",
+      "name": "ml-inference",
+      "displayName": "Flox ML",
+      "path": "apps/ml-inference",
+      "public": true,
+      "port": 8000,
+      "env": {
+        "ML_MODEL_FILE": "${{project.ML_MODEL_FILE}}"
+      }
+    },
+    {
+      "kind": "app",
+      "name": "backend-fastapi",
+      "displayName": "Flox Backend API",
+      "path": "apps/backend/fastapi",
+      "public": true,
+      "port": 5000,
+      "env": {
+        "DATABASE_URL": "${{project.DATABASE_URL}}",
+        "ML_URL": "${{project.ML_URL}}",
+        "OPENAI_API_KEY": "${{project.OPENAI_API_KEY}}",
+        "BACKEND_PUBLIC_URL": "${{project.BACKEND_PUBLIC_URL}}"
+      }
+    },
+    {
+      "kind": "app",
+      "name": "worker",
+      "displayName": "Flox Worker",
+      "path": "apps/worker",
+      "command": "celery -A worker.worker:app worker --loglevel=info",
+      "env": {
+        "DATABASE_URL": "${{project.DATABASE_URL}}",
+        "REDIS_URL": "${{project.REDIS_URL}}",
+        "ML_URL": "${{project.ML_URL}}"
+      }
+    },
+    {
+      "kind": "app",
+      "name": "backend-classifier",
+      "displayName": "Flox Classifier",
+      "path": "apps/worker",
+      "command": "celery -A worker.worker:app beat --loglevel=info",
+      "env": {
+        "DATABASE_URL": "${{project.DATABASE_URL}}",
+        "REDIS_URL": "${{project.REDIS_URL}}",
+        "ML_URL": "${{project.ML_URL}}"
+      }
+    },
+    {
+      "kind": "app",
+      "name": "webapp",
+      "displayName": "Flox Webapp",
+      "path": "apps/webapp",
+      "public": true,
+      "primary": true,
+      "port": 3000,
+      "env": {
+        "VITE_BACKEND_URL": "${{project.VITE_BACKEND_URL}}"
+      },
+      "buildArgs": {
+        "VITE_BACKEND_URL": "${{project.VITE_BACKEND_URL}}"
+      }
+    },
+    {
+      "kind": "app",
+      "name": "node-simulator",
+      "displayName": "Flox Node Simulator",
+      "path": "apps/simulator",
+      "env": {
+        "SIM_BACKEND_URL": "${{project.SIM_BACKEND_URL}}",
+        "SIM_NODE_ID": "${{project.SIM_NODE_ID}}"
+      }
+    }
+  ],
+  "deployOrder": [
+    "postgres",
+    "redis",
+    "ml-inference",
+    "backend-fastapi",
+    "worker",
+    "backend-classifier",
+    "webapp",
+    "node-simulator"
+  ]
+}

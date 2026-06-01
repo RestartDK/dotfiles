@@ -9,6 +9,7 @@
     ../../modules/nixos/tailscale.nix
     ../../modules/nixos/docker.nix
     ../../modules/nixos/apps.nix
+    ../../modules/nixos/nvidia.nix
   ];
 
   boot.loader.grub = {
