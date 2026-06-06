@@ -31,6 +31,7 @@ source_first_existing() {
 path_prepend "/run/current-system/sw/bin"
 path_prepend "/etc/profiles/per-user/$USER/bin"
 path_prepend "$HOME/.nix-profile/bin"
+path_prepend "$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
 
 # Homebrew: Apple Silicon macOS default, then whatever `brew --prefix` reports.
 path_prepend "/opt/homebrew/bin"
