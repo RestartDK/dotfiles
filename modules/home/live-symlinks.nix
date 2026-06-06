@@ -22,12 +22,6 @@ in
       description = "Absolute path to the editable nix-config checkout on this host.";
     };
 
-    codexConfigPath = lib.mkOption {
-      type = lib.types.str;
-      default = "dotfiles/codex/common/.codex/config.toml";
-      description = "Repo-relative path to the host-appropriate Codex config.toml.";
-    };
-
     groups = {
       shell = lib.mkEnableOption "shell/starship config";
       git = lib.mkEnableOption "Git config";
@@ -67,7 +61,6 @@ in
       xdg.configFile."agents/skills" = dir "dotfiles/agents/.agents/skills";
 
       home.file.".codex/AGENTS.md" = file "dotfiles/codex/.codex/AGENTS.md";
-      home.file.".codex/config.toml" = file cfg.codexConfigPath;
       home.file.".codex/hooks.json" = file "dotfiles/codex/.codex/hooks.json";
       home.file.".codex/herdr-agent-state.sh" = file "dotfiles/codex/.codex/herdr-agent-state.sh";
       home.file.".codex/rules/default.rules" = file "dotfiles/codex/.codex/rules/default.rules";

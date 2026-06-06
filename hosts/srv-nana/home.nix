@@ -12,8 +12,7 @@
 
   my.liveConfig = {
     enable = true;
-    repoRoot = "/home/dkumlin/Projects/nixos-config";
-    codexConfigPath = "dotfiles/codex/srv-nana/.codex/config.toml";
+    repoRoot = "/home/dkumlin/Projects/nix-config";
     groups = {
       shell = true;
       git = true;

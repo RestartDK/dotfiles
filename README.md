@@ -12,14 +12,14 @@ hosts/mac-pro/   # future nix-darwin MacBook config, not applied yet
 ## Apply Nana
 
 ```bash
-cd ~/Projects/nixos-config
+cd ~/Projects/nix-config
 sudo nixos-rebuild switch --flake .#srv-nana
 ```
 
 `/etc/nixos` on Nana is intentionally a symlink to the editable checkout:
 
 ```text
-/etc/nixos -> /home/dkumlin/Projects/nixos-config
+/etc/nixos -> /home/dkumlin/Projects/nix-config
 ```
 
 ## Apply Mac Pro later
@@ -53,7 +53,7 @@ config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
 
 This keeps the files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `dotfiles/` takes effect immediately; rebuilding is only needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
 
-Managed live config includes shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex, Claude, OpenCode, and shared agent skills. Tmux config is intentionally not included.
+Managed live config includes shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, and shared agent skills. Codex `config.toml` is intentionally local app state, not repo-managed. Tmux config is intentionally not included.
 
 ## Rules
 

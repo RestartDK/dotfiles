@@ -13,7 +13,6 @@
   my.liveConfig = {
     enable = true;
     repoRoot = "/Users/danielkumlin/Projects/nix-config";
-    codexConfigPath = "dotfiles/codex/mac-pro/.codex/config.toml";
     groups = {
       shell = true;
       git = true;
