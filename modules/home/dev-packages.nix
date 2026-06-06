@@ -3,7 +3,6 @@
 let
   herdr = pkgs.callPackage ../../packages/herdr.nix { };
   linuxAgentPackages = lib.optionals pkgs.stdenv.isLinux [
-    herdr
     pkgs.codex
     pkgs.claude-code
     pkgs.pi-coding-agent
@@ -31,6 +30,7 @@ in
     uv
     poetry
     lazygit
+    herdr
 
     neovim
     gcc
