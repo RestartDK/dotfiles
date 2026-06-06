@@ -1,0 +1,14 @@
+{
+  "defaultModel": "gpt-5.5",
+  "defaultProvider": "openai-codex",
+  "defaultThinkingLevel": "high",
+  "hideThinkingBlock": false,
+  "lastChangelogVersion": "0.78.1",
+  "packages": [
+    "npm:pi-mcp-adapter",
+    "npm:@ollama/pi-web-search"
+  ],
+  "powerlineWelcome": false,
+  "quietStartup": true,
+  "theme": "terminal"
+}

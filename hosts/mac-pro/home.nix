@@ -20,6 +20,7 @@
       terminalTools = true;
       herdr = true;
       agents = true;
+      macos = true;
     };
   };
 }

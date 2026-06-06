@@ -22,6 +22,9 @@ node_modules/
 **/*.sqlite-shm
 **/*.sqlite-wal
 **/auth.json
+**/automatic_backups/
+**/__pycache__/
+**/*.pyc
 
 # editor/system noise
 .DS_Store

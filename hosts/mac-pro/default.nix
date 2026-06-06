@@ -118,12 +118,20 @@
     casks = [
       "1password-cli"
       "aerospace"
+      "affinity-designer"
+      "affinity-photo"
+      "affinity-publisher"
+      "android-studio"
       "betterdisplay"
       "bruno"
+      "chatgpt"
       "codex"
       "codexbar"
+      "cursor"
+      "discord"
       "emdash"
       "expo-orbit"
+      "figma"
       "flutter"
       "font-jetbrains-mono-nerd-font"
       "font-monaspace-nerd-font"
@@ -133,13 +141,31 @@
       "font-source-sans-3"
       "ghostty"
       "godot"
+      "google-chrome"
       "karabiner-elements"
+      "linear"
       "mactex"
+      "nextcloud"
+      "nordvpn"
+      "notion-calendar"
+      "notion-mail"
+      "obsidian"
+      "ollama"
       "orbstack"
+      "raycast"
+      "rustdesk"
       "skim"
+      "slack"
+      "spotify"
+      "tailscale"
       "warp"
       "zulu@17"
     ];
+  };
+
+  system.defaults.dock = {
+    autohide = true;
+    tilesize = 51;
   };
 
   system.stateVersion = 6;

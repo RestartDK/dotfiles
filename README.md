@@ -53,7 +53,7 @@ config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
 
 This keeps the files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `dotfiles/` takes effect immediately; rebuilding is only needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
 
-Managed live config includes shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, and shared agent skills. Codex `config.toml` and RustDesk server/password settings are intentionally local app state, not repo-managed. Tmux config is intentionally not included.
+Managed live config includes shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, shared agent skills, and selected macOS app config such as AeroSpace, Ghostty, Karabiner, Graphite, SketchyBar, WezTerm, Amp, and cmux. Codex `config.toml` and RustDesk server/password settings are intentionally local app state, not repo-managed. Tmux config is intentionally not included.
 
 ## Rules
 
