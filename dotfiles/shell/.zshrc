@@ -147,7 +147,9 @@ if [[ -t 0 && -t 1 ]]; then
 fi
 
 # fzf config
-command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
+if [[ -t 0 && -t 1 ]]; then
+  command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
+fi
 
 # Aliases
 command -v eza >/dev/null 2>&1 && alias ls="eza --icons=always"
