@@ -27,6 +27,7 @@
   };
 
   networking.networkmanager.enable = true;
+  networking.nameservers = [ "1.1.1.1" "9.9.9.9" ];
 
   # Avoid remote setup being interrupted by desktop idle suspend.
   systemd.sleep.settings.Sleep = {

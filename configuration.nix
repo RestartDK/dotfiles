@@ -4,5 +4,5 @@
 { ... }:
 
 {
-  imports = [ ./hosts/nana ];
+  imports = [ ./hosts/srv-nana ];
 }

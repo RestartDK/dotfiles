@@ -1,5 +1,8 @@
 { pkgs, ... }:
 
+let
+  herdr = pkgs.callPackage ../../packages/herdr.nix { };
+in
 {
   environment.systemPackages = with pkgs; [
     git
@@ -7,7 +10,6 @@
     wget
     vim
     neovim
-    tmux
     zsh
     starship
     tailscale
@@ -47,5 +49,7 @@
     uv
     poetry
     lazygit
+  ] ++ [
+    herdr
   ];
 }

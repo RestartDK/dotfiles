@@ -12,7 +12,9 @@
 
 
   # Keep non-secret Tailscale preferences reproducible. Authentication remains
-  # stateful in /var/lib/tailscale and is intentionally not committed.
+  # stateful in /var/lib/tailscale and is intentionally not committed. Nana
+  # keeps normal DNS outside Tailscale because MagicDNS was not reachable during
+  # the NixOS migration.
   systemd.services.tailscale-preferences = {
     description = "Apply Nana Tailscale preferences";
     after = [ "tailscaled.service" ];
@@ -25,7 +27,7 @@
     script = ''
       ${pkgs.tailscale}/bin/tailscale set \
         --hostname=srv-nana \
-        --accept-dns=true \
+        --accept-dns=false \
         --accept-routes=true \
         --operator=dkumlin
     '';

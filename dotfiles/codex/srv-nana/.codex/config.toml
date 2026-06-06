@@ -1,0 +1,46 @@
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+approval_policy = "never"
+approvals_reviewer = "user"
+sandbox_mode = "danger-full-access"
+
+[projects."/home/dkumlin"]
+trust_level = "trusted"
+
+[projects."/home/dkumlin/.dotfiles"]
+trust_level = "trusted"
+
+[projects."/home/dkumlin/Projects/snack"]
+trust_level = "trusted"
+
+[projects."/home/dkumlin/Projects/apartment-search"]
+trust_level = "trusted"
+
+[projects."/home/dkumlin/General/Apartment papers"]
+trust_level = "trusted"
+
+[projects."/"]
+trust_level = "trusted"
+
+[features]
+hooks = true
+multi_agent = true
+js_repl = false
+
+[plugins."github@openai-curated"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."gmail@openai-curated"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true

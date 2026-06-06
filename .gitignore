@@ -10,6 +10,19 @@ secrets/*.yaml
 result
 result-*
 
+# generated app state inside live dotfiles
+node_modules/
+**/node_modules/
+**/sessions/
+**/cache/
+**/logs/
+**/*.log
+**/*.sock
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/auth.json
+
 # editor/system noise
 .DS_Store
 *.swp
