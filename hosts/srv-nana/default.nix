@@ -10,6 +10,7 @@
     ../../modules/nixos/docker.nix
     ../../modules/nixos/apps.nix
     ../../modules/nixos/nvidia.nix
+    ../../modules/nixos/rustdesk.nix
   ];
 
   boot.loader.grub = {
