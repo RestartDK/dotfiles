@@ -2,7 +2,10 @@
 
 {
   nixpkgs.config.allowUnfree = true;
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+  # Nix itself is installed/managed by Determinate Nix on this Mac.
+  # Keep nix-darwin from replacing that daemon/config during activation.
+  nix.enable = false;
 
   networking.hostName = "dkumlin-macbook-pro";
   networking.localHostName = "dkumlin-macbook-pro";
