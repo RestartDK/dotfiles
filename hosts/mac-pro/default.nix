@@ -118,20 +118,12 @@
     casks = [
       "1password-cli"
       "aerospace"
-      "affinity-designer"
-      "affinity-photo"
-      "affinity-publisher"
-      "android-studio"
       "betterdisplay"
       "bruno"
-      "chatgpt"
       "codex"
       "codexbar"
-      "cursor"
-      "discord"
       "emdash"
       "expo-orbit"
-      "figma"
       "flutter"
       "font-jetbrains-mono-nerd-font"
       "font-monaspice-nerd-font"
@@ -140,26 +132,21 @@
       "font-source-sans-3"
       "ghostty"
       "godot"
-      "google-chrome"
       "karabiner-elements"
-      "linear"
       "mactex"
-      "nextcloud"
-      "nordvpn"
-      "notion-calendar"
-      "notion-mail"
-      "obsidian"
-      "ollama-app"
       "orbstack"
-      "raycast"
-      "rustdesk"
       "skim"
-      "slack"
-      "spotify"
-      "tailscale-app"
       "warp"
       "zulu@17"
     ];
+
+    # Installed manually/vendor-managed on this Mac for now. Do not add these
+    # to `casks` until intentionally migrating them to Homebrew ownership,
+    # otherwise `brew bundle` may try to reinstall over existing .app bundles.
+    # Manual apps: affinity-designer, affinity-photo, affinity-publisher,
+    # android-studio, chatgpt, cursor, discord, figma, google-chrome, linear,
+    # nextcloud, nordvpn, notion-calendar, notion-mail, obsidian, ollama-app,
+    # raycast, rustdesk, slack, spotify, tailscale-app.
   };
 
   system.defaults.dock = {
