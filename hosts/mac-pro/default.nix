@@ -4,9 +4,9 @@
   nixpkgs.config.allowUnfree = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
-  networking.hostName = "mac-pro";
-  networking.localHostName = "Mac-Pro";
-  networking.computerName = "Mac Pro";
+  networking.hostName = "dkumlin-macbook-pro";
+  networking.localHostName = "dkumlin-macbook-pro";
+  networking.computerName = "Daniel’s MacBook Pro";
 
   system.primaryUser = "danielkumlin";
   users.users.danielkumlin.home = "/Users/danielkumlin";
