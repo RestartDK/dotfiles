@@ -121,8 +121,6 @@
       "betterdisplay"
       "bruno"
       "codex"
-      "codexbar"
-      "emdash"
       "expo-orbit"
       "flutter"
       "font-jetbrains-mono-nerd-font"
@@ -136,8 +134,6 @@
       "mactex"
       "orbstack"
       "skim"
-      "warp"
-      "zulu@17"
     ];
 
     # Installed manually/vendor-managed on this Mac for now. Do not add these
@@ -147,6 +143,7 @@
     # android-studio, chatgpt, cursor, discord, figma, google-chrome, linear,
     # nextcloud, nordvpn, notion-calendar, notion-mail, obsidian, ollama-app,
     # raycast, rustdesk, slack, spotify, tailscale-app.
+    # Also intentionally unmanaged for now: codexbar, emdash, warp, zulu@17.
   };
 
   system.defaults.dock = {
