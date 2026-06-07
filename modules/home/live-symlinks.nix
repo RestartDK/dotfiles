@@ -27,6 +27,8 @@ in
       git = lib.mkEnableOption "Git config";
       editors = lib.mkEnableOption "editor config";
       terminalTools = lib.mkEnableOption "terminal utility config";
+      ghostty = lib.mkEnableOption "Ghostty terminal config";
+      wayland = lib.mkEnableOption "Wayland desktop config";
       herdr = lib.mkEnableOption "Herdr config";
       agents = lib.mkEnableOption "AI agent config";
       macos = lib.mkEnableOption "macOS-specific app config";
@@ -50,6 +52,15 @@ in
     (lib.mkIf cfg.groups.terminalTools {
       xdg.configFile."btop/btop.conf" = file "dotfiles/btop/btop.conf";
       xdg.configFile."thefuck/settings.py" = file "dotfiles/thefuck/settings.py";
+    })
+
+    (lib.mkIf cfg.groups.ghostty {
+      xdg.configFile."ghostty" = dir "dotfiles/ghostty";
+    })
+
+    (lib.mkIf cfg.groups.wayland {
+      xdg.configFile."hypr" = dir "dotfiles/hypr";
+      xdg.configFile."waybar" = dir "dotfiles/waybar";
     })
 
     (lib.mkIf cfg.groups.herdr {
@@ -88,7 +99,6 @@ in
 
     (lib.mkIf cfg.groups.macos {
       xdg.configFile."aerospace/aerospace.toml" = file "dotfiles/aerospace/aerospace.toml";
-      xdg.configFile."ghostty" = dir "dotfiles/ghostty";
       xdg.configFile."karabiner/karabiner.json" = file "dotfiles/karabiner/karabiner.json";
       xdg.configFile."graphite/aliases" = file "dotfiles/graphite/aliases";
       xdg.configFile."sketchybar" = dir "dotfiles/sketchybar";

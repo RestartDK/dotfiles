@@ -18,6 +18,8 @@
       git = true;
       editors = true;
       terminalTools = true;
+      ghostty = true;
+      wayland = true;
       herdr = true;
       agents = true;
     };

@@ -18,6 +18,7 @@
       git = true;
       editors = true;
       terminalTools = true;
+      ghostty = true;
       herdr = true;
       agents = true;
       macos = true;

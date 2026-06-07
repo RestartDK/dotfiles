@@ -5,6 +5,7 @@
     ./hardware-configuration.nix
     ../../modules/nixos/base.nix
     ../../modules/nixos/desktop-gnome.nix
+    ../../modules/nixos/hyprland.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/tailscale.nix
     ../../modules/nixos/docker.nix
