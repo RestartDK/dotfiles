@@ -1,11 +1,15 @@
-{ lib, pkgs, ... }:
+{ lib, pkgs, inputs, ... }:
 
 let
   herdr = pkgs.callPackage ../../packages/herdr.nix { };
+  unstable = import inputs.nixpkgs-unstable {
+    system = pkgs.stdenv.hostPlatform.system;
+    config = pkgs.config;
+  };
   linuxAgentPackages = lib.optionals pkgs.stdenv.isLinux [
     pkgs.codex
     pkgs.claude-code
-    pkgs.pi-coding-agent
+    unstable.pi-coding-agent
     pkgs.opencode
   ];
 in
