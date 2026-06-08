@@ -10,8 +10,20 @@ window#waybar {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+#custom-nix {
+  padding: 0 12px;
+  color: #89b4fa;
+  font-size: 16px;
+}
+
+#workspaces {
+  padding: 0 4px;
+}
+
 #workspaces button {
-  padding: 0 7px;
+  min-width: 24px;
+  padding: 0 9px 0 9px;
+  margin: 0 2px;
   color: #6c7086;
   background: transparent;
   border: none;

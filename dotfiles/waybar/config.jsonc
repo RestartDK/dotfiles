@@ -4,9 +4,15 @@
   "height": 28,
   "spacing": 8,
 
-  "modules-left": ["hyprland/workspaces"],
-  "modules-center": ["hyprland/window"],
-  "modules-right": ["network", "pulseaudio", "cpu", "memory", "clock", "tray"],
+  "modules-left": ["custom/nix", "hyprland/workspaces"],
+  "modules-center": ["clock"],
+  "modules-right": ["network", "pulseaudio", "cpu", "memory", "tray"],
+
+  "custom/nix": {
+    "format": "",
+    "tooltip-format": "NixOS menu",
+    "on-click": "$HOME/.config/waybar/scripts/nix-menu"
+  },
 
   "hyprland/workspaces": {
     "disable-scroll": true,
@@ -53,7 +59,8 @@
 
   "network": {
     "format-wifi": "{essid}",
-    "format-ethernet": "LAN",
+    "format-ethernet": "󰈀",
+    "format-linked": "󰈀",
     "format-disconnected": "offline",
     "tooltip-format": "{ifname}: {ipaddr}"
   },

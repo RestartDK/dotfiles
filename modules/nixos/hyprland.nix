@@ -27,6 +27,7 @@ in
   ] ++ (with pkgs; [
     ghostty
     waybar
+    fuzzel
     wl-clipboard
     playerctl
     brightnessctl

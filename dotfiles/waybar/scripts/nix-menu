@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Waybar's built-in GtkMenu can flicker on Hyprland/layer-shell. Use a tiny
+# fuzzel dmenu popup anchored below the Nix icon instead.
+existing_menu_pids=$(pgrep -f 'fuzzel .*--namespace=nix-menu' || true)
+if [[ -n "$existing_menu_pids" ]]; then
+  kill $existing_menu_pids 2>/dev/null || true
+  exit 0
+fi
+
+if command -v fuzzel >/dev/null 2>&1; then
+  fuzzel_cmd=(fuzzel)
+else
+  fuzzel_cmd=(nix run nixpkgs#fuzzel --)
+fi
+
+choice=$(
+  printf '%s\n' \
+    '  Lock' \
+    '󰗽  Log Out' \
+    '󰤄  Sleep' \
+    '󰜉  Restart…' \
+    '⏻  Shut Down…' |
+    "${fuzzel_cmd[@]}" \
+      --namespace=nix-menu \
+      --dmenu \
+      --only-match \
+      --no-sort \
+      --hide-prompt \
+      --minimal-lines \
+      --lines=5 \
+      --width=18 \
+      --anchor=top-left \
+      --x-margin=8 \
+      --y-margin=34 \
+      --horizontal-pad=14 \
+      --vertical-pad=8 \
+      --inner-pad=0 \
+      --font='JetBrainsMono Nerd Font:size=12' \
+      --background-color=14141aeb \
+      --text-color=cdd6f4ff \
+      --selection-color=313244ff \
+      --selection-text-color=f5e0dcff \
+      --match-color=89b4faff \
+      --selection-match-color=89b4faff \
+      --border-color=ffffff22 \
+      --border-width=1 \
+      --border-radius=10 \
+      --selection-radius=6 \
+      --log-level=none
+) || exit 0
+
+case "$choice" in
+  *Lock*)
+    hyprlock
+    ;;
+  *'Log Out'*)
+    hyprshutdown
+    ;;
+  *Sleep*)
+    systemctl suspend
+    ;;
+  *Restart*)
+    hyprshutdown -t Restarting --post-cmd reboot
+    ;;
+  *'Shut Down'*)
+    hyprshutdown -t Powering-off --post-cmd poweroff
+    ;;
+esac
