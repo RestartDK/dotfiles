@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Waybar's built-in GtkMenu can flicker on Hyprland/layer-shell. Use a tiny
+# Waybar's built-in GtkMenu flickered on Hyprland/layer-shell. Use a tiny
 # fuzzel dmenu popup anchored below the Nix icon instead.
+cleanup_click_away_bind() {
+  if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl eval 'if _nix_menu_clickaway_bind then _nix_menu_clickaway_bind:unbind(); _nix_menu_clickaway_bind = nil end' >/dev/null 2>&1 || true
+  fi
+}
+
 existing_menu_pids=$(pgrep -f 'fuzzel .*--namespace=nix-menu' || true)
 if [[ -n "$existing_menu_pids" ]]; then
   kill $existing_menu_pids 2>/dev/null || true
+  cleanup_click_away_bind
   exit 0
 fi
 
@@ -15,7 +22,18 @@ else
   fuzzel_cmd=(nix run nixpkgs#fuzzel --)
 fi
 
-choice=$(
+# Keep fuzzel's default exclusive keyboard focus so it does not close merely
+# because the pointer leaves it. Add a temporary transparent mouse-release bind
+# that kills the menu only when a click happens outside the menu bounds.
+if command -v hyprctl >/dev/null 2>&1; then
+  click_away="$HOME/.config/waybar/scripts/nix-menu-click-away"
+  lua_click_away=${click_away//\\/\\\\}
+  lua_click_away=${lua_click_away//\"/\\\"}
+  hyprctl eval "_nix_menu_clickaway_bind = hl.bind(\"mouse:272\", hl.dsp.exec_cmd(\"$lua_click_away\"), { release = true, non_consuming = true, transparent = true, locked = true, ignore_mods = true, dont_inhibit = true })" >/dev/null 2>&1 || true
+fi
+trap cleanup_click_away_bind EXIT
+
+if ! choice=$(
   printf '%s\n' \
     '  Lock' \
     '󰗽  Log Out' \
@@ -33,7 +51,7 @@ choice=$(
       --width=18 \
       --anchor=top-left \
       --x-margin=8 \
-      --y-margin=34 \
+      --y-margin=0 \
       --horizontal-pad=14 \
       --vertical-pad=8 \
       --inner-pad=0 \
@@ -49,7 +67,12 @@ choice=$(
       --border-radius=10 \
       --selection-radius=6 \
       --log-level=none
-) || exit 0
+); then
+  exit 0
+fi
+
+cleanup_click_away_bind
+trap - EXIT
 
 case "$choice" in
   *Lock*)

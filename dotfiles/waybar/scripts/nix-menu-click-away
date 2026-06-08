@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Kill the Nix menu only when the pointer click happened outside the fuzzel
+# layer surface. This lets clicks inside the menu select an item normally.
+python3 - <<'PY'
+import json
+import subprocess
+import sys
+
+try:
+    cursor = json.loads(subprocess.check_output(["hyprctl", "-j", "cursorpos"], text=True))
+    layers = json.loads(subprocess.check_output(["hyprctl", "-j", "layers"], text=True))
+except Exception:
+    sys.exit(0)
+
+x = cursor.get("x")
+y = cursor.get("y")
+if x is None or y is None:
+    sys.exit(0)
+
+surfaces = []
+for monitor in layers.values():
+    for level_surfaces in monitor.get("levels", {}).values():
+        for surface in level_surfaces:
+            if surface.get("namespace") == "nix-menu":
+                surfaces.append(surface)
+
+# If fuzzel already closed, there is nothing to kill.
+if not surfaces:
+    sys.exit(0)
+
+for surface in surfaces:
+    sx = surface.get("x", 0)
+    sy = surface.get("y", 0)
+    sw = surface.get("w", 0)
+    sh = surface.get("h", 0)
+    if sx <= x < sx + sw and sy <= y < sy + sh:
+        sys.exit(0)
+
+subprocess.run(["pkill", "-f", "fuzzel .*--namespace=nix-menu"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+PY
