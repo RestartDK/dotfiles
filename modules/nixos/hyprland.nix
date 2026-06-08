@@ -11,6 +11,10 @@
   # Prefer native Wayland for Electron/Chromium apps on NixOS.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
+  fonts.packages = with pkgs; [
+    nerd-fonts.symbols-only
+  ];
+
   environment.systemPackages = with pkgs; [
     ghostty
     waybar
@@ -19,6 +23,14 @@
     brightnessctl
     hyprlauncher
     hyprshutdown
+    hyprpaper
+    hyprpicker
+    hyprsunset
+    hyprcursor
+    hyprland-qt-support
+    hyprland-qtutils
+    hyprpwcenter
+    hyprsysteminfo
     networkmanagerapplet
     wlogout
     hyprpolkitagent

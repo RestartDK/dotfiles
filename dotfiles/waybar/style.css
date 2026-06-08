@@ -1,5 +1,5 @@
 * {
-  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-family: "Symbols Nerd Font", "JetBrainsMono Nerd Font", monospace;
   font-size: 13px;
   min-height: 0;
 }
@@ -11,15 +11,19 @@ window#waybar {
 }
 
 #workspaces button {
-  padding: 0 8px;
+  padding: 0 7px;
   color: #6c7086;
   background: transparent;
   border: none;
 }
 
 #workspaces button.active {
-  color: #89b4fa;
-  background: rgba(137, 180, 250, 0.16);
+  color: #cdd6f4;
+  background: rgba(166, 166, 166, 0.16);
+}
+
+#workspaces button.empty {
+  color: #45475a;
 }
 
 #window {

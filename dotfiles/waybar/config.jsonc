@@ -10,7 +10,40 @@
 
   "hyprland/workspaces": {
     "disable-scroll": true,
-    "all-outputs": true
+    "all-outputs": true,
+    "sort-by": "number",
+    "format": "{id} {windows}",
+    "format-window-separator": " ",
+    "window-rewrite-default": "",
+    "window-rewrite": {
+      "class<com.mitchellh.ghostty>": "",
+      "class<kitty>": "",
+      "class<Alacritty>": "",
+      "class<firefox>": "",
+      "class<google-chrome>": "",
+      "class<chromium>": "",
+      "class<brave-browser>": "󰖟",
+      "class<Code>": "󰨞",
+      "class<code>": "󰨞",
+      "class<VSCodium>": "󰨞",
+      "class<Spotify>": "",
+      "class<spotify>": "",
+      "class<discord>": "",
+      "class<vesktop>": "",
+      "class<Slack>": "󰒱",
+      "class<slack>": "󰒱",
+      "class<org.gnome.Nautilus>": "",
+      "class<nautilus>": "",
+      "class<org.gnome.Settings>": "",
+      "class<org.gnome.TextEditor>": "󰈙",
+      "class<org.gnome.Calculator>": "",
+      "class<org.gnome.Calendar>": "󰃭",
+      "class<1Password>": "󰌾",
+      "class<steam>": "",
+      "class<org.telegram.desktop>": "",
+      "class<obsidian>": "󰠮",
+      "title<.*btop.*>": ""
+    }
   },
 
   "hyprland/window": {

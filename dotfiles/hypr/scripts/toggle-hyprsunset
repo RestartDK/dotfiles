@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if pgrep -x hyprsunset >/dev/null; then
+  pkill -x hyprsunset
+else
+  # Warm, subtle night-light temperature. Kill it to restore identity colors.
+  hyprsunset --temperature 4500 >/tmp/hyprsunset.log 2>&1 &
+fi

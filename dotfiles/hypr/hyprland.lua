@@ -28,6 +28,8 @@ local mainMod = "SUPER"
 -------------------
 
 hl.on("hyprland.start", function()
+  hl.exec_cmd("pidof hyprpaper >/dev/null || hyprpaper")
+  hl.exec_cmd("pidof hypridle >/dev/null || hypridle")
   hl.exec_cmd("waybar")
   hl.exec_cmd("hyprlauncher -d")
   hl.exec_cmd("nm-applet --indicator")
@@ -105,6 +107,8 @@ hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + C", hl.dsp.window.close())
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
+hl.bind(mainMod .. " + P", hl.dsp.exec_cmd("hyprpicker -a"))
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("~/.config/hypr/scripts/toggle-hyprsunset"))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + T", hl.dsp.layout("togglesplit"))
 hl.bind(mainMod .. " + Escape", hl.dsp.exec_cmd("hyprlock"))
