@@ -36,6 +36,7 @@ in
     uv
     poetry
     lazygit
+    gh
     herdr
 
     neovim
@@ -60,6 +61,10 @@ in
       user = {
         name = "Daniel Kumlin";
         email = "danielkumlinwork@gmail.com";
+      };
+      credential = {
+        "https://github.com".helper = "!gh auth git-credential";
+        "https://gist.github.com".helper = "!gh auth git-credential";
       };
     };
   };
