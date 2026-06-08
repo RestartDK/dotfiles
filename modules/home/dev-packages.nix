@@ -30,7 +30,6 @@ in
     bun
     go
     rustup
-    rust-analyzer
     pkg-config
     openssl
     python3
