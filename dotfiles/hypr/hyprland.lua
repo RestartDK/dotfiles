@@ -19,7 +19,8 @@ hl.monitor({
 
 local terminal = "ghostty"
 local fileManager = "nautilus"
-local menu = "wofi --show drun"
+local menu = "hyprlauncher"
+local powerMenu = "wlogout"
 local mainMod = "SUPER"
 
 -------------------
@@ -28,13 +29,17 @@ local mainMod = "SUPER"
 
 hl.on("hyprland.start", function()
   hl.exec_cmd("waybar")
+  hl.exec_cmd("hyprlauncher -d")
+  hl.exec_cmd("nm-applet --indicator")
   hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
+  hl.exec_cmd("hyprctl setcursor Adwaita 24")
 end)
 
 -------------------------------
 ---- ENVIRONMENT VARIABLES ----
 -------------------------------
 
+hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
@@ -54,8 +59,8 @@ hl.config({
     border_size = 2,
     layout = "dwindle",
     col = {
-      active_border = "rgba(89b4faee)",
-      inactive_border = "rgba(313244aa)",
+      active_border = "rgba(a6a6a6ff)",
+      inactive_border = "rgba(3a3a3aaa)",
     },
   },
 
@@ -68,7 +73,7 @@ hl.config({
   },
 
   animations = {
-    enabled = true,
+    enabled = false,
   },
 
   input = {
@@ -101,10 +106,22 @@ hl.bind(mainMod .. " + C", hl.dsp.window.close())
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
-hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
-hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd("hyprctl dispatch 'hl.dsp.exit()'"))
+hl.bind(mainMod .. " + T", hl.dsp.layout("togglesplit"))
+hl.bind(mainMod .. " + Escape", hl.dsp.exec_cmd("hyprlock"))
+hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("hyprlock"))
+hl.bind(mainMod .. " + SHIFT + Q", hl.dsp.exec_cmd(powerMenu))
+hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd("hyprshutdown"))
 
--- Move focus with Super + arrow keys.
+-- Move focus with Super + vim keys or arrow keys.
+-- Raw Ctrl+h/j/k/l is intentionally left to terminals/editors.
+hl.bind(mainMod .. " + H", hl.dsp.focus({ direction = "left" }))
+hl.bind(mainMod .. " + J", hl.dsp.focus({ direction = "down" }))
+hl.bind(mainMod .. " + K", hl.dsp.focus({ direction = "up" }))
+hl.bind(mainMod .. " + L", hl.dsp.focus({ direction = "right" }))
+hl.bind(mainMod .. " + CTRL + H", hl.dsp.focus({ direction = "left" }))
+hl.bind(mainMod .. " + CTRL + J", hl.dsp.focus({ direction = "down" }))
+hl.bind(mainMod .. " + CTRL + K", hl.dsp.focus({ direction = "up" }))
+hl.bind(mainMod .. " + CTRL + L", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + left", hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + up", hl.dsp.focus({ direction = "up" }))

@@ -6,16 +6,21 @@
     xwayland.enable = true;
   };
 
+  programs.hyprlock.enable = true;
+
   # Prefer native Wayland for Electron/Chromium apps on NixOS.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
   environment.systemPackages = with pkgs; [
     ghostty
     waybar
-    wofi
     wl-clipboard
     playerctl
     brightnessctl
+    hyprlauncher
+    hyprshutdown
+    networkmanagerapplet
+    wlogout
     hyprpolkitagent
   ];
 

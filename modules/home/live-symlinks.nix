@@ -61,6 +61,7 @@ in
     (lib.mkIf cfg.groups.wayland {
       xdg.configFile."hypr" = dir "dotfiles/hypr";
       xdg.configFile."waybar" = dir "dotfiles/waybar";
+      xdg.configFile."wlogout" = dir "dotfiles/wlogout";
     })
 
     (lib.mkIf cfg.groups.herdr {
