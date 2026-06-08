@@ -28,6 +28,15 @@
     cursor-size = 24;
   };
 
+  xdg.desktopEntries.hyprland-settings = {
+    name = "Settings";
+    genericName = "System Settings";
+    comment = "Open GNOME Settings from Hyprland";
+    exec = "settings";
+    icon = "org.gnome.Settings";
+    categories = [ "Settings" ];
+  };
+
   my.liveConfig = {
     enable = true;
     repoRoot = "/home/dkumlin/Projects/nix-config";

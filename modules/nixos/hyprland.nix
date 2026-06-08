@@ -1,5 +1,11 @@
 { pkgs, ... }:
 
+let
+  hyprlandSettings = pkgs.writeShellScriptBin "settings" ''
+    export XDG_CURRENT_DESKTOP=GNOME
+    exec ${pkgs.gnome-control-center}/bin/gnome-control-center "$@"
+  '';
+in
 {
   programs.hyprland = {
     enable = true;
@@ -7,6 +13,7 @@
   };
 
   programs.hyprlock.enable = true;
+  services.blueman.enable = true;
 
   # Prefer native Wayland for Electron/Chromium apps on NixOS.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
@@ -15,7 +22,9 @@
     nerd-fonts.symbols-only
   ];
 
-  environment.systemPackages = with pkgs; [
+  environment.systemPackages = [
+    hyprlandSettings
+  ] ++ (with pkgs; [
     ghostty
     waybar
     wl-clipboard
@@ -32,9 +41,14 @@
     hyprpwcenter
     hyprsysteminfo
     networkmanagerapplet
+    nwg-displays
+    nwg-look
+    pavucontrol
     wlogout
     hyprpolkitagent
-  ];
+    adwaita-icon-theme
+    hicolor-icon-theme
+  ]);
 
   # Hyprland is a compositor, not a full desktop environment. Keep an auth
   # agent available for privileged GUI prompts outside GNOME.
