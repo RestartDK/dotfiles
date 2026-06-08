@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+screenshot_dir="$HOME/Pictures/Screenshots"
+mkdir -p "$screenshot_dir"
+
+file="$screenshot_dir/screenshot-$(date +%Y%m%d-%H%M%S).png"
+
+# Select an area/window, save it, and copy it to the clipboard. The nix run
+# fallback lets this work before the next NixOS rebuild installs grimblast.
+if command -v grimblast >/dev/null 2>&1; then
+  grimblast --notify --freeze copysave area "$file"
+else
+  nix run nixpkgs#grimblast -- --notify --freeze copysave area "$file"
+fi

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+notify() {
+  if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl notify 0 4500 "rgb(ffcc66)" "Settings Hub: $*" >/dev/null 2>&1 || true
+  fi
+}
+
+launch() {
+  local cmd="$1"
+  shift || true
+
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    notify "missing command: $cmd"
+    exit 1
+  fi
+
+  setsid -f "$cmd" "$@" >/dev/null 2>&1 || notify "failed to launch: $cmd"
+}
+
+launcher="${HYPR_SETTINGS_HUB_LAUNCHER:-hyprlauncher}"
+if ! command -v "$launcher" >/dev/null 2>&1; then
+  notify "hyprlauncher is not installed"
+  exit 1
+fi
+
+choice="$({
+  printf '%s\n' \
+    "󰂯  Bluetooth" \
+    "󰍹  Displays" \
+    "󰕾  Sound" \
+    "󰤨  Network" \
+    "󰉼  Appearance" \
+    "󰢬  Printers" \
+    "󰾲  NVIDIA" \
+    "󰍛  System Info" \
+    "  Power" \
+    "  NixOS Config"
+} | "$launcher" --dmenu --quiet)" || exit 0
+
+case "$choice" in
+  *Bluetooth*) launch blueman-manager ;;
+  *Displays*) launch nwg-displays ;;
+  *Sound*) launch pavucontrol ;;
+  *Network*) launch nm-connection-editor ;;
+  *Appearance*) launch nwg-look ;;
+  *Printers*) launch xdg-open http://localhost:631/ ;;
+  *NVIDIA*) launch nvidia-settings ;;
+  *"System Info"*) launch hyprsysteminfo ;;
+  *Power*) launch wlogout ;;
+  *"NixOS Config"*) launch xdg-open /home/dkumlin/Projects/nix-config ;;
+  *) exit 0 ;;
+esac

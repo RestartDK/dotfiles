@@ -28,6 +28,8 @@ in
     ghostty
     waybar
     fuzzel
+    grimblast
+    slurp
     wl-clipboard
     playerctl
     brightnessctl
@@ -42,6 +44,9 @@ in
     hyprpwcenter
     hyprsysteminfo
     networkmanagerapplet
+    thunar
+    thunar-volman
+    tumbler
     nwg-displays
     nwg-look
     pavucontrol

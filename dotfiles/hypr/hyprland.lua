@@ -18,7 +18,7 @@ hl.monitor({
 ---------------------
 
 local terminal = "ghostty"
-local fileManager = "nautilus"
+local fileManager = "thunar"
 local menu = "hyprlauncher"
 local powerMenu = "wlogout"
 local mainMod = "SUPER"
@@ -108,8 +108,9 @@ hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + C", hl.dsp.window.close())
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + S", hl.dsp.exec_cmd("settings"))
+hl.bind(mainMod .. " + S", hl.dsp.exec_cmd("~/.config/hypr/scripts/settings-hub"))
 hl.bind(mainMod .. " + P", hl.dsp.exec_cmd("hyprpicker -a"))
+hl.bind("CTRL + SHIFT + 4", hl.dsp.exec_cmd("~/.config/hypr/scripts/screenshot-area"))
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("~/.config/hypr/scripts/toggle-hyprsunset"))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + T", hl.dsp.layout("togglesplit"))
