@@ -10,7 +10,13 @@
   home.homeDirectory = "/home/dkumlin";
   home.stateVersion = "26.05";
 
-  gtk.enable = true;
+  gtk = {
+    enable = true;
+    iconTheme = {
+      package = pkgs.papirus-icon-theme;
+      name = "Papirus";
+    };
+  };
 
   home.pointerCursor = {
     enable = true;
@@ -26,6 +32,7 @@
     color-scheme = "prefer-dark";
     cursor-theme = "Adwaita";
     cursor-size = 24;
+    icon-theme = "Papirus";
   };
 
   xdg.desktopEntries.hyprland-settings = {

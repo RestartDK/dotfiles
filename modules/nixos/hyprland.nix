@@ -48,6 +48,8 @@ in
     hyprpolkitagent
     adwaita-icon-theme
     hicolor-icon-theme
+    papirus-icon-theme
+    kdePackages.breeze-icons
   ]);
 
   # Hyprland is a compositor, not a full desktop environment. Keep an auth

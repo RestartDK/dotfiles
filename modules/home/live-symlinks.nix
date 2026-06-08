@@ -62,6 +62,20 @@ in
       xdg.configFile."hypr" = dir "dotfiles/hypr";
       xdg.configFile."waybar" = dir "dotfiles/waybar";
       xdg.configFile."wlogout" = dir "dotfiles/wlogout";
+      # Hyprtoolkit/Hyprlauncher only search ~/.local/share/icons and
+      # /usr/share/icons, not NixOS' /run/current-system/sw/share/icons.
+      home.file.".local/share/icons/hicolor" = {
+        source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/hicolor";
+        force = true;
+      };
+      home.file.".local/share/icons/Papirus" = {
+        source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/Papirus";
+        force = true;
+      };
+      home.file.".local/share/icons/breeze" = {
+        source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/breeze";
+        force = true;
+      };
     })
 
     (lib.mkIf cfg.groups.herdr {
