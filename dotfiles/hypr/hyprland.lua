@@ -28,6 +28,11 @@ local mainMod = "SUPER"
 -------------------
 
 hl.on("hyprland.start", function()
+  -- Ensure DBus/systemd-launched desktop portals inherit the Hyprland
+  -- Wayland environment. Without this, GTK file choosers can silently fail
+  -- and Chrome downloads with "Ask where to save" may be cancelled.
+  hl.exec_cmd("sh -lc 'export XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-Hyprland}; export XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-hyprland}; export XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-wayland}; export DESKTOP_SESSION=${DESKTOP_SESSION:-hyprland}; dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP DESKTOP_SESSION; systemctl --user restart xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service xdg-desktop-portal.service'")
+
   hl.exec_cmd("pidof hyprpaper >/dev/null || hyprpaper")
   hl.exec_cmd("pidof hypridle >/dev/null || hypridle")
   hl.exec_cmd("waybar")
