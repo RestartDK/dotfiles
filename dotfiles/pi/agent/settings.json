@@ -3,7 +3,7 @@
   "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "low",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.78.1",
+  "lastChangelogVersion": "0.79.1",
   "packages": [
     "npm:pi-mcp-adapter",
     "npm:@ollama/pi-web-search"

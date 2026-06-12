@@ -17,6 +17,18 @@ path_append() {
   esac
 }
 
+path_remove() {
+  [[ -n "$1" ]] || return 0
+  local entry
+  local -a next_path
+  next_path=()
+  for entry in "${path[@]}"; do
+    [[ "$entry" == "$1" ]] || next_path+=("$entry")
+  done
+  path=("${next_path[@]}")
+  export PATH
+}
+
 source_first_existing() {
   local file
   for file in "$@"; do
@@ -27,11 +39,14 @@ source_first_existing() {
   return 1
 }
 
-# Nix profiles: NixOS/nix-darwin system profile first, then user profile.
+# Drop stale standalone Home Manager profile from older setups. This profile can
+# shadow the NixOS-managed Home Manager packages in /etc/profiles/per-user.
+path_remove "$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
+
+# Nix profiles: NixOS/nix-darwin managed user profile first, then legacy user/system profiles.
 path_prepend "/run/current-system/sw/bin"
-path_prepend "/etc/profiles/per-user/$USER/bin"
 path_prepend "$HOME/.nix-profile/bin"
-path_prepend "$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
+path_prepend "/etc/profiles/per-user/$USER/bin"
 
 # Homebrew: Apple Silicon macOS default, then whatever `brew --prefix` reports.
 path_prepend "/opt/homebrew/bin"
