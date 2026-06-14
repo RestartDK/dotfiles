@@ -33,7 +33,7 @@
       ];
     };
 
-    darwinConfigurations.mac-pro = nix-darwin.lib.darwinSystem {
+    darwinConfigurations."dkumlin-macbook-pro" = nix-darwin.lib.darwinSystem {
       system = darwinSystem;
       specialArgs = { inherit inputs; };
       modules = [

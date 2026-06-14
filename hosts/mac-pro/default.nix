@@ -51,7 +51,6 @@
     brews = [
       "act"
       "agent-browser"
-      "anomalyco/tap/opencode"
       "aws/tap/eksctl"
       "awscli"
       "azure-cli"
@@ -123,7 +122,6 @@
       "aerospace"
       "betterdisplay"
       "bruno"
-      "codex"
       "expo-orbit"
       "flutter"
       "font-jetbrains-mono-nerd-font"
