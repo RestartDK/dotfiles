@@ -170,11 +170,9 @@ fi
 command -v eza >/dev/null 2>&1 && alias ls="eza --icons=always"
 
 # Pi's powerline extension cannot reliably detect local Nerd Font support over
-# SSH, because terminal-specific env vars often are not forwarded. Default SSH
-# sessions to Nerd Font icons while allowing POWERLINE_NERD_FONTS=0 to override.
-if [[ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ]]; then
-  export POWERLINE_NERD_FONTS="${POWERLINE_NERD_FONTS:-1}"
-fi
+# SSH/dev namespaces, because terminal-specific env vars often are not forwarded.
+# Default to Nerd Font icons while allowing POWERLINE_NERD_FONTS=0 to override.
+export POWERLINE_NERD_FONTS="${POWERLINE_NERD_FONTS:-1}"
 
 # Tool initializers
 command -v direnv >/dev/null 2>&1 && eval "$(direnv hook zsh)"
