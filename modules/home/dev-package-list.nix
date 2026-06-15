@@ -29,6 +29,7 @@ with pkgs; [
   jq
   yq
   btop
+  starship
   fnm
   bun
   go
