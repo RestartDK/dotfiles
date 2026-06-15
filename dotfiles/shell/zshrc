@@ -162,8 +162,17 @@ if [[ -t 0 && -t 1 ]]; then
 fi
 
 # fzf config
-if [[ -t 0 && -t 1 ]]; then
-  command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
+if [[ -t 0 && -t 1 ]] && command -v fzf >/dev/null 2>&1; then
+  source <(fzf --zsh)
+
+  # Keep Ctrl-R bound to fzf history search in both emacs and vi keymaps.
+  # Some vi-mode setups only bind the default keymap, so make this explicit.
+  if (( $+widgets[fzf-history-widget] )); then
+    bindkey '^R' fzf-history-widget
+    bindkey -M emacs '^R' fzf-history-widget 2>/dev/null || true
+    bindkey -M viins '^R' fzf-history-widget 2>/dev/null || true
+    bindkey -M vicmd '^R' fzf-history-widget 2>/dev/null || true
+  fi
 fi
 
 # Aliases
