@@ -6,11 +6,11 @@ let
     system = pkgs.stdenv.hostPlatform.system;
     config = pkgs.config;
   };
-  linuxAgentPackages = lib.optionals pkgs.stdenv.isLinux [
-    pkgs.codex
-    pkgs.claude-code
+  agentPackages = [
+    unstable.codex
+    unstable.claude-code
+    unstable.opencode
     unstable.pi-coding-agent
-    pkgs.opencode
   ];
 in
 {
@@ -52,7 +52,7 @@ in
     zsh-autosuggestions
     zsh-syntax-highlighting
     zsh-vi-mode
-  ] ++ linuxAgentPackages;
+  ] ++ agentPackages;
 
   programs.git = {
     enable = true;
