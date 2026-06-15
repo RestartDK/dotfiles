@@ -2,6 +2,12 @@
 
 let
   cfg = config.my.liveConfig;
+  allAgents = cfg.groups.agents;
+  sharedAgentSkills = allAgents || cfg.groups.agentSkills;
+  codex = allAgents || cfg.groups.codex;
+  claude = allAgents || cfg.groups.claude;
+  opencode = allAgents || cfg.groups.opencode;
+  pi = allAgents || cfg.groups.pi;
   link = path: config.lib.file.mkOutOfStoreSymlink "${cfg.repoRoot}/${path}";
   file = path: {
     source = link path;
@@ -30,7 +36,12 @@ in
       ghostty = lib.mkEnableOption "Ghostty terminal config";
       wayland = lib.mkEnableOption "Wayland desktop config";
       herdr = lib.mkEnableOption "Herdr config";
-      agents = lib.mkEnableOption "AI agent config";
+      agents = lib.mkEnableOption "all AI agent config";
+      agentSkills = lib.mkEnableOption "shared AI agent skills config";
+      codex = lib.mkEnableOption "Codex config";
+      claude = lib.mkEnableOption "Claude config";
+      opencode = lib.mkEnableOption "OpenCode config";
+      pi = lib.mkEnableOption "Pi config";
       macos = lib.mkEnableOption "macOS-specific app config";
     };
   };
@@ -82,26 +93,34 @@ in
       xdg.configFile."herdr/config.toml" = file "dotfiles/herdr/config.toml";
     })
 
-    (lib.mkIf cfg.groups.agents {
+    (lib.mkIf sharedAgentSkills {
       home.file.".agents/.skill-lock.json" = file "dotfiles/agents/.skill-lock.json";
       home.file.".agents/skills" = dir "dotfiles/agents/skills";
       xdg.configFile."agents/skills" = dir "dotfiles/agents/skills";
+    })
 
+    (lib.mkIf codex {
       home.file.".codex/AGENTS.md" = file "dotfiles/codex/AGENTS.md";
       home.file.".codex/hooks.json" = file "dotfiles/codex/hooks.json";
       home.file.".codex/herdr-agent-state.sh" = file "dotfiles/codex/herdr-agent-state.sh";
       home.file.".codex/rules/default.rules" = file "dotfiles/codex/rules/default.rules";
       home.file.".codex/skills" = dir "dotfiles/agents/skills";
+    })
 
+    (lib.mkIf claude {
       home.file.".claude/settings.json" = file "dotfiles/claude/settings.json";
       home.file.".claude/hooks/herdr-agent-state.sh" = file "dotfiles/claude/hooks/herdr-agent-state.sh";
       home.file.".claude/skills" = dir "dotfiles/agents/skills";
+    })
 
+    (lib.mkIf opencode {
       xdg.configFile."opencode/opencode.json" = file "dotfiles/opencode/opencode.json";
       xdg.configFile."opencode/package.json" = file "dotfiles/opencode/package.json";
       xdg.configFile."opencode/plugins" = dir "dotfiles/opencode/plugins";
       xdg.configFile."opencode/skills" = dir "dotfiles/agents/skills";
+    })
 
+    (lib.mkIf pi {
       home.file.".pi/agent/keybindings.json" = file "dotfiles/pi/agent/keybindings.json";
       home.file.".pi/agent/settings.json" = file "dotfiles/pi/agent/settings.json";
       home.file.".pi/agent/models.json" = file "dotfiles/pi/agent/models.json";
@@ -109,6 +128,9 @@ in
       home.file.".pi/agent/npm" = dir "dotfiles/pi/agent/npm";
       home.file.".pi/agent/prompts" = dir "dotfiles/pi/agent/prompts";
       home.file.".pi/agent/themes" = dir "dotfiles/pi/agent/themes";
+    })
+
+    (lib.mkIf (pi && sharedAgentSkills) {
       home.file.".pi/agent/skills" = dir "dotfiles/agents/skills";
     })
 

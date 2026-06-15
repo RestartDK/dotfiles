@@ -1,4 +1,4 @@
-{ pkgs, inputs }:
+{ pkgs, inputs, agentPackageNames ? [ "codex" "claude-code" "opencode" "pi-coding-agent" ] }:
 
 let
   herdr = pkgs.callPackage ../../packages/herdr.nix { };
@@ -6,12 +6,19 @@ let
     system = pkgs.stdenv.hostPlatform.system;
     config = pkgs.config;
   };
-  agentPackages = [
-    unstable.codex
-    unstable.claude-code
-    unstable.opencode
-    unstable.pi-coding-agent
-  ];
+  availableAgentPackages = {
+    codex = unstable.codex;
+    "claude-code" = unstable.claude-code;
+    opencode = unstable.opencode;
+    "pi-coding-agent" = unstable.pi-coding-agent;
+  };
+  agentPackages = map (
+    name:
+    if builtins.hasAttr name availableAgentPackages then
+      builtins.getAttr name availableAgentPackages
+    else
+      throw "unknown agent package: ${name}"
+  ) agentPackageNames;
 in
 with pkgs; [
   eza

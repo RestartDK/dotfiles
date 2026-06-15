@@ -29,8 +29,10 @@ sudo nixos-rebuild switch --flake .#srv-nana
 `twin` is a Home Manager-only profile for existing NixOS/Linux target machines
 that should get Daniel's shared dev packages and live dotfiles without changing
 host-level settings like DNS, SSH, users, groups, Docker, bootloader, or
-Tailscale. It uses the `daniel` user by default and follows `nixpkgs-unstable`
-for packages.
+Tailscale. It installs Pi as the only managed AI agent and links Pi-specific
+config while intentionally leaving any existing Codex, Claude, OpenCode, and
+shared agent skills installations/config untouched. It uses the `daniel` user by
+default and follows `nixpkgs-unstable` for packages.
 
 If the login user or home directory differs, edit `hosts/twin/settings.nix`.
 Then apply from the target machine:
@@ -80,7 +82,7 @@ config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
 
 This keeps the files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `dotfiles/` takes effect immediately; rebuilding is only needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
 
-Managed live config includes shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, shared agent skills, and selected macOS app config such as AeroSpace, Ghostty, Karabiner, Graphite, SketchyBar, WezTerm, Amp, and cmux. Codex `config.toml` and RustDesk server/password settings are intentionally local app state, not repo-managed. Tmux config is intentionally not included.
+Managed live config can include shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, shared agent skills, and selected macOS app config such as AeroSpace, Ghostty, Karabiner, Graphite, SketchyBar, WezTerm, Amp, and cmux. The reusable `twin` profile enables Pi-specific config but not Codex, Claude, OpenCode, or shared agent skills. Codex `config.toml` and RustDesk server/password settings are intentionally local app state, not repo-managed. Tmux config is intentionally not included.
 
 ## Rules
 
