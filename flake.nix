@@ -16,6 +16,10 @@
   let
     linuxSystem = "x86_64-linux";
     darwinSystem = "aarch64-darwin";
+    twinPkgs = import inputs.nixpkgs-unstable {
+      system = linuxSystem;
+      config.allowUnfree = true;
+    };
   in {
     nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
       system = linuxSystem;
@@ -31,6 +35,15 @@
           home-manager.users.dkumlin = import ./hosts/srv-nana/home.nix;
         }
       ];
+    };
+
+    # Dev-only profile for existing NixOS/Linux target machines. This is
+    # intentionally Home Manager only: it does not change DNS, SSH, users,
+    # groups, Docker, bootloader, or other host-level settings.
+    homeConfigurations.twin = home-manager.lib.homeManagerConfiguration {
+      pkgs = twinPkgs;
+      extraSpecialArgs = { inherit inputs; };
+      modules = [ ./hosts/twin/home.nix ];
     };
 
     darwinConfigurations."dkumlin-macbook-pro" = nix-darwin.lib.darwinSystem {
