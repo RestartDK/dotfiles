@@ -1,6 +1,8 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
 {
+  imports = [ ./host-options.nix ];
+
   services.xserver.enable = true;
   services.displayManager.gdm.enable = true;
   services.desktopManager.gnome.enable = true;
@@ -24,7 +26,7 @@
   programs._1password.enable = true;
   programs._1password-gui = {
     enable = true;
-    polkitPolicyOwners = [ "dkumlin" ];
+    polkitPolicyOwners = [ config.my.host.userName ];
   };
 
   fonts.packages = with pkgs; [

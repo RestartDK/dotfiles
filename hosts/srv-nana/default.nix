@@ -14,12 +14,18 @@
     ../../modules/nixos/rustdesk.nix
   ];
 
+  my.host = {
+    hostName = "srv-nana";
+    userName = "dkumlin";
+    uid = 1000;
+    homeDirectory = "/home/dkumlin";
+  };
+
   boot.loader.grub = {
     enable = true;
     devices = [ "/dev/nvme0n1" ];
     useOSProber = true;
   };
 
-  networking.hostName = "srv-nana";
   system.stateVersion = "26.05";
 }
