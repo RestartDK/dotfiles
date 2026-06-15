@@ -6,6 +6,7 @@ Nix-native config for Daniel's machines.
 
 ```text
 hosts/srv-nana/                      # NixOS workstation
+hosts/twin/                          # reusable Home Manager dev profile
 hosts/dkumlin-macbook-pro/           # personal nix-darwin MacBook config
 hosts/dkumlin-twin-macbook-pro/      # work nix-darwin MacBook config
 ```
@@ -21,6 +22,22 @@ sudo nixos-rebuild switch --flake .#srv-nana
 
 ```text
 /etc/nixos -> /home/dkumlin/Projects/nix-config
+```
+
+## Apply reusable twin dev profile
+
+`twin` is a Home Manager-only profile for existing NixOS/Linux target machines
+that should get Daniel's shared dev packages and live dotfiles without changing
+host-level settings like DNS, SSH, users, groups, Docker, bootloader, or
+Tailscale. It uses the `daniel` user by default and follows `nixpkgs-unstable`
+for packages.
+
+If the login user or home directory differs, edit `hosts/twin/settings.nix`.
+Then apply from the target machine:
+
+```bash
+cd ~/Projects/nix-config
+nix run github:nix-community/home-manager/release-26.05 -- switch --flake .#twin -b hm-backup
 ```
 
 ## Apply Macs
@@ -44,9 +61,10 @@ darwin-rebuild switch --flake .#dkumlin-twin-macbook-pro
 ```text
 flake.nix                            # flake outputs and inputs
 hosts/srv-nana/                      # Nana NixOS host + Nana Home Manager entrypoint
+hosts/twin/                          # reusable Home Manager dev profile
 hosts/dkumlin-macbook-pro/           # personal MacBook nix-darwin host + Home Manager entrypoint
 hosts/dkumlin-twin-macbook-pro/      # work MacBook nix-darwin host + Home Manager entrypoint
-modules/nixos/                       # NixOS reusable modules
+modules/nixos/                       # NixOS reusable modules, including configurable host identity
 modules/home/                        # shared Home Manager modules
 dotfiles/                            # live dotfiles linked out-of-store
 packages/herdr.nix                   # Herdr binary package for Nana
