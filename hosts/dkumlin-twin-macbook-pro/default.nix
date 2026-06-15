@@ -36,15 +36,11 @@
       "anomalyco/tap"
       "aws/tap"
       "cormacrelf/tap"
-      "daytonaio/cli"
       "getsentry/tools"
       "leoafarias/fvm"
       "mongodb/brew"
-      "nikitabobko/tap"
       "oven-sh/bun"
-      "sst/tap"
       "steipete/tap"
-      "supabase/tap"
       "withgraphite/tap"
     ];
 
@@ -63,7 +59,6 @@
       "cocoapods"
       "coreutils"
       "cormacrelf/tap/dark-notify"
-      "daytonaio/cli/daytona"
       "deno"
       "dfu-util"
       "eza"
@@ -119,7 +114,6 @@
 
     casks = [
       "1password-cli"
-      "aerospace"
       "betterdisplay"
       "bruno"
       "codex-app"
