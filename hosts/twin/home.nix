@@ -14,7 +14,10 @@ in
   # Dev packages only. Unlike modules/home/dev-packages.nix, this intentionally
   # does not manage programs.git.settings so it does not overwrite the target
   # machine's existing Git aliases, LFS setup, or signing config.
-  home.packages = import ../../modules/home/dev-package-list.nix { inherit pkgs inputs; };
+  home.packages = import ../../modules/home/dev-package-list.nix {
+    inherit pkgs inputs;
+    agentPackageNames = [ "pi-coding-agent" ];
+  };
 
   home.username = settings.userName;
   home.homeDirectory = settings.homeDirectory;
@@ -33,7 +36,14 @@ in
       terminalTools = true;
       ghostty = true;
       herdr = true;
-      agents = true;
+      # Keep the remote profile from touching existing Codex, Claude, OpenCode,
+      # or shared agent skills. Only Pi itself and Pi-specific config are managed.
+      agents = false;
+      agentSkills = false;
+      pi = true;
+      codex = false;
+      claude = false;
+      opencode = false;
 
       wayland = false;
       macos = false;
