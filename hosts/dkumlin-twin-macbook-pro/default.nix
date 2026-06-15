@@ -136,7 +136,6 @@
       "godot"
       "karabiner-elements"
       "linear"
-      "mactex"
       "notion-calendar"
       "notion-mail"
       "obsidian"
