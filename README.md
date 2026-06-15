@@ -5,8 +5,9 @@ Nix-native config for Daniel's machines.
 ## Hosts
 
 ```text
-hosts/srv-nana/  # NixOS workstation
-hosts/mac-pro/   # future nix-darwin MacBook config, not applied yet
+hosts/srv-nana/                      # NixOS workstation
+hosts/dkumlin-macbook-pro/           # personal nix-darwin MacBook config
+hosts/dkumlin-twin-macbook-pro/      # work nix-darwin MacBook config
 ```
 
 ## Apply Nana
@@ -22,25 +23,33 @@ sudo nixos-rebuild switch --flake .#srv-nana
 /etc/nixos -> /home/dkumlin/Projects/nix-config
 ```
 
-## Apply Mac Pro later
+## Apply Macs
 
-Do not run this until the Nana migration has been verified:
+Personal MacBook:
 
 ```bash
 cd ~/Projects/nix-config
-darwin-rebuild switch --flake .#mac-pro
+darwin-rebuild switch --flake .#dkumlin-macbook-pro
+```
+
+Work MacBook:
+
+```bash
+cd ~/Projects/nix-config
+darwin-rebuild switch --flake .#dkumlin-twin-macbook-pro
 ```
 
 ## Layout
 
 ```text
-flake.nix                  # flake outputs and inputs
-hosts/srv-nana/            # Nana NixOS host + Nana Home Manager entrypoint
-hosts/mac-pro/             # Mac Pro nix-darwin host + Mac Home Manager entrypoint
-modules/nixos/             # NixOS reusable modules
-modules/home/              # shared Home Manager modules
-dotfiles/                  # live dotfiles linked out-of-store
-packages/herdr.nix         # Herdr binary package for Nana
+flake.nix                            # flake outputs and inputs
+hosts/srv-nana/                      # Nana NixOS host + Nana Home Manager entrypoint
+hosts/dkumlin-macbook-pro/           # personal MacBook nix-darwin host + Home Manager entrypoint
+hosts/dkumlin-twin-macbook-pro/      # work MacBook nix-darwin host + Home Manager entrypoint
+modules/nixos/                       # NixOS reusable modules
+modules/home/                        # shared Home Manager modules
+dotfiles/                            # live dotfiles linked out-of-store
+packages/herdr.nix                   # Herdr binary package for Nana
 ```
 
 ## Live dotfiles
