@@ -25,6 +25,7 @@ with pkgs; [
   fd
   ripgrep
   fzf
+  direnv
   bat
   jq
   yq
