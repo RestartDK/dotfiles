@@ -40,6 +40,8 @@ in
       # or shared agent skills. Only Pi itself and Pi-specific config are managed.
       agents = false;
       agentSkills = false;
+      agentSkillsGlobal = false;
+      agentSkillsPersonal = false;
       pi = true;
       codex = false;
       claude = false;
