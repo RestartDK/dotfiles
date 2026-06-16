@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -170,6 +171,10 @@ def load_script_hooks(source_root: Path) -> list[Path]:
     return hooks
 
 
+def shell_executable() -> str | None:
+    return shutil.which("bash") or shutil.which("sh")
+
+
 def parse_herdr_json(stdout: str) -> dict[str, Any]:
     for line in stdout.splitlines():
         stripped = line.strip()
@@ -269,7 +274,7 @@ def main() -> int:
             for index, (label, command, shell) in enumerate(setup_commands, start=1):
                 eprint(f"herdr-worktree-create: [{index}/{total}] {label}")
                 if shell:
-                    run = subprocess.run(command, cwd=str(worktree_path), env=env, shell=True, executable="/bin/bash")
+                    run = subprocess.run(command, cwd=str(worktree_path), env=env, shell=True, executable=shell_executable())
                 else:
                     run = subprocess.run(command, cwd=str(worktree_path), env=env)
                 if run.returncode != 0:
