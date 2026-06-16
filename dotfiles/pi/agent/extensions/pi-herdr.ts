@@ -270,7 +270,7 @@ export default function (pi: ExtensionAPI) {
 		const command =
 			`cd ${shellQuote(cwd)} && ` +
 			"command -v herdr-worktree-create >/dev/null 2>&1 && " +
-			"{ test -f .herdr/setup-worktree.json || test -x .herdr/setup-worktree.sh || test -x .herdr/post-worktree-create.sh; }";
+			"{ test -f .herdr/setup.json || test -x .herdr/setup-worktree.sh || test -x .herdr/post-worktree-create.sh; }";
 		const result = await pi.exec("bash", ["-lc", command], { signal });
 		return !signal?.aborted && !result.killed && result.code === 0;
 	}
@@ -526,7 +526,7 @@ export default function (pi: ExtensionAPI) {
 			"Preserve the current UI focus by default. Do not change workspace or tab focus unless the user explicitly asks or the workflow truly requires visible interaction there.",
 			"Pane actions like run, read, watch, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. For pane_split, omit pane to split the agent's own pane, or pass a pane alias/id to split that explicit source pane.",
 			"Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
-			"Use `worktree_create` to create a Git worktree checkout and open it as a Herdr workspace. When the current repo has a Herdr setup hook (`.herdr/setup-worktree.sh` or `.herdr/post-worktree-create.sh`) and `herdr-worktree-create` is installed, `worktree_create` automatically prefers that wrapper so repo setup runs after creation.",
+			"Use `worktree_create` to create a Git worktree checkout and open it as a Herdr workspace. When the current repo has a Herdr setup hook (`.herdr/setup.json`, `.herdr/setup-worktree.sh`, or `.herdr/post-worktree-create.sh`) and `herdr-worktree-create` is installed, `worktree_create` automatically prefers that wrapper so repo setup runs after creation.",
 			"Use `worktree_remove` to delete a Herdr-managed worktree checkout; it runs git worktree remove and does not delete the branch.",
 			"Use `herdr` watch for normal command output, including server readiness, test completion, or regex matches.",
 			"Use `herdr` wait_agent only for panes running a recognized coding agent. It waits on agent statuses, not normal process completion; use watch/read for commands like tests or servers.",

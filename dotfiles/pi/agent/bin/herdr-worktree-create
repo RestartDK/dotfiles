@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""Create a Herdr Git worktree, then run project-local .herdr/setup.json commands.
+
+The wrapper intentionally keeps Herdr as the source of truth for worktree creation.
+It calls `herdr worktree create --json`, parses the created worktree path, and
+then executes setup commands from the source repository's .herdr/setup.json.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def eprint(*args: object) -> None:
+    print(*args, file=sys.stderr)
+
+
+def absolutize(path: str, base: Path) -> str:
+    p = Path(path).expanduser()
+    if not p.is_absolute():
+        p = base / p
+    return str(p.resolve())
+
+
+def option_value(args: list[str], name: str) -> str | None:
+    for i, arg in enumerate(args):
+        if arg == name and i + 1 < len(args):
+            return args[i + 1]
+        if arg.startswith(name + "="):
+            return arg.split("=", 1)[1]
+    return None
+
+
+def git_root(cwd: Path) -> Path | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=str(cwd),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        return None
+    return Path(result.stdout.strip()).resolve()
+
+
+def normalize_command(entry: Any, index: int) -> tuple[str, list[str] | str, bool]:
+    """Return (label, command, shell)."""
+    if isinstance(entry, str):
+        return (entry, entry, True)
+
+    if isinstance(entry, list) and all(isinstance(item, str) for item in entry):
+        return (" ".join(entry), entry, False)
+
+    if isinstance(entry, dict):
+        label = entry.get("name") or entry.get("description") or f"command {index}"
+        if isinstance(entry.get("run"), str):
+            return (str(label), entry["run"], True)
+        if isinstance(entry.get("argv"), list) and all(isinstance(item, str) for item in entry["argv"]):
+            return (str(label), entry["argv"], False)
+
+    raise ValueError(
+        "commands[%d] must be a shell string, an argv string array, "
+        "or an object with {run: string} / {argv: string[]}" % index
+    )
+
+
+def load_setup(source_root: Path) -> tuple[Path | None, list[tuple[str, list[str] | str, bool]]]:
+    setup_path = source_root / ".herdr" / "setup.json"
+    if not setup_path.exists():
+        return None, []
+
+    try:
+        payload = json.loads(setup_path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{setup_path}: invalid JSON: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"{setup_path}: top-level value must be an object")
+
+    raw_commands = payload.get("commands", [])
+    if raw_commands is None:
+        raw_commands = []
+    if not isinstance(raw_commands, list):
+        raise ValueError(f"{setup_path}: commands must be an array")
+
+    return setup_path, [normalize_command(entry, i) for i, entry in enumerate(raw_commands)]
+
+
+def load_script_hooks(source_root: Path) -> list[Path]:
+    hooks: list[Path] = []
+    for name in ("setup-worktree.sh", "post-worktree-create.sh"):
+        path = source_root / ".herdr" / name
+        if path.exists() and os.access(path, os.X_OK):
+            hooks.append(path)
+    return hooks
+
+
+def parse_herdr_json(stdout: str) -> dict[str, Any]:
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("{"):
+            return json.loads(stripped)
+    raise ValueError("expected JSON output from herdr worktree create --json")
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    invocation_cwd = Path.cwd()
+
+    source_cwd_arg = option_value(args, "--cwd")
+    source_cwd = Path(absolutize(source_cwd_arg, invocation_cwd)) if source_cwd_arg else invocation_cwd
+    source_root = git_root(source_cwd)
+
+    setup_path: Path | None = None
+    setup_commands: list[tuple[str, list[str] | str, bool]] = []
+    script_hooks: list[Path] = []
+    if source_root is not None:
+        try:
+            setup_path, setup_commands = load_setup(source_root)
+            script_hooks = load_script_hooks(source_root)
+        except ValueError as exc:
+            eprint(f"herdr-worktree-create: {exc}")
+            return 2
+
+    herdr_args = ["herdr", "worktree", "create", *args]
+    if "--json" not in args:
+        herdr_args.append("--json")
+
+    create = subprocess.run(
+        herdr_args,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if create.stderr:
+        sys.stderr.write(create.stderr)
+    if create.returncode != 0:
+        if create.stdout:
+            sys.stdout.write(create.stdout)
+        return create.returncode
+
+    try:
+        response = parse_herdr_json(create.stdout)
+    except Exception as exc:
+        if create.stdout:
+            sys.stdout.write(create.stdout)
+        eprint(f"herdr-worktree-create: {exc}")
+        return 2
+
+    result = response.get("result") if isinstance(response, dict) else None
+    worktree = result.get("worktree") if isinstance(result, dict) else None
+    worktree_path_raw = worktree.get("path") if isinstance(worktree, dict) else None
+    has_setup = bool(setup_commands or script_hooks)
+    if has_setup and not isinstance(worktree_path_raw, str):
+        eprint("herdr-worktree-create: setup exists but Herdr response did not include result.worktree.path")
+        return 2
+
+    if has_setup:
+        worktree_path = Path(worktree_path_raw).resolve()
+        env = os.environ.copy()
+        env.update(
+            {
+                "HERDR_SOURCE_ROOT": str(source_root) if source_root else "",
+                "HERDR_SETUP_FILE": str(setup_path) if setup_path else "",
+                "HERDR_WORKTREE_PATH": str(worktree_path),
+                "HERDR_WORKTREE_BRANCH": str(worktree.get("branch") or "") if isinstance(worktree, dict) else "",
+            }
+        )
+
+        if setup_path and setup_commands:
+            total = len(setup_commands)
+            eprint(f"herdr-worktree-create: running {total} setup command(s) from {setup_path}")
+            for index, (label, command, shell) in enumerate(setup_commands, start=1):
+                eprint(f"herdr-worktree-create: [{index}/{total}] {label}")
+                if shell:
+                    run = subprocess.run(command, cwd=str(worktree_path), env=env, shell=True, executable="/bin/bash")
+                else:
+                    run = subprocess.run(command, cwd=str(worktree_path), env=env)
+                if run.returncode != 0:
+                    eprint(f"herdr-worktree-create: setup command {index} failed with exit code {run.returncode}")
+                    return run.returncode
+
+        for hook in script_hooks:
+            eprint(f"herdr-worktree-create: running script hook {hook}")
+            run = subprocess.run([str(hook)], cwd=str(worktree_path), env=env)
+            if run.returncode != 0:
+                eprint(f"herdr-worktree-create: script hook {hook} failed with exit code {run.returncode}")
+                return run.returncode
+
+    sys.stdout.write(create.stdout)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

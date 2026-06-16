@@ -139,6 +139,7 @@ in
       home.file.".pi/agent/settings.json" = file "dotfiles/pi/agent/settings.json";
       home.file.".pi/agent/models.json" = file "dotfiles/pi/agent/models.json";
       home.file.".pi/agent/extensions" = dir "dotfiles/pi/agent/extensions";
+      home.file.".pi/agent/bin" = dir "dotfiles/pi/agent/bin";
       home.file.".pi/agent/npm" = dir "dotfiles/pi/agent/npm";
       home.file.".pi/agent/prompts" = dir "dotfiles/pi/agent/prompts";
       home.file.".pi/agent/themes" = dir "dotfiles/pi/agent/themes";
