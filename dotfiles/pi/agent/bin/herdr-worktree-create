@@ -50,26 +50,52 @@ def current_branch(cwd: Path) -> str | None:
     return branch or None
 
 
-def prompt_with_default(label: str, default: str | None = None) -> str:
+def open_prompt_io() -> tuple[Any, Any, bool] | None:
+    """Return input, output, should_close for an interactive prompt.
+
+    Herdr custom command panes may not wire the process stdin as a TTY even
+    though the pane itself has a controlling terminal. Prefer normal
+    stdin/stdout when they are interactive, otherwise fall back to /dev/tty.
+    """
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        return sys.stdin, sys.stdout, False
+    try:
+        tty = open("/dev/tty", "r+", buffering=1)
+    except OSError:
+        return None
+    return tty, tty, True
+
+
+def prompt_with_default(label: str, default: str | None, prompt_in: Any, prompt_out: Any) -> str:
     suffix = f" [{default}]" if default else ""
-    value = input(f"{label}{suffix}: ").strip()
-    return value or (default or "")
+    print(f"{label}{suffix}: ", end="", file=prompt_out, flush=True)
+    value = prompt_in.readline()
+    if value == "":
+        raise EOFError
+    return value.strip() or (default or "")
 
 
 def prompt_for_missing_create_args(args: list[str], source_cwd: Path) -> list[str] | None:
     if option_value(args, "--branch") or option_value(args, "--path"):
         return args
-    if not sys.stdin.isatty():
+
+    prompt_io = open_prompt_io()
+    if prompt_io is None:
         return args
+    prompt_in, prompt_out, should_close = prompt_io
 
-    print("Create Herdr worktree")
-    branch = prompt_with_default("Branch name")
-    if not branch:
-        eprint("herdr-worktree-create: cancelled; branch name is required")
-        return None
+    try:
+        print("Create Herdr worktree", file=prompt_out, flush=True)
+        branch = prompt_with_default("Branch name", None, prompt_in, prompt_out)
+        if not branch:
+            eprint("herdr-worktree-create: cancelled; branch name is required")
+            return None
 
-    base = prompt_with_default("Base ref", "current checkout")
-    label = prompt_with_default("Worktree name", branch)
+        base = prompt_with_default("Base ref", "current checkout", prompt_in, prompt_out)
+        label = prompt_with_default("Worktree name", branch, prompt_in, prompt_out)
+    finally:
+        if should_close:
+            prompt_in.close()
 
     next_args = [*args, "--branch", branch]
     if base and base != "current checkout":
@@ -166,7 +192,9 @@ def main() -> int:
     invocation_cwd = Path.cwd()
 
     source_cwd_arg = option_value(args, "--cwd")
-    source_cwd = Path(absolutize(source_cwd_arg, invocation_cwd)) if source_cwd_arg else invocation_cwd
+    source_cwd_default = os.environ.get("HERDR_ACTIVE_PANE_CWD") or None
+    source_cwd_value = source_cwd_arg or source_cwd_default
+    source_cwd = Path(absolutize(source_cwd_value, invocation_cwd)) if source_cwd_value else invocation_cwd
     source_root = git_root(source_cwd)
 
     setup_path: Path | None = None
@@ -195,6 +223,7 @@ def main() -> int:
 
     create = subprocess.run(
         herdr_args,
+        cwd=str(source_cwd),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
