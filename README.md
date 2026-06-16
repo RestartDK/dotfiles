@@ -69,6 +69,9 @@ hosts/dkumlin-twin-macbook-pro/      # work MacBook nix-darwin host + Home Manag
 modules/nixos/                       # NixOS reusable modules, including configurable host identity
 modules/home/                        # shared Home Manager modules
 dotfiles/                            # live dotfiles linked out-of-store
+  agents/skills-global/              # portable skills safe to enable broadly
+  agents/skills-personal/            # personal-only skills such as homelab/Dokploy
+  agents/skills-all/                 # symlink farm combining global + personal skills
 packages/herdr.nix                   # Herdr binary package for Nana
 ```
 
@@ -82,7 +85,7 @@ config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
 
 This keeps the files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `dotfiles/` takes effect immediately; rebuilding is only needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
 
-Managed live config can include shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, shared agent skills, and selected macOS app config such as AeroSpace, Ghostty, Karabiner, Graphite, SketchyBar, WezTerm, Amp, and cmux. The reusable `twin` profile enables Pi-specific config but not Codex, Claude, OpenCode, or shared agent skills. Codex `config.toml` and RustDesk server/password settings are intentionally local app state, not repo-managed. Tmux config is intentionally not included.
+Managed live config can include shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, shared agent skills, and selected macOS app config such as AeroSpace, Ghostty, Karabiner, Graphite, SketchyBar, WezTerm, Amp, and cmux. Agent skills are split into global and personal sets so hosts can opt into only the skills they should expose; `agentSkills` enables all sets, while `agentSkillsGlobal` and `agentSkillsPersonal` enable them independently. The reusable `twin` profile enables Pi-specific config but not Codex, Claude, OpenCode, or shared agent skills. Codex `config.toml` and RustDesk server/password settings are intentionally local app state, not repo-managed. Tmux config is intentionally not included.
 
 ## Rules
 

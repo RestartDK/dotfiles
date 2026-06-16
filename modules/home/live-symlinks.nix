@@ -3,7 +3,19 @@
 let
   cfg = config.my.liveConfig;
   allAgents = cfg.groups.agents;
-  sharedAgentSkills = allAgents || cfg.groups.agentSkills;
+  allAgentSkills = allAgents || cfg.groups.agentSkills;
+  globalAgentSkills = cfg.groups.agentSkillsGlobal;
+  personalAgentSkills = cfg.groups.agentSkillsPersonal;
+  agentSkillsPath =
+    if allAgentSkills || (globalAgentSkills && personalAgentSkills) then
+      "dotfiles/agents/skills-all"
+    else if globalAgentSkills then
+      "dotfiles/agents/skills-global"
+    else if personalAgentSkills then
+      "dotfiles/agents/skills-personal"
+    else
+      null;
+  agentSkillsEnabled = agentSkillsPath != null;
   codex = allAgents || cfg.groups.codex;
   claude = allAgents || cfg.groups.claude;
   opencode = allAgents || cfg.groups.opencode;
@@ -37,7 +49,9 @@ in
       wayland = lib.mkEnableOption "Wayland desktop config";
       herdr = lib.mkEnableOption "Herdr config";
       agents = lib.mkEnableOption "all AI agent config";
-      agentSkills = lib.mkEnableOption "shared AI agent skills config";
+      agentSkills = lib.mkEnableOption "all shared AI agent skills config";
+      agentSkillsGlobal = lib.mkEnableOption "global AI agent skills config";
+      agentSkillsPersonal = lib.mkEnableOption "personal AI agent skills config";
       codex = lib.mkEnableOption "Codex config";
       claude = lib.mkEnableOption "Claude config";
       opencode = lib.mkEnableOption "OpenCode config";
@@ -93,10 +107,10 @@ in
       xdg.configFile."herdr/config.toml" = file "dotfiles/herdr/config.toml";
     })
 
-    (lib.mkIf sharedAgentSkills {
+    (lib.mkIf agentSkillsEnabled {
       home.file.".agents/.skill-lock.json" = file "dotfiles/agents/.skill-lock.json";
-      home.file.".agents/skills" = dir "dotfiles/agents/skills";
-      xdg.configFile."agents/skills" = dir "dotfiles/agents/skills";
+      home.file.".agents/skills" = dir agentSkillsPath;
+      xdg.configFile."agents/skills" = dir agentSkillsPath;
     })
 
     (lib.mkIf codex {
@@ -104,20 +118,20 @@ in
       home.file.".codex/hooks.json" = file "dotfiles/codex/hooks.json";
       home.file.".codex/herdr-agent-state.sh" = file "dotfiles/codex/herdr-agent-state.sh";
       home.file.".codex/rules/default.rules" = file "dotfiles/codex/rules/default.rules";
-      home.file.".codex/skills" = dir "dotfiles/agents/skills";
+      home.file.".codex/skills" = lib.mkIf agentSkillsEnabled (dir agentSkillsPath);
     })
 
     (lib.mkIf claude {
       home.file.".claude/settings.json" = file "dotfiles/claude/settings.json";
       home.file.".claude/hooks/herdr-agent-state.sh" = file "dotfiles/claude/hooks/herdr-agent-state.sh";
-      home.file.".claude/skills" = dir "dotfiles/agents/skills";
+      home.file.".claude/skills" = lib.mkIf agentSkillsEnabled (dir agentSkillsPath);
     })
 
     (lib.mkIf opencode {
       xdg.configFile."opencode/opencode.json" = file "dotfiles/opencode/opencode.json";
       xdg.configFile."opencode/package.json" = file "dotfiles/opencode/package.json";
       xdg.configFile."opencode/plugins" = dir "dotfiles/opencode/plugins";
-      xdg.configFile."opencode/skills" = dir "dotfiles/agents/skills";
+      xdg.configFile."opencode/skills" = lib.mkIf agentSkillsEnabled (dir agentSkillsPath);
     })
 
     (lib.mkIf pi {
@@ -130,8 +144,8 @@ in
       home.file.".pi/agent/themes" = dir "dotfiles/pi/agent/themes";
     })
 
-    (lib.mkIf (pi && sharedAgentSkills) {
-      home.file.".pi/agent/skills" = dir "dotfiles/agents/skills";
+    (lib.mkIf (pi && agentSkillsEnabled) {
+      home.file.".pi/agent/skills" = dir agentSkillsPath;
     })
 
     (lib.mkIf cfg.groups.macos {
