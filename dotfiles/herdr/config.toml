@@ -28,5 +28,5 @@ split_horizontal = "prefix+shift+j"
 [[keys.command]]
 key = "prefix+shift+g"
 type = "pane"
-command = "herdr-worktree-create"
+command = "$HOME/.pi/agent/bin/herdr-worktree-create"
 
