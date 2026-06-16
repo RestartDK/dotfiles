@@ -36,6 +36,49 @@ def option_value(args: list[str], name: str) -> str | None:
     return None
 
 
+def current_branch(cwd: Path) -> str | None:
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=str(cwd),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        return None
+    branch = result.stdout.strip()
+    return branch or None
+
+
+def prompt_with_default(label: str, default: str | None = None) -> str:
+    suffix = f" [{default}]" if default else ""
+    value = input(f"{label}{suffix}: ").strip()
+    return value or (default or "")
+
+
+def prompt_for_missing_create_args(args: list[str], source_cwd: Path) -> list[str] | None:
+    if option_value(args, "--branch") or option_value(args, "--path"):
+        return args
+    if not sys.stdin.isatty():
+        return args
+
+    print("Create Herdr worktree")
+    branch = prompt_with_default("Branch name")
+    if not branch:
+        eprint("herdr-worktree-create: cancelled; branch name is required")
+        return None
+
+    base = prompt_with_default("Base ref", "current checkout")
+    label = prompt_with_default("Worktree name", branch)
+
+    next_args = [*args, "--branch", branch]
+    if base and base != "current checkout":
+        next_args.extend(["--base", base])
+    if label:
+        next_args.extend(["--label", label])
+    return next_args
+
+
 def git_root(cwd: Path) -> Path | None:
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -111,6 +154,15 @@ def parse_herdr_json(stdout: str) -> dict[str, Any]:
 
 def main() -> int:
     args = sys.argv[1:]
+    if any(arg in ("-h", "--help") for arg in args):
+        print(
+            "Usage: herdr-worktree-create [herdr worktree create options]\n\n"
+            "With --branch or --path, creates a Herdr worktree noninteractively.\n"
+            "Without either option in an interactive pane, prompts for branch/base/name.\n"
+            "After creation, runs .herdr/setup.json commands and executable shell hooks."
+        )
+        return 0
+
     invocation_cwd = Path.cwd()
 
     source_cwd_arg = option_value(args, "--cwd")
@@ -127,6 +179,15 @@ def main() -> int:
         except ValueError as exc:
             eprint(f"herdr-worktree-create: {exc}")
             return 2
+
+    try:
+        prompted_args = prompt_for_missing_create_args(args, source_cwd)
+    except (EOFError, KeyboardInterrupt):
+        eprint("\nherdr-worktree-create: cancelled")
+        return 130
+    if prompted_args is None:
+        return 130
+    args = prompted_args
 
     herdr_args = ["herdr", "worktree", "create", *args]
     if "--json" not in args:
