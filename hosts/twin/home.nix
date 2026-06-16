@@ -1,4 +1,4 @@
-{ pkgs, inputs, lib, config, ... }:
+{ pkgs, inputs, ... }:
 
 let
   settings = import ./settings.nix;
@@ -51,12 +51,4 @@ in
       macos = false;
     };
   };
-
-  # Work/twin uses Herdr's native worktree creator on prefix+shift+g.
-  # The shared config keeps the custom wrapper available for other machines.
-  xdg.configFile."herdr/config.toml" = lib.mkForce {
-    source = config.lib.file.mkOutOfStoreSymlink "${settings.homeDirectory}/Projects/nix-config/dotfiles/herdr/config.twin.toml";
-    force = true;
-  };
-
 }
