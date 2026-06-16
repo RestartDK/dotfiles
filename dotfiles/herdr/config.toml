@@ -15,7 +15,7 @@ name = "terminal"
 [keys]
 prefix = "ctrl+x"
 new_workspace = "prefix+shift+n"
-new_worktree = ""
+new_worktree = "prefix+shift+g"
 switch_workspace = "prefix+1..9"
 switch_tab = "prefix+alt+1..9"
 focus_pane_left = "prefix+h"
@@ -25,8 +25,10 @@ focus_pane_right = "prefix+l"
 split_vertical = "prefix+shift+l"
 split_horizontal = "prefix+shift+j"
 
-[[keys.command]]
-key = "prefix+shift+g"
-type = "pane"
-command = "herdr-worktree-create"
+# Custom worktree wrapper, currently disabled in favor of native Herdr worktree create.
+# Re-enable by setting `new_worktree = ""` above and uncommenting this block.
+# [[keys.command]]
+# key = "prefix+shift+g"
+# type = "pane"
+# command = "herdr-worktree-create"
 
