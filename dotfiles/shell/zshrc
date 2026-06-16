@@ -86,6 +86,7 @@ fi
 # User-local tools
 path_append "$HOME/.lmstudio/bin"
 path_append "$HOME/.local/bin"
+path_append "$HOME/.pi/agent/bin"
 path_prepend "$HOME/.rbenv/bin"
 path_prepend "$HOME/.bun/bin"
 path_prepend "$HOME/railpack/bin"
