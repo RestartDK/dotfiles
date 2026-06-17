@@ -6,6 +6,7 @@ in
 {
   imports = [
     ../../modules/home/live-symlinks.nix
+    ../../modules/home/pi-opencode-netns-wrapper.nix
   ];
 
   programs.home-manager.enable = true;
@@ -16,7 +17,7 @@ in
   # machine's existing Git aliases, LFS setup, or signing config.
   home.packages = import ../../modules/home/dev-package-list.nix {
     inherit pkgs inputs;
-    agentPackageNames = [ "pi-coding-agent" ];
+    agentPackageNames = [ ];
   };
 
   home.username = settings.userName;
