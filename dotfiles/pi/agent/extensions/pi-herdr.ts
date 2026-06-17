@@ -265,6 +265,34 @@ export default function (pi: ExtensionAPI) {
 		return `'${value.replace(/'/g, `'\\''`)}'`;
 	}
 
+	function selectedPiNetns(): string | null {
+		const value = process.env.PI_NETNS_SELECTED?.trim();
+		return value ? value : null;
+	}
+
+	function piRunDevNetns(): string {
+		const value = process.env.PI_NETNS_RUN_DEV_NETNS?.trim();
+		return value || "/run/current-system/sw/bin/run-dev-netns";
+	}
+
+	function buildEnterPiNetnsCommand(namespace: string): string {
+		const runDevNetns = piRunDevNetns();
+		return [
+			`export PI_NETNS=${shellQuote(namespace)}`,
+			`export PI_NETNS_SELECTED=${shellQuote(namespace)}`,
+			`export PI_NETNS_RUN_DEV_NETNS=${shellQuote(runDevNetns)}`,
+			`exec /run/wrappers/bin/sudo -n -E ${shellQuote(runDevNetns)} ${shellQuote(namespace)} "\${SHELL:-/bin/sh}" -l`,
+		].join("; ");
+	}
+
+	async function enterPiNetnsInPane(paneId: string, signal?: AbortSignal): Promise<string | null> {
+		const namespace = selectedPiNetns();
+		if (!namespace) return null;
+		await execHerdr(["pane", "run", paneId, buildEnterPiNetnsCommand(namespace)], signal);
+		await sleep(800, signal);
+		return namespace;
+	}
+
 	async function shouldUseWorktreeCreateWrapper(cwd: string | undefined, signal?: AbortSignal): Promise<boolean> {
 		if (!cwd) return false;
 		const command =
@@ -534,6 +562,7 @@ export default function (pi: ExtensionAPI) {
 			"Use `recent-unwrapped` when you need log matching or reads that ignore soft wrapping.",
 			"Pane references can be either friendly aliases you created earlier or real herdr pane ids from `list`.",
 			"Use `pane_split`, `tab_create`, or `workspace_create` to establish new pane targets. `pane_split` defaults to the agent's own pane when pane is omitted and splits right when direction is omitted. `run` only works with an existing pane alias or pane id.",
+			"When PI_NETNS_SELECTED is set, newly split panes automatically enter that network namespace before later commands are run in them.",
 			"Use friendly pane aliases like `server`, `reviewer`, or `tests` so later reads, watches, and sends can reuse them across the session.",
 			"When starting a fresh pi instance in another pane and the model matters, either specify `--model` explicitly or ask the user which model/provider they want.",
 		],
@@ -823,13 +852,15 @@ export default function (pi: ExtensionAPI) {
 					if (params.newPane) {
 						recordAlias(params.newPane, splitPane.pane_id, splitPane.workspace_id);
 					}
+					const enteredNetns = await enterPiNetnsInPane(splitPane.pane_id, signal);
 
 					const sourceLabel = sourcePane.alias || paneRef;
 					const aliasText = params.newPane ? `, aliased as '${params.newPane}'` : "";
+					const netnsText = enteredNetns ? `, entered network namespace '${enteredNetns}'` : "";
 					return {
 						content: [{
 							type: "text",
-							text: `Created pane '${splitPane.pane_id}' by splitting '${sourceLabel}' ${direction}${aliasText}`,
+							text: `Created pane '${splitPane.pane_id}' by splitting '${sourceLabel}' ${direction}${aliasText}${netnsText}`,
 						}],
 						details: withSnapshot({
 							action: "pane_split",
@@ -839,6 +870,7 @@ export default function (pi: ExtensionAPI) {
 							newPaneId: splitPane.pane_id,
 							direction,
 							workspaceId: splitPane.workspace_id,
+							enteredNetns,
 						}),
 					};
 				}

@@ -93,6 +93,8 @@ path_prepend "$HOME/railpack/bin"
 path_append "$HOME/.pub-cache/bin"
 path_append "$HOME/.kluster/cli/bin"
 
+[[ -r "$HOME/.config/herdr/netns-hook.zsh" ]] && source "$HOME/.config/herdr/netns-hook.zsh"
+
 # Flutter: common Homebrew cask location on this machine.
 path_append "/opt/homebrew/Caskroom/flutter/3.32.4/flutter/bin"
 
