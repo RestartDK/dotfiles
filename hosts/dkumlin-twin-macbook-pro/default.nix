@@ -112,6 +112,7 @@
       "bruno"
       "codex-app"
       "cursor"
+      "figma"
       "flutter"
       "font-jetbrains-mono-nerd-font"
       "font-monaspice-nerd-font"
@@ -139,7 +140,7 @@
     # to `casks` until intentionally migrating them to Homebrew ownership,
     # otherwise `brew bundle` may try to reinstall over existing .app bundles.
     # Manual apps: affinity-designer, affinity-photo, affinity-publisher,
-    # android-studio, chatgpt, discord, figma, google-chrome,
+    # android-studio, chatgpt, discord, google-chrome,
     # nextcloud, nordvpn, ollama-app.
     # Also intentionally unmanaged for now: codexbar, emdash, warp, zulu@17.
   };
