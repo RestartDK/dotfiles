@@ -41,7 +41,6 @@ export default function piSshExtension(pi: ExtensionAPI): void {
 		if (ctx.mode !== "tui") {
 			return;
 		}
-		ctx.ui.setTitle(`Pi · ${ctx.cwd}`);
 		protocol = new ClipboardPasteProtocol({
 			write: (data) => process.stdout.write(data),
 			saveImage: (data, mimeType) => {
