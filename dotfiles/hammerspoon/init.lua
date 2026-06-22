@@ -1,20 +1,19 @@
 local bridge = {}
 
 local appBundleId = "com.mitchellh.ghostty"
-local titlePrefix = "Pi · "
 local markerPrefix = "PI_GHOSTTY_IMAGE_V1:"
 local maxImageBytes = 50 * 1024 * 1024
 local dropWidth = 112
 local dropHeight = 30
-local lastPiWindow = nil
+local lastGhosttyWindow = nil
 local dropTarget = nil
 
-local function isPiWindow(window)
+local function isGhosttyWindow(window)
 	if not window then
 		return false
 	end
 	local application = window:application()
-	return application and application:bundleID() == appBundleId and window:title():sub(1, #titlePrefix) == titlePrefix
+	return application and application:bundleID() == appBundleId
 end
 
 local function imageMimeType(data)
@@ -87,7 +86,7 @@ local function markerForPath(path)
 end
 
 local function pasteMarker(window, marker)
-	if not isPiWindow(window) or not marker then
+	if not isGhosttyWindow(window) or not marker then
 		return false
 	end
 	local clipboard = hs.pasteboard.readAllData()
@@ -111,7 +110,7 @@ end
 
 local function pasteClipboardImage()
 	local window = hs.window.focusedWindow()
-	if not isPiWindow(window) then
+	if not isGhosttyWindow(window) then
 		return
 	end
 	local image = hs.pasteboard.readImage()
@@ -171,7 +170,7 @@ local function createDropTarget()
 				hs.alert.show("Drop a PNG, JPEG, GIF, or WebP image")
 				return false
 			end
-			return pasteMarker(lastPiWindow, marker)
+			return pasteMarker(lastGhosttyWindow, marker)
 		end
 		return true
 	end)
@@ -182,8 +181,8 @@ local pasteHotkey = hs.hotkey.new({ "cmd" }, "v", pasteClipboardImage)
 
 local function refresh()
 	local focusedWindow = hs.window.focusedWindow()
-	if isPiWindow(focusedWindow) then
-		lastPiWindow = focusedWindow
+	if isGhosttyWindow(focusedWindow) then
+		lastGhosttyWindow = focusedWindow
 		if not pasteHotkey.enabled then
 			pasteHotkey:enable()
 		end
@@ -191,17 +190,17 @@ local function refresh()
 		pasteHotkey:disable()
 	end
 
-	if lastPiWindow and not isPiWindow(lastPiWindow) then
-		lastPiWindow = nil
+	if lastGhosttyWindow and not isGhosttyWindow(lastGhosttyWindow) then
+		lastGhosttyWindow = nil
 	end
 	if not dropTarget then
 		dropTarget = createDropTarget()
 	end
-	if not lastPiWindow or not lastPiWindow:isVisible() then
+	if not lastGhosttyWindow or not lastGhosttyWindow:isVisible() then
 		dropTarget:hide()
 		return
 	end
-	local frame = lastPiWindow:frame()
+	local frame = lastGhosttyWindow:frame()
 	dropTarget:frame({
 		x = frame.x + frame.w - dropWidth - 12,
 		y = frame.y + 7,

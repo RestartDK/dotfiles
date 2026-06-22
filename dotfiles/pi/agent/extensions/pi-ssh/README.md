@@ -26,15 +26,17 @@ Then:
 
 1. Open Ghostty on the Mac.
 2. SSH to the development host normally.
-3. Start `pi` in the project directory.
+3. Start Herdr, focus the pane where you want to work, and start `pi` in the project directory.
 4. In an existing Pi process, run `/reload` once after installing or changing the extension.
 5. Send an image in either of these ways:
-   - Copy a screenshot or image on the Mac and press `Cmd+V` while Pi is focused.
-   - Drag an image from Finder onto the **Drop image → Pi** target in the Ghostty title bar.
+   - Copy a screenshot or image on the Mac and press `Cmd+V` while the Pi pane is focused.
+   - Drag an image from Finder onto the **Drop image → Pi** target over the Ghostty window while the Pi pane is focused.
 6. Optionally use `/pi-ssh` to request an image through OSC 5522 on a terminal that supports that protocol.
 7. Add text around the inserted path and press Enter. Pi receives the remote path and reads it as an image attachment.
 
-Text on the clipboard continues to paste normally with `Cmd+V`. The Hammerspoon hotkey only takes over when the clipboard contains an image and the focused Ghostty window is running Pi.
+Text on the clipboard continues to paste normally with `Cmd+V`. Herdr parses and forwards the Hammerspoon bracketed-paste marker to its focused pane, where `pi-ssh` consumes it. The bridge deliberately keys off the Ghostty application instead of Pi's terminal title because Herdr owns the outer terminal and does not forward a pane's title to Ghostty.
+
+The focused Herdr pane must contain Pi. Sending an image while a shell or another application is focused will insert the bridge marker into that application instead.
 
 PNG, JPEG, GIF, and WebP images up to 50 MB are accepted. macOS clipboard formats such as TIFF are converted to PNG before transfer.
 
