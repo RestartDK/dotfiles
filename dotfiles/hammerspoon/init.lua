@@ -3,10 +3,6 @@ local bridge = {}
 local appBundleId = "com.mitchellh.ghostty"
 local markerPrefix = "PI_GHOSTTY_IMAGE_V1:"
 local maxImageBytes = 50 * 1024 * 1024
-local dropWidth = 112
-local dropHeight = 30
-local lastGhosttyWindow = nil
-local dropTarget = nil
 
 local function isGhosttyWindow(window)
 	if not window then
@@ -47,7 +43,7 @@ local function markerForImage(image)
 	local encoded = image:encodeAsURLString(false, "PNG")
 	local dataUrlPrefix = "data:image/png;base64,"
 	if not encoded or encoded:sub(1, #dataUrlPrefix) ~= dataUrlPrefix then
-		hs.alert.show("Could not encode the dropped image")
+		hs.alert.show("Could not encode the clipboard image")
 		return nil
 	end
 	local payload = encoded:sub(#dataUrlPrefix + 1)
@@ -140,78 +136,21 @@ local function pasteClipboardImage()
 	end
 end
 
-local function createDropTarget()
-	local target = hs.canvas.new({ x = 0, y = 0, w = dropWidth, h = dropHeight })
-	target[1] = {
-		type = "rectangle",
-		action = "fill",
-		fillColor = { red = 0.08, green = 0.1, blue = 0.15, alpha = 0.9 },
-		roundedRectRadii = { xRadius = 7, yRadius = 7 },
-	}
-	target[2] = {
-		type = "text",
-		text = "Drop image → Pi",
-		textAlignment = "center",
-		textColor = { red = 0.75, green = 0.85, blue = 1, alpha = 1 },
-		textSize = 12,
-		frame = { x = 0, y = 7, w = dropWidth, h = 18 },
-	}
-	target:level("dragging")
-	target:behavior({ "canJoinAllSpaces", "stationary" })
-	target:mouseCallback(function() end)
-	target:draggingCallback(function(_, message, details)
-		if message == "receive" then
-			local marker = imageMarkerFromPasteboard(details.pasteboard)
-			if not marker then
-				hs.alert.show("Drop a PNG, JPEG, GIF, or WebP image")
-				return false
-			end
-			return pasteMarker(lastGhosttyWindow, marker)
-		end
-		return true
-	end)
-	return target
-end
-
 local pasteHotkey = hs.hotkey.new({ "cmd" }, "v", pasteClipboardImage)
 
 local function refresh()
-	local focusedWindow = hs.window.focusedWindow()
-	if isGhosttyWindow(focusedWindow) then
-		lastGhosttyWindow = focusedWindow
+	if isGhosttyWindow(hs.window.focusedWindow()) then
 		if not pasteHotkey.enabled then
 			pasteHotkey:enable()
 		end
 	elseif pasteHotkey.enabled then
 		pasteHotkey:disable()
 	end
-
-	if lastGhosttyWindow and not isGhosttyWindow(lastGhosttyWindow) then
-		lastGhosttyWindow = nil
-	end
-	if not dropTarget then
-		dropTarget = createDropTarget()
-	end
-	if not lastGhosttyWindow or not lastGhosttyWindow:isVisible() then
-		dropTarget:hide()
-		return
-	end
-	local frame = lastGhosttyWindow:frame()
-	dropTarget:frame({
-		x = frame.x + frame.w - dropWidth - 12,
-		y = frame.y + 7,
-		w = dropWidth,
-		h = dropHeight,
-	})
-	dropTarget:show()
 end
 
 bridge.timer = hs.timer.doEvery(0.2, refresh)
 bridge.pasteHotkey = pasteHotkey
 bridge.refresh = refresh
-bridge.dropTarget = function()
-	return dropTarget
-end
 
 hs.autoLaunch(true)
 refresh()
