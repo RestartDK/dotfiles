@@ -8,6 +8,17 @@
     "npm:pi-mcp-adapter",
     "npm:@ollama/pi-web-search"
   ],
+  "powerline": {
+    "preset": "default",
+    "customItems": [
+      {
+        "id": "netns",
+        "statusKey": "netns",
+        "position": "left",
+        "color": "accent"
+      }
+    ]
+  },
   "powerlineWelcome": false,
   "quietStartup": true,
   "skills": [
