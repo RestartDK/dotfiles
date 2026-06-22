@@ -28,9 +28,7 @@ Then:
 2. SSH to the development host normally.
 3. Start Herdr, focus the pane where you want to work, and start `pi` in the project directory.
 4. In an existing Pi process, run `/reload` once after installing or changing the extension.
-5. Send an image in either of these ways:
-   - Copy a screenshot or image on the Mac and press `Cmd+V` while the Pi pane is focused.
-   - Drag an image from Finder onto the **Drop image → Pi** target over the Ghostty window while the Pi pane is focused.
+5. Copy a screenshot or image on the Mac and press `Cmd+V` while the Pi pane is focused.
 6. Optionally use `/pi-ssh` to request an image through OSC 5522 on a terminal that supports that protocol.
 7. Add text around the inserted path and press Enter. Pi receives the remote path and reads it as an image attachment.
 
