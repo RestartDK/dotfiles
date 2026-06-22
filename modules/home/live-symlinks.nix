@@ -150,6 +150,7 @@ in
     })
 
     (lib.mkIf cfg.groups.macos {
+      home.file.".hammerspoon/init.lua" = file "dotfiles/hammerspoon/init.lua";
       xdg.configFile."aerospace/aerospace.toml" = file "dotfiles/aerospace/aerospace.toml";
       xdg.configFile."karabiner/karabiner.json" = file "dotfiles/karabiner/karabiner.json";
       xdg.configFile."graphite/aliases" = file "dotfiles/graphite/aliases";
