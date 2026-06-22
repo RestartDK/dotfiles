@@ -82,7 +82,7 @@ local function markerForPath(path)
 			return markerForData(data, mimeType)
 		end
 	end
-	return markerForImage(hs.image.imageFromPath(path))
+	return nil
 end
 
 local function pasteMarker(window, marker)
@@ -108,27 +108,7 @@ local function pasteMarker(window, marker)
 	return pasted == true
 end
 
-local function pasteClipboardImage()
-	local window = hs.window.focusedWindow()
-	if not isGhosttyWindow(window) then
-		return
-	end
-	local image = hs.pasteboard.readImage()
-	if image then
-		pasteMarker(window, markerForImage(image))
-		return
-	end
-	local application = window:application()
-	if application then
-		application:selectMenuItem({ "Edit", "Paste" })
-	end
-end
-
-local function droppedImageMarker(pasteboardName)
-	local image = hs.pasteboard.readImage(pasteboardName)
-	if image then
-		return markerForImage(image)
-	end
+local function imageMarkerFromPasteboard(pasteboardName)
 	local urls = hs.pasteboard.readURL(pasteboardName, true)
 	if type(urls) == "string" then
 		urls = { urls }
@@ -141,7 +121,23 @@ local function droppedImageMarker(pasteboardName)
 			end
 		end
 	end
-	return nil
+	return markerForImage(hs.pasteboard.readImage(pasteboardName))
+end
+
+local function pasteClipboardImage()
+	local window = hs.window.focusedWindow()
+	if not isGhosttyWindow(window) then
+		return
+	end
+	local marker = imageMarkerFromPasteboard(nil)
+	if marker then
+		pasteMarker(window, marker)
+		return
+	end
+	local application = window:application()
+	if application then
+		application:selectMenuItem({ "Edit", "Paste" })
+	end
 end
 
 local function createDropTarget()
@@ -165,7 +161,7 @@ local function createDropTarget()
 	target:mouseCallback(function() end)
 	target:draggingCallback(function(_, message, details)
 		if message == "receive" then
-			local marker = droppedImageMarker(details.pasteboard)
+			local marker = imageMarkerFromPasteboard(details.pasteboard)
 			if not marker then
 				hs.alert.show("Drop a PNG, JPEG, GIF, or WebP image")
 				return false
