@@ -30,6 +30,7 @@ in
   my.liveConfig = {
     enable = true;
     repoRoot = "${settings.homeDirectory}/Projects/nix-config";
+    piSettingsFile = "dotfiles/pi/agent/settings-twin.json";
     groups = {
       shell = true;
       git = true;
