@@ -10,6 +10,13 @@
 
     nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Track Pi directly so `nix flake update` can advance it independently of
+    # the version packaged in nixpkgs-unstable.
+    pi-src = {
+      url = "github:earendil-works/pi";
+      flake = false;
+    };
   };
 
   outputs = inputs@{ self, nixpkgs, home-manager, nix-darwin, ... }:

@@ -17,7 +17,7 @@ in
   # machine's existing Git aliases, LFS setup, or signing config.
   home.packages = import ../../modules/home/dev-package-list.nix {
     inherit pkgs inputs;
-    agentPackageNames = [ ];
+    agentPackageNames = [ "pi-coding-agent" ];
   };
 
   home.username = settings.userName;
