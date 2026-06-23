@@ -107,6 +107,7 @@
     ];
 
     casks = [
+      "1password"
       "1password-cli"
       "betterdisplay"
       "bruno"
