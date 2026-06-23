@@ -2,7 +2,7 @@
   "name": "pi-extensions",
   "private": true,
   "dependencies": {
-    "@ollama/pi-web-search": "^0.0.5",
-    "pi-mcp-adapter": "^2.10.0"
+    "pi-mcp-adapter": "^2.10.0",
+    "pi-web-access": "^0.10.7"
   }
 }

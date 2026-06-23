@@ -6,7 +6,7 @@
   "lastChangelogVersion": "0.79.1",
   "packages": [
     "npm:pi-mcp-adapter",
-    "npm:@ollama/pi-web-search"
+    "npm:pi-web-access"
   ],
   "powerline": {
     "preset": "default",
