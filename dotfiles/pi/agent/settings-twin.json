@@ -1,9 +1,9 @@
 {
   "defaultModel": "gpt-5.5",
   "defaultProvider": "openai-codex",
-  "defaultThinkingLevel": "xhigh",
+  "defaultThinkingLevel": "low",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.79.1",
+  "lastChangelogVersion": "0.80.1",
   "packages": [
     "npm:pi-mcp-adapter",
     "npm:pi-web-access"
@@ -28,5 +28,5 @@
   "skills": [
     "~/.claude/skills"
   ],
-  "theme": "terminal"
+  "theme": "light/dark"
 }
