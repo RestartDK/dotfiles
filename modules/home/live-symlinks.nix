@@ -40,6 +40,12 @@ in
       description = "Absolute path to the editable nix-config checkout on this host.";
     };
 
+    piSettingsFile = lib.mkOption {
+      type = lib.types.str;
+      default = "dotfiles/pi/agent/settings.json";
+      description = "Repo-relative Pi settings JSON file to link as ~/.pi/agent/settings.json.";
+    };
+
     groups = {
       shell = lib.mkEnableOption "shell/starship config";
       git = lib.mkEnableOption "Git config";
@@ -136,7 +142,7 @@ in
 
     (lib.mkIf pi {
       home.file.".pi/agent/keybindings.json" = file "dotfiles/pi/agent/keybindings.json";
-      home.file.".pi/agent/settings.json" = file "dotfiles/pi/agent/settings.json";
+      home.file.".pi/agent/settings.json" = file cfg.piSettingsFile;
       home.file.".pi/agent/models.json" = file "dotfiles/pi/agent/models.json";
       home.file.".pi/agent/extensions" = dir "dotfiles/pi/agent/extensions";
       home.file.".pi/agent/bin" = dir "dotfiles/pi/agent/bin";

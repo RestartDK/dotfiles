@@ -21,8 +21,8 @@
   },
   "powerlineWelcome": false,
   "piStartup": {
-    "enabled": false,
-    "greeting": "hey dk :)"
+    "enabled": true,
+    "greeting": "hey twin :)"
   },
   "quietStartup": true,
   "skills": [
