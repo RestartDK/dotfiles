@@ -6,18 +6,18 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const art = String.raw`          :#@@+  +@@#:
           *@@@+  +@@@*
-         *@@@@+  +@@@@+
-       =#@@@@@+  +@@@@@#:
-    .=#@@@@@@@+  +@@@@@@@#=
-++#%@@@@@@@@@@+  +@@@@@@@@@@%#+=
+         *@@@@+  +@@@@*
+       =#@@@@@+  +@@@@@#=
+    .=#@@@@@@@+  +@@@@@@@#=.
+++#%@@@@@@@@@@+  +@@@@@@@@@@%#++
 @@@@@@@@@@@@@@+  +@@@@@@@@@@@@@@
 
 
 @@@@@@@@@@@@@@+  +@@@@@@@@@@@@@@
 ++#%@@@@@@@@@@+  +@@@@@@@@@@%#++
-    .=#@@@@@@@+  +@@@@@@@#=
-       =#@@@@@+  +@@@@@*:
-         *@@@@+  +@@@@+
+    .=#@@@@@@@+  +@@@@@@@#=.
+       =#@@@@@+  +@@@@@#=
+         *@@@@+  +@@@@*
           *@@@+  +@@@*
           :#@@+  +@@#:`;
 
@@ -195,6 +195,7 @@ export default function (pi: ExtensionAPI) {
 
     const home = homedir();
     const lines = art.trimEnd().split("\n");
+    const artWidth = Math.max(...lines.map((line) => visibleWidth(line)));
     const contextFiles = countFiles([
       join(home, ".pi", "agent", "AGENTS.md"),
       join(home, ".claude", "AGENTS.md"),
@@ -207,7 +208,7 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setHeader((_tui, theme) => ({
       render(width: number) {
         const renderedLines = [
-          ...lines.map((line) => centerLine(theme.fg("accent", line), width)),
+          ...lines.map((line) => centerLine(theme.fg("accent", line.padEnd(artWidth)), width)),
           "",
           centerLine(theme.fg("muted", statsLine), width),
         ];

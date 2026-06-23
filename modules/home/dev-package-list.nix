@@ -13,11 +13,14 @@ let
     system = pkgs.stdenv.hostPlatform.system;
     config = pkgs.config;
   };
+  piCodingAgent = unstable.callPackage ../../packages/pi-coding-agent.nix {
+    src = inputs.pi-src;
+  };
   availableAgentPackages = {
     codex = unstable.codex;
     "claude-code" = unstable.claude-code;
     opencode = unstable.opencode;
-    "pi-coding-agent" = unstable.pi-coding-agent;
+    "pi-coding-agent" = piCodingAgent;
   };
   agentPackages = map (
     name:
