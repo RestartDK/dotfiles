@@ -1,7 +1,10 @@
-{ pkgs, ... }:
+{ pkgs, inputs, ... }:
 
 let
-  realPi = "${pkgs.pi-coding-agent}/bin/pi";
+  piCodingAgent = pkgs.callPackage ../../packages/pi-coding-agent.nix {
+    src = inputs.pi-src;
+  };
+  realPi = "${piCodingAgent}/bin/pi";
   piWrapper = pkgs.writeShellScriptBin "pi" ''
     set -euo pipefail
 
