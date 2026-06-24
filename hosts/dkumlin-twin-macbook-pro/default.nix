@@ -92,7 +92,6 @@
       "poppler"
       "postgresql@16"
       "rbenv"
-      "rustup"
       "starship"
       "thefuck"
       "tree"
