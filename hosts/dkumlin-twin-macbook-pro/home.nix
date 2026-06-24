@@ -1,7 +1,8 @@
-{ ... }:
+{ inputs, ... }:
 
 {
   imports = [
+    inputs.hunk.homeManagerModules.default
     ../../modules/home/cobb-forwarding.nix
     ../../modules/home/dev-packages.nix
     ../../modules/home/live-symlinks.nix
@@ -10,6 +11,8 @@
   home.username = "danielkumlin";
   home.homeDirectory = "/Users/danielkumlin";
   home.stateVersion = "26.05";
+
+  programs.hunk.enable = true;
 
   my.liveConfig = {
     enable = true;
