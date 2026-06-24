@@ -144,6 +144,7 @@ in
       home.file.".pi/agent/keybindings.json" = file "dotfiles/pi/agent/keybindings.json";
       home.file.".pi/agent/settings.json" = file cfg.piSettingsFile;
       home.file.".pi/agent/models.json" = file "dotfiles/pi/agent/models.json";
+      home.file.".pi/agent/mcp.json" = file "dotfiles/pi/agent/mcp.json";
       home.file.".pi/agent/extensions" = dir "dotfiles/pi/agent/extensions";
       home.file.".pi/agent/bin" = dir "dotfiles/pi/agent/bin";
       home.file.".pi/agent/npm" = dir "dotfiles/pi/agent/npm";

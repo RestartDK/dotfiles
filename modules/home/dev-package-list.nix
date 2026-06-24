@@ -59,6 +59,7 @@ with pkgs; [
   gcc
   gnumake
   nodejs
+  pnpm
   tree-sitter
   unzip
   stylua
