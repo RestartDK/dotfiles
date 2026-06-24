@@ -5,11 +5,13 @@ let
 in
 {
   imports = [
+    inputs.hunk.homeManagerModules.default
     ../../modules/home/live-symlinks.nix
     ../../modules/home/pi-opencode-netns-wrapper.nix
   ];
 
   programs.home-manager.enable = true;
+  programs.hunk.enable = true;
   xdg.enable = true;
 
   # Dev packages only. Unlike modules/home/dev-packages.nix, this intentionally
