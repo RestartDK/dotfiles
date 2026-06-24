@@ -42,6 +42,12 @@ type = "plugin_action"
 command = "daniel.scatterer.quick-start"
 description = "scatterer quick start"
 
+[[keys.command]]
+key = "prefix+shift+r"
+type = "plugin_action"
+command = "daniel.scatterer.pr-picker"
+description = "scatterer PR picker"
+
 [experimental]
 pane_history = false
 switch_ascii_input_source_in_prefix = true
