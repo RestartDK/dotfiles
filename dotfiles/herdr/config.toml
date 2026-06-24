@@ -30,3 +30,5 @@ key = "prefix+shift+g"
 type = "pane"
 command = "$HOME/.pi/agent/bin/herdr-worktree-create"
 
+[experimental]
+pane_history = false

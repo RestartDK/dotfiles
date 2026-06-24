@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "linear": {
+      "url": "https://mcp.linear.app/mcp",
+      "auth": "oauth"
+    },
+    "figma": {
+      "url": "https://mcp.figma.com/mcp",
+      "auth": "oauth",
+      "oauth": {
+        "clientName": "Codex"
+      }
+    }
+  }
+}
