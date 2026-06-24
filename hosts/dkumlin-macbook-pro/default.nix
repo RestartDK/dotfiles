@@ -101,7 +101,6 @@
       "poppler"
       "postgresql@16"
       "rbenv"
-      "rustup"
       "spicetify-cli"
       "starship"
       "supabase"

@@ -5,18 +5,18 @@ let
   sources = {
     x86_64-linux = {
       asset = "linux-x86_64";
-      hash = "sha256-Uo0i6ImBSmzPIhYoAdWWkNnb1dxk+W1+HRx6hjSyVTU=";
+      hash = "sha256-uWWsr/wsIvVLbmxkr3z46Yo/SsJiJjCgWZxnpLnYplQ=";
     };
     aarch64-darwin = {
       asset = "macos-aarch64";
-      hash = "sha256-E0T9GHQapNAXI8N60+IvOP4WJuQJC1Q1qxdXxm8qF9U=";
+      hash = "sha256-FvRlPwSR6h59K0a1sCVC8Y4bguiNqvnikAVy5btjTfg=";
     };
   };
   source = sources.${system} or (throw "herdr is not packaged for ${system} in this config");
 in
 stdenvNoCC.mkDerivation rec {
   pname = "herdr";
-  version = "0.6.8";
+  version = "0.7.1";
 
   src = fetchurl {
     url = "https://github.com/ogulcancelik/herdr/releases/download/v${version}/herdr-${source.asset}";

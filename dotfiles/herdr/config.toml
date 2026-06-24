@@ -7,7 +7,7 @@ directory = "~/.herdr/worktrees"
 delivery = "system"
 
 [ui]
-agent_panel_scope = "all"
+agent_panel_sort = "spaces"
 
 [theme]
 name = "terminal"
@@ -30,5 +30,18 @@ key = "prefix+shift+g"
 type = "pane"
 command = "$HOME/.pi/agent/bin/herdr-worktree-create"
 
+[[keys.command]]
+key = "prefix+shift+s"
+type = "plugin_action"
+command = "daniel.scatterer.apply-layout"
+description = "scatterer layout"
+
+[[keys.command]]
+key = "prefix+shift+a"
+type = "plugin_action"
+command = "daniel.scatterer.quick-start"
+description = "scatterer quick start"
+
 [experimental]
 pane_history = false
+switch_ascii_input_source_in_prefix = true

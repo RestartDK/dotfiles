@@ -44,7 +44,11 @@ with pkgs; [
   fnm
   bun
   go
-  rustup
+  rustc
+  cargo
+  rust-analyzer
+  rustfmt
+  clippy
   pkg-config
   openssl
   python3
@@ -56,7 +60,6 @@ with pkgs; [
   herdrWorktreeCreate
 
   neovim
-  gcc
   gnumake
   nodejs
   pnpm
@@ -69,4 +72,6 @@ with pkgs; [
   zsh-autosuggestions
   zsh-syntax-highlighting
   zsh-vi-mode
+] ++ lib.optionals stdenv.hostPlatform.isLinux [
+  gcc
 ] ++ agentPackages
