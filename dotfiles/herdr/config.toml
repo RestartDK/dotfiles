@@ -24,6 +24,7 @@ focus_pane_up = "prefix+k"
 focus_pane_right = "prefix+l"
 split_vertical = "prefix+shift+l"
 split_horizontal = "prefix+shift+j"
+reload_config = "prefix+shift+r"
 
 [[keys.command]]
 key = "prefix+shift+g"
@@ -43,7 +44,7 @@ command = "daniel.scatterer.quick-start"
 description = "scatterer quick start"
 
 [[keys.command]]
-key = "prefix+shift+r"
+key = "prefix+shift+p"
 type = "plugin_action"
 command = "daniel.scatterer.pr-picker"
 description = "scatterer PR picker"
