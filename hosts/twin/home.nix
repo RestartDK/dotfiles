@@ -12,6 +12,7 @@ in
 
   programs.home-manager.enable = true;
   programs.hunk.enable = true;
+  services.lorri.enable = true;
   xdg.enable = true;
 
   home.file.".zshenv".text = ''
