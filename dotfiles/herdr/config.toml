@@ -27,11 +27,6 @@ split_horizontal = "prefix+shift+j"
 reload_config = "prefix+shift+r"
 
 [[keys.command]]
-key = "prefix+shift+g"
-type = "pane"
-command = "$HOME/.pi/agent/bin/herdr-worktree-create"
-
-[[keys.command]]
 key = "prefix+shift+s"
 type = "plugin_action"
 command = "daniel.scatterer.apply-layout"

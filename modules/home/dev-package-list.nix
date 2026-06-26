@@ -2,13 +2,6 @@
 
 let
   herdr = pkgs.callPackage ../../packages/herdr.nix { };
-  herdrWorktreeCreate = pkgs.writeShellApplication {
-    name = "herdr-worktree-create";
-    runtimeInputs = [ pkgs.python3 pkgs.git herdr ];
-    text = ''
-      exec ${pkgs.python3}/bin/python3 ${../../dotfiles/pi/agent/bin/herdr-worktree-create} "$@"
-    '';
-  };
   unstable = import inputs.nixpkgs-unstable {
     system = pkgs.stdenv.hostPlatform.system;
     config = pkgs.config;
@@ -57,7 +50,6 @@ with pkgs; [
   lazygit
   gh
   herdr
-  herdrWorktreeCreate
 
   neovim
   gnumake
