@@ -22,14 +22,14 @@
     vim
   ];
 
-  # This mirrors the current Mac app/tool inventory but intentionally keeps
-  # cleanup disabled until we actually test nix-darwin on the Mac.
+  # This host treats the Homebrew lists below as authoritative. During
+  # activation, nix-darwin prunes Homebrew packages not declared here.
   homebrew = {
     enable = true;
     onActivation = {
       autoUpdate = false;
       upgrade = false;
-      cleanup = "none";
+      cleanup = "uninstall";
     };
 
     taps = [
@@ -125,8 +125,6 @@
       "godot"
       "karabiner-elements"
       "linear"
-      "notion-calendar"
-      "notion-mail"
       "obsidian"
       "orbstack"
       "raycast"
