@@ -50,6 +50,16 @@ with pkgs; [
   lazygit
   gh
   herdr
+  (yazi.override {
+    _7zz = _7zz-rar;
+  })
+  file
+  ffmpeg
+  _7zz-rar
+  poppler-utils
+  zoxide
+  resvg
+  imagemagick
 
   neovim
   gnumake
