@@ -143,8 +143,8 @@
     # otherwise `brew bundle` may try to reinstall over existing .app bundles.
     # Manual apps: affinity-designer, affinity-photo, affinity-publisher,
     # android-studio, chatgpt, cursor, discord, figma, google-chrome, linear,
-    # nextcloud, nordvpn, notion-calendar, notion-mail, obsidian, ollama-app,
-    # raycast, rustdesk, slack, spotify, tailscale-app.
+    # nextcloud, nordvpn, obsidian, ollama-app, raycast, rustdesk, slack,
+    # spotify, tailscale-app.
     # Also intentionally unmanaged for now: codexbar, emdash, warp, zulu@17.
   };
 
