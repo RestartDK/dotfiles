@@ -51,6 +51,12 @@ command = "daniel.scatterer.lazygit"
 description = "lazygit"
 
 [[keys.command]]
+key = "prefix+shift+f"
+type = "pane"
+command = "yazi"
+description = "yazi file manager"
+
+[[keys.command]]
 key = "ctrl+h"
 type = "plugin_action"
 command = "daniel.scatterer.nav-left"
