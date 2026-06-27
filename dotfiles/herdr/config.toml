@@ -46,8 +46,8 @@ description = "scatterer PR picker"
 
 [[keys.command]]
 key = "prefix+shift+g"
-type = "pane"
-command = "lazygit"
+type = "plugin_action"
+command = "daniel.scatterer.lazygit"
 description = "lazygit"
 
 [experimental]
