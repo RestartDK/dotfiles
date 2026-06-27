@@ -44,6 +44,12 @@ type = "plugin_action"
 command = "daniel.scatterer.pr-picker"
 description = "scatterer PR picker"
 
+[[keys.command]]
+key = "prefix+shift+g"
+type = "pane"
+command = "lazygit"
+description = "lazygit"
+
 [experimental]
 pane_history = false
 switch_ascii_input_source_in_prefix = true
