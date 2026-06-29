@@ -24,6 +24,7 @@ type OpenAIModelList = {
 };
 
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
+const GPT_55_CONTEXT_WINDOW = 1_050_000;
 const DEFAULT_CONTEXT_WINDOW = 128_000;
 const DEFAULT_MAX_TOKENS = 128_000;
 const CAPABILITY_PROBE_CONCURRENCY = 2;
@@ -56,7 +57,7 @@ function fromBuiltInModel(model: Model<Api>) {
     thinkingLevelMap: model.thinkingLevelMap,
     input: model.input,
     cost: model.cost,
-    contextWindow: model.contextWindow,
+    contextWindow: model.id === "gpt-5.5" ? GPT_55_CONTEXT_WINDOW : model.contextWindow,
     maxTokens: model.maxTokens,
     compat: model.compat,
   };

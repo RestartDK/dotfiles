@@ -76,12 +76,95 @@ buildNpmPackage {
       "$nm/@anthropic-ai/sandbox-runtime/vendor/seccomp"
   '';
 
-  postFixup = "wrapProgram $out/bin/pi --prefix PATH : ${
-    lib.makeBinPath [
-      ripgrep
-      fd
-    ]
-  }";
+  postFixup = ''
+    node <<'NODE'
+    const fs = require("fs");
+
+    function replace(path, from, to) {
+      const before = fs.readFileSync(path, "utf8");
+      if (!before.includes(from)) {
+        console.error("pattern not found in " + path);
+        process.exit(1);
+      }
+      fs.writeFileSync(path, before.replace(from, to));
+    }
+
+    function replaceRegex(path, pattern, to) {
+      const before = fs.readFileSync(path, "utf8");
+      const after = before.replace(pattern, to);
+      if (after === before) {
+        console.error("pattern not found in " + path);
+        process.exit(1);
+      }
+      fs.writeFileSync(path, after);
+    }
+
+    const root = process.env.out + "/lib/node_modules/pi-monorepo";
+
+    for (const file of [
+      root + "/node_modules/@earendil-works/pi-ai/dist/api/openai-responses.js",
+      root + "/node_modules/@earendil-works/pi-ai/dist/api/azure-openai-responses.js",
+    ]) {
+      replaceRegex(
+        file,
+        /if \(options\?\.maxTokens\) \{\n\s*params\.max_output_tokens = options\?\.maxTokens;\n\s*\}/,
+        `if (options?.maxTokens) {
+        if (options.maxTokens < 16) {
+            throw new Error("context_length_exceeded: available output token budget is below OpenAI Responses minimum (16)");
+        }
+        params.max_output_tokens = options?.maxTokens;
+    }`,
+      );
+    }
+
+    replace(
+      root + "/node_modules/@earendil-works/pi-ai/dist/utils/overflow.js",
+      `/exceeds the context window/i, // OpenAI (Completions & Responses API)`,
+      `/exceeds the context window/i, // OpenAI (Completions & Responses API)
+    /Invalid 'max_output_tokens': integer below minimum value/i, // OpenAI Responses API output budget exhausted`,
+    );
+
+    replaceRegex(
+      root + "/dist/core/session-manager.js",
+      /const messages = \[];\n\s*const appendMessage = \(entry\) => \{\n\s*if \(entry\.type === "message"\) \{\n\s*messages\.push\(entry\.message\);\n\s*\}/,
+      `const messages = [];
+    const appendMessage = (entry, options = {}) => {
+        if (entry.type === "message") {
+            if (options.stripAssistantUsage && entry.message.role === "assistant") {
+                messages.push({
+                    ...entry.message,
+                    usage: {
+                        input: 0,
+                        output: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0,
+                        totalTokens: 0,
+                        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+                    },
+                });
+            }
+            else {
+                messages.push(entry.message);
+            }
+        }`,
+    );
+
+    replaceRegex(
+      root + "/dist/core/session-manager.js",
+      /if \(foundFirstKept\) \{\n\s*appendMessage\(entry\);\n\s*\}/,
+      `if (foundFirstKept) {
+                appendMessage(entry, { stripAssistantUsage: true });
+            }`,
+    );
+    NODE
+
+    wrapProgram $out/bin/pi --prefix PATH : ${
+      lib.makeBinPath [
+        ripgrep
+        fd
+      ]
+    }
+  '';
 
   doInstallCheck = true;
   nativeInstallCheckInputs = [

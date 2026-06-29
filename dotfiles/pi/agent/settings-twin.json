@@ -1,9 +1,9 @@
 {
   "defaultModel": "gpt-5.5",
-  "defaultProvider": "openai-codex",
+  "defaultProvider": "openai",
   "defaultThinkingLevel": "xhigh",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.80.1",
+  "lastChangelogVersion": "0.80.2",
   "packages": [
     "npm:pi-mcp-adapter",
     "npm:pi-web-access"
@@ -26,7 +26,8 @@
   },
   "quietStartup": true,
   "skills": [
-    "~/.claude/skills"
+    "~/.claude/skills",
+    "~/.nix-profile/skills/hunk-review"
   ],
   "theme": "light/dark"
 }
