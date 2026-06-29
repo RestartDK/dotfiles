@@ -11,6 +11,9 @@ agent_panel_sort = "spaces"
 
 [theme]
 name = "terminal"
+auto_switch = true
+dark_name = "tokyo-night"
+light_name = "tokyo-night-day"
 
 [keys]
 prefix = "ctrl+x"
