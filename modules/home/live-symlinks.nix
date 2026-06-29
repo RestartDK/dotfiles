@@ -82,6 +82,7 @@ in
 
     (lib.mkIf cfg.groups.terminalTools {
       xdg.configFile."btop/btop.conf" = file "dotfiles/btop/btop.conf";
+      xdg.configFile."hunk/config.toml" = file "dotfiles/hunk/config.toml";
       xdg.configFile."thefuck/settings.py" = file "dotfiles/thefuck/settings.py";
     })
 
