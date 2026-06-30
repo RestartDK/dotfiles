@@ -1,5 +1,5 @@
 # Let Hunk choose a readable light/dark palette from the terminal background.
 theme = "auto"
 
-# Keep the actual terminal background visible when possible.
-transparent_background = true
+# Keep diff row highlights visible. Set this to true only for fully transparent Hunk surfaces.
+transparent_background = false
