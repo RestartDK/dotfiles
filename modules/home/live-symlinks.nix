@@ -157,6 +157,10 @@ in
       home.file.".pi/agent/skills" = dir agentSkillsPath;
     })
 
+    (lib.mkIf (pi && !agentSkillsEnabled) {
+      home.file.".pi/agent/skills" = dir "dotfiles/pi/agent/skills";
+    })
+
     (lib.mkIf cfg.groups.macos {
       home.file.".hammerspoon/init.lua" = file "dotfiles/hammerspoon/init.lua";
       xdg.configFile."aerospace/aerospace.toml" = file "dotfiles/aerospace/aerospace.toml";
