@@ -1,7 +1,12 @@
-{ config, lib, ... }:
+{ config, inputs, lib, pkgs, ... }:
 
 let
   cfg = config.my.liveConfig;
+  herdrPackage = pkgs.callPackage ../../packages/herdr.nix { };
+  scattererPackage = pkgs.callPackage ../../packages/scatterer.nix {
+    src = inputs.scatterer-src;
+  };
+  scattererPluginRoot = "${scattererPackage}/share/herdr/plugins/scatterer";
   allAgents = cfg.groups.agents;
   allAgentSkills = allAgents || cfg.groups.agentSkills;
   globalAgentSkills = cfg.groups.agentSkillsGlobal;
@@ -111,7 +116,17 @@ in
     })
 
     (lib.mkIf cfg.groups.herdr {
+      home.packages = [ scattererPackage ];
       xdg.configFile."herdr/config.toml" = file "dotfiles/herdr/config.toml";
+
+      home.activation.linkScattererHerdrPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        herdr_bin="${herdrPackage}/bin/herdr"
+        plugin_root="${scattererPluginRoot}"
+
+        run "$herdr_bin" plugin uninstall daniel.scatterer >/dev/null 2>&1 || true
+        run "$herdr_bin" plugin unlink daniel.scatterer >/dev/null 2>&1 || true
+        run "$herdr_bin" plugin link "$plugin_root" >/dev/null
+      '';
     })
 
     (lib.mkIf agentSkillsEnabled {

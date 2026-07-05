@@ -191,7 +191,24 @@
         "nix-darwin": "nix-darwin",
         "nixpkgs": "nixpkgs",
         "nixpkgs-unstable": "nixpkgs-unstable",
-        "pi-src": "pi-src"
+        "pi-src": "pi-src",
+        "scatterer-src": "scatterer-src"
+      }
+    },
+    "scatterer-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782767381,
+        "narHash": "sha256-v8lxRp5u++x8jk1OWsFsbRpgfC4yKtVsuMrO7U8P7co=",
+        "owner": "RestartDK",
+        "repo": "scatterer",
+        "rev": "f23d017fa34839c73a0a1cc108a279127003376a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "RestartDK",
+        "repo": "scatterer",
+        "type": "github"
       }
     },
     "systems": {

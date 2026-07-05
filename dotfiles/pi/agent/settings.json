@@ -10,6 +10,11 @@
   ],
   "powerline": {
     "preset": "default",
+    "hiddenSegments": [
+      "cache_read",
+      "cache_write",
+      "cost"
+    ],
     "customItems": [
       {
         "id": "netns",

@@ -11,6 +11,11 @@
     hunk.url = "github:modem-dev/hunk";
     hunk.inputs.nixpkgs.follows = "nixpkgs-unstable";
 
+    scatterer-src = {
+      url = "github:RestartDK/scatterer";
+      flake = false;
+    };
+
     nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
 

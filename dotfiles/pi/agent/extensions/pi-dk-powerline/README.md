@@ -64,6 +64,7 @@ You can also set it in `~/.pi/agent/settings.json` or project-local `.pi/setting
 ```
 
 Use `"fixedEditor": true` to enable it again. Add `"mouseScroll": false` if you want native terminal selection instead of fixed-editor mouse handling.
+Add `"hiddenSegments": ["cache_read", "cache_write", "cost"]` to hide specific built-in or custom segment ids.
 
 | Preset | Description |
 |--------|-------------|

@@ -4,6 +4,7 @@ import type { ColorValue, CustomItemPosition, CustomStatusItem, PresetDef, Statu
 export interface PowerlineConfig {
   preset: StatusLinePreset;
   customItems: CustomStatusItem[];
+  hiddenSegments: StatusLineSegmentId[];
   mouseScroll: boolean;
   fixedEditor: boolean;
 }
@@ -83,8 +84,21 @@ function normalizeCustomItems(raw: unknown): CustomStatusItem[] {
   return [...deduped.values()];
 }
 
+function normalizeHiddenSegments(raw: unknown): StatusLineSegmentId[] {
+  if (!Array.isArray(raw)) return [];
+
+  const deduped = new Set<StatusLineSegmentId>();
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const segmentId = entry.trim();
+    if (segmentId) deduped.add(segmentId as StatusLineSegmentId);
+  }
+
+  return [...deduped.values()];
+}
+
 export function parsePowerlineConfig(value: unknown, presets: readonly StatusLinePreset[]): PowerlineConfig {
-  const defaultConfig: PowerlineConfig = { preset: "default", customItems: [], mouseScroll: true, fixedEditor: true };
+  const defaultConfig: PowerlineConfig = { preset: "default", customItems: [], hiddenSegments: [], mouseScroll: true, fixedEditor: true };
 
   const directPreset = normalizePreset(value, presets);
   if (directPreset) return { ...defaultConfig, preset: directPreset };
@@ -94,12 +108,17 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
   return {
     preset: normalizePreset(value.preset, presets) ?? defaultConfig.preset,
     customItems: normalizeCustomItems(value.customItems),
+    hiddenSegments: normalizeHiddenSegments(value.hiddenSegments),
     mouseScroll: value.mouseScroll !== false,
     fixedEditor: value.fixedEditor !== false,
   };
 }
 
-export function mergeSegmentsWithCustomItems(presetDef: PresetDef, customItems: readonly CustomStatusItem[]): {
+export function mergeSegmentsWithCustomItems(
+  presetDef: PresetDef,
+  customItems: readonly CustomStatusItem[],
+  hiddenSegments: readonly StatusLineSegmentId[] = [],
+): {
   leftSegments: StatusLineSegmentId[];
   rightSegments: StatusLineSegmentId[];
   secondarySegments: StatusLineSegmentId[];
@@ -115,7 +134,12 @@ export function mergeSegmentsWithCustomItems(presetDef: PresetDef, customItems: 
     else right.push(segmentId);
   }
 
-  return { leftSegments: left, rightSegments: right, secondarySegments: secondary };
+  const hidden = new Set(hiddenSegments);
+  return {
+    leftSegments: left.filter((segmentId) => !hidden.has(segmentId)),
+    rightSegments: right.filter((segmentId) => !hidden.has(segmentId)),
+    secondarySegments: secondary.filter((segmentId) => !hidden.has(segmentId)),
+  };
 }
 
 export function nextPowerlineSettingWithPreset(existingPowerlineSetting: unknown, preset: StatusLinePreset): unknown {

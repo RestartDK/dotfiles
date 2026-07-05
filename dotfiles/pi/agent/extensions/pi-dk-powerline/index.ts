@@ -51,6 +51,7 @@ import {
 let config: PowerlineConfig = {
   preset: "default",
   customItems: [],
+  hiddenSegments: [],
   mouseScroll: true,
   fixedEditor: true,
 };
@@ -869,7 +870,7 @@ function computeResponsiveLayout(
   const sepWidth = visibleWidth(separatorDef.left) + 2; // separator + spaces around it
   
   // Get all segments: primary first, then secondary
-  const mergedSegments = mergeSegmentsWithCustomItems(presetDef, config.customItems);
+  const mergedSegments = mergeSegmentsWithCustomItems(presetDef, config.customItems, config.hiddenSegments);
   const primaryIds = [...mergedSegments.leftSegments, ...mergedSegments.rightSegments];
   const secondaryIds = mergedSegments.secondarySegments;
   const allSegmentIds = [...primaryIds, ...secondaryIds];
