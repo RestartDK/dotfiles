@@ -51,6 +51,12 @@ in
       description = "Repo-relative Pi settings JSON file to link as ~/.pi/agent/settings.json.";
     };
 
+    piSkillsPath = lib.mkOption {
+      type = lib.types.str;
+      default = "dotfiles/pi/agent/skills";
+      description = "Repo-relative Pi-specific skills directory to link as ~/.pi/agent/skills when shared agent skills are disabled.";
+    };
+
     groups = {
       shell = lib.mkEnableOption "shell/starship config";
       git = lib.mkEnableOption "Git config";
@@ -173,7 +179,7 @@ in
     })
 
     (lib.mkIf (pi && !agentSkillsEnabled) {
-      home.file.".pi/agent/skills" = dir "dotfiles/pi/agent/skills";
+      home.file.".pi/agent/skills" = dir cfg.piSkillsPath;
     })
 
     (lib.mkIf cfg.groups.macos {
