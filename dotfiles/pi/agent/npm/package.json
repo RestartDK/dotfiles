@@ -3,6 +3,6 @@
   "private": true,
   "dependencies": {
     "pi-mcp-adapter": "^2.10.0",
-    "pi-web-access": "^0.10.7"
+    "pi-web-access": "^0.13.0"
   }
 }
