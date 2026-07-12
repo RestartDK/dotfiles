@@ -137,7 +137,7 @@
       name = "NixOS Config";
       genericName = "NixOS Configuration";
       comment = "Open the NixOS configuration repository";
-      exec = "xdg-open /home/dkumlin/Projects/nix-config";
+      exec = "xdg-open /home/dkumlin/.config/dotfiles";
       icon = "folder";
       categories = [ "Settings" ];
     };
@@ -199,7 +199,7 @@
 
   my.liveConfig = {
     enable = true;
-    repoRoot = "/home/dkumlin/Projects/nix-config";
+    repoRoot = "/home/dkumlin/.config/dotfiles";
     groups = {
       shell = true;
       git = true;

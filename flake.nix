@@ -9,7 +9,7 @@
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
     hunk.url = "github:modem-dev/hunk";
-    hunk.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    hunk.inputs.nixpkgs.follows = "nixpkgs";
 
     scatterer-src = {
       url = "github:RestartDK/scatterer";
@@ -31,11 +31,53 @@
   let
     linuxSystem = "x86_64-linux";
     darwinSystem = "aarch64-darwin";
+    systems = [ linuxSystem darwinSystem ];
+    forAllSystems = nixpkgs.lib.genAttrs systems;
+    pkgsFor = system: import nixpkgs {
+      inherit system;
+      config.allowUnfree = true;
+    };
+    mkTraitorPackage = pkgs: pkgs.stdenvNoCC.mkDerivation {
+      pname = "traitor";
+      version = "0.1.0";
+      src = ./bin;
+      dontConfigure = true;
+      dontBuild = true;
+      installPhase = ''
+        mkdir -p $out/bin
+        cp traitor $out/bin/traitor
+        chmod +x $out/bin/traitor
+      '';
+    };
     twinPkgs = import inputs.nixpkgs-unstable {
       system = linuxSystem;
       config.allowUnfree = true;
     };
   in {
+    packages = forAllSystems (system:
+      let
+        pkgs = pkgsFor system;
+        traitor = mkTraitorPackage pkgs;
+      in
+      {
+        inherit traitor;
+        default = traitor;
+      });
+
+    apps = forAllSystems (system: {
+      traitor = {
+        type = "app";
+        program = "${self.packages.${system}.traitor}/bin/traitor";
+      };
+      default = self.apps.${system}.traitor;
+    });
+
+    homeManagerModules = {
+      live-symlinks = ./modules/home/live-symlinks.nix;
+      twin = ./profiles/home/twin.nix;
+      cobb-daniel = ./profiles/home/cobb-daniel.nix;
+    };
+
     nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
       system = linuxSystem;
       specialArgs = { inherit inputs; };

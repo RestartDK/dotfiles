@@ -89,72 +89,40 @@ buildNpmPackage {
       fs.writeFileSync(path, before.replace(from, to));
     }
 
-    function replaceRegex(path, pattern, to) {
-      const before = fs.readFileSync(path, "utf8");
-      const after = before.replace(pattern, to);
-      if (after === before) {
-        console.error("pattern not found in " + path);
-        process.exit(1);
-      }
-      fs.writeFileSync(path, after);
-    }
-
     const root = process.env.out + "/lib/node_modules/pi-monorepo";
-
-    for (const file of [
-      root + "/node_modules/@earendil-works/pi-ai/dist/api/openai-responses.js",
-      root + "/node_modules/@earendil-works/pi-ai/dist/api/azure-openai-responses.js",
-    ]) {
-      replaceRegex(
-        file,
-        /if \(options\?\.maxTokens\) \{\n\s*params\.max_output_tokens = options\?\.maxTokens;\n\s*\}/,
-        `if (options?.maxTokens) {
-        if (options.maxTokens < 16) {
-            throw new Error("context_length_exceeded: available output token budget is below OpenAI Responses minimum (16)");
-        }
-        params.max_output_tokens = options?.maxTokens;
-    }`,
-      );
-    }
+    const sessionManager = root + "/dist/core/session-manager.js";
 
     replace(
-      root + "/node_modules/@earendil-works/pi-ai/dist/utils/overflow.js",
-      `/exceeds the context window/i, // OpenAI (Completions & Responses API)`,
-      `/exceeds the context window/i, // OpenAI (Completions & Responses API)
-    /Invalid 'max_output_tokens': integer below minimum value/i, // OpenAI Responses API output budget exhausted`,
+      sessionManager,
+      `export function buildContextEntries(entries, leafId, byId) {`,
+      [
+        `function stripAssistantUsageForCompactionContext(entry) {`,
+        `    if (entry.type !== "message" || entry.message.role !== "assistant") {`,
+        `        return entry;`,
+        `    }`,
+        `    return {`,
+        `        ...entry,`,
+        `        message: {`,
+        `            ...entry.message,`,
+        `            usage: {`,
+        `                input: 0,`,
+        `                output: 0,`,
+        `                cacheRead: 0,`,
+        `                cacheWrite: 0,`,
+        `                totalTokens: 0,`,
+        `                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },`,
+        `            },`,
+        `        },`,
+        `    };`,
+        `}`,
+        `export function buildContextEntries(entries, leafId, byId) {`,
+      ].join("\n"),
     );
 
-    replaceRegex(
-      root + "/dist/core/session-manager.js",
-      /const messages = \[];\n\s*const appendMessage = \(entry\) => \{\n\s*if \(entry\.type === "message"\) \{\n\s*messages\.push\(entry\.message\);\n\s*\}/,
-      `const messages = [];
-    const appendMessage = (entry, options = {}) => {
-        if (entry.type === "message") {
-            if (options.stripAssistantUsage && entry.message.role === "assistant") {
-                messages.push({
-                    ...entry.message,
-                    usage: {
-                        input: 0,
-                        output: 0,
-                        cacheRead: 0,
-                        cacheWrite: 0,
-                        totalTokens: 0,
-                        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-                    },
-                });
-            }
-            else {
-                messages.push(entry.message);
-            }
-        }`,
-    );
-
-    replaceRegex(
-      root + "/dist/core/session-manager.js",
-      /if \(foundFirstKept\) \{\n\s*appendMessage\(entry\);\n\s*\}/,
-      `if (foundFirstKept) {
-                appendMessage(entry, { stripAssistantUsage: true });
-            }`,
+    replace(
+      sessionManager,
+      `            contextEntries.push(entry);`,
+      `            contextEntries.push(stripAssistantUsageForCompactionContext(entry));`,
     );
     NODE
 

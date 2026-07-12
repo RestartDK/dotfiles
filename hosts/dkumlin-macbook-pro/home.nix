@@ -12,7 +12,7 @@
 
   my.liveConfig = {
     enable = true;
-    repoRoot = "/Users/danielkumlin/Projects/nix-config";
+    repoRoot = "/Users/danielkumlin/.config/dotfiles";
     groups = {
       shell = true;
       git = true;
