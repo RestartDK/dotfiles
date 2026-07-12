@@ -15,11 +15,13 @@ concurrency:
 
 jobs:
   linux:
-    name: Check and build srv-nana
+    name: Linux / NixOS
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Free disk space
         run: |
@@ -34,13 +36,83 @@ jobs:
           df -h
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v17
+        uses: DeterminateSystems/nix-installer-action@v20
 
       - name: Enable Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@v10
 
-      - name: Check flake
-        run: nix flake check --print-build-logs
+      - name: Check flake outputs
+        run: ./bin/traitor check --all-systems --print-build-logs
 
-      - name: Build NixOS system
+      - name: Build NixOS host (srv-nana)
+        # srv-nana is the Linux/NixOS host output in this flake. Building it in
+        # CI catches Linux system regressions without implying CI is Nana-only.
         run: nix build .#nixosConfigurations.srv-nana.config.system.build.toplevel --no-link --print-build-logs
+
+  darwin:
+    name: Darwin / nix-darwin
+    # The flake's Darwin systems are aarch64-darwin.
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v20
+
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v10
+
+      - name: Check flake outputs
+        run: ./bin/traitor check --print-build-logs
+
+      - name: Build personal MacBook config
+        run: nix build .#darwinConfigurations.dkumlin-macbook-pro.system --no-link --print-build-logs
+
+      - name: Build work MacBook config
+        run: nix build .#darwinConfigurations.dkumlin-twin-macbook-pro.system --no-link --print-build-logs
+
+  statix:
+    name: Nix static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v20
+
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v10
+
+      - name: Run statix on changed Nix files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+          fi
+
+          if [[ -z "${base_sha:-}" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+            base_sha="$(git rev-list --max-parents=0 HEAD)"
+          fi
+
+          mapfile -t nix_files < <(git diff --name-only --diff-filter=ACMR "$base_sha" HEAD -- '*.nix')
+
+          if (( ${#nix_files[@]} == 0 )); then
+            echo "No changed Nix files"
+            exit 0
+          fi
+
+          for file in "${nix_files[@]}"; do
+            echo "::group::statix $file"
+            nix run nixpkgs#statix -- check "$file"
+            echo "::endgroup::"
+          done
