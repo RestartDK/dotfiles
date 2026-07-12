@@ -83,8 +83,7 @@ fi
 # such as codex/claude. Invoke those wrappers explicitly if needed.
 # path_prepend "$HOME/.superset/bin"
 
-# Dotfiles checkout helpers. The canonical checkout is ~/.config/dotfiles;
-# ~/Projects/dotfiles can be a convenience symlink for editor/project workflows.
+# Dotfiles checkout helpers. The canonical checkout is ~/.config/dotfiles.
 export DOTFILES="${DOTFILES:-$HOME/.config/dotfiles}"
 export DOTFILES_BIN="${DOTFILES_BIN:-$DOTFILES/bin}"
 path_prepend "$DOTFILES_BIN"

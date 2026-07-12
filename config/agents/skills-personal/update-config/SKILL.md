@@ -21,12 +21,7 @@ Remote:
 https://github.com/RestartDK/dotfiles
 ```
 
-Compatibility paths may exist, but the canonical checkout is `~/.config/dotfiles`:
-
-```text
-/Users/danielkumlin/Projects/dotfiles -> ~/.config/dotfiles
-/Users/danielkumlin/Projects/nix-config -> ~/.config/dotfiles
-```
+Do not recreate legacy checkout symlinks such as `~/Projects/nix-config`; the repo should live directly in `~/.config/dotfiles`.
 
 Cobb host/profile repo, when editing Cobb integration:
 

@@ -49,8 +49,6 @@ resolve_flake_dir() {
     candidates+=("$(dirname "$DOTFILES_BIN")")
   fi
   candidates+=("$HOME/.config/dotfiles")
-  candidates+=("$HOME/Projects/dotfiles")
-  candidates+=("$HOME/Projects/nix-config")
 
   local candidate
   for candidate in "${candidates[@]}"; do
