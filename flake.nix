@@ -77,15 +77,16 @@
 
     homeManagerModules =
       let
-        withDotfilesInputs = module: { ... }: {
+        withDotfilesInputs = module: extraImports: { ... }: {
           _module.args.inputs = inputs;
-          imports = [ module ];
+          imports = [ module ] ++ extraImports;
         };
+        hunkModule = inputs.hunk.homeManagerModules.default;
       in
       {
-        live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix;
-        twin = withDotfilesInputs ./profiles/home/twin.nix;
-        cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix;
+        live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix [ ];
+        twin = withDotfilesInputs ./profiles/home/twin.nix [ hunkModule ];
+        cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ hunkModule ];
       };
 
     nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {

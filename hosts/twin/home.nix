@@ -1,4 +1,4 @@
-{ pkgs, inputs, ... }:
+{ inputs, ... }:
 
 let
   settings = import ./settings.nix;
@@ -7,13 +7,8 @@ in
   imports = [
     inputs.hunk.homeManagerModules.default
     ../../modules/home/live-symlinks.nix
-    ../../modules/home/pi-opencode-netns-wrapper.nix
+    ../../modules/home/twin-dev-environment.nix
   ];
-
-  programs.home-manager.enable = true;
-  programs.hunk.enable = true;
-  services.lorri.enable = true;
-  xdg.enable = true;
 
   home.file.".zshenv".text = ''
     agent_dir="$HOME/.ssh/agent"
@@ -39,20 +34,11 @@ in
     fi
   '';
 
-  # Dev packages only. Unlike modules/home/dev-packages.nix, this intentionally
-  # does not manage programs.git.settings so it does not overwrite the target
-  # machine's existing Git aliases, LFS setup, or signing config.
-  home.packages = import ../../modules/home/dev-package-list.nix {
-    inherit pkgs inputs;
-    agentPackageNames = [ ];
-  };
-
   home.username = settings.userName;
   home.homeDirectory = settings.homeDirectory;
   home.stateVersion = settings.homeStateVersion;
-  # The twin dev profile follows nixpkgs-unstable, while the shared Home Manager
-  # input remains release-26.05 for the rest of the repo.
-  home.enableNixpkgsReleaseCheck = false;
+
+  my.twinDevEnvironment.enable = true;
 
   my.liveConfig = {
     enable = true;

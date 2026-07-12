@@ -1,26 +1,12 @@
-{ config, inputs ? { }, lib, pkgs, ... }:
+{ config, ... }:
 
 {
-  imports =
-    [
-      ../../modules/home/live-symlinks.nix
-      ../../modules/home/pi-opencode-netns-wrapper.nix
-    ]
-    ++ lib.optional (inputs ? hunk) inputs.hunk.homeManagerModules.default;
+  imports = [
+    ../../modules/home/live-symlinks.nix
+    ../../modules/home/twin-dev-environment.nix
+  ];
 
-  programs.home-manager.enable = true;
-  programs.hunk.enable = lib.mkIf (inputs ? hunk) true;
-  services.lorri.enable = true;
-  xdg.enable = true;
-
-  # Dev packages only. This intentionally does not manage programs.git.settings
-  # so target machines keep their existing Git aliases, LFS setup, and signing config.
-  home.packages = import ../../modules/home/dev-package-list.nix {
-    inherit pkgs inputs;
-    agentPackageNames = [ ];
-  };
-
-  home.enableNixpkgsReleaseCheck = false;
+  my.twinDevEnvironment.enable = true;
 
   my.liveConfig = {
     enable = true;
