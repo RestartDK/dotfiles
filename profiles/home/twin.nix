@@ -33,7 +33,7 @@
       editors = true;
       terminalTools = true;
       ghostty = true;
-      herdr = true;
+      multiplexer = true;
 
       # Remote twin profile: manage Pi-specific config, but do not touch existing
       # Codex, Claude, OpenCode, or shared agent skill installations.

@@ -65,7 +65,7 @@ in
       editors = true;
       terminalTools = true;
       ghostty = true;
-      herdr = true;
+      multiplexer = true;
       # Keep the remote profile from touching existing Codex, Claude, OpenCode,
       # or shared agent skills. Only Pi itself and Pi-specific config are managed.
       agents = false;

@@ -34,7 +34,7 @@ in
       editors = true;
       terminalTools = true;
       ghostty = true;
-      herdr = true;
+      multiplexer = true;
       pi = true;
 
       wayland = false;

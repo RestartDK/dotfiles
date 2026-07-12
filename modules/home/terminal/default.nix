@@ -39,7 +39,7 @@ in
       xdg.configFile."ghostty" = dir "config/ghostty";
     })
 
-    (lib.mkIf cfg.groups.herdr (lib.mkMerge [
+    (lib.mkIf cfg.groups.multiplexer (lib.mkMerge [
       {
         home.packages = [ herdrPackage ];
         xdg.configFile."herdr/config.toml" = file "config/herdr/config.toml";

@@ -28,7 +28,7 @@
       terminalTools = lib.mkEnableOption "terminal utility config";
       ghostty = lib.mkEnableOption "Ghostty terminal config";
       wayland = lib.mkEnableOption "Wayland desktop config";
-      herdr = lib.mkEnableOption "Herdr config";
+      multiplexer = lib.mkEnableOption "terminal multiplexer config (Herdr)";
       agents = lib.mkEnableOption "all AI agent config";
       agentSkills = lib.mkEnableOption "all shared AI agent skills config";
       agentSkillsGlobal = lib.mkEnableOption "global AI agent skills config";
