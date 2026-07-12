@@ -1,5 +1,9 @@
 # Portable shell setup for macOS/Linux. Keep secrets out of this file.
 
+# Cobb generates this fragment on development hosts so Cursor/VS Code terminals
+# enter the user's base development namespace before the rest of the shell loads.
+[[ -r "$HOME/.config/shell/cobb-vscode-netns.zsh" ]] && source "$HOME/.config/shell/cobb-vscode-netns.zsh"
+
 # ---- PATH helpers ---------------------------------------------------------
 path_prepend() {
   [[ -d "$1" ]] || return 0
@@ -48,14 +52,12 @@ elif [[ -S "$HOME/.1password/agent.sock" ]]; then
   export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
 fi
 
-# Drop stale standalone Home Manager profile from older setups. This profile can
-# shadow the NixOS-managed Home Manager packages in /etc/profiles/per-user.
-path_remove "$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
-
-# Nix profiles: NixOS/nix-darwin managed user profile first, then legacy user/system profiles.
+# Nix profiles. Prefer the most recently activated user-level Home Manager
+# profile when present, while retaining NixOS-managed and legacy profiles.
 path_prepend "/run/current-system/sw/bin"
 path_prepend "$HOME/.nix-profile/bin"
 path_prepend "/etc/profiles/per-user/$USER/bin"
+path_prepend "$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
 
 # Homebrew: Apple Silicon macOS default, then whatever `brew --prefix` reports.
 path_prepend "/opt/homebrew/bin"

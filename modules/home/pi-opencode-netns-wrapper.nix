@@ -1,6 +1,7 @@
-{ pkgs, inputs, ... }:
+{ config, inputs, lib, pkgs, ... }:
 
 let
+  cfg = config.my.piNetnsWrapper;
   piCodingAgent = pkgs.callPackage ../../packages/pi-coding-agent.nix {
     src = inputs.pi-src;
   };
@@ -400,6 +401,11 @@ let
   '';
 in
 {
-  home.packages = [ piWrapper ];
-  home.file.".config/herdr/netns-hook.zsh".text = netnsHook;
+  options.my.piNetnsWrapper.enable =
+    lib.mkEnableOption "Pi and Herdr integration with Cobb development network namespaces";
+
+  config = lib.mkIf cfg.enable {
+    home.packages = [ piWrapper ];
+    home.file.".config/herdr/netns-hook.zsh".text = netnsHook;
+  };
 }

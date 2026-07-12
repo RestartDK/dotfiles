@@ -77,15 +77,16 @@
 
     homeManagerModules =
       let
-        withDotfilesInputs = module: { ... }: {
+        withDotfilesInputs = module: extraImports: { ... }: {
           _module.args.inputs = inputs;
-          imports = [ module ];
+          imports = [ module ] ++ extraImports;
         };
+        hunkModule = inputs.hunk.homeManagerModules.default;
       in
       {
-        live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix;
-        twin = withDotfilesInputs ./profiles/home/twin.nix;
-        cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix;
+        live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix [ ];
+        twin = withDotfilesInputs ./profiles/home/twin.nix [ hunkModule ];
+        cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ hunkModule ];
       };
 
     nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
@@ -95,11 +96,13 @@
         ./hosts/srv-nana
         home-manager.nixosModules.home-manager
         {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.backupFileExtension = "hm-backup";
-          home-manager.extraSpecialArgs = { inherit inputs; };
-          home-manager.users.dkumlin = import ./hosts/srv-nana/home.nix;
+          home-manager = {
+            useGlobalPkgs = true;
+            useUserPackages = true;
+            backupFileExtension = "hm-backup";
+            extraSpecialArgs = { inherit inputs; };
+            users.dkumlin = import ./hosts/srv-nana/home.nix;
+          };
         }
       ];
     };
@@ -120,11 +123,13 @@
         ./hosts/dkumlin-macbook-pro
         home-manager.darwinModules.home-manager
         {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.backupFileExtension = "hm-backup";
-          home-manager.extraSpecialArgs = { inherit inputs; };
-          home-manager.users.danielkumlin = import ./hosts/dkumlin-macbook-pro/home.nix;
+          home-manager = {
+            useGlobalPkgs = true;
+            useUserPackages = true;
+            backupFileExtension = "hm-backup";
+            extraSpecialArgs = { inherit inputs; };
+            users.danielkumlin = import ./hosts/dkumlin-macbook-pro/home.nix;
+          };
         }
       ];
     };
@@ -136,11 +141,13 @@
         ./hosts/dkumlin-twin-macbook-pro
         home-manager.darwinModules.home-manager
         {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.backupFileExtension = "hm-backup";
-          home-manager.extraSpecialArgs = { inherit inputs; };
-          home-manager.users.danielkumlin = import ./hosts/dkumlin-twin-macbook-pro/home.nix;
+          home-manager = {
+            useGlobalPkgs = true;
+            useUserPackages = true;
+            backupFileExtension = "hm-backup";
+            extraSpecialArgs = { inherit inputs; };
+            users.danielkumlin = import ./hosts/dkumlin-twin-macbook-pro/home.nix;
+          };
         }
       ];
     };
