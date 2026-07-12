@@ -30,9 +30,11 @@ in
 {
   config = lib.mkIf cfg.enable (lib.mkMerge [
     (lib.mkIf cfg.groups.terminalTools {
-      xdg.configFile."btop/btop.conf" = file "config/btop/btop.conf";
-      xdg.configFile."hunk/config.toml" = file "config/hunk/config.toml";
-      xdg.configFile."thefuck/settings.py" = file "config/thefuck/settings.py";
+      xdg.configFile = {
+        "btop/btop.conf" = file "config/btop/btop.conf";
+        "hunk/config.toml" = file "config/hunk/config.toml";
+        "thefuck/settings.py" = file "config/thefuck/settings.py";
+      };
     })
 
     (lib.mkIf cfg.groups.ghostty {
@@ -52,9 +54,12 @@ in
           herdr_bin="${herdrPackage}/bin/herdr"
           plugin_root="${scattererPluginRoot}"
 
-          run "$herdr_bin" plugin uninstall daniel.scatterer >/dev/null 2>&1 || true
-          run "$herdr_bin" plugin unlink daniel.scatterer >/dev/null 2>&1 || true
-          run "$herdr_bin" plugin link "$plugin_root" >/dev/null
+          # Linking talks to the running Herdr instance. Keep an existing
+          # registration intact and do not fail Home Manager when Herdr is not
+          # currently open; the next activation from a Herdr session refreshes it.
+          if ! run "$herdr_bin" plugin link "$plugin_root" >/dev/null 2>&1; then
+            echo "Herdr is not running; leaving Scatterer plugin registration unchanged."
+          fi
         '';
       })
     ]))

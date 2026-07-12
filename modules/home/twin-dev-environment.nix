@@ -4,7 +4,10 @@ let
   cfg = config.my.twinDevEnvironment;
 in
 {
-  imports = [ ./pi-opencode-netns-wrapper.nix ];
+  imports = [
+    ./cobb-vscode-netns.nix
+    ./pi-opencode-netns-wrapper.nix
+  ];
 
   options.my.twinDevEnvironment.enable =
     lib.mkEnableOption "Daniel's reusable Twin development environment";
