@@ -54,11 +54,28 @@ in
           herdr_bin="${herdrPackage}/bin/herdr"
           plugin_root="${scattererPluginRoot}"
 
-          # Linking talks to the running Herdr instance. Keep an existing
-          # registration intact and do not fail Home Manager when Herdr is not
-          # currently open; the next activation from a Herdr session refreshes it.
+          # Plugin linking uses Herdr's socket API. Bootstrap a temporary
+          # headless server for first-time or non-interactive activations, but
+          # leave an already running Herdr session alone.
+          started_herdr_server=0
+          herdr_server_pid=""
+          if ! "$herdr_bin" status server >/dev/null 2>&1; then
+            "$herdr_bin" server >/dev/null 2>&1 &
+            herdr_server_pid=$!
+            started_herdr_server=1
+            for _ in {1..50}; do
+              "$herdr_bin" status server >/dev/null 2>&1 && break
+              ${pkgs.coreutils}/bin/sleep 0.1
+            done
+          fi
+
           if ! run "$herdr_bin" plugin link "$plugin_root" >/dev/null 2>&1; then
-            echo "Herdr is not running; leaving Scatterer plugin registration unchanged."
+            echo "Could not refresh Scatterer plugin registration; leaving the existing registration unchanged."
+          fi
+
+          if [ "$started_herdr_server" -eq 1 ]; then
+            "$herdr_bin" server stop >/dev/null 2>&1 || true
+            wait "$herdr_server_pid" 2>/dev/null || true
           fi
         '';
       })
