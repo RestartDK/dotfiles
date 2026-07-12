@@ -2,6 +2,7 @@
 
 let
   herdr = pkgs.callPackage ../../packages/herdr.nix { };
+  codexCli = pkgs.callPackage ../../packages/codex-cli.nix { };
   unstable = import inputs.nixpkgs-unstable {
     system = pkgs.stdenv.hostPlatform.system;
     config = pkgs.config;
@@ -10,7 +11,9 @@ let
     src = inputs.pi-src;
   };
   availableAgentPackages = {
-    codex = unstable.codex;
+    # The nixpkgs Rust build currently pulls livekit-libwebrtc, which fails to
+    # build on aarch64-darwin. Use OpenAI's npm binary distribution instead.
+    codex = codexCli;
     "claude-code" = unstable.claude-code;
     opencode = unstable.opencode;
     "pi-coding-agent" = piCodingAgent;
