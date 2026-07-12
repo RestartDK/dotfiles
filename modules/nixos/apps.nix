@@ -1,8 +1,5 @@
 { pkgs, ... }:
 
-let
-  herdr = pkgs.callPackage ../../packages/herdr.nix { };
-in
 {
   environment.systemPackages = with pkgs; [
     git
@@ -49,7 +46,5 @@ in
     uv
     poetry
     lazygit
-  ] ++ [
-    herdr
   ];
 }

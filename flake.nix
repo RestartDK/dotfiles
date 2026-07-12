@@ -11,6 +11,9 @@
     hunk.url = "github:modem-dev/hunk";
     hunk.inputs.nixpkgs.follows = "nixpkgs";
 
+    herdr.url = "github:ogulcancelik/herdr";
+    herdr.inputs.nixpkgs.follows = "nixpkgs";
+
     scatterer-src = {
       url = "github:RestartDK/scatterer";
       flake = false;
@@ -72,11 +75,18 @@
       default = self.apps.${system}.traitor;
     });
 
-    homeManagerModules = {
-      live-symlinks = ./modules/home/live-symlinks.nix;
-      twin = ./profiles/home/twin.nix;
-      cobb-daniel = ./profiles/home/cobb-daniel.nix;
-    };
+    homeManagerModules =
+      let
+        withDotfilesInputs = module: { ... }: {
+          _module.args.inputs = inputs;
+          imports = [ module ];
+        };
+      in
+      {
+        live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix;
+        twin = withDotfilesInputs ./profiles/home/twin.nix;
+        cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix;
+      };
 
     nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
       system = linuxSystem;

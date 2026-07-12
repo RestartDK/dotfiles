@@ -19,7 +19,7 @@
       editors = true;
       terminalTools = true;
       ghostty = true;
-      herdr = true;
+      multiplexer = true;
       agents = true;
       macos = true;
     };

@@ -207,7 +207,7 @@
       terminalTools = true;
       ghostty = true;
       wayland = true;
-      herdr = true;
+      multiplexer = true;
       agents = true;
     };
   };

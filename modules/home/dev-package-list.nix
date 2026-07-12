@@ -1,7 +1,6 @@
 { pkgs, inputs, agentPackageNames ? [ "codex" "claude-code" "opencode" "pi-coding-agent" ] }:
 
 let
-  herdr = pkgs.callPackage ../../packages/herdr.nix { };
   codexCli = pkgs.callPackage ../../packages/codex-cli.nix { };
   unstable = import inputs.nixpkgs-unstable {
     system = pkgs.stdenv.hostPlatform.system;
@@ -52,7 +51,6 @@ with pkgs; [
   poetry
   lazygit
   gh
-  herdr
   (yazi.override {
     _7zz = _7zz-rar;
   })

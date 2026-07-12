@@ -1,9 +1,9 @@
-{ config, inputs ? { }, lib, pkgs, ... }:
+{ config, inputs, lib, pkgs, ... }:
 
 let
   cfg = config.my.liveConfig;
   hasScattererInput = inputs ? scatterer-src;
-  herdrPackage = pkgs.callPackage ../../../packages/herdr.nix { };
+  herdrPackage = inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
   scattererPackage =
     if hasScattererInput then
       pkgs.callPackage ../../../packages/scatterer.nix {
@@ -39,8 +39,9 @@ in
       xdg.configFile."ghostty" = dir "config/ghostty";
     })
 
-    (lib.mkIf cfg.groups.herdr (lib.mkMerge [
+    (lib.mkIf cfg.groups.multiplexer (lib.mkMerge [
       {
+        home.packages = [ herdrPackage ];
         xdg.configFile."herdr/config.toml" = file "config/herdr/config.toml";
       }
 
