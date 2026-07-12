@@ -16,8 +16,8 @@
 
   my.liveConfig = {
     enable = true;
-    repoRoot = "/Users/danielkumlin/Projects/nix-config";
-    piSettingsFile = "dotfiles/pi/agent/settings-twin.json";
+    repoRoot = "/Users/danielkumlin/.config/dotfiles";
+    piSettingsFile = "config/pi/agent/settings-twin.json";
     groups = {
       shell = true;
       git = true;

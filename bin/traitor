@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: traitor <command> [args...]
+
+Commands:
+  re, rebuild [action]   Rebuild current host (default action: switch)
+  test                   Rebuild current host with action=test
+  rollback               Roll back current host generation
+  check                  Run flake checks
+  update [inputs...]     Update flake inputs
+  upgrade                Update all inputs, then rebuild
+  show                   Show flake outputs
+  twin                   Apply the Home Manager-only twin profile
+  nana                   Rebuild srv-nana explicitly
+  mac                    Rebuild dkumlin-macbook-pro explicitly
+  work-mac               Rebuild dkumlin-twin-macbook-pro explicitly
+  path                   Print resolved dotfiles path
+  help                   Show this help
+
+Environment:
+  DOTFILES      Override dotfiles checkout path
+  DOTFILES_BIN  Used as fallback to find the checkout
+  FLAKE_HOST    Override host flake attribute
+EOF
+}
+
+find_flake_up() {
+  local dir
+  dir="$(cd "${1:-.}" 2>/dev/null && pwd -P)" || return 1
+  while [[ "$dir" != / ]]; do
+    if [[ -f "$dir/flake.nix" ]]; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  return 1
+}
+
+resolve_flake_dir() {
+  local candidates=()
+  candidates+=("${FLAKE_DIR:-}")
+  candidates+=("$(find_flake_up "$PWD" 2>/dev/null || true)")
+  candidates+=("${DOTFILES:-}")
+  if [[ -n "${DOTFILES_BIN:-}" ]]; then
+    candidates+=("$(dirname "$DOTFILES_BIN")")
+  fi
+  candidates+=("$HOME/.config/dotfiles")
+  candidates+=("$HOME/Projects/dotfiles")
+  candidates+=("$HOME/Projects/nix-config")
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    [[ -n "$candidate" ]] || continue
+    candidate="${candidate/#\~/$HOME}"
+    if [[ -f "$candidate/flake.nix" ]]; then
+      cd "$candidate" >/dev/null 2>&1 && pwd -P
+      return 0
+    fi
+  done
+
+  echo "traitor: could not find dotfiles flake" >&2
+  exit 1
+}
+
+is_darwin() {
+  [[ "$(uname -s)" == "Darwin" ]]
+}
+
+current_host_attr() {
+  if [[ -n "${FLAKE_HOST:-}" ]]; then
+    printf '%s\n' "$FLAKE_HOST"
+    return 0
+  fi
+
+  local short
+  short="$(hostname -s 2>/dev/null || hostname)"
+  case "$short" in
+    srv-nana|nana) printf '%s\n' "srv-nana" ;;
+    dkumlin-macbook-pro) printf '%s\n' "dkumlin-macbook-pro" ;;
+    dkumlin-twin-macbook-pro) printf '%s\n' "dkumlin-twin-macbook-pro" ;;
+    *) printf '%s\n' "$short" ;;
+  esac
+}
+
+sudo_path() {
+  local prefix=()
+  [[ -d /run/wrappers/bin ]] && prefix+=(/run/wrappers/bin)
+  [[ -d /run/current-system/sw/bin ]] && prefix+=(/run/current-system/sw/bin)
+  [[ -d /nix/var/nix/profiles/default/bin ]] && prefix+=(/nix/var/nix/profiles/default/bin)
+  if ((${#prefix[@]})); then
+    local IFS=:
+    printf '%s:%s\n' "${prefix[*]}" "$PATH"
+  else
+    printf '%s\n' "$PATH"
+  fi
+}
+
+preflight() {
+  local flake_dir="$1"
+  cd "$flake_dir"
+
+  if [[ -f flake.lock ]]; then
+    if grep -nE '^<{7}|^={7}|^>{7}' flake.lock >/tmp/traitor-conflicts.$$ 2>/dev/null; then
+      echo "traitor: flake.lock contains conflict markers" >&2
+      cat /tmp/traitor-conflicts.$$ >&2
+      rm -f /tmp/traitor-conflicts.$$
+      exit 1
+    fi
+    rm -f /tmp/traitor-conflicts.$$
+  fi
+
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if git grep -nE '^<{7}|^={7}|^>{7}' -- '*.nix' '*.json' '*.jsonc' '*.toml' '*.yml' '*.yaml' '*.md' >/tmp/traitor-conflicts.$$ 2>/dev/null; then
+      echo "traitor: tracked files contain conflict markers" >&2
+      cat /tmp/traitor-conflicts.$$ >&2
+      rm -f /tmp/traitor-conflicts.$$
+      exit 1
+    fi
+    rm -f /tmp/traitor-conflicts.$$
+  fi
+}
+
+archive_inputs() {
+  local flake_dir="$1"
+  cd "$flake_dir"
+  # Do this before sudo so private inputs can use the user's SSH/1Password agent.
+  nix flake archive --no-update-lock-file >/dev/null
+}
+
+find_darwin_rebuild() {
+  if [[ -x /run/current-system/sw/bin/darwin-rebuild ]]; then
+    printf '%s\n' /run/current-system/sw/bin/darwin-rebuild
+  elif command -v darwin-rebuild >/dev/null 2>&1; then
+    command -v darwin-rebuild
+  else
+    return 1
+  fi
+}
+
+run_rebuild() {
+  local action="${1:-switch}"
+  shift || true
+  local flake_dir host
+  flake_dir="$(resolve_flake_dir)"
+  host="$(current_host_attr)"
+
+  preflight "$flake_dir"
+  archive_inputs "$flake_dir"
+
+  if is_darwin; then
+    local darwin_rebuild
+    if darwin_rebuild="$(find_darwin_rebuild)"; then
+      PATH="$(sudo_path)" /usr/bin/sudo "$darwin_rebuild" --flake "$flake_dir#$host" --no-write-lock-file "$action" "$@"
+    else
+      echo "traitor: darwin-rebuild not found; building it from the flake" >&2
+      cd "$flake_dir"
+      nix build ".#darwinConfigurations.$host.system"
+      PATH="$(sudo_path)" /usr/bin/sudo ./result/sw/bin/darwin-rebuild --flake ".#$host" --no-write-lock-file "$action" "$@"
+    fi
+  else
+    PATH="$(sudo_path)" nixos-rebuild --flake "$flake_dir#$host" --sudo --no-write-lock-file "$action" "$@"
+  fi
+}
+
+run_rollback() {
+  if is_darwin; then
+    local darwin_rebuild
+    darwin_rebuild="$(find_darwin_rebuild)"
+    PATH="$(sudo_path)" /usr/bin/sudo "$darwin_rebuild" --rollback
+  else
+    PATH="$(sudo_path)" nixos-rebuild --sudo --rollback switch
+  fi
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  help|-h|--help)
+    usage
+    ;;
+  path)
+    resolve_flake_dir
+    ;;
+  re|rebuild)
+    run_rebuild "${1:-switch}" "${@:2}"
+    ;;
+  test)
+    run_rebuild test "$@"
+    ;;
+  rollback)
+    run_rollback
+    ;;
+  check)
+    flake_dir="$(resolve_flake_dir)"
+    cd "$flake_dir"
+    nix flake check "$@"
+    ;;
+  update)
+    flake_dir="$(resolve_flake_dir)"
+    cd "$flake_dir"
+    if (($#)); then
+      for input in "$@"; do
+        nix flake update "$input"
+      done
+    else
+      nix flake update
+    fi
+    ;;
+  upgrade)
+    flake_dir="$(resolve_flake_dir)"
+    cd "$flake_dir"
+    nix flake update
+    run_rebuild switch
+    ;;
+  show)
+    flake_dir="$(resolve_flake_dir)"
+    cd "$flake_dir"
+    nix flake show
+    ;;
+  twin)
+    flake_dir="$(resolve_flake_dir)"
+    cd "$flake_dir"
+    nix run github:nix-community/home-manager/release-26.05 -- switch --flake "$flake_dir#twin" -b hm-backup "$@"
+    ;;
+  nana)
+    FLAKE_HOST=srv-nana run_rebuild switch "$@"
+    ;;
+  mac)
+    FLAKE_HOST=dkumlin-macbook-pro run_rebuild switch "$@"
+    ;;
+  work-mac)
+    FLAKE_HOST=dkumlin-twin-macbook-pro run_rebuild switch "$@"
+    ;;
+  *)
+    echo "traitor: unknown command: $cmd" >&2
+    echo >&2
+    usage >&2
+    exit 2
+    ;;
+esac

@@ -1,6 +1,18 @@
-# NixOS / nix-darwin / Home Manager configuration
+# RestartDK dotfiles
 
-Nix-native config for Daniel's machines.
+Nix-native dotfiles and host configuration for Daniel's machines.
+
+The canonical editable checkout is:
+
+```text
+~/.config/dotfiles
+```
+
+Remote:
+
+```text
+https://github.com/RestartDK/dotfiles
+```
 
 ## Hosts
 
@@ -11,81 +23,104 @@ hosts/dkumlin-macbook-pro/           # personal nix-darwin MacBook config
 hosts/dkumlin-twin-macbook-pro/      # work nix-darwin MacBook config
 ```
 
-## Apply Nana
+## Apply configs
+
+Use the `traitor` wrapper from the repo:
 
 ```bash
-cd ~/Projects/nix-config
-sudo nixos-rebuild switch --flake .#srv-nana
+cd ~/.config/dotfiles
+./bin/traitor re
 ```
 
-`/etc/nixos` on Nana is intentionally a symlink to the editable checkout:
-
-```text
-/etc/nixos -> /home/dkumlin/Projects/nix-config
-```
-
-## Apply reusable twin dev profile
-
-`twin` is a Home Manager-only profile for existing NixOS/Linux target machines
-that should get Daniel's shared dev packages and live dotfiles without changing
-host-level settings like DNS, SSH, users, groups, Docker, bootloader, or
-Tailscale. It installs Pi as the only managed AI agent and links Pi-specific
-config while intentionally leaving any existing Codex, Claude, OpenCode, and
-shared agent skills installations/config untouched. It uses the `daniel` user by
-default and follows `nixpkgs-unstable` for packages.
-
-If the login user or home directory differs, edit `hosts/twin/settings.nix`.
-Then apply from the target machine:
+Convenience commands:
 
 ```bash
-cd ~/Projects/nix-config
-nix run github:nix-community/home-manager/release-26.05 -- switch --flake .#twin -b hm-backup
+traitor re          # rebuild current host
+traitor check       # run flake checks
+traitor update      # update flake inputs
+traitor upgrade     # update, then rebuild
+traitor rollback    # roll back current host generation
+traitor twin        # apply the Home Manager-only twin profile
+traitor nana        # rebuild srv-nana explicitly
+traitor mac         # rebuild dkumlin-macbook-pro explicitly
+traitor work-mac    # rebuild dkumlin-twin-macbook-pro explicitly
 ```
 
-## Apply Macs
-
-Personal MacBook:
+Raw commands still work when needed:
 
 ```bash
-cd ~/Projects/nix-config
-darwin-rebuild switch --flake .#dkumlin-macbook-pro
+sudo nixos-rebuild switch --flake ~/.config/dotfiles#srv-nana
+darwin-rebuild switch --flake ~/.config/dotfiles#dkumlin-macbook-pro
+darwin-rebuild switch --flake ~/.config/dotfiles#dkumlin-twin-macbook-pro
+nix run github:nix-community/home-manager/release-26.05 -- switch --flake ~/.config/dotfiles#twin -b hm-backup
 ```
 
-Work MacBook:
-
-```bash
-cd ~/Projects/nix-config
-darwin-rebuild switch --flake .#dkumlin-twin-macbook-pro
-```
+This repo is flake-only; there is intentionally no legacy `configuration.nix` entrypoint.
 
 ## Layout
 
 ```text
 flake.nix                            # flake outputs and inputs
-hosts/srv-nana/                      # Nana NixOS host + Nana Home Manager entrypoint
-hosts/twin/                          # reusable Home Manager dev profile
-hosts/dkumlin-macbook-pro/           # personal MacBook nix-darwin host + Home Manager entrypoint
-hosts/dkumlin-twin-macbook-pro/      # work MacBook nix-darwin host + Home Manager entrypoint
-modules/nixos/                       # NixOS reusable modules, including configurable host identity
+bin/traitor                          # local operations wrapper
+hosts/                               # machine-specific host composition
+profiles/home/                       # reusable Home Manager bridge profiles
+modules/nixos/                       # NixOS reusable modules
 modules/home/                        # shared Home Manager modules
-dotfiles/                            # live dotfiles linked out-of-store
+  shell/ editors/ terminal/ agents/ desktop/
+config/                              # source app dotfiles formerly in dotfiles/
   agents/skills-global/              # portable skills safe to enable broadly
   agents/skills-personal/            # personal-only skills such as homelab/Dokploy
   agents/skills-all/                 # symlink farm combining global + personal skills
-packages/herdr.nix                   # Herdr binary package for Nana
+packages/                            # local package definitions
 ```
 
-## Live dotfiles
+## Dotfile model
 
-High-churn dev and agent config is managed with Home Manager explicit out-of-store symlinks:
+The repo itself is the dotfiles checkout. App config source lives under `config/`:
+
+```text
+~/.config/dotfiles/config/ghostty
+~/.config/dotfiles/config/nvim
+~/.config/dotfiles/config/pi
+```
+
+Home Manager links selected files into their runtime locations, for example:
+
+```text
+~/.config/ghostty
+~/.config/nvim
+~/.pi/agent/settings.json
+```
+
+High-churn dev and agent config is still managed with explicit out-of-store symlinks:
 
 ```nix
 config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
 ```
 
-This keeps the files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `dotfiles/` takes effect immediately; rebuilding is only needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
+That keeps those files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `config/` can take effect immediately for live-symlinked apps; rebuilding is needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
 
-Managed live config can include shell, Git ignore, Neovim, btop, TheFuck, Herdr, Pi, Codex hooks/rules/skills, Claude, OpenCode, shared agent skills, and selected macOS app config such as AeroSpace, Ghostty, Karabiner, Graphite, SketchyBar, WezTerm, Amp, and cmux. Agent skills are split into global and personal sets so hosts can opt into only the skills they should expose; `agentSkills` enables all sets, while `agentSkillsGlobal` and `agentSkillsPersonal` enable them independently. The reusable `twin` profile enables Pi-specific config but not Codex, Claude, OpenCode, or shared agent skills. Codex `config.toml` and RustDesk server/password settings are intentionally local app state, not repo-managed. Tmux config is intentionally not included.
+## Cobb bridge profile
+
+This flake exports a reusable Home Manager module for Cobb:
+
+```nix
+inputs.daniel-dotfiles.homeManagerModules.cobb-daniel
+```
+
+The module lives at:
+
+```text
+profiles/home/cobb-daniel.nix
+```
+
+It is intended for Cobb's `nix/hosts/profiles/daniel.nix` to import, while Cobb remains responsible for system users, services, networking, and host-level config. The bridge points Daniel's user-level config at:
+
+```text
+/home/daniel/.config/dotfiles
+```
+
+and only enables on Cobb dev hosts (`monster`, `titan`, `titan-2`).
 
 ## Rules
 
@@ -94,10 +129,3 @@ Managed live config can include shell, Git ignore, Neovim, btop, TheFuck, Herdr,
 - Use Home Manager for packages and explicit out-of-store symlink declarations.
 - Use NixOS / nix-darwin modules for host/system services.
 - Add new Nix files with `git add` before rebuilding; flakes only see tracked files.
-
-## Updating
-
-```bash
-nix flake update
-sudo nixos-rebuild switch --flake .#srv-nana
-```
