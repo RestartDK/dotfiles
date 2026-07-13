@@ -59,6 +59,12 @@ const modelSegment: StatusLineSegment = {
       if (level !== "off") {
         const thinkingText = getThinkingText(level);
         if (thinkingText) {
+          if (level === "max") {
+            return {
+              content: `${color(ctx, "model", content)}${SEP_DOT}${applyColor(ctx.theme, "error", thinkingText)}`,
+              visible: true,
+            };
+          }
           content += `${SEP_DOT}${thinkingText}`;
         }
       }
@@ -125,55 +131,87 @@ const pathSegment: StatusLineSegment = {
   },
 };
 
+function formatGitIndicator(symbol: string, count: number): string {
+  if (count === 0) return "";
+  return count === 1 ? symbol : `${symbol}${count}`;
+}
+
+function formatGitRelation(ctx: SegmentContext, ahead: number | null, behind: number | null): string {
+  if (ahead === null || behind === null) return "";
+  if (ahead > 0 && behind > 0) {
+    return applyColor(ctx.theme, "error", `⇕⇡${ahead}⇣${behind}`);
+  }
+  if (ahead > 0) {
+    return applyColor(ctx.theme, "warning", `⇡${ahead}`);
+  }
+  if (behind > 0) {
+    return applyColor(ctx.theme, "warning", `⇣${behind}`);
+  }
+  return applyColor(ctx.theme, "success", "✓");
+}
+
 const gitSegment: StatusLineSegment = {
   id: "git",
   render(ctx) {
     const icons = getIcons();
     const opts = ctx.options.git ?? {};
-    const { branch, staged, unstaged, untracked } = ctx.git;
-    const gitStatus = (staged > 0 || unstaged > 0 || untracked > 0) 
-      ? { staged, unstaged, untracked } 
-      : null;
-
-    if (!branch && !gitStatus) return { content: "", visible: false };
-
-    const isDirty = gitStatus && (gitStatus.staged > 0 || gitStatus.unstaged > 0 || gitStatus.untracked > 0);
+    const {
+      branch,
+      conflicted,
+      stashed,
+      deleted,
+      renamed,
+      modified,
+      staged,
+      untracked,
+      typechanged,
+      ahead,
+      behind,
+      linesAdded,
+      linesRemoved,
+    } = ctx.git;
     const showBranch = opts.showBranch !== false;
+    const showStaged = opts.showStaged !== false;
+    const showUnstaged = opts.showUnstaged !== false;
+    const showUntracked = opts.showUntracked !== false;
+    const showDetails = showStaged || showUnstaged || showUntracked;
+    const isDirty = conflicted + deleted + renamed + modified + staged + untracked + typechanged > 0;
     const branchColor: SemanticColor = isDirty ? "gitDirty" : "gitClean";
+    const statusSymbols = showDetails
+      ? [
+          formatGitIndicator("=", conflicted),
+          formatGitIndicator("$", stashed),
+          formatGitIndicator("✘", showStaged || showUnstaged ? deleted : 0),
+          formatGitIndicator("»", showStaged ? renamed : 0),
+          formatGitIndicator("!", showUnstaged ? modified : 0),
+          formatGitIndicator("+", showStaged ? staged : 0),
+          formatGitIndicator("?", showUntracked ? untracked : 0),
+        ].join("")
+      : "";
+    const relation = showDetails ? formatGitRelation(ctx, ahead, behind) : "";
+    const details: string[] = [];
 
-    // Build content - color branch separately from indicators
+    if (statusSymbols || relation) {
+      details.push(`[${applyColor(ctx.theme, "error", statusSymbols)}${relation}]`);
+    }
+    if (showDetails && linesAdded > 0) {
+      details.push(applyColor(ctx.theme, "success", `+${linesAdded}`));
+    }
+    if (showDetails && linesRemoved > 0) {
+      details.push(applyColor(ctx.theme, "error", `-${linesRemoved}`));
+    }
+
     let content = "";
     if (showBranch && branch) {
-      // Color just the branch name (icon + branch text)
       content = color(ctx, branchColor, withIcon(icons.branch, branch));
+    } else if (details.length > 0 && !showBranch) {
+      content = color(ctx, branchColor, icons.git ? `${icons.git}` : "");
+    }
+    if (details.length > 0) {
+      content += `${content ? " " : ""}${details.join(" ")}`;
     }
 
-    // Add status indicators (each with their own color, not wrapped)
-    if (gitStatus) {
-      const indicators: string[] = [];
-      if (opts.showUnstaged !== false && gitStatus.unstaged > 0) {
-        indicators.push(applyColor(ctx.theme, "warning", `*${gitStatus.unstaged}`));
-      }
-      if (opts.showStaged !== false && gitStatus.staged > 0) {
-        indicators.push(applyColor(ctx.theme, "success", `+${gitStatus.staged}`));
-      }
-      if (opts.showUntracked !== false && gitStatus.untracked > 0) {
-        indicators.push(applyColor(ctx.theme, "muted", `?${gitStatus.untracked}`));
-      }
-      if (indicators.length > 0) {
-        const indicatorText = indicators.join(" ");
-        if (!content && showBranch === false) {
-          // No branch shown, color the git icon with branch color
-          content = color(ctx, branchColor, icons.git ? `${icons.git} ` : "") + indicatorText;
-        } else {
-          content += content ? ` ${indicatorText}` : indicatorText;
-        }
-      }
-    }
-
-    if (!content) return { content: "", visible: false };
-
-    return { content, visible: true };
+    return content ? { content, visible: true } : { content: "", visible: false };
   },
 };
 
@@ -189,9 +227,14 @@ const thinkingSegment: StatusLineSegment = {
       medium: "med",
       high: "high",
       xhigh: "xhigh",
+      max: "max",
     };
     const label = levelText[level] || level;
     const content = `think:${label}`;
+
+    if (level === "max") {
+      return { content: applyColor(ctx.theme, "error", `☠ ${content}`), visible: true };
+    }
 
     if (level === "high" || level === "xhigh") {
       return { content: rainbow(content), visible: true };
@@ -285,14 +328,13 @@ const contextPctSegment: StatusLineSegment = {
     const autoIcon = ctx.autoCompactEnabled && icons.auto ? ` ${icons.auto}` : "";
     const text = `${pct.toFixed(1)}%/${formatTokens(window)}${autoIcon}`;
 
-    // Icon outside color, text inside - use semantic colors for thresholds
     let content: string;
     if (pct > 90) {
-      content = withIcon(icons.context, color(ctx, "contextError", text));
+      content = color(ctx, "contextError", text);
     } else if (pct > 70) {
-      content = withIcon(icons.context, color(ctx, "contextWarn", text));
+      content = color(ctx, "contextWarn", text);
     } else {
-      content = withIcon(icons.context, color(ctx, "context", text));
+      content = color(ctx, "context", text);
     }
 
     return { content, visible: true };
@@ -304,12 +346,11 @@ const contextTotalSegment: StatusLineSegment = {
   render(ctx) {
     if (ctx.customCompactionEnabled) return { content: "", visible: false };
 
-    const icons = getIcons();
     const window = ctx.contextWindow;
     if (!window) return { content: "", visible: false };
 
     return {
-      content: color(ctx, "context", withIcon(icons.context, formatTokens(window))),
+      content: color(ctx, "context", formatTokens(window)),
       visible: true,
     };
   },

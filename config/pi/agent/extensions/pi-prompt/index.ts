@@ -37,6 +37,7 @@ import { readCoreContextUsage } from "./context-usage.ts";
 import { renderFixedEditorCluster } from "./fixed-editor/cluster.ts";
 import { emergencyTerminalModeReset, TerminalSplitCompositor } from "./fixed-editor/terminal-split.ts";
 import { getDefaultColors } from "./theme.ts";
+import { getPromptStateDir } from "./state-path.ts";
 import {
   isSupportedSuperShortcut,
   matchesConfiguredShortcut,
@@ -347,7 +348,7 @@ function readSettingsFile(settingsPath: string): Record<string, unknown> {
 
     const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
     if (!isRecord(parsed)) {
-      console.debug(`[powerline-footer] Ignoring non-object settings at ${settingsPath}`);
+      console.debug(`[pi-prompt] Ignoring non-object settings at ${settingsPath}`);
       return {};
     }
 
@@ -355,7 +356,7 @@ function readSettingsFile(settingsPath: string): Record<string, unknown> {
   } catch (error) {
     // Settings are user-edited input. Log and keep the extension running with defaults
     // instead of crashing the UI during startup.
-    console.debug(`[powerline-footer] Failed to read settings from ${settingsPath}:`, error);
+    console.debug(`[pi-prompt] Failed to read settings from ${settingsPath}:`, error);
     return {};
   }
 }
@@ -368,7 +369,7 @@ function readWritableSettingsFile(settingsPath: string): Record<string, unknown>
   try {
     const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
     if (!isRecord(parsed)) {
-      console.debug(`[powerline-footer] Refusing to write settings to non-object file at ${settingsPath}`);
+      console.debug(`[pi-prompt] Refusing to write settings to non-object file at ${settingsPath}`);
       return null;
     }
 
@@ -376,7 +377,7 @@ function readWritableSettingsFile(settingsPath: string): Record<string, unknown>
   } catch (error) {
     // Do not overwrite malformed user settings with partial data. Surface the failure
     // through the command handler so the user can fix the file intentionally.
-    console.debug(`[powerline-footer] Failed to parse settings at ${settingsPath}:`, error);
+    console.debug(`[pi-prompt] Failed to parse settings at ${settingsPath}:`, error);
     return null;
   }
 }
@@ -388,7 +389,7 @@ function readCompactionPolicyEnabled(configPath: string): boolean | undefined {
     if (!isRecord(parsed) || typeof parsed.enabled !== "boolean") return false;
     return parsed.enabled;
   } catch (error) {
-    console.debug(`[powerline-footer] Failed to read compaction policy from ${configPath}:`, error);
+    console.debug(`[pi-prompt] Failed to read compaction policy from ${configPath}:`, error);
     return false;
   }
 }
@@ -407,8 +408,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getStashHistoryPath(): string {
-  const homeDir = process.env.HOME || process.env.USERPROFILE || homedir();
-  return join(homeDir, ".pi", "agent", "powerline-footer", "stash-history.json");
+  return join(getPromptStateDir(), "stash-history.json");
 }
 
 function getSessionsPath(): string {
@@ -548,13 +548,13 @@ function readPersistedStashHistory(): string[] {
 
     const parsed = JSON.parse(readFileSync(stashHistoryPath, "utf-8"));
     if (!isRecord(parsed)) {
-      console.debug(`[powerline-footer] Ignoring invalid stash history at ${stashHistoryPath}`);
+      console.debug(`[pi-prompt] Ignoring invalid stash history at ${stashHistoryPath}`);
       return [];
     }
 
     return normalizeStashHistoryEntries(parsed.history);
   } catch (error) {
-    console.debug(`[powerline-footer] Failed to read stash history from ${stashHistoryPath}:`, error);
+    console.debug(`[pi-prompt] Failed to read stash history from ${stashHistoryPath}:`, error);
     return [];
   }
 }
@@ -570,7 +570,7 @@ function persistStashHistory(history: string[]): void {
     mkdirSync(dirname(stashHistoryPath), { recursive: true });
     writeFileSync(stashHistoryPath, JSON.stringify(payload, null, 2) + "\n");
   } catch (error) {
-    console.debug(`[powerline-footer] Failed to persist stash history to ${stashHistoryPath}:`, error);
+    console.debug(`[pi-prompt] Failed to persist stash history to ${stashHistoryPath}:`, error);
   }
 }
 
@@ -599,7 +599,7 @@ function writePowerlineSetting(cwd: string, update: (existingPowerlineSetting: u
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
     return true;
   } catch (error) {
-    console.debug(`[powerline-footer] Failed to persist powerline setting to ${settingsPath}:`, error);
+    console.debug(`[pi-prompt] Failed to persist powerline setting to ${settingsPath}:`, error);
     return false;
   }
 }
@@ -786,12 +786,12 @@ function resolveShortcutConfig(settings: Record<string, unknown>): PowerlineShor
 
     const replacement = findShortcutReplacement(key, used);
     if (!replacement) {
-      console.debug(`[powerline-footer] Shortcut conflict for ${key}: "${configured}" is already in use`);
+      console.debug(`[pi-prompt] Shortcut conflict for ${key}: "${configured}" is already in use`);
       continue;
     }
 
     console.debug(
-      `[powerline-footer] Shortcut conflict for ${key}: "${configured}" replaced with "${replacement}"`,
+      `[pi-prompt] Shortcut conflict for ${key}: "${configured}" replaced with "${replacement}"`,
     );
 
     resolved[key] = replacement;
@@ -811,7 +811,7 @@ function parseBashModeSettings(settings: Record<string, unknown>): BashModeSetti
 
   if (configuredToggleShortcut && toggleShortcut !== configuredToggleShortcut) {
     console.debug(
-      `[powerline-footer] Bash mode shortcut conflict: "${configuredToggleShortcut}" replaced with "${toggleShortcut}"`,
+      `[pi-prompt] Bash mode shortcut conflict: "${configuredToggleShortcut}" replaced with "${toggleShortcut}"`,
     );
   }
   const transcriptMaxLines = typeof raw.transcriptMaxLines === "number" && Number.isFinite(raw.transcriptMaxLines)
@@ -933,7 +933,7 @@ function computeResponsiveLayout(
 // Extension
 // ═══════════════════════════════════════════════════════════════════════════
 
-export default function powerlineFooter(pi: ExtensionAPI) {
+export default function piPrompt(pi: ExtensionAPI) {
   const startupSettings = readSettings();
   config = parsePowerlineConfig(startupSettings.powerline, PRESET_NAMES);
   let resolvedShortcuts = resolveShortcutConfig(startupSettings);
@@ -1860,7 +1860,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
     // Get git status (cached)
     const gitBranch = footerDataRef?.getGitBranch() ?? null;
-    const gitStatus = getGitStatus(gitBranch);
+    const gitStatus = getGitStatus(gitBranch, bashModeActive ? shellSession?.state.cwd ?? ctx.cwd : ctx.cwd);
     const extensionStatuses = footerDataRef?.getExtensionStatuses() ?? new Map();
     const customItemsById = new Map(config.customItems.map((item) => [item.id, item]));
     const hiddenExtensionStatusKeys = collectHiddenExtensionStatusKeys(config.customItems);
@@ -2041,15 +2041,15 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
     if (!ctx.hasUI || !config.fixedEditor) return;
     if (!tui?.terminal || typeof tui.terminal.write !== "function") {
-      throw new Error("[powerline-footer] Fixed editor compositor could not find tui.terminal.write()");
+      throw new Error("[pi-prompt] Fixed editor compositor could not find tui.terminal.write()");
     }
     if (!currentEditor) {
-      throw new Error("[powerline-footer] Fixed editor compositor expected the custom editor to be installed first");
+      throw new Error("[pi-prompt] Fixed editor compositor expected the custom editor to be installed first");
     }
 
     const editorContainerMatch = findContainerWithChild(tui, currentEditor);
     if (!editorContainerMatch) {
-      throw new Error("[powerline-footer] Fixed editor compositor could not find the editor container in TUI children");
+      throw new Error("[pi-prompt] Fixed editor compositor could not find the editor container in TUI children");
     }
 
     const tuiChildren = Array.isArray(tui.children) ? tui.children : [];
@@ -2562,7 +2562,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
           }),
         },
       ).catch((error) => {
-        console.debug("[powerline-footer] Welcome overlay failed:", error);
+        console.debug("[pi-prompt] Welcome overlay failed:", error);
       });
     }, 100);
   }

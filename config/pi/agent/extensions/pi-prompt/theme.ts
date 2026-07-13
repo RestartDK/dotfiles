@@ -1,5 +1,5 @@
 /**
- * Theme system for powerline-footer
+ * Theme system for pi-prompt
  * 
  * Colors are resolved in order:
  * 1. User overrides from theme.json (if exists)
@@ -110,7 +110,7 @@ export function loadThemeConfig(): PowerlineThemeConfig {
   } catch (error) {
     // Theme overrides are optional. If the file is unreadable or malformed,
     // keep rendering with built-in defaults instead of breaking the footer.
-    console.debug(`[powerline-theme] Failed to load ${themePath}:`, error);
+    console.debug(`[pi-prompt] Failed to load ${themePath}:`, error);
   }
 
   themeConfigCache = {};
@@ -183,7 +183,7 @@ export function applyColor(
       if (warnedInvalidThemeColors.size > 200) {
         warnedInvalidThemeColors.clear();
       }
-      console.debug(`[powerline-theme] Invalid theme color "${key}"; falling back to "text".`, error);
+      console.debug(`[pi-prompt] Invalid theme color "${key}"; falling back to "text".`, error);
     }
     return theme.fg("text", text);
   }

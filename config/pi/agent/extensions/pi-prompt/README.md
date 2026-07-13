@@ -1,8 +1,8 @@
 <p>
-  <img src="banner.png" alt="pi-powerline-footer" width="1100">
+  <img src="banner.png" alt="pi-prompt" width="1100">
 </p>
 
-# pi-powerline-footer
+# pi-prompt
 
 Customizes the default [pi](https://github.com/badlogic/pi-mono) editor with a powerline-style status bar, welcome overlay, and AI-generated "vibes" for loading messages. Inspired by [Powerlevel10k](https://github.com/romkatv/powerlevel10k) and [oh-my-pi](https://github.com/can1357/oh-my-pi).
 
@@ -24,7 +24,7 @@ Customizes the default [pi](https://github.com/badlogic/pi-mono) editor with a p
 
 **Smart defaults** — Nerd Font auto-detection for iTerm, WezTerm, Kitty, Ghostty, and Alacritty with ASCII fallbacks. Colors matched to oh-my-pi's dark theme.
 
-**Git integration** — Async status fetching with 1s cache TTL. Automatically invalidates on file writes/edits. Shows branch, staged (+), unstaged (*), and untracked (?) counts.
+**Git integration** — Async status fetching with a 1s cache. Shows Starship-style conflict, stash, deletion, rename, modification, staged, untracked, ahead, behind, diverged, and up-to-date indicators. Added and removed line counts are measured from the merge base with the repository's parent branch.
 
 **Context awareness** — Color-coded warnings at 70% (yellow) and 90% (red) context usage. During streaming, the context segment refreshes from live assistant usage instead of waiting for the next turn. Auto-compact indicator when enabled. If `pi-custom-compaction` is installed and enabled, the powerline automatically hides native context segments so the footer does not show stale post-summary usage.
 
@@ -36,11 +36,7 @@ Customizes the default [pi](https://github.com/badlogic/pi-mono) editor with a p
 
 ## Installation
 
-```bash
-pi install npm:pi-powerline-footer
-```
-
-Restart pi to activate.
+The dotfiles Home Manager profile links this directory to `~/.pi/agent/extensions/pi-prompt`. Restart pi or run `/reload` to activate changes.
 
 ## Usage
 
@@ -171,7 +167,7 @@ Use `Alt+S` / `Option+S` as a quick stash toggle while drafting. It keeps one ac
 
 Auto-restore after an agent run only happens when the editor is still empty. If you typed meanwhile, the stash is preserved.
 
-The `stash` indicator appears in the powerline bar (on presets with `extension_statuses`). Active stash is still session-local and resets on session switch / disable, but stash history is persisted to `~/.pi/agent/powerline-footer/stash-history.json` so it survives restarts.
+The `stash` indicator appears in the powerline bar (on presets with `extension_statuses`). Active stash is still session-local and resets on session switch / disable, but stash history is persisted to `~/.pi/agent/pi-prompt/stash-history.json` so it survives restarts.
 
 ### Stash history
 
@@ -306,6 +302,7 @@ The thinking segment shows live updates when you change thinking level:
 | medium | `think:med` | teal |
 | high | `think:high` | rainbow |
 | xhigh | `think:xhigh` | rainbow |
+| max | `☠ think:max` | red |
 
 ## Path Display
 
@@ -313,9 +310,9 @@ The path segment supports three modes:
 
 | Mode | Example | Description |
 |------|---------|-------------|
-| `basename` | `powerline-footer` | Just the directory name (default) |
-| `abbreviated` | `…/extensions/powerline-footer` | Full path with home abbreviated and length limit |
-| `full` | `~/.pi/agent/extensions/powerline-footer` | Complete path with home abbreviated |
+| `basename` | `pi-prompt` | Just the directory name (default) |
+| `abbreviated` | `…/extensions/pi-prompt` | Full path with home abbreviated and length limit |
+| `full` | `~/.pi/agent/extensions/pi-prompt` | Complete path with home abbreviated |
 
 Configure via preset options: `path: { mode: "full" }`
 
@@ -352,7 +349,7 @@ Colors are configurable via pi's theme system. Each preset defines its own color
 
 ### Custom Theme Override
 
-Create `~/.pi/agent/extensions/powerline-footer/theme.json`:
+Create `~/.pi/agent/extensions/pi-prompt/theme.json`:
 
 ```json
 {

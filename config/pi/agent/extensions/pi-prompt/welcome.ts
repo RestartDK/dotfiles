@@ -326,7 +326,7 @@ function logDiscoveryError(scope: string, error: unknown): void {
     loggedDiscoveryErrors.clear();
   }
 
-  console.debug(`[powerline-welcome] ${scope}:`, error);
+  console.debug(`[pi-prompt] ${scope}:`, error);
 }
 
 /**

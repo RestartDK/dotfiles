@@ -123,9 +123,19 @@ export interface SeparatorDef {
 // Git status data
 export interface GitStatus {
   branch: string | null;
+  parentBranch: string | null;
+  conflicted: number;
+  stashed: number;
+  deleted: number;
+  renamed: number;
+  modified: number;
   staged: number;
-  unstaged: number;
   untracked: number;
+  typechanged: number;
+  ahead: number | null;
+  behind: number | null;
+  linesAdded: number;
+  linesRemoved: number;
 }
 
 // Usage statistics
