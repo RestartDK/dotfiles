@@ -136,18 +136,21 @@ function formatGitIndicator(symbol: string, count: number): string {
   return count === 1 ? symbol : `${symbol}${count}`;
 }
 
-function formatGitRelation(ctx: SegmentContext, ahead: number | null, behind: number | null): string {
-  if (ahead === null || behind === null) return "";
+function formatGitRelation(ahead: number | null, behind: number | null): {
+  content: string;
+  color: "error" | "warning" | "success";
+} | null {
+  if (ahead === null || behind === null) return null;
   if (ahead > 0 && behind > 0) {
-    return applyColor(ctx.theme, "error", `⇕⇡${ahead}⇣${behind}`);
+    return { content: `⇕⇡${ahead}⇣${behind}`, color: "error" };
   }
   if (ahead > 0) {
-    return applyColor(ctx.theme, "warning", `⇡${ahead}`);
+    return { content: `⇡${ahead}`, color: "warning" };
   }
   if (behind > 0) {
-    return applyColor(ctx.theme, "warning", `⇣${behind}`);
+    return { content: `⇣${behind}`, color: "warning" };
   }
-  return applyColor(ctx.theme, "success", "✓");
+  return { content: "✓", color: "success" };
 }
 
 const gitSegment: StatusLineSegment = {
@@ -188,11 +191,12 @@ const gitSegment: StatusLineSegment = {
           formatGitIndicator("?", showUntracked ? untracked : 0),
         ].join("")
       : "";
-    const relation = showDetails ? formatGitRelation(ctx, ahead, behind) : "";
+    const relation = showDetails ? formatGitRelation(ahead, behind) : null;
     const details: string[] = [];
 
     if (statusSymbols || relation) {
-      details.push(`[${applyColor(ctx.theme, "error", statusSymbols)}${relation}]`);
+      const indicatorColor = statusSymbols ? "error" : relation?.color ?? "error";
+      details.push(applyColor(ctx.theme, indicatorColor, `[${statusSymbols}${relation?.content ?? ""}]`));
     }
     if (showDetails && linesAdded > 0) {
       details.push(applyColor(ctx.theme, "success", `+${linesAdded}`));
