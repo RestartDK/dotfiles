@@ -1,7 +1,7 @@
 {
-  "name": "pi-powerline-footer",
+  "name": "pi-prompt",
   "version": "0.5.2",
-  "description": "Powerline-style status bar extension for pi coding agent",
+  "description": "Powerline prompt extension for pi coding agent",
   "type": "module",
   "files": [
     "*.ts",
@@ -23,10 +23,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nicobailon/pi-powerline-footer.git"
+    "url": "git+https://github.com/RestartDK/dotfiles.git",
+    "directory": "config/pi/agent/extensions/pi-prompt"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test tests/**/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "^0.80.6",

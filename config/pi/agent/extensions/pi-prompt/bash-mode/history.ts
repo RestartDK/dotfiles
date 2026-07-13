@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { getPromptStateDir } from "../state-path.ts";
 
 interface PersistedHistoryEntry {
   command: string;
@@ -13,7 +14,7 @@ function getHomeDir(): string {
 }
 
 function getHistoryDir(): string {
-  return join(getHomeDir(), ".pi", "agent", "powerline-footer", "bash-history");
+  return join(getPromptStateDir(), "bash-history");
 }
 
 function projectKey(cwd: string): string {
@@ -53,7 +54,7 @@ export function readProjectHistory(cwd: string): PersistedHistoryEntry[] {
   } catch (error) {
     // Project history is a best-effort cache. If it is unreadable or malformed,
     // bash mode should keep working instead of failing command entry entirely.
-    console.debug(`[powerline-footer] Failed to read bash project history from ${filePath}:`, error);
+    console.debug(`[pi-prompt] Failed to read bash project history from ${filePath}:`, error);
     return [];
   }
 }
@@ -74,7 +75,7 @@ export function appendProjectHistory(cwd: string, command: string, entryCwd: str
     writeFileSync(filePath, JSON.stringify({ version: 1, entries: next }, null, 2) + "\n");
   } catch (error) {
     // History persistence should never block a successful shell command from completing.
-    console.debug(`[powerline-footer] Failed to persist bash project history to ${filePath}:`, error);
+    console.debug(`[pi-prompt] Failed to persist bash project history to ${filePath}:`, error);
   }
 }
 
@@ -128,7 +129,7 @@ export function readGlobalShellHistory(shellPath: string): string[] {
   } catch (error) {
     // Global shell history is optional recall data. If it is unavailable, shell predictions
     // should degrade to other sources instead of failing the editor.
-    console.debug(`[powerline-footer] Failed to read global shell history for ${shellName}:`, error);
+    console.debug(`[pi-prompt] Failed to read global shell history for ${shellName}:`, error);
     return [];
   }
 }
