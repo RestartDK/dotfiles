@@ -44,10 +44,10 @@ jobs:
       - name: Check flake outputs
         run: ./bin/traitor check --all-systems --print-build-logs
 
-      - name: Build NixOS host (srv-nana)
-        # srv-nana is the Linux/NixOS host output in this flake. Building it in
-        # CI catches Linux system regressions without implying CI is Nana-only.
-        run: nix build .#nixosConfigurations.srv-nana.config.system.build.toplevel --no-link --print-build-logs
+      - name: Evaluate NixOS host derivation (srv-nana)
+        # Evaluate the complete system derivation without materializing Nana's
+        # large NVIDIA/CUDA closure on the hosted runner.
+        run: nix eval --raw .#nixosConfigurations.srv-nana.config.system.build.toplevel.drvPath
 
   darwin:
     name: Darwin / nix-darwin
