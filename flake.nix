@@ -56,6 +56,10 @@
       system = linuxSystem;
       config.allowUnfree = true;
     };
+    homeSpecialArgs = {
+      inherit inputs;
+      dotfilesInputs = inputs;
+    };
   in {
     packages = forAllSystems (system:
       let
@@ -78,7 +82,9 @@
     homeManagerModules =
       let
         withDotfilesInputs = module: extraImports: { ... }: {
-          _module.args.inputs = inputs;
+          # Keep the embedding flake's generic `inputs` argument intact. Cobb
+          # passes its own inputs through Home Manager extraSpecialArgs.
+          _module.args.dotfilesInputs = inputs;
           imports = [ module ] ++ extraImports;
         };
         hunkModule = inputs.hunk.homeManagerModules.default;
@@ -100,7 +106,7 @@
             useGlobalPkgs = true;
             useUserPackages = true;
             backupFileExtension = "hm-backup";
-            extraSpecialArgs = { inherit inputs; };
+            extraSpecialArgs = homeSpecialArgs;
             users.dkumlin = import ./hosts/srv-nana/home.nix;
           };
         }
@@ -112,7 +118,7 @@
     # groups, Docker, bootloader, or other host-level settings.
     homeConfigurations.twin = home-manager.lib.homeManagerConfiguration {
       pkgs = twinPkgs;
-      extraSpecialArgs = { inherit inputs; };
+      extraSpecialArgs = homeSpecialArgs;
       modules = [ ./hosts/twin/home.nix ];
     };
 
@@ -127,7 +133,7 @@
             useGlobalPkgs = true;
             useUserPackages = true;
             backupFileExtension = "hm-backup";
-            extraSpecialArgs = { inherit inputs; };
+            extraSpecialArgs = homeSpecialArgs;
             users.danielkumlin = import ./hosts/dkumlin-macbook-pro/home.nix;
           };
         }
@@ -145,7 +151,7 @@
             useGlobalPkgs = true;
             useUserPackages = true;
             backupFileExtension = "hm-backup";
-            extraSpecialArgs = { inherit inputs; };
+            extraSpecialArgs = homeSpecialArgs;
             users.danielkumlin = import ./hosts/dkumlin-twin-macbook-pro/home.nix;
           };
         }

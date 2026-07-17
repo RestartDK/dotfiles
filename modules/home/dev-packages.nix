@@ -1,10 +1,13 @@
-{ pkgs, inputs, ... }:
+{ dotfilesInputs, pkgs, ... }:
 
 {
   programs.home-manager.enable = true;
   xdg.enable = true;
 
-  home.packages = import ./dev-package-list.nix { inherit pkgs inputs; };
+  home.packages = import ./dev-package-list.nix {
+    inherit pkgs;
+    inputs = dotfilesInputs;
+  };
 
   programs.git = {
     enable = true;

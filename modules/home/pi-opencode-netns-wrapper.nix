@@ -1,9 +1,9 @@
-{ config, inputs, lib, pkgs, ... }:
+{ config, dotfilesInputs, lib, pkgs, ... }:
 
 let
   cfg = config.my.piNetnsWrapper;
   piCodingAgent = pkgs.callPackage ../../packages/pi-coding-agent.nix {
-    src = inputs.pi-src;
+    src = dotfilesInputs.pi-src;
   };
   realPi = "${piCodingAgent}/bin/pi";
   piWrapper = pkgs.writeShellScriptBin "pi" ''

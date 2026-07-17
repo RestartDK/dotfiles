@@ -114,13 +114,13 @@ The module lives at:
 profiles/home/cobb-daniel.nix
 ```
 
-It is intended for Cobb's `nix/hosts/profiles/daniel.nix` to import, while Cobb remains responsible for system users, services, networking, and host-level config. The bridge points Daniel's user-level config at:
+It is intended for Cobb's `nix/hosts/profiles/daniel.nix` to import, while Cobb remains responsible for system users, services, networking, and host-level config. Cobb's NixOS Home Manager module remains the sole activator. The bridge contributes Daniel's development packages and network-namespace wrappers without installing the standalone Home Manager CLI, and points high-churn config at:
 
 ```text
 /home/daniel/.config/dotfiles
 ```
 
-and only enables on Cobb dev hosts (`monster`, `titan`, `titan-2`).
+The package and live-config layers only enable on Cobb dev hosts (`monster`, `titan`, `titan-2`).
 
 ## Rules
 

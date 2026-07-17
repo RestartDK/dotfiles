@@ -1,4 +1,4 @@
-{ config, inputs ? { }, lib, pkgs, ... }:
+{ config, dotfilesInputs, lib, pkgs, ... }:
 
 let
   cfg = config.my.twinDevEnvironment;
@@ -9,11 +9,18 @@ in
     ./pi-opencode-netns-wrapper.nix
   ];
 
-  options.my.twinDevEnvironment.enable =
-    lib.mkEnableOption "Daniel's reusable Twin development environment";
+  options.my.twinDevEnvironment = {
+    enable = lib.mkEnableOption "Daniel's reusable Twin development environment";
+
+    installHomeManagerCli = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to install the standalone Home Manager CLI.";
+    };
+  };
 
   config = lib.mkIf cfg.enable {
-    programs.home-manager.enable = true;
+    programs.home-manager.enable = cfg.installHomeManagerCli;
     programs.hunk.enable = true;
     services.lorri.enable = true;
     xdg.enable = true;
@@ -21,7 +28,8 @@ in
     # Keep Git identity, aliases, signing, and other host policy in the owning
     # profile while sharing Daniel's development tools across Twin and Cobb.
     home.packages = import ./dev-package-list.nix {
-      inherit pkgs inputs;
+      inherit pkgs;
+      inputs = dotfilesInputs;
       agentPackageNames = [ ];
     };
 
