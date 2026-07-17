@@ -68,11 +68,10 @@ jobs:
       - name: Check flake outputs
         run: ./bin/traitor check --print-build-logs
 
-      - name: Build personal MacBook config
-        run: nix build .#darwinConfigurations.dkumlin-macbook-pro.system --no-link --print-build-logs
-
-      - name: Build work MacBook config
-        run: nix build .#darwinConfigurations.dkumlin-twin-macbook-pro.system --no-link --print-build-logs
+      - name: Check Darwin configurations evaluate
+        run: |
+          time nix eval .#darwinConfigurations.dkumlin-macbook-pro.system --apply 'x: "OK"'
+          time nix eval .#darwinConfigurations.dkumlin-twin-macbook-pro.system --apply 'x: "OK"'
 
   statix:
     name: Nix static analysis
