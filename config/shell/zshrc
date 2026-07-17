@@ -52,12 +52,24 @@ elif [[ -S "$HOME/.1password/agent.sock" ]]; then
   export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
 fi
 
-# Nix profiles. Prefer the most recently activated user-level Home Manager
-# profile when present, while retaining NixOS-managed and legacy profiles.
+# Nix profiles. Cobb development hosts use a standalone Home Manager profile;
+# elsewhere, prefer the NixOS/nix-darwin-managed user profile and retain the
+# standalone profile only as a fallback. Remove both first so an inherited PATH
+# cannot preserve stale profile precedence.
+managed_home_profile="/etc/profiles/per-user/$USER/bin"
+standalone_home_profile="$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
+path_remove "$managed_home_profile"
+path_remove "$standalone_home_profile"
 path_prepend "/run/current-system/sw/bin"
 path_prepend "$HOME/.nix-profile/bin"
-path_prepend "/etc/profiles/per-user/$USER/bin"
-path_prepend "$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
+if [[ "$OSTYPE" != darwin* && -r "$HOME/.config/shell/cobb-vscode-netns.zsh" ]]; then
+  path_prepend "$managed_home_profile"
+  path_prepend "$standalone_home_profile"
+else
+  path_prepend "$standalone_home_profile"
+  path_prepend "$managed_home_profile"
+fi
+unset managed_home_profile standalone_home_profile
 
 # Homebrew: Apple Silicon macOS default, then whatever `brew --prefix` reports.
 path_prepend "/opt/homebrew/bin"
