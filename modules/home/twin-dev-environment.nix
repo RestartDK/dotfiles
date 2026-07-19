@@ -1,4 +1,4 @@
-{ config, inputs ? { }, lib, pkgs, ... }:
+{ config, dotfilesInputs, lib, pkgs, ... }:
 
 let
   cfg = config.my.twinDevEnvironment;
@@ -13,7 +13,6 @@ in
     lib.mkEnableOption "Daniel's reusable Twin development environment";
 
   config = lib.mkIf cfg.enable {
-    programs.home-manager.enable = true;
     programs.hunk.enable = true;
     services.lorri.enable = true;
     xdg.enable = true;
@@ -21,7 +20,8 @@ in
     # Keep Git identity, aliases, signing, and other host policy in the owning
     # profile while sharing Daniel's development tools across Twin and Cobb.
     home.packages = import ./dev-package-list.nix {
-      inherit pkgs inputs;
+      inherit pkgs;
+      inputs = dotfilesInputs;
       agentPackageNames = [ ];
     };
 

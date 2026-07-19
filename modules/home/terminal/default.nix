@@ -1,13 +1,13 @@
-{ config, inputs, lib, pkgs, ... }:
+{ config, dotfilesInputs, lib, pkgs, ... }:
 
 let
   cfg = config.my.liveConfig;
-  hasScattererInput = inputs ? scatterer-src;
-  herdrPackage = inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  hasScattererInput = dotfilesInputs ? scatterer-src;
+  herdrPackage = dotfilesInputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
   scattererPackage =
     if hasScattererInput then
       pkgs.callPackage ../../../packages/scatterer.nix {
-        src = inputs.scatterer-src;
+        src = dotfilesInputs.scatterer-src;
       }
     else
       null;

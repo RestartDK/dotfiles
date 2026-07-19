@@ -9,19 +9,26 @@ let
   ];
 in
 {
-  imports = [ ../../modules/home/live-symlinks.nix ];
+  imports = [
+    ../../modules/home/live-symlinks.nix
+    ../../modules/home/twin-dev-environment.nix
+  ];
 
-  # Cobb owns the machine, users, network namespaces, services, and most common
-  # tool defaults. This bridge only points Daniel's user-level high-churn config
-  # at the canonical RestartDK/dotfiles checkout on Cobb dev hosts.
+  # Cobb's NixOS Home Manager module is the sole activator. This imported
+  # profile only contributes Daniel's development packages and high-churn
+  # configuration.
+  my.twinDevEnvironment.enable = isCobbDevHost;
+
   my.liveConfig = {
     enable = isCobbDevHost;
     repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
     piSettingsFile = "config/pi/agent/settings-twin.json";
     piSkillsPath = "config/pi/agent/skills-twin";
     groups = {
-      # Avoid .zshrc and OpenCode conflicts with Cobb's profiles/common.nix.
-      shell = false;
+      # Cobb's Daniel profile disables its generated shell and Neovim config
+      # on development hosts, so the canonical dotfiles checkout owns both.
+      shell = true;
+      # Keep Cobb's work-agent defaults and credentials authoritative.
       opencode = false;
       codex = false;
       claude = false;
