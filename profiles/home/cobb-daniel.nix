@@ -15,12 +15,9 @@ in
   ];
 
   # Cobb's NixOS Home Manager module is the sole activator. This imported
-  # profile contributes Daniel's development packages and high-churn config
-  # without installing a second standalone Home Manager CLI.
-  my.twinDevEnvironment = {
-    enable = isCobbDevHost;
-    installHomeManagerCli = false;
-  };
+  # profile only contributes Daniel's development packages and high-churn
+  # configuration.
+  my.twinDevEnvironment.enable = isCobbDevHost;
 
   my.liveConfig = {
     enable = isCobbDevHost;

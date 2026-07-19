@@ -9,18 +9,10 @@ in
     ./pi-opencode-netns-wrapper.nix
   ];
 
-  options.my.twinDevEnvironment = {
-    enable = lib.mkEnableOption "Daniel's reusable Twin development environment";
-
-    installHomeManagerCli = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Whether to install the standalone Home Manager CLI.";
-    };
-  };
+  options.my.twinDevEnvironment.enable =
+    lib.mkEnableOption "Daniel's reusable Twin development environment";
 
   config = lib.mkIf cfg.enable {
-    programs.home-manager.enable = cfg.installHomeManagerCli;
     programs.hunk.enable = true;
     services.lorri.enable = true;
     xdg.enable = true;

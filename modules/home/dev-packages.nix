@@ -1,7 +1,6 @@
 { dotfilesInputs, pkgs, ... }:
 
 {
-  programs.home-manager.enable = true;
   xdg.enable = true;
 
   home.packages = import ./dev-package-list.nix {
