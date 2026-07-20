@@ -6,9 +6,7 @@ let
     system = pkgs.stdenv.hostPlatform.system;
     config = pkgs.config;
   };
-  piCodingAgent = unstable.callPackage ../../packages/pi-coding-agent.nix {
-    src = inputs.pi-src;
-  };
+  piCodingAgent = unstable.callPackage ../../packages/pi-coding-agent.nix { };
   availableAgentPackages = {
     # The nixpkgs Rust build currently pulls livekit-libwebrtc, which fails to
     # build on aarch64-darwin. Use OpenAI's npm binary distribution instead.
