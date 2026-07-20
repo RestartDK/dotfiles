@@ -2,9 +2,11 @@
 
 let
   cfg = config.my.piNetnsWrapper;
-  piCodingAgent = pkgs.callPackage ../../packages/pi-coding-agent.nix {
-    src = dotfilesInputs.pi-src;
+  unstable = import dotfilesInputs.nixpkgs-unstable {
+    system = pkgs.stdenv.hostPlatform.system;
+    config = pkgs.config;
   };
+  piCodingAgent = unstable.callPackage ../../packages/pi-coding-agent.nix { };
   realPi = "${piCodingAgent}/bin/pi";
   piWrapper = pkgs.writeShellScriptBin "pi" ''
     set -euo pipefail
