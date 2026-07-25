@@ -1,4 +1,4 @@
-{ bashNonInteractive, lib, rustPlatform, src }:
+{ bashNonInteractive, gitMinimal, lib, libiconv, rustPlatform, src, stdenv }:
 
 let
   manifest = builtins.fromTOML (builtins.readFile "${src}/herdr-plugin.toml");
@@ -8,12 +8,13 @@ rustPlatform.buildRustPackage {
   inherit (manifest) version;
 
   inherit src;
-  cargoHash = "sha256-bc1/N1R4bt5RfGgK0ISRNDA7uw54LGIMY1wgCrzVycg=";
+  cargoHash = "sha256-3WF9Sms5E5hF1UCLh+bSj9GJvZEG8KaiFMv4ZSawg7w=";
+  buildInputs = lib.optionals stdenv.isDarwin [ libiconv ];
+  nativeCheckInputs = [ gitMinimal ];
 
   # The plugin root is immutable in /nix/store, so Herdr should execute the
   # already-built binary we install below rather than relying on cargo at
   # runtime. Link/install-time build commands are only used outside Nix.
-  doCheck = false;
 
   postPatch = ''
     substituteInPlace herdr-plugin.toml \
