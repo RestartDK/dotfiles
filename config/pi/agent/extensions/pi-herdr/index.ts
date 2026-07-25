@@ -42,6 +42,7 @@ const ActionEnum = StringEnum(
 		"tab_list",
 		"tab_create",
 		"tab_focus",
+		"tab_close",
 		"focus",
 		"pane_split",
 		"run",
@@ -419,6 +420,7 @@ export default function (pi: ExtensionAPI) {
 			"Use `herdr` run for long-running processes in other panes instead of `bash`.",
 			"Keep the tab containing Pi dedicated to the interactive Pi session. For tests, builds, servers, watchers, or other background work in the current project, first use `tab_create` with a descriptive label and a friendly `pane` alias for its root pane, then run work there.",
 			"Group related processes in one dedicated work tab. If that workflow needs more panes, use `pane_split` on the root pane alias or another pane in that work tab; never split a pane in Pi's own tab.",
+			"Remember every transient work tab and process you create. Before finishing the task, terminate processes you started and use `tab_close` to tear down their dedicated tabs, unless the user explicitly asked to leave a service or agent running.",
 			"Use a new workspace instead of a tab when the work needs a separate Git worktree or broader isolation.",
 			"When you want to submit a line or prompt to a pane, prefer `run` over `send` + `Enter` so text and Enter happen atomically.",
 			"Use `send` only for low-level literal text or key injection when you do not want command-style submission semantics.",
@@ -434,7 +436,7 @@ export default function (pi: ExtensionAPI) {
 			"Pane references can be either friendly aliases you created earlier or real herdr pane ids from `list`.",
 			"Use `tab_create` with `pane` set to a friendly root-pane alias as the default way to establish a target for current-project background work. `pane_split` requires an existing pane alias/id outside Pi's tab and defaults its direction to right. `run` only works with an existing pane alias or pane id.",
 			"When PI_NETNS_SELECTED is set, newly split panes automatically enter that network namespace before later commands are run in them.",
-			"Use friendly pane aliases like `server`, `reviewer`, or `tests` so later reads, watches, and sends can reuse them across the session.",
+			"Use friendly pane aliases like `server`, `reviewer`, or `tests` so later reads, watches, sends, and cleanup can reuse them across the session.",
 			"When starting a fresh pi instance in another pane and the model matters, either specify `--model` explicitly or ask the user which model/provider they want.",
 		],
 		parameters: Type.Object({
@@ -698,6 +700,32 @@ export default function (pi: ExtensionAPI) {
 					return {
 						content: [{ type: "text", text: `Focused tab '${tab.label}'` }],
 						details: withSnapshot({ action: "tab_focus", tab }),
+					};
+				}
+
+				case "tab_close": {
+					const tabId = params.tab;
+					if (!tabId) throw new Error("'tab' is required for tab_close");
+					if (tabId === currentPane.tab_id) throw new Error("Refusing to close the tab pi is running in.");
+
+					const tabs = await getTabList(currentWorkspaceId, signal);
+					const tab = tabs.find((candidate) => candidate.tab_id === tabId);
+					if (!tab) throw new Error(`Tab '${tabId}' not found in the current workspace.`);
+					const paneIds = new Set(
+						(await getWorkspacePanes(currentWorkspaceId, signal))
+							.filter((pane) => pane.tab_id === tabId)
+							.map((pane) => pane.pane_id),
+					);
+					expectResult(
+						await herdr.call("tab.close", { tab_id: tabId }, { signal }),
+						"ok",
+					);
+					for (const [alias, managed] of [...managedPanes.entries()]) {
+						if (paneIds.has(managed.paneId)) forgetAlias(alias);
+					}
+					return {
+						content: [{ type: "text", text: `Closed tab '${tab.label}' (${tabId})` }],
+						details: withSnapshot({ action: "tab_close", tab, tabId }),
 					};
 				}
 

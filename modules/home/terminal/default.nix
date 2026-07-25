@@ -51,31 +51,19 @@ in
         home.packages = [ scattererPackage ];
 
         home.activation.linkScattererHerdrPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          herdr_bin="${herdrPackage}/bin/herdr"
-          plugin_root="${scattererPluginRoot}"
-
-          # Plugin linking uses Herdr's socket API. Bootstrap a temporary
-          # headless server for first-time or non-interactive activations, but
-          # leave an already running Herdr session alone.
-          started_herdr_server=0
-          herdr_server_pid=""
-          if ! "$herdr_bin" status server >/dev/null 2>&1; then
-            "$herdr_bin" server >/dev/null 2>&1 &
-            herdr_server_pid=$!
-            started_herdr_server=1
-            for _ in {1..50}; do
-              "$herdr_bin" status server >/dev/null 2>&1 && break
-              ${pkgs.coreutils}/bin/sleep 0.1
-            done
-          fi
-
-          if ! run "$herdr_bin" plugin link "$plugin_root" >/dev/null 2>&1; then
+          # Herdr 0.7.5 stores one user-global plugin registry and can update it
+          # while the server is offline. Never start or restore a session only
+          # to refresh this declarative plugin link. Preserve an explicit local
+          # development link; otherwise refresh the immutable Nix registration.
+          existing_manifest="$(
+            "${herdrPackage}/bin/herdr" plugin list --json 2>/dev/null \
+              | ${pkgs.jq}/bin/jq -r '.result.plugins[]? | select(.plugin_id == "daniel.scatterer") | .manifest_path // empty' \
+              | ${pkgs.coreutils}/bin/head -n 1
+          )"
+          if [ -n "$existing_manifest" ] && [[ "$existing_manifest" != /nix/store/* ]]; then
+            echo "Preserving local Scatterer plugin link at $existing_manifest"
+          elif ! run "${herdrPackage}/bin/herdr" plugin link "${scattererPluginRoot}" >/dev/null 2>&1; then
             echo "Could not refresh Scatterer plugin registration; leaving the existing registration unchanged."
-          fi
-
-          if [ "$started_herdr_server" -eq 1 ]; then
-            "$herdr_bin" server stop >/dev/null 2>&1 || true
-            wait "$herdr_server_pid" 2>/dev/null || true
           fi
         '';
       })
