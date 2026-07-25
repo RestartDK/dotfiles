@@ -2,77 +2,24 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 
-type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
-type ReadSource = "visible" | "recent" | "recent-unwrapped";
+import { expectResult, HerdrClient } from "./client.ts";
+import type {
+	AgentStatus,
+	PaneInfo,
+	TabInfo,
+	WorkspaceInfo,
+	WorktreeInfo,
+} from "./generated/success-response.ts";
 
-interface WorkspaceInfo {
-	workspace_id: string;
-	number: number;
-	label: string;
-	focused: boolean;
-	pane_count: number;
-	tab_count: number;
-	active_tab_id: string;
-	agent_status: AgentStatus;
-}
-
-interface TabInfo {
-	tab_id: string;
-	workspace_id: string;
-	number: number;
-	label: string;
-	focused: boolean;
-	pane_count: number;
-	agent_status: AgentStatus;
-}
-
-interface PaneInfo {
-	pane_id: string;
-	workspace_id: string;
-	tab_id: string;
-	focused: boolean;
-	cwd?: string;
-	agent?: string;
-	agent_status: AgentStatus;
-	revision: number;
-}
-
-interface PaneReadResult {
-	pane_id: string;
-	workspace_id: string;
-	tab_id: string;
-	source: "visible" | "recent" | "recent_unwrapped";
-	text: string;
-	revision: number;
-	truncated: boolean;
-}
-
-interface WorktreeInfo {
-	branch?: string;
-	path: string;
-	label?: string;
-	open_workspace_id?: string;
-	is_bare?: boolean;
-	is_detached?: boolean;
-	is_linked_worktree?: boolean;
-	is_prunable?: boolean;
-	[key: string]: unknown;
-}
+type ToolReadSource = "visible" | "recent" | "recent-unwrapped";
 
 interface ManagedPane {
 	paneId: string;
 	workspaceId: string;
-}
-
-interface HerdrJsonEnvelope {
-	id?: string;
-	result?: any;
-	error?: {
-		code?: string;
-		message?: string;
-	};
 }
 
 interface HerdrToolDetails {
@@ -125,11 +72,13 @@ const WaitModeEnum = StringEnum(["all", "any"] as const, {
 
 export default function (pi: ExtensionAPI) {
 	const herdrEnv = process.env.HERDR_ENV;
+	const socketPath = process.env.HERDR_SOCKET_PATH;
 	const currentPaneTargetEnv = process.env.HERDR_PANE_ID;
-	if (!herdrEnv || !currentPaneTargetEnv) {
+	if (herdrEnv !== "1" || !socketPath || !currentPaneTargetEnv) {
 		return;
 	}
 	const currentPaneTarget = currentPaneTargetEnv;
+	const herdr = new HerdrClient(socketPath);
 
 	const managedPanes = new Map<string, ManagedPane>();
 	const aliasOrder: string[] = [];
@@ -193,17 +142,6 @@ export default function (pi: ExtensionAPI) {
 		if (index !== -1) aliasOrder.splice(index, 1);
 	}
 
-	function parseHerdrError(output: string): string | null {
-		const trimmed = output.trim();
-		if (!trimmed) return null;
-		try {
-			const value = JSON.parse(trimmed) as HerdrJsonEnvelope;
-			return value.error?.message || value.error?.code || trimmed;
-		} catch {
-			return trimmed;
-		}
-	}
-
 	function isAbortError(error: unknown, signal?: AbortSignal): boolean {
 		return signal?.aborted === true || (error instanceof Error && error.message === "Aborted");
 	}
@@ -223,42 +161,15 @@ export default function (pi: ExtensionAPI) {
 		});
 	}
 
-	async function execHerdr(args: string[], signal?: AbortSignal) {
-		const result = await pi.exec("herdr", args, { signal });
-		if (signal?.aborted || result.killed) {
-			throw new Error("Aborted");
-		}
-		if (result.code !== 0) {
-			const message =
-				parseHerdrError(result.stderr) ||
-				parseHerdrError(result.stdout) ||
-				`herdr ${args.join(" ")} failed with exit code ${result.code}`;
-			throw new Error(message);
-		}
-		return result;
+	function absolutePath(value: string | undefined, cwd: string): string | undefined {
+		if (!value) return undefined;
+		if (value === "~") return homedir();
+		if (value.startsWith("~/")) return resolve(homedir(), value.slice(2));
+		return resolve(cwd, value);
 	}
 
-	async function execHerdrJson<T = any>(args: string[], signal?: AbortSignal): Promise<T> {
-		const result = await execHerdr(args, signal);
-		const stdout = result.stdout.trim();
-		if (!stdout) {
-			throw new Error(`Expected JSON output from herdr ${args.join(" ")}`);
-		}
-		let value: HerdrJsonEnvelope;
-		try {
-			value = JSON.parse(stdout) as HerdrJsonEnvelope;
-		} catch {
-			throw new Error(`Failed to parse JSON from herdr ${args.join(" ")}`);
-		}
-		if (value.error) {
-			throw new Error(value.error.message || value.error.code || `herdr ${args.join(" ")} failed`);
-		}
-		return value as T;
-	}
-
-	async function execHerdrText(args: string[], signal?: AbortSignal): Promise<string> {
-		const result = await execHerdr(args, signal);
-		return result.stdout;
+	function protocolReadSource(source: ToolReadSource | undefined): "visible" | "recent" | "recent_unwrapped" {
+		return source === "recent-unwrapped" ? "recent_unwrapped" : source ?? "recent";
 	}
 
 	function shellQuote(value: string): string {
@@ -288,51 +199,49 @@ export default function (pi: ExtensionAPI) {
 	async function enterPiNetnsInPane(paneId: string, signal?: AbortSignal): Promise<string | null> {
 		const namespace = selectedPiNetns();
 		if (!namespace) return null;
-		await execHerdr(["pane", "run", paneId, buildEnterPiNetnsCommand(namespace)], signal);
+		expectResult(
+			await herdr.call(
+				"pane.send_input",
+				{ pane_id: paneId, text: buildEnterPiNetnsCommand(namespace), keys: ["Enter"] },
+				{ signal },
+			),
+			"ok",
+		);
 		await sleep(800, signal);
 		return namespace;
 	}
 
 	async function getCurrentPaneInfo(signal?: AbortSignal): Promise<PaneInfo> {
-		const response = await execHerdrJson<{ result: { pane: PaneInfo } }>(["pane", "get", currentPaneTarget], signal);
-		return response.result.pane;
-	}
-
-	async function getWorkspaceInfo(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceInfo> {
-		const response = await execHerdrJson<{ result: { workspace: WorkspaceInfo } }>([
-			"workspace",
-			"get",
-			workspaceId,
-		], signal);
-		return response.result.workspace;
+		return expectResult(
+			await herdr.call("pane.get", { pane_id: currentPaneTarget }, { signal }),
+			"pane_info",
+		).pane;
 	}
 
 	async function getWorkspaceList(signal?: AbortSignal): Promise<WorkspaceInfo[]> {
-		const response = await execHerdrJson<{ result: { workspaces: WorkspaceInfo[] } }>(["workspace", "list"], signal);
-		return response.result.workspaces || [];
+		return expectResult(await herdr.call("workspace.list", {}, { signal }), "workspace_list").workspaces;
 	}
 
 	async function getWorkspacePanes(workspaceId: string, signal?: AbortSignal): Promise<PaneInfo[]> {
-		const response = await execHerdrJson<{ result: { panes: PaneInfo[] } }>([
-			"pane",
-			"list",
-			"--workspace",
-			workspaceId,
-		], signal);
-		return response.result.panes || [];
+		return expectResult(
+			await herdr.call("pane.list", { workspace_id: workspaceId }, { signal }),
+			"pane_list",
+		).panes;
 	}
 
 	async function getTabList(workspaceId?: string, signal?: AbortSignal): Promise<TabInfo[]> {
-		const args = ["tab", "list"];
-		if (workspaceId) args.push("--workspace", workspaceId);
-		const response = await execHerdrJson<{ result: { tabs: TabInfo[] } }>(args, signal);
-		return response.result.tabs || [];
+		return expectResult(
+			await herdr.call("tab.list", { workspace_id: workspaceId }, { signal }),
+			"tab_list",
+		).tabs;
 	}
 
 	async function getPaneInfo(paneId: string, signal?: AbortSignal): Promise<PaneInfo | null> {
 		try {
-			const response = await execHerdrJson<{ result: { pane: PaneInfo } }>(["pane", "get", paneId], signal);
-			return response.result.pane;
+			return expectResult(
+				await herdr.call("pane.get", { pane_id: paneId }, { signal }),
+				"pane_info",
+			).pane;
 		} catch (error) {
 			if (isAbortError(error, signal)) throw error;
 			return null;
@@ -390,14 +299,24 @@ export default function (pi: ExtensionAPI) {
 
 	async function readPane(
 		paneId: string,
-		options: { source?: ReadSource; lines?: number; raw?: boolean },
+		options: { source?: ToolReadSource; lines?: number; raw?: boolean },
 		signal?: AbortSignal,
 	): Promise<string> {
-		const args = ["pane", "read", paneId];
-		if (options.source) args.push("--source", options.source);
-		if (options.lines != null) args.push("--lines", String(options.lines));
-		if (options.raw) args.push("--raw");
-		return execHerdrText(args, signal);
+		const result = expectResult(
+			await herdr.call(
+				"pane.read",
+				{
+					pane_id: paneId,
+					source: protocolReadSource(options.source),
+					lines: options.lines,
+					format: options.raw ? "ansi" : "text",
+					strip_ansi: options.raw !== true,
+				},
+				{ signal },
+			),
+			"pane_read",
+		);
+		return result.read.text;
 	}
 
 	function formatReadOutput(output: string): string {
@@ -475,23 +394,6 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
-	function sleepWithSignal(ms: number, signal: AbortSignal | undefined) {
-		if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
-		if (signal.aborted) return Promise.reject(new Error("wait_agent canceled."));
-		return new Promise<void>((resolve, reject) => {
-			const timer = setTimeout(() => {
-				signal.removeEventListener("abort", onAbort);
-				resolve();
-			}, ms);
-			const onAbort = () => {
-				clearTimeout(timer);
-				signal.removeEventListener("abort", onAbort);
-				reject(new Error("wait_agent canceled."));
-			};
-			signal.addEventListener("abort", onAbort, { once: true });
-		});
-	}
-
 	function statusDot(theme: any, status: AgentStatus): string {
 		switch (status) {
 			case "blocked":
@@ -511,14 +413,17 @@ export default function (pi: ExtensionAPI) {
 		name: "herdr",
 		label: "herdr",
 		description:
-			"Herdr-native pane orchestration for long-running workflows. " +
-			"Actions: list panes, manage workspaces, Git worktrees, and tabs, split existing panes, submit lines atomically in existing panes, read output, watch readiness, wait for one or more agent panes to reach target statuses, send raw text or keys, focus contexts, and stop panes.",
+			"Herdr-native pane and dedicated-tab orchestration for long-running workflows. " +
+			"Actions: list panes, manage workspaces, Git worktrees, and tabs, split panes in dedicated work tabs, submit lines atomically, read output, watch readiness, wait for one or more agent panes to reach target statuses, send raw text or keys, focus contexts, and stop panes.",
 		promptGuidelines: [
 			"Use `herdr` run for long-running processes in other panes instead of `bash`.",
+			"Keep the tab containing Pi dedicated to the interactive Pi session. For tests, builds, servers, watchers, or other background work in the current project, first use `tab_create` with a descriptive label and a friendly `pane` alias for its root pane, then run work there.",
+			"Group related processes in one dedicated work tab. If that workflow needs more panes, use `pane_split` on the root pane alias or another pane in that work tab; never split a pane in Pi's own tab.",
+			"Use a new workspace instead of a tab when the work needs a separate Git worktree or broader isolation.",
 			"When you want to submit a line or prompt to a pane, prefer `run` over `send` + `Enter` so text and Enter happen atomically.",
 			"Use `send` only for low-level literal text or key injection when you do not want command-style submission semantics.",
-			"Preserve the current UI focus by default. Do not change workspace or tab focus unless the user explicitly asks or the workflow truly requires visible interaction there.",
-			"Pane actions like run, read, watch, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. For pane_split, omit pane to split the agent's own pane, or pass a pane alias/id to split that explicit source pane.",
+			"Preserve the current UI focus by default. Create work tabs and panes with focus disabled unless the user explicitly asks to view them or the workflow truly requires visible interaction there.",
+			"Pane actions like run, read, watch, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab.",
 			"Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
 			"Use `worktree_create` to create a Git worktree checkout and open it as a Herdr workspace.",
 			"Use `worktree_remove` to delete a Herdr-managed worktree checkout; it runs git worktree remove and does not delete the branch.",
@@ -527,14 +432,14 @@ export default function (pi: ExtensionAPI) {
 			"For agent panes, background finished panes usually become `done` while focused finished panes usually become `idle`.",
 			"Use `recent-unwrapped` when you need log matching or reads that ignore soft wrapping.",
 			"Pane references can be either friendly aliases you created earlier or real herdr pane ids from `list`.",
-			"Use `pane_split`, `tab_create`, or `workspace_create` to establish new pane targets. `pane_split` defaults to the agent's own pane when pane is omitted and splits right when direction is omitted. `run` only works with an existing pane alias or pane id.",
+			"Use `tab_create` with `pane` set to a friendly root-pane alias as the default way to establish a target for current-project background work. `pane_split` requires an existing pane alias/id outside Pi's tab and defaults its direction to right. `run` only works with an existing pane alias or pane id.",
 			"When PI_NETNS_SELECTED is set, newly split panes automatically enter that network namespace before later commands are run in them.",
 			"Use friendly pane aliases like `server`, `reviewer`, or `tests` so later reads, watches, and sends can reuse them across the session.",
 			"When starting a fresh pi instance in another pane and the model matters, either specify `--model` explicitly or ask the user which model/provider they want.",
 		],
 		parameters: Type.Object({
 			action: ActionEnum,
-			pane: Type.Optional(Type.String({ description: "Friendly pane alias or explicit pane id. For pane_split, omit to split the agent's own pane." })),
+			pane: Type.Optional(Type.String({ description: "Friendly pane alias or explicit pane id. For tab/workspace/worktree creation, an alias to assign to the new root pane. For pane_split, a required source pane outside Pi's tab." })),
 			panes: Type.Optional(Type.Array(Type.String(), { description: "Pane aliases or pane ids for multi-pane waits" })),
 			workspace: Type.Optional(Type.String({ description: "Workspace id for workspace, worktree, or tab actions" })),
 			tab: Type.Optional(Type.String({ description: "Tab id for tab actions or focus(tab) only. Pane actions must use pane ids or aliases." })),
@@ -565,7 +470,8 @@ export default function (pi: ExtensionAPI) {
 			force: Type.Optional(Type.Boolean({ description: "Force worktree_remove when Git refuses a dirty checkout" })),
 		}),
 
-		async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
+			const requestCwd = ctx.cwd;
 			const currentPane = await getCurrentPaneInfo(signal);
 			const currentPaneId = currentPane.pane_id;
 			const currentWorkspaceId = currentPane.workspace_id;
@@ -606,16 +512,16 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				case "workspace_create": {
-					const args = ["workspace", "create"];
-					if (params.cwd) args.push("--cwd", params.cwd);
-					if (params.label) args.push("--label", params.label);
-					if (params.focus !== true) args.push("--no-focus");
-					const response = await execHerdrJson<{
-						result: { workspace: WorkspaceInfo; root_pane?: PaneInfo };
-					}>(args, signal);
-					const workspace = response.result.workspace;
-					const rootPane =
-						response.result.root_pane ?? (await getWorkspacePanes(workspace.workspace_id, signal))[0] ?? null;
+					const created = expectResult(
+						await herdr.call(
+							"workspace.create",
+							{ cwd: absolutePath(params.cwd, requestCwd), label: params.label, focus: params.focus === true },
+							{ signal },
+						),
+						"workspace_created",
+					);
+					const workspace = created.workspace;
+					const rootPane = created.root_pane;
 					if (params.pane && rootPane) {
 						recordAlias(params.pane, rootPane.pane_id, workspace.workspace_id);
 					}
@@ -638,86 +544,105 @@ export default function (pi: ExtensionAPI) {
 				case "workspace_focus": {
 					const workspaceId = params.workspace;
 					if (!workspaceId) throw new Error("'workspace' is required for workspace_focus");
-					const response = await execHerdrJson<{ result: { workspace: WorkspaceInfo } }>([
-						"workspace",
-						"focus",
-						workspaceId,
-					], signal);
+					const workspace = expectResult(
+						await herdr.call("workspace.focus", { workspace_id: workspaceId }, { signal }),
+						"workspace_info",
+					).workspace;
 					return {
-						content: [{ type: "text", text: `Focused workspace '${response.result.workspace.label}'` }],
-						details: withSnapshot({ action: "workspace_focus", workspace: response.result.workspace }),
+						content: [{ type: "text", text: `Focused workspace '${workspace.label}'` }],
+						details: withSnapshot({ action: "workspace_focus", workspace }),
 					};
 				}
 
 				case "worktree_list": {
-					const args = ["worktree", "list"];
-					if (params.workspace) args.push("--workspace", params.workspace);
-					else if (params.cwd) args.push("--cwd", params.cwd);
-					const response = await execHerdrJson<{ result: { worktrees: WorktreeInfo[]; source?: Record<string, unknown> } }>(args, signal);
-					const worktrees = response.result.worktrees || [];
+					const result = expectResult(
+						await herdr.call(
+							"worktree.list",
+							{ workspace_id: params.workspace, cwd: params.workspace ? undefined : absolutePath(params.cwd, requestCwd) },
+							{ signal },
+						),
+						"worktree_list",
+					);
+					const worktrees = result.worktrees;
 					const text = worktrees.length ? worktrees.map(summarizeWorktree).join("\n") : "No worktrees.";
 					return {
 						content: [{ type: "text", text }],
-						details: withSnapshot({ action: "worktree_list", worktrees, source: response.result.source }),
+						details: withSnapshot({ action: "worktree_list", worktrees, source: result.source }),
 					};
 				}
 
 				case "worktree_create": {
-					const args = ["worktree", "create"];
-					if (params.workspace) args.push("--workspace", params.workspace);
-					else if (params.cwd) args.push("--cwd", params.cwd);
-					if (params.branch) args.push("--branch", params.branch);
-					if (params.base) args.push("--base", params.base);
-					if (params.path) args.push("--path", params.path);
-					if (params.label) args.push("--label", params.label);
-					if (params.focus !== true) args.push("--no-focus");
-					const response = await execHerdrJson<{ result: { workspace?: WorkspaceInfo; worktree?: WorktreeInfo; root_pane?: PaneInfo; [key: string]: unknown } }>(args, signal);
-					const workspace = response.result.workspace;
-					const worktree = response.result.worktree;
-					const rootPane = response.result.root_pane;
+					const created = expectResult(
+						await herdr.call(
+							"worktree.create",
+							{
+								workspace_id: params.workspace,
+								cwd: params.workspace ? undefined : absolutePath(params.cwd, requestCwd),
+								branch: params.branch,
+								base: params.base,
+								path: absolutePath(params.path, requestCwd),
+								label: params.label,
+								focus: params.focus === true,
+							},
+							{ signal },
+						),
+						"worktree_created",
+					);
+					const { workspace, worktree, root_pane: rootPane } = created;
 					if (params.pane && rootPane && workspace) recordAlias(params.pane, rootPane.pane_id, workspace.workspace_id);
 					const label = worktree?.branch || params.branch || worktree?.path || params.path || workspace?.label || "worktree";
 					const workspaceText = workspace ? `, workspace ${workspace.workspace_id}` : "";
 					const aliasText = params.pane && rootPane ? `, root pane aliased as '${params.pane}'` : "";
 					return {
 						content: [{ type: "text", text: `Created worktree '${label}'${workspaceText}${aliasText}` }],
-						details: withSnapshot({ action: "worktree_create", ...response.result, pane: params.pane }),
+						details: withSnapshot({ action: "worktree_create", ...created, pane: params.pane }),
 					};
 				}
 
 				case "worktree_open": {
-					const args = ["worktree", "open"];
-					if (params.workspace) args.push("--workspace", params.workspace);
-					else if (params.cwd) args.push("--cwd", params.cwd);
-					if (params.path) args.push("--path", params.path);
-					else if (params.branch) args.push("--branch", params.branch);
-					else throw new Error("'path' or 'branch' is required for worktree_open");
-					if (params.label) args.push("--label", params.label);
-					if (params.focus !== true) args.push("--no-focus");
-					const response = await execHerdrJson<{ result: { workspace?: WorkspaceInfo; worktree?: WorktreeInfo; root_pane?: PaneInfo; [key: string]: unknown } }>(args, signal);
-					const workspace = response.result.workspace;
-					const rootPane = response.result.root_pane;
+					if (!params.path && !params.branch) throw new Error("'path' or 'branch' is required for worktree_open");
+					const opened = expectResult(
+						await herdr.call(
+							"worktree.open",
+							{
+								workspace_id: params.workspace,
+								cwd: params.workspace ? undefined : absolutePath(params.cwd, requestCwd),
+								path: absolutePath(params.path, requestCwd),
+								branch: params.branch,
+								label: params.label,
+								focus: params.focus === true,
+							},
+							{ signal },
+						),
+						"worktree_opened",
+					);
+					const { workspace, root_pane: rootPane } = opened;
 					if (params.pane && rootPane && workspace) recordAlias(params.pane, rootPane.pane_id, workspace.workspace_id);
-					const label = response.result.worktree?.branch || params.branch || response.result.worktree?.path || params.path || workspace?.label || "worktree";
+					const label = opened.worktree.branch || params.branch || opened.worktree.path || params.path || workspace.label || "worktree";
 					const workspaceText = workspace ? `, workspace ${workspace.workspace_id}` : "";
 					return {
 						content: [{ type: "text", text: `Opened worktree '${label}'${workspaceText}` }],
-						details: withSnapshot({ action: "worktree_open", ...response.result, pane: params.pane }),
+						details: withSnapshot({ action: "worktree_open", ...opened, pane: params.pane }),
 					};
 				}
 
 				case "worktree_remove": {
 					const workspaceId = params.workspace;
 					if (!workspaceId) throw new Error("'workspace' is required for worktree_remove");
-					const args = ["worktree", "remove", "--workspace", workspaceId];
-					if (params.force) args.push("--force");
-					const response = await execHerdrJson<{ result: Record<string, unknown> }>(args, signal);
+					const removed = expectResult(
+						await herdr.call(
+							"worktree.remove",
+							{ workspace_id: workspaceId, force: params.force === true },
+							{ signal },
+						),
+						"worktree_removed",
+					);
 					for (const [alias, managed] of [...managedPanes.entries()]) {
 						if (managed.workspaceId === workspaceId) forgetAlias(alias);
 					}
 					return {
 						content: [{ type: "text", text: `Removed worktree workspace ${workspaceId}; branch was not deleted.` }],
-						details: withSnapshot({ action: "worktree_remove", workspaceId, ...response.result }),
+						details: withSnapshot({ action: "worktree_remove", workspaceId, ...removed }),
 					};
 				}
 
@@ -733,16 +658,20 @@ export default function (pi: ExtensionAPI) {
 
 				case "tab_create": {
 					const workspaceId = params.workspace ?? currentWorkspaceId;
-					const args = ["tab", "create", "--workspace", workspaceId];
-					if (params.cwd) args.push("--cwd", params.cwd);
-					if (params.label) args.push("--label", params.label);
-					if (params.focus !== true) args.push("--no-focus");
-					const response = await execHerdrJson<{ result: { tab: TabInfo; root_pane?: PaneInfo } }>(args, signal);
-					const tab = response.result.tab;
-					const rootPane =
-						response.result.root_pane ??
-						(await getWorkspacePanes(tab.workspace_id, signal)).find((pane) => pane.tab_id === tab.tab_id) ??
-						null;
+					const created = expectResult(
+						await herdr.call(
+							"tab.create",
+							{
+								workspace_id: workspaceId,
+								cwd: absolutePath(params.cwd, requestCwd),
+								label: params.label,
+								focus: params.focus === true,
+							},
+							{ signal },
+						),
+						"tab_created",
+					);
+					const { tab, root_pane: rootPane } = created;
 					if (params.pane && rootPane) {
 						recordAlias(params.pane, rootPane.pane_id, tab.workspace_id);
 					}
@@ -762,41 +691,46 @@ export default function (pi: ExtensionAPI) {
 				case "tab_focus": {
 					const tabId = params.tab;
 					if (!tabId) throw new Error("'tab' is required for tab_focus");
-					const response = await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", tabId], signal);
+					const tab = expectResult(
+						await herdr.call("tab.focus", { tab_id: tabId }, { signal }),
+						"tab_info",
+					).tab;
 					return {
-						content: [{ type: "text", text: `Focused tab '${response.result.tab.label}'` }],
-						details: withSnapshot({ action: "tab_focus", tab: response.result.tab }),
+						content: [{ type: "text", text: `Focused tab '${tab.label}'` }],
+						details: withSnapshot({ action: "tab_focus", tab }),
 					};
 				}
 
 				case "focus": {
 					if (params.tab) {
-						const response = await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", params.tab], signal);
+						const tab = expectResult(
+							await herdr.call("tab.focus", { tab_id: params.tab }, { signal }),
+							"tab_info",
+						).tab;
 						return {
-							content: [{ type: "text", text: `Focused tab '${response.result.tab.label}'` }],
-							details: withSnapshot({ action: "focus", target: "tab", tab: response.result.tab }),
+							content: [{ type: "text", text: `Focused tab '${tab.label}'` }],
+							details: withSnapshot({ action: "focus", target: "tab", tab }),
 						};
 					}
 					if (params.workspace) {
-						const response = await execHerdrJson<{ result: { workspace: WorkspaceInfo } }>([
-							"workspace",
-							"focus",
-							params.workspace,
-						], signal);
+						const workspace = expectResult(
+							await herdr.call("workspace.focus", { workspace_id: params.workspace }, { signal }),
+							"workspace_info",
+						).workspace;
 						return {
-							content: [{ type: "text", text: `Focused workspace '${response.result.workspace.label}'` }],
-							details: withSnapshot({ action: "focus", target: "workspace", workspace: response.result.workspace }),
+							content: [{ type: "text", text: `Focused workspace '${workspace.label}'` }],
+							details: withSnapshot({ action: "focus", target: "workspace", workspace }),
 						};
 					}
 					if (params.pane) {
 						const resolved = await requirePaneRef(params.pane, currentWorkspaceId, signal);
-						const response = await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", resolved.pane.tab_id], signal);
+						const pane = expectResult(
+							await herdr.call("pane.focus", { pane_id: resolved.pane.pane_id }, { signal }),
+							"pane_info",
+						).pane;
 						return {
-							content: [{
-								type: "text",
-								text: `Focused tab '${response.result.tab.label}' for pane '${resolved.pane.pane_id}'. Herdr does not expose direct pane focus yet.`,
-							}],
-							details: withSnapshot({ action: "focus", target: "pane", paneId: resolved.pane.pane_id, tab: response.result.tab }),
+							content: [{ type: "text", text: `Focused pane '${pane.pane_id}'` }],
+							details: withSnapshot({ action: "focus", target: "pane", paneId: pane.pane_id }),
 						};
 					}
 					throw new Error("'workspace', 'tab', or 'pane' is required for focus");
@@ -804,16 +738,33 @@ export default function (pi: ExtensionAPI) {
 
 				case "pane_split": {
 					rejectUnexpectedParams("pane_split", params, ["workspace", "tab"]);
-					const paneRef = params.pane ?? currentPaneId;
+					const paneRef = params.pane;
+					if (!paneRef) {
+						throw new Error(
+							"'pane' is required for pane_split. Create a dedicated work tab first with tab_create and assign its root pane an alias.",
+						);
+					}
 					const direction = params.direction ?? "right";
 
 					const sourcePane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
-					const args = ["pane", "split", sourcePane.pane.pane_id, "--direction", direction];
-					if (params.cwd) args.push("--cwd", params.cwd);
-					if (params.focus !== true) args.push("--no-focus");
-
-					const response = await execHerdrJson<{ result: { pane: PaneInfo } }>(args, signal);
-					const splitPane = response.result.pane;
+					if (sourcePane.pane.tab_id === currentPane.tab_id) {
+						throw new Error(
+							"Refusing to split a pane in Pi's tab. Create a dedicated work tab with tab_create, then split its root pane alias.",
+						);
+					}
+					const splitPane = expectResult(
+						await herdr.call(
+							"pane.split",
+							{
+								target_pane_id: sourcePane.pane.pane_id,
+								direction,
+								cwd: absolutePath(params.cwd, requestCwd),
+								focus: params.focus === true,
+							},
+							{ signal },
+						),
+						"pane_info",
+					).pane;
 					if (params.newPane) {
 						recordAlias(params.newPane, splitPane.pane_id, splitPane.workspace_id);
 					}
@@ -848,7 +799,14 @@ export default function (pi: ExtensionAPI) {
 					if (!command) throw new Error("'command' is required for run");
 
 					const targetPane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
-					await execHerdr(["pane", "run", targetPane.pane.pane_id, command], signal);
+					expectResult(
+						await herdr.call(
+							"pane.send_input",
+							{ pane_id: targetPane.pane.pane_id, text: command, keys: ["Enter"] },
+							{ signal },
+						),
+						"ok",
+					);
 
 					await sleep(800, signal);
 					const initialOutput = await readPane(
@@ -935,32 +893,34 @@ export default function (pi: ExtensionAPI) {
 					const updateTimer = onUpdate ? setInterval(publishWatchUpdate, 1000) : null;
 
 					try {
-						const args = ["wait", "output", resolved.pane.pane_id, "--match", match];
-						if (params.source) args.push("--source", params.source);
-						if (params.lines != null) args.push("--lines", String(params.lines));
-						if (params.timeout != null) args.push("--timeout", String(params.timeout));
-						if (params.regex) args.push("--regex");
-						if (params.raw) args.push("--raw");
-
-						const response = await execHerdrJson<{
-							result: {
-								type: string;
-								pane_id: string;
-								revision: number;
-								matched_line: string;
-								read: PaneReadResult;
-							};
-						}>(args, signal);
-						const matched = response.result;
-						const text = matched.read?.text ? formatReadOutput(matched.read.text) : matched.matched_line;
+						const matched = expectResult(
+							await herdr.call(
+								"pane.wait_for_output",
+								{
+									pane_id: resolved.pane.pane_id,
+									source: protocolReadSource(params.source),
+									lines: params.lines,
+									match: { type: params.regex ? "regex" : "substring", value: match },
+									timeout_ms: params.timeout,
+									strip_ansi: params.raw !== true,
+								},
+								{
+									signal,
+									timeoutMs: params.timeout != null ? params.timeout + 5_000 : undefined,
+								},
+							),
+							"output_matched",
+						);
+						const matchedLine = matched.matched_line ?? match;
+						const text = matched.read.text ? formatReadOutput(matched.read.text) : matchedLine;
 
 						return {
-							content: [{ type: "text", text: `Matched: ${matched.matched_line}\n\n${text}` }],
+							content: [{ type: "text", text: `Matched: ${matchedLine}\n\n${text}` }],
 							details: withSnapshot({
 								action: "watch",
 								pane: paneLabel,
 								paneId: resolved.pane.pane_id,
-								matchedLine: matched.matched_line,
+								matchedLine,
 								elapsed: Math.floor((Date.now() - startTime) / 1000),
 							}),
 						};
@@ -988,42 +948,45 @@ export default function (pi: ExtensionAPI) {
 						});
 					}
 
-					const deadline = params.timeout != null ? Date.now() + params.timeout : null;
-					let snapshot: Array<{
-						pane: string;
-						paneId: string;
-						status: AgentStatus;
-						agent?: string;
-					}> = [];
+					const controllers = resolvedPanes.map(() => new AbortController());
+					const abortWaits = () => controllers.forEach((controller) => controller.abort());
+					signal?.addEventListener("abort", abortWaits, { once: true });
+					try {
+						const waits = resolvedPanes.map((resolved, index) =>
+							herdr
+								.call(
+									"agent.wait",
+									{
+										target: resolved.pane.pane_id,
+										until: statuses,
+										timeout_ms: params.timeout,
+									},
+									{
+										signal: controllers[index]?.signal,
+										timeoutMs: params.timeout != null ? params.timeout + 5_000 : undefined,
+									},
+								)
+								.then((result) => expectResult(result, "agent_info")),
+						);
+						if (mode === "all") await Promise.all(waits);
+						else await Promise.any(waits);
+					} finally {
+						signal?.removeEventListener("abort", abortWaits);
+						abortWaits();
+					}
 
-					while (true) {
-						throwIfAborted(signal, "wait_agent");
-						snapshot = [];
-						for (const resolved of resolvedPanes) {
-							throwIfAborted(signal, "wait_agent");
+					const snapshot = await Promise.all(
+						resolvedPanes.map(async (resolved) => {
 							const pane = await getPaneInfo(resolved.pane.pane_id, signal);
 							if (!pane) throw new Error(`Pane '${resolved.aliasOrRef}' no longer exists.`);
-							snapshot.push({
+							return {
 								pane: resolved.aliasOrRef,
 								paneId: pane.pane_id,
 								status: pane.agent_status,
 								agent: pane.agent,
-							});
-						}
-
-						const satisfied =
-							mode === "all"
-								? snapshot.every((item) => statuses.includes(item.status))
-								: snapshot.some((item) => statuses.includes(item.status));
-						if (satisfied) break;
-						if (deadline != null && Date.now() >= deadline) {
-							throw new Error(
-								`Timed out waiting for panes [${snapshot.map((item) => item.pane).join(", ")}] to reach ${mode} of statuses '${formatStatusList(statuses)}'. Last statuses: ${snapshot.map((item) => `${item.pane}=${item.status}`).join(", ")}`,
-							);
-						}
-						await sleepWithSignal(250, signal);
-					}
-
+							};
+						}),
+					);
 					const summary = snapshot.map((item) => `${item.pane}=${item.status}`).join(", ");
 					return {
 						content: [{
@@ -1053,11 +1016,21 @@ export default function (pi: ExtensionAPI) {
 					const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
 
 					if (params.text) {
-						await execHerdr(["pane", "send-text", resolved.pane.pane_id, params.text], signal);
+						expectResult(
+							await herdr.call(
+								"pane.send_text",
+								{ pane_id: resolved.pane.pane_id, text: params.text },
+								{ signal },
+							),
+							"ok",
+						);
 					}
 					if (params.keys) {
 						const keys = params.keys.split(/\s+/).filter(Boolean);
-						await execHerdr(["pane", "send-keys", resolved.pane.pane_id, ...keys], signal);
+						expectResult(
+							await herdr.call("pane.send_keys", { pane_id: resolved.pane.pane_id, keys }, { signal }),
+							"ok",
+						);
 					}
 
 					const desc = [params.text && `"${params.text}"`, params.keys].filter(Boolean).join(" + ");
@@ -1083,7 +1056,10 @@ export default function (pi: ExtensionAPI) {
 						throw new Error("Refusing to close the pane pi is running in.");
 					}
 
-					await execHerdr(["pane", "close", resolved.pane.pane_id], signal);
+					expectResult(
+						await herdr.call("pane.close", { pane_id: resolved.pane.pane_id }, { signal }),
+						"ok",
+					);
 					if (resolved.alias) forgetAlias(resolved.alias);
 
 					return {

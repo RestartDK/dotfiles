@@ -31,15 +31,15 @@ Cobb host/profile repo, when editing Cobb integration:
 
 ## Always use `traitor` for this repo
 
-Daniel's config operations CLI is `traitor`. Prefer it over raw `nix`, `nixos-rebuild`, `darwin-rebuild`, and `home-manager` commands.
+Daniel's config operations CLI is `traitor`. Prefer it over raw `nix`, `nixos-rebuild`, `darwin-rebuild`, and `home-manager` commands. Invoke `traitor` directly when it is available on `PATH`; use `./bin/traitor` only as a fallback when PATH is not loaded yet.
 
-Use the repo-local binary if PATH is not loaded yet:
+Preferred:
 
 ```bash
 cd ~/.config/dotfiles
-./bin/traitor path
-./bin/traitor check
-./bin/traitor re
+traitor path
+traitor check
+traitor re
 ```
 
 Common commands:

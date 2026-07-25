@@ -18,15 +18,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.codex/herdr-agent-state.sh' blocked",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
       }
     ],
     "PreToolUse": [
@@ -43,15 +34,6 @@
         "hooks": [
           {
             "command": "bash $HOME/.codex/herdr-agent-state.sh working",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.codex/herdr-agent-state.sh' working",
             "timeout": 10,
             "type": "command"
           }
@@ -88,7 +70,7 @@
       {
         "hooks": [
           {
-            "command": "bash '/Users/danielkumlin/.codex/herdr-agent-state.sh' idle",
+            "command": "bash '/Users/danielkumlin/.codex/herdr-agent-state.sh' session",
             "timeout": 10,
             "type": "command"
           }
@@ -121,15 +103,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.codex/herdr-agent-state.sh' idle",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
@@ -154,15 +127,6 @@
         "hooks": [
           {
             "command": "bash $HOME/.codex/herdr-agent-state.sh working",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.codex/herdr-agent-state.sh' working",
             "timeout": 10,
             "type": "command"
           }

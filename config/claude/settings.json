@@ -27,16 +27,6 @@
           }
         ],
         "matcher": "*"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' blocked",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "PostToolUse": [
@@ -71,16 +61,6 @@
           }
         ],
         "matcher": "*"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' working",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "SessionEnd": [
@@ -101,16 +81,6 @@
           }
         ],
         "matcher": "*"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' release",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "SessionStart": [
@@ -125,7 +95,7 @@
       {
         "hooks": [
           {
-            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' idle",
+            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' session",
             "timeout": 10,
             "type": "command"
           }
@@ -151,16 +121,6 @@
           }
         ],
         "matcher": "*"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' idle",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "UserPromptSubmit": [
@@ -176,16 +136,6 @@
         "hooks": [
           {
             "command": "bash $HOME/.claude/hooks/herdr-agent-state.sh working",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' working",
             "timeout": 10,
             "type": "command"
           }
