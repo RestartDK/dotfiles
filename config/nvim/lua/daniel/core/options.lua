@@ -50,9 +50,6 @@ opt.backspace = "indent,eol,start"
 -- clipboard
 opt.clipboard:append("unnamedplus")
 
--- Concealer for obsidian
-vim.o.conceallevel = 2
-
 local homebrew_python = "/opt/homebrew/opt/python@3.14/bin/python3.14"
 if vim.fn.executable(homebrew_python) == 1 then
   vim.g.python3_host_prog = homebrew_python
