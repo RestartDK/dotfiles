@@ -7,11 +7,12 @@
   # Keep nix-darwin from replacing that daemon/config during activation.
   nix.enable = false;
 
-  networking.hostName = "dkumlin-macbook-pro";
-  networking.localHostName = "dkumlin-macbook-pro";
-  networking.computerName = "Daniel’s MacBook Pro";
+  networking = {
+    hostName = "dkumlin-macbook-pro";
+    localHostName = "dkumlin-macbook-pro";
+    computerName = "Daniel’s MacBook Pro";
+  };
 
-  system.primaryUser = "danielkumlin";
   users.users.danielkumlin.home = "/Users/danielkumlin";
 
   programs.zsh.enable = true;
@@ -111,9 +112,6 @@
       "watchman"
       "withgraphite/tap/graphite"
       "yarn"
-      "zsh-autosuggestions"
-      "zsh-syntax-highlighting"
-      "zsh-vi-mode"
     ];
 
     casks = [
@@ -148,22 +146,24 @@
     # Also intentionally unmanaged for now: codexbar, emdash, warp, zulu@17.
   };
 
-  system.defaults.dock = {
-    autohide = true;
-    orientation = "left";
-    show-recents = false;
-    tilesize = 51;
-    persistent-apps = [
-      "/Applications/Slack.app"
-      "/Applications/Linear.app"
-      "/Applications/Cursor.app"
-      "/Applications/Codex.app"
-      "/Applications/Helium.app"
-      "/Applications/Ghostty.app"
-      "/Applications/Obsidian.app"
-    ];
-    persistent-others = [ ];
+  system = {
+    primaryUser = "danielkumlin";
+    defaults.dock = {
+      autohide = true;
+      orientation = "left";
+      show-recents = false;
+      tilesize = 51;
+      persistent-apps = [
+        "/Applications/Slack.app"
+        "/Applications/Linear.app"
+        "/Applications/Cursor.app"
+        "/Applications/Codex.app"
+        "/Applications/Helium.app"
+        "/Applications/Ghostty.app"
+        "/Applications/Obsidian.app"
+      ];
+      persistent-others = [ ];
+    };
+    stateVersion = 6;
   };
-
-  system.stateVersion = 6;
 }
