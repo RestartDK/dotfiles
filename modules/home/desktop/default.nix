@@ -38,7 +38,6 @@ in
     (lib.mkIf cfg.groups.macos {
       home.file.".hammerspoon/init.lua" = file "config/hammerspoon/init.lua";
       xdg.configFile."aerospace/aerospace.toml" = file "config/aerospace/aerospace.toml";
-      xdg.configFile."karabiner/karabiner.json" = file "config/karabiner/karabiner.json";
       xdg.configFile."graphite/aliases" = file "config/graphite/aliases";
       xdg.configFile."sketchybar" = dir "config/sketchybar";
       xdg.configFile."wezterm/wezterm.lua" = file "config/wezterm/wezterm.lua";

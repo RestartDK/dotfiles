@@ -132,6 +132,17 @@
           }
         ]
       }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "tldraw-offline",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh '/Users/danielkumlin/skills/tldraw-offline/inject-server-context.sh' SubagentStart"
+          }
+        ]
+      }
     ]
   }
 }

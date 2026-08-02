@@ -1,6 +1,6 @@
 {
-  "defaultModel": "kindle-alpha-api",
-  "defaultProvider": "openai",
+  "defaultModel": "gpt-5.6-sol",
+  "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "low",
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.80.1",

@@ -1,0 +1,15 @@
+{
+  "name": "@restartdk/dotfiles-karabiner-config",
+  "private": true,
+  "description": "Generate the declarative Karabiner-Elements config in this dotfiles repository",
+  "scripts": {
+    "build": "tsx src/index.ts",
+    "update": "npm update karabiner.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "karabiner.ts": "latest",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

@@ -33,16 +33,6 @@ path_remove() {
   export PATH
 }
 
-source_first_existing() {
-  local file
-  for file in "$@"; do
-    [[ -r "$file" ]] || continue
-    source "$file"
-    return 0
-  done
-  return 1
-}
-
 # Prefer 1Password's SSH agent when it is available. The SSH client also has
 # IdentityAgent configured, but this makes ssh-add and other agent-aware tools
 # use the same socket in interactive shells.
@@ -52,23 +42,18 @@ elif [[ -S "$HOME/.1password/agent.sock" ]]; then
   export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
 fi
 
-# Nix profiles. Cobb development hosts use a standalone Home Manager profile;
-# elsewhere, prefer the NixOS/nix-darwin-managed user profile and retain the
-# standalone profile only as a fallback. Remove both first so an inherited PATH
-# cannot preserve stale profile precedence.
+# Nix profiles. Prefer the NixOS/nix-darwin-managed user profile and retain a
+# standalone Home Manager profile only as a fallback. Remove both first so an
+# inherited PATH cannot preserve stale profile precedence. path_prepend adds to
+# the front, so add the managed profile last.
 managed_home_profile="/etc/profiles/per-user/$USER/bin"
 standalone_home_profile="$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
 path_remove "$managed_home_profile"
 path_remove "$standalone_home_profile"
 path_prepend "/run/current-system/sw/bin"
 path_prepend "$HOME/.nix-profile/bin"
-if [[ "$OSTYPE" != darwin* && -r "$HOME/.config/shell/cobb-vscode-netns.zsh" ]]; then
-  path_prepend "$managed_home_profile"
-  path_prepend "$standalone_home_profile"
-else
-  path_prepend "$standalone_home_profile"
-  path_prepend "$managed_home_profile"
-fi
+path_prepend "$standalone_home_profile"
+path_prepend "$managed_home_profile"
 unset managed_home_profile standalone_home_profile
 
 # Homebrew: Apple Silicon macOS default, then whatever `brew --prefix` reports.
@@ -173,29 +158,6 @@ setopt hist_expire_dups_first
 setopt hist_ignore_dups
 setopt hist_verify
 
-# Interactive zsh plugins. Chezmoi fetches user-local copies, and we also
-# support Homebrew/Linux package paths when present. Only load visual/ZLE
-# plugins when attached to a real terminal.
-if [[ -t 0 && -t 1 ]]; then
-  source_first_existing \
-    "$HOME/.local/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" \
-    "$HOME/.nix-profile/share/zsh-autosuggestions/zsh-autosuggestions.zsh" \
-    "/etc/profiles/per-user/$USER/share/zsh-autosuggestions/zsh-autosuggestions.zsh" \
-    "/run/current-system/sw/share/zsh-autosuggestions/zsh-autosuggestions.zsh" \
-    "${HOMEBREW_PREFIX:-}/share/zsh-autosuggestions/zsh-autosuggestions.zsh" \
-    "/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" \
-    "/usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
-
-  source_first_existing \
-    "$HOME/.local/share/zsh/plugins/zsh-vi-mode/zsh-vi-mode.plugin.zsh" \
-    "$HOME/.nix-profile/share/zsh-vi-mode/zsh-vi-mode.plugin.zsh" \
-    "/etc/profiles/per-user/$USER/share/zsh-vi-mode/zsh-vi-mode.plugin.zsh" \
-    "/run/current-system/sw/share/zsh-vi-mode/zsh-vi-mode.plugin.zsh" \
-    "${HOMEBREW_PREFIX:-}/opt/zsh-vi-mode/share/zsh-vi-mode/zsh-vi-mode.plugin.zsh" \
-    "/usr/share/zsh-vi-mode/zsh-vi-mode.plugin.zsh" \
-    "/usr/share/zsh/plugins/zsh-vi-mode/zsh-vi-mode.plugin.zsh"
-fi
-
 # fzf config
 if [[ -t 0 && -t 1 ]]; then
   command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
@@ -215,10 +177,6 @@ command -v fnm >/dev/null 2>&1 && eval "$(fnm env --use-on-cd --shell zsh)"
 command -v rbenv >/dev/null 2>&1 && eval "$(rbenv init -)"
 command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"
 command -v thefuck >/dev/null 2>&1 && eval "$(thefuck --alias)"
-
-# Completions for poetry
-[[ -d "$HOME/.zfunc" ]] && fpath+=("$HOME/.zfunc")
-autoload -Uz compinit && compinit
 
 # Dart completion
 [[ -f "$HOME/.dart-cli-completion/zsh-config.zsh" ]] && source "$HOME/.dart-cli-completion/zsh-config.zsh"
@@ -291,19 +249,3 @@ __pi_revive_run() {
 
 pi() { __pi_revive_run pi "$@"; }
 # <<< pi revive wrapper <<<
-
-# Sentry completions
-[[ -d "$HOME/.local/share/zsh/site-functions" ]] && fpath=("$HOME/.local/share/zsh/site-functions" $fpath)
-
-# zsh-syntax-highlighting should be sourced near the end so it can wrap all
-# widgets created by plugins and completions above.
-if [[ -t 0 && -t 1 ]]; then
-  source_first_existing \
-    "$HOME/.local/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
-    "$HOME/.nix-profile/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
-    "/etc/profiles/per-user/$USER/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
-    "/run/current-system/sw/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
-    "${HOMEBREW_PREFIX:-}/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
-    "/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
-    "/usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-fi

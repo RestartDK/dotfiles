@@ -100,9 +100,6 @@
       "watchman"
       "withgraphite/tap/graphite"
       "yarn"
-      "zsh-autosuggestions"
-      "zsh-syntax-highlighting"
-      "zsh-vi-mode"
     ];
 
     casks = [

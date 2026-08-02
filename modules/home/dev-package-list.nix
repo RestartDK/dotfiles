@@ -68,11 +68,6 @@ with pkgs; [
   unzip
   stylua
 
-  # Installed so the live .zshrc can source them without Home Manager
-  # generating an immutable ~/.zshrc.
-  zsh-autosuggestions
-  zsh-syntax-highlighting
-  zsh-vi-mode
 ] ++ lib.optionals stdenv.hostPlatform.isLinux [
   gcc
 ] ++ agentPackages
