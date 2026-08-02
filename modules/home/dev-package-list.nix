@@ -4,7 +4,7 @@ let
   codexCli = pkgs.callPackage ../../packages/codex-cli.nix { };
   unstable = import inputs.nixpkgs-unstable {
     system = pkgs.stdenv.hostPlatform.system;
-    config = pkgs.config;
+    inherit (pkgs) config;
   };
   piCodingAgent = unstable.callPackage ../../packages/pi-coding-agent.nix { };
   availableAgentPackages = {
@@ -12,7 +12,7 @@ let
     # build on aarch64-darwin. Use OpenAI's npm binary distribution instead.
     codex = codexCli;
     "claude-code" = unstable.claude-code;
-    opencode = unstable.opencode;
+    inherit (unstable) opencode;
     "pi-coding-agent" = piCodingAgent;
   };
   agentPackages = map (

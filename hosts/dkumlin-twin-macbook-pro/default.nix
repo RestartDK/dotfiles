@@ -7,11 +7,12 @@
   # Keep nix-darwin from replacing that daemon/config during activation.
   nix.enable = false;
 
-  networking.hostName = "dkumlin-twin-macbook-pro";
-  networking.localHostName = "dkumlin-twin-macbook-pro";
-  networking.computerName = "Daniel’s Twin MacBook Pro";
+  networking = {
+    hostName = "dkumlin-twin-macbook-pro";
+    localHostName = "dkumlin-twin-macbook-pro";
+    computerName = "Daniel’s Twin MacBook Pro";
+  };
 
-  system.primaryUser = "danielkumlin";
   users.users.danielkumlin.home = "/Users/danielkumlin";
 
   programs.zsh.enable = true;
@@ -141,52 +142,55 @@
     # Also intentionally unmanaged for now: codexbar, emdash, warp, zulu@17.
   };
 
-  system.defaults.dock = {
-    autohide = true;
-    orientation = "left";
-    show-recents = false;
-    tilesize = 51;
+  system = {
+    primaryUser = "danielkumlin";
+    defaults.dock = {
+      autohide = true;
+      orientation = "left";
+      show-recents = false;
+      tilesize = 51;
+    };
+
+    # nix-darwin's built-in Dock persistent-apps currently writes minimal Dock
+    # tiles that can show up as question marks on recent macOS. Use dockutil
+    # after Homebrew activation so the Dock gets proper LaunchServices entries.
+    activationScripts.postActivation.text = ''
+      runAsUser() {
+        launchctl asuser "$(id -u -- danielkumlin)" sudo --user=danielkumlin --set-home -- "$@"
+      }
+
+      echo >&2 "disabling Spotlight Cmd-Space hotkeys for Raycast..."
+      runAsUser /usr/bin/defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }'
+      runAsUser /usr/bin/defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 '{ enabled = 0; value = { parameters = (32, 49, 1572864); type = standard; }; }'
+      if [[ -x /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings ]]; then
+        runAsUser /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u || true
+      fi
+
+      dockutil=/opt/homebrew/bin/dockutil
+      if [[ -x "$dockutil" ]]; then
+        echo >&2 "configuring Dock items with dockutil..."
+        runAsUser "$dockutil" --remove all --no-restart || true
+        for app in \
+          "/Applications/Slack.app" \
+          "/Applications/Linear.app" \
+          "/Applications/Cursor.app" \
+          "/Applications/Codex.app" \
+          "/Applications/Helium.app" \
+          "/Applications/Ghostty.app" \
+          "/Applications/Obsidian.app"
+        do
+          if [[ -e "$app" ]]; then
+            runAsUser "$dockutil" --add "$app" --no-restart
+          else
+            echo >&2 "skipping missing Dock item: $app"
+          fi
+        done
+        killall -qu danielkumlin Dock || true
+      else
+        echo >&2 "dockutil not found; skipping Dock item configuration"
+      fi
+    '';
+
+    stateVersion = 6;
   };
-
-  # nix-darwin's built-in Dock persistent-apps currently writes minimal Dock
-  # tiles that can show up as question marks on recent macOS. Use dockutil
-  # after Homebrew activation so the Dock gets proper LaunchServices entries.
-  system.activationScripts.postActivation.text = ''
-    runAsUser() {
-      launchctl asuser "$(id -u -- danielkumlin)" sudo --user=danielkumlin --set-home -- "$@"
-    }
-
-    echo >&2 "disabling Spotlight Cmd-Space hotkeys for Raycast..."
-    runAsUser /usr/bin/defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }'
-    runAsUser /usr/bin/defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 '{ enabled = 0; value = { parameters = (32, 49, 1572864); type = standard; }; }'
-    if [[ -x /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings ]]; then
-      runAsUser /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u || true
-    fi
-
-    dockutil=/opt/homebrew/bin/dockutil
-    if [[ -x "$dockutil" ]]; then
-      echo >&2 "configuring Dock items with dockutil..."
-      runAsUser "$dockutil" --remove all --no-restart || true
-      for app in \
-        "/Applications/Slack.app" \
-        "/Applications/Linear.app" \
-        "/Applications/Cursor.app" \
-        "/Applications/Codex.app" \
-        "/Applications/Helium.app" \
-        "/Applications/Ghostty.app" \
-        "/Applications/Obsidian.app"
-      do
-        if [[ -e "$app" ]]; then
-          runAsUser "$dockutil" --add "$app" --no-restart
-        else
-          echo >&2 "skipping missing Dock item: $app"
-        fi
-      done
-      killall -qu danielkumlin Dock || true
-    else
-      echo >&2 "dockutil not found; skipping Dock item configuration"
-    fi
-  '';
-
-  system.stateVersion = 6;
 }
