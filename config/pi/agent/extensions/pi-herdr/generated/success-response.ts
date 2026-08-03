@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated from Herdr protocol 18, schema version 1.
+ * Generated from Herdr protocol 19, schema version 1.
  * Run `npm run generate` after updating Herdr. Do not edit by hand.
  */
 
@@ -387,6 +387,13 @@ export type EventData =
       [k: string]: unknown;
     }
   | {
+      before_workspace_id?: string | null;
+      type: "workspace_reordered";
+      workspace_ids: string[];
+      workspaces: WorkspaceInfo[];
+      [k: string]: unknown;
+    }
+  | {
       type: "workspace_focused";
       workspace_id: string;
       [k: string]: unknown;
@@ -525,6 +532,7 @@ export type EventKind =
   | "workspace_closed"
   | "workspace_renamed"
   | "workspace_moved"
+  | "workspace_reordered"
   | "workspace_focused"
   | "worktree_created"
   | "worktree_opened"
@@ -561,6 +569,7 @@ export type IntegrationTarget =
   | "qodercli"
   | "cursor"
   | "mastracode"
+  | "antigravity_cli"
   | "grok";
 export type PluginActionContext = "global" | "workspace" | "tab" | "pane" | "selection";
 export type PluginPlatform = "linux" | "macos" | "windows";

@@ -80,6 +80,9 @@ export default function (pi: ExtensionAPI) {
 	}
 	const currentPaneTarget = currentPaneTargetEnv;
 	const herdr = new HerdrClient(socketPath);
+	const lifecycleSource = `pi-herdr:${process.pid}:${Date.now()}`;
+	let lifecycleSeq = 0;
+	let lifecycleErrorLogged = false;
 
 	const managedPanes = new Map<string, ManagedPane>();
 	const aliasOrder: string[] = [];
@@ -127,8 +130,67 @@ export default function (pi: ExtensionAPI) {
 		setAliases(aliases, order);
 	}
 
-	pi.on("session_start", async (_event, ctx) => reconstructState(ctx));
+	function logLifecycleError(action: string, error: unknown) {
+		if (lifecycleErrorLogged) return;
+		lifecycleErrorLogged = true;
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(`[pi-herdr] Failed to ${action}: ${message}`);
+	}
+
+	async function reportAgentState(state: "idle" | "working", ctx: ExtensionContext) {
+		try {
+			expectResult(
+				await herdr.call(
+					"pane.report_agent",
+					{
+						agent: "pi",
+						agent_session_id: ctx.sessionManager.getSessionId(),
+						agent_session_path: ctx.sessionManager.getSessionFile() ?? null,
+						pane_id: currentPaneTarget,
+						seq: ++lifecycleSeq,
+						source: lifecycleSource,
+						state,
+					},
+					{ timeoutMs: 2000 },
+				),
+				"ok",
+			);
+			lifecycleErrorLogged = false;
+		} catch (error) {
+			logLifecycleError(`report Pi as ${state}`, error);
+		}
+	}
+
+	async function releaseAgent() {
+		try {
+			expectResult(
+				await herdr.call(
+					"pane.release_agent",
+					{
+						agent: "pi",
+						pane_id: currentPaneTarget,
+						seq: ++lifecycleSeq,
+						source: lifecycleSource,
+					},
+					{ timeoutMs: 2000 },
+				),
+				"ok",
+			);
+		} catch (error) {
+			logLifecycleError("release Pi agent state", error);
+		}
+	}
+
+	pi.on("session_start", async (_event, ctx) => {
+		reconstructState(ctx);
+		await reportAgentState("idle", ctx);
+	});
 	pi.on("session_tree", async (_event, ctx) => reconstructState(ctx));
+	pi.on("agent_start", async (_event, ctx) => reportAgentState("working", ctx));
+	pi.on("agent_settled", async (_event, ctx) =>
+		reportAgentState(ctx.isIdle() ? "idle" : "working", ctx),
+	);
+	pi.on("session_shutdown", async () => releaseAgent());
 
 	function recordAlias(alias: string, paneId: string, workspaceId: string) {
 		managedPanes.set(alias, { paneId, workspaceId });
