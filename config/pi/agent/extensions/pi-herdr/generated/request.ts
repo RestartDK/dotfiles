@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated from Herdr protocol 18, schema version 1.
+ * Generated from Herdr protocol 19, schema version 1.
  * Run `npm run generate` after updating Herdr. Do not edit by hand.
  */
 
@@ -86,6 +86,11 @@ export type Request = {
   | {
       method: "workspace.move";
       params: WorkspaceMoveParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "workspace.move_block";
+      params: WorkspaceMoveBlockParams;
       [k: string]: unknown;
     }
   | {
@@ -583,6 +588,10 @@ export type Subscription =
       [k: string]: unknown;
     }
   | {
+      type: "workspace.reordered";
+      [k: string]: unknown;
+    }
+  | {
       type: "workspace.closed";
       [k: string]: unknown;
     }
@@ -803,6 +812,7 @@ export type IntegrationTarget =
   | "qodercli"
   | "cursor"
   | "mastracode"
+  | "antigravity_cli"
   | "grok";
 export type PopupSize = number | string;
 export type PluginPanePlacement = "overlay" | "popup" | "split" | "tab" | "zoomed";
@@ -851,6 +861,11 @@ export interface WorkspaceRenameParams {
 export interface WorkspaceMoveParams {
   insert_index: number;
   workspace_id: string;
+  [k: string]: unknown;
+}
+export interface WorkspaceMoveBlockParams {
+  before_workspace_id?: string | null;
+  workspace_ids: string[];
   [k: string]: unknown;
 }
 export interface WorkspaceReportMetadataParams {
