@@ -4,6 +4,7 @@ let
   cfg = config.my.liveConfig;
   hasScattererInput = dotfilesInputs ? scatterer-src;
   herdrPackage = dotfilesInputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  tuicrPackage = dotfilesInputs.tuicr.packages.${pkgs.stdenv.hostPlatform.system}.default;
   scattererPackage =
     if hasScattererInput then
       pkgs.callPackage ../../../packages/scatterer.nix {
@@ -30,10 +31,12 @@ in
 {
   config = lib.mkIf cfg.enable (lib.mkMerge [
     (lib.mkIf cfg.groups.terminalTools {
+      home.packages = [ tuicrPackage ];
       xdg.configFile = {
         "btop/btop.conf" = file "config/btop/btop.conf";
         "hunk/config.toml" = file "config/hunk/config.toml";
         "thefuck/settings.py" = file "config/thefuck/settings.py";
+        "tuicr/config.toml" = file "config/tuicr/config.toml";
       };
     })
 
