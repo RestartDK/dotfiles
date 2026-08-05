@@ -8,7 +8,7 @@ rustPlatform.buildRustPackage {
   inherit (manifest) version;
 
   inherit src;
-  cargoHash = "sha256-3WF9Sms5E5hF1UCLh+bSj9GJvZEG8KaiFMv4ZSawg7w=";
+  cargoHash = "sha256-DSQMSzVo9FiVbC9JptkiGtBFkrFg9prCbz8mKgdRi3A=";
   buildInputs = lib.optionals stdenv.isDarwin [ libiconv ];
   nativeCheckInputs = [ gitMinimal ];
 
