@@ -42,6 +42,13 @@ focus_pane_right = "prefix+l"
 split_vertical = "prefix+shift+l"
 split_horizontal = "prefix+shift+j"
 reload_config = "prefix+shift+r"
+goto = ""
+
+[[keys.command]]
+key = "prefix+g"
+type = "plugin_action"
+command = "daniel.scatterer.agent-picker"
+description = "scatterer agent session picker"
 
 [[keys.command]]
 key = "prefix+shift+s"
