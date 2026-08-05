@@ -292,11 +292,11 @@
     "scatterer-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1785003924,
-        "narHash": "sha256-uVaZdtoRSYcCnJO9QllkraMOr05DaveI/f5G1DARTHA=",
+        "lastModified": 1785919898,
+        "narHash": "sha256-0F0j0xsYQcG1WM4qNnuBYITAOuUnQAk9g72GHNKuNiY=",
         "owner": "RestartDK",
         "repo": "scatterer",
-        "rev": "59a7cc8907da477fe5f2cf3408ca4db7fdb23b02",
+        "rev": "7a24d0cf5d13b808628412c5a694f5dc438ed9ed",
         "type": "github"
       },
       "original": {
