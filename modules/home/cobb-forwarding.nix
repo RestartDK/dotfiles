@@ -153,6 +153,18 @@ _:
       mkdir -p "$STATE_DIR"
       chmod 700 "$STATE_DIR"
 
+      # Each local forward consumes a file descriptor. macOS GUI applications
+      # inherit launchd's low default soft limit of 256, which is insufficient
+      # for all namespace forwards.
+      required_nofile=1024
+      soft_nofile="$(ulimit -Sn)"
+      if [ "$soft_nofile" != unlimited ] && [ "$soft_nofile" -lt "$required_nofile" ]; then
+        if ! ulimit -Sn "$required_nofile"; then
+          echo "Unable to raise the open-file limit from $soft_nofile to $required_nofile." >&2
+          exit 1
+        fi
+      fi
+
       SSH_COMMON=(
         -F /dev/null
         -S "$CONTROL_SOCKET"
