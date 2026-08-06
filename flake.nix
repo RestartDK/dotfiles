@@ -88,7 +88,6 @@
       in
       {
         live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix [ ];
-        twin = withDotfilesInputs ./profiles/home/twin.nix [ hunkModule ];
         cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ hunkModule ];
       };
 
