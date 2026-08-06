@@ -91,6 +91,7 @@ _:
         3020
         3050
         3051
+        4321
         8080
         8099
       )
@@ -108,6 +109,7 @@ _:
       echo "  goodview:         http://localhost:3002" >&2
       echo "  haproxy:          http://localhost:3005" >&2
       echo "  cosmos:           http://localhost:3050" >&2
+      echo "  website:          http://localhost:4321" >&2
       echo "  process-compose:  http://localhost:8099" >&2
       echo >&2
       echo "Stop with Ctrl-C, then rerun with another target to switch stacks." >&2
