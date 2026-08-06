@@ -148,7 +148,9 @@ _:
 
         rm -f "$CONTROL_SOCKET"
 
-        forwards=()
+        forwards=(
+          -L "127.0.0.1:4321:127.0.0.1:4321"
+        )
         for slot in $(seq 1 50); do
           forwards+=(
             -L "127.0.0.1:$((30000 + slot)):$DEVUSER-opencode-$slot:3000"
@@ -219,6 +221,7 @@ _:
           return 1
         fi
 
+        echo "Website:         http://localhost:4321"
         echo "Frontend:        http://cobb-$slot_number.localhost:$((31000 + slot_number))"
         echo "API:             http://cobb-$slot_number.localhost:$((30000 + slot_number))"
         echo "Goodview:        http://cobb-$slot_number.localhost:$((32000 + slot_number))"
