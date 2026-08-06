@@ -10,7 +10,12 @@ _:
       DEVUSER="''${DEVUSER:-daniel}"
       MACHINE="''${MACHINE:-titan-2}"
       SSH_USER="''${SSH_USER:-$DEVUSER}"
+      SSH_PORT="''${SSH_PORT:-2222}"
+      IDENTITY_FILE="''${IDENTITY_FILE:-$HOME/.ssh/id_ed25519.pub}"
+      IDENTITY_AGENT="''${IDENTITY_AGENT:-$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock}"
       TARGET="''${1:-main}"
+
+      export SSH_AUTH_SOCK="$IDENTITY_AGENT"
 
       usage() {
         cat >&2 <<EOF
@@ -100,10 +105,15 @@ _:
       echo "Stop with Ctrl-C, then rerun with another target to switch stacks." >&2
 
       exec ssh \
+        -F /dev/null \
+        -p "$SSH_PORT" \
+        -l "$SSH_USER" \
+        -o "IdentityFile=$IDENTITY_FILE" \
+        -o IdentitiesOnly=yes \
         -N \
         -o ExitOnForwardFailure=yes \
         "''${FORWARDS[@]}" \
-        "''${SSH_USER}@''${MACHINE}"
+        "$MACHINE"
     '';
   };
 
@@ -118,7 +128,7 @@ _:
       SSH_USER="''${SSH_USER:-$DEVUSER}"
       SSH_PORT="''${SSH_PORT:-2222}"
       IDENTITY_FILE="''${IDENTITY_FILE:-$HOME/.ssh/id_ed25519.pub}"
-      IDENTITY_AGENT="''${SSH_AUTH_SOCK:-$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock}"
+      IDENTITY_AGENT="''${IDENTITY_AGENT:-$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock}"
       STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/cobb-tunnels"
       CONTROL_SOCKET="$STATE_DIR/titan-2.sock"
 
