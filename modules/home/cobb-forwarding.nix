@@ -12,10 +12,18 @@ _:
       SSH_USER="''${SSH_USER:-$DEVUSER}"
       SSH_PORT="''${SSH_PORT:-2222}"
       IDENTITY_FILE="''${IDENTITY_FILE:-$HOME/.ssh/id_ed25519.pub}"
-      IDENTITY_AGENT="''${IDENTITY_AGENT:-$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock}"
+      ONEPASSWORD_AGENT="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
       TARGET="''${1:-main}"
 
-      export SSH_AUTH_SOCK="$IDENTITY_AGENT"
+      if [ -n "''${IDENTITY_AGENT:-}" ]; then
+        SSH_AUTH_SOCK="$IDENTITY_AGENT"
+      elif [ -S "$ONEPASSWORD_AGENT" ]; then
+        SSH_AUTH_SOCK="$ONEPASSWORD_AGENT"
+      elif [ ! -S "''${SSH_AUTH_SOCK:-}" ]; then
+        echo "No usable SSH agent found. Set IDENTITY_AGENT to an agent socket." >&2
+        exit 1
+      fi
+      export SSH_AUTH_SOCK
 
       usage() {
         cat >&2 <<EOF
@@ -128,11 +136,19 @@ _:
       SSH_USER="''${SSH_USER:-$DEVUSER}"
       SSH_PORT="''${SSH_PORT:-2222}"
       IDENTITY_FILE="''${IDENTITY_FILE:-$HOME/.ssh/id_ed25519.pub}"
-      IDENTITY_AGENT="''${IDENTITY_AGENT:-$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock}"
+      ONEPASSWORD_AGENT="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
       STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/cobb-tunnels"
       CONTROL_SOCKET="$STATE_DIR/titan-2.sock"
 
-      export SSH_AUTH_SOCK="$IDENTITY_AGENT"
+      if [ -n "''${IDENTITY_AGENT:-}" ]; then
+        SSH_AUTH_SOCK="$IDENTITY_AGENT"
+      elif [ -S "$ONEPASSWORD_AGENT" ]; then
+        SSH_AUTH_SOCK="$ONEPASSWORD_AGENT"
+      elif [ ! -S "''${SSH_AUTH_SOCK:-}" ]; then
+        echo "No usable SSH agent found. Set IDENTITY_AGENT to an agent socket." >&2
+        exit 1
+      fi
+      export SSH_AUTH_SOCK
 
       mkdir -p "$STATE_DIR"
       chmod 700 "$STATE_DIR"
