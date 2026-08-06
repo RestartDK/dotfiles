@@ -153,6 +153,7 @@ _:
           forwards+=(
             -L "127.0.0.1:$((30000 + slot)):$DEVUSER-opencode-$slot:3000"
             -L "127.0.0.1:$((31000 + slot)):$DEVUSER-opencode-$slot:3001"
+            -L "127.0.0.1:$((32000 + slot)):$DEVUSER-opencode-$slot:3002"
             -L "127.0.0.1:$((38000 + slot)):$DEVUSER-opencode-$slot:8099"
             -L "127.0.0.1:$((39000 + slot)):$DEVUSER-opencode-$slot:9012"
           )
@@ -216,6 +217,7 @@ _:
 
         echo "Frontend:        http://cobb-$slot_number.localhost:$((31000 + slot_number))"
         echo "API:             http://cobb-$slot_number.localhost:$((30000 + slot_number))"
+        echo "Goodview:        http://cobb-$slot_number.localhost:$((32000 + slot_number))"
         echo "Process Compose: http://cobb-$slot_number.localhost:$((38000 + slot_number))"
         echo "Artifacts:       http://cobb-$slot_number.localhost:$((39000 + slot_number))"
       }
