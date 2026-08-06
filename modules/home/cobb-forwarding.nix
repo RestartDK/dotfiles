@@ -154,8 +154,12 @@ _:
             -L "127.0.0.1:$((30000 + slot)):$DEVUSER-opencode-$slot:3000"
             -L "127.0.0.1:$((31000 + slot)):$DEVUSER-opencode-$slot:3001"
             -L "127.0.0.1:$((32000 + slot)):$DEVUSER-opencode-$slot:3002"
+            -L "127.0.0.1:$((35000 + slot)):$DEVUSER-opencode-$slot:3050"
+            -L "127.0.0.1:$((36000 + slot)):$DEVUSER-opencode-$slot:$((36000 + slot))"
+            -L "127.0.0.1:$((37000 + slot)):$DEVUSER-opencode-$slot:3010"
             -L "127.0.0.1:$((38000 + slot)):$DEVUSER-opencode-$slot:8099"
             -L "127.0.0.1:$((39000 + slot)):$DEVUSER-opencode-$slot:9012"
+            -L "127.0.0.1:$((40000 + slot)):$DEVUSER-opencode-$slot:9013"
           )
         done
 
@@ -218,8 +222,12 @@ _:
         echo "Frontend:        http://cobb-$slot_number.localhost:$((31000 + slot_number))"
         echo "API:             http://cobb-$slot_number.localhost:$((30000 + slot_number))"
         echo "Goodview:        http://cobb-$slot_number.localhost:$((32000 + slot_number))"
+        echo "React Cosmos:    http://cobb-$slot_number.localhost:$((35000 + slot_number))"
+        echo "Cosmos renderer: http://cobb-$slot_number.localhost:$((36000 + slot_number))"
+        echo "Grafana:         http://cobb-$slot_number.localhost:$((37000 + slot_number))"
         echo "Process Compose: http://cobb-$slot_number.localhost:$((38000 + slot_number))"
         echo "Artifacts:       http://cobb-$slot_number.localhost:$((39000 + slot_number))"
+        echo "RustFS console:  http://cobb-$slot_number.localhost:$((40000 + slot_number))"
       }
 
       usage() {
