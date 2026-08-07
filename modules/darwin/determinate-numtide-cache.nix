@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 {
   # Determinate Nix owns /etc/nix/nix.conf and includes this supported
