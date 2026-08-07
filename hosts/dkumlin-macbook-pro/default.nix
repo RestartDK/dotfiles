@@ -1,6 +1,8 @@
 { pkgs, ... }:
 
 {
+  imports = [ ../../modules/darwin/determinate-numtide-cache.nix ];
+
   nixpkgs.config.allowUnfree = true;
 
   # Nix itself is installed/managed by Determinate Nix on this Mac.
@@ -51,7 +53,6 @@
 
     brews = [
       "act"
-      "agent-browser"
       "aws/tap/eksctl"
       "awscli"
       "azure-cli"

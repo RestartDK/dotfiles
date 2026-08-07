@@ -1,19 +1,11 @@
-{ pkgs, inputs, agentPackageNames ? [ "codex" "claude-code" "opencode" "pi-coding-agent" ] }:
+{ pkgs, inputs, agentPackageNames ? [ "agent-browser" "codex" "claude-code" "opencode" "pi-coding-agent" ] }:
 
 let
-  codexCli = pkgs.callPackage ../../packages/codex-cli.nix { };
-  unstable = import inputs.nixpkgs-unstable {
-    system = pkgs.stdenv.hostPlatform.system;
-    inherit (pkgs) config;
-  };
-  piCodingAgent = unstable.callPackage ../../packages/pi-coding-agent.nix { };
+  llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
   availableAgentPackages = {
-    # The nixpkgs Rust build currently pulls livekit-libwebrtc, which fails to
-    # build on aarch64-darwin. Use OpenAI's npm binary distribution instead.
-    codex = codexCli;
-    "claude-code" = unstable.claude-code;
-    inherit (unstable) opencode;
-    "pi-coding-agent" = piCodingAgent;
+    inherit (llmAgents) agent-browser codex opencode;
+    "claude-code" = llmAgents.claude-code;
+    "pi-coding-agent" = llmAgents.pi;
   };
   agentPackages = map (
     name:

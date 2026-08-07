@@ -4,7 +4,7 @@ let
   cfg = config.my.liveConfig;
   hasScattererInput = dotfilesInputs ? scatterer-src;
   herdrPackage = dotfilesInputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
-  tuicrPackage = dotfilesInputs.tuicr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
   scattererPackage =
     if hasScattererInput then
       pkgs.callPackage ../../../packages/scatterer.nix {

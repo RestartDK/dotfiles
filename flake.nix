@@ -14,8 +14,7 @@
     herdr.url = "github:ogulcancelik/herdr";
     herdr.inputs.nixpkgs.follows = "nixpkgs";
 
-    tuicr.url = "github:agavra/tuicr";
-    tuicr.inputs.nixpkgs.follows = "nixpkgs";
+    llm-agents.url = "github:numtide/llm-agents.nix";
 
     scatterer-src = {
       url = "github:RestartDK/scatterer";
