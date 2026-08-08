@@ -13,7 +13,6 @@ in
     lib.mkEnableOption "Daniel's reusable Twin development environment";
 
   config = lib.mkIf cfg.enable {
-    programs.hunk.enable = true;
     services.lorri.enable = true;
     xdg.enable = true;
 

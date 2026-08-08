@@ -92,9 +92,6 @@
     "greeting": "hey twin :)"
   },
   "quietStartup": true,
-  "skills": [
-    "~/.claude/skills",
-    "~/.nix-profile/skills/hunk-review"
-  ],
+  "skills": ["~/.claude/skills"],
   "theme": "light/dark"
 }

@@ -1,18 +1,17 @@
-{ inputs, ... }:
+_:
 
 {
   imports = [
-    inputs.hunk.homeManagerModules.default
     ../../modules/home/cobb-forwarding.nix
     ../../modules/home/dev-packages.nix
     ../../modules/home/live-symlinks.nix
   ];
 
-  home.username = "danielkumlin";
-  home.homeDirectory = "/Users/danielkumlin";
-  home.stateVersion = "26.05";
-
-  programs.hunk.enable = true;
+  home = {
+    username = "danielkumlin";
+    homeDirectory = "/Users/danielkumlin";
+    stateVersion = "26.05";
+  };
 
   programs.ssh = {
     enable = true;

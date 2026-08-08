@@ -8,9 +8,6 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
-    hunk.url = "github:modem-dev/hunk";
-    hunk.inputs.nixpkgs.follows = "nixpkgs";
-
     herdr.url = "github:ogulcancelik/herdr";
     herdr.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -83,11 +80,10 @@
           _module.args.dotfilesInputs = inputs;
           imports = [ module ] ++ extraImports;
         };
-        hunkModule = inputs.hunk.homeManagerModules.default;
       in
       {
         live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix [ ];
-        cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ hunkModule ];
+        cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
       };
 
     nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {

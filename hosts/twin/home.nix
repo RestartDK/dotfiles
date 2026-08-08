@@ -1,11 +1,10 @@
-{ inputs, ... }:
+_:
 
 let
   settings = import ./settings.nix;
 in
 {
   imports = [
-    inputs.hunk.homeManagerModules.default
     ../../modules/home/live-symlinks.nix
     ../../modules/home/twin-dev-environment.nix
   ];

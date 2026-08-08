@@ -34,7 +34,6 @@ in
       home.packages = [ tuicrPackage ];
       xdg.configFile = {
         "btop/btop.conf" = file "config/btop/btop.conf";
-        "hunk/config.toml" = file "config/hunk/config.toml";
         "thefuck/settings.py" = file "config/thefuck/settings.py";
         "tuicr/config.toml" = file "config/tuicr/config.toml";
       };
