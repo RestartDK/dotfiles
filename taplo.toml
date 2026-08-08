@@ -1,0 +1,7 @@
+include = ["**/*.toml"]
+exclude = [".direnv/**"]
+
+[formatting]
+column_width = 80
+indent_string = "  "
+trailing_newline = true

@@ -42,8 +42,8 @@ jobs:
       - name: Enable FlakeHub Cache
         uses: DeterminateSystems/flakehub-cache-action@v3.21.9
 
-      - name: Check flake outputs
-        run: ./bin/traitor check --all-systems --print-build-logs
+      - name: Check Linux outputs, formatting, and linting
+        run: ./bin/traitor check --print-build-logs
 
       - name: Evaluate NixOS host derivation (srv-nana)
         # Evaluate the complete system derivation without materializing Nana's
@@ -66,7 +66,7 @@ jobs:
       - name: Enable FlakeHub Cache
         uses: DeterminateSystems/flakehub-cache-action@v3.21.9
 
-      - name: Check flake outputs
+      - name: Check Darwin outputs, formatting, and linting
         run: ./bin/traitor check --print-build-logs
 
       - name: Check Darwin configurations evaluate

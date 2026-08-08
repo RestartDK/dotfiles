@@ -7,10 +7,10 @@
 ------------------
 
 hl.monitor({
-	output = "",
-	mode = "preferred",
-	position = "auto",
-	scale = "auto",
+  output = "",
+  mode = "preferred",
+  position = "auto",
+  scale = "auto",
 })
 
 ---------------------
@@ -28,21 +28,21 @@ local mainMod = "SUPER"
 -------------------
 
 hl.on("hyprland.start", function()
-	-- Ensure DBus/systemd-launched desktop portals inherit the Hyprland
-	-- Wayland environment. Without this, GTK file choosers can silently fail
-	-- and Chrome downloads with "Ask where to save" may be cancelled.
-	hl.exec_cmd(
-		"sh -lc 'export XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-Hyprland}; export XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-hyprland}; export XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-wayland}; export DESKTOP_SESSION=${DESKTOP_SESSION:-hyprland}; dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP DESKTOP_SESSION; systemctl --user restart xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service xdg-desktop-portal.service'"
-	)
+  -- Ensure DBus/systemd-launched desktop portals inherit the Hyprland
+  -- Wayland environment. Without this, GTK file choosers can silently fail
+  -- and Chrome downloads with "Ask where to save" may be cancelled.
+  hl.exec_cmd(
+    "sh -lc 'export XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-Hyprland}; export XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-hyprland}; export XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-wayland}; export DESKTOP_SESSION=${DESKTOP_SESSION:-hyprland}; dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP DESKTOP_SESSION; systemctl --user restart xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service xdg-desktop-portal.service'"
+  )
 
-	hl.exec_cmd("pidof hyprpaper >/dev/null || hyprpaper")
-	hl.exec_cmd("pidof hypridle >/dev/null || hypridle")
-	hl.exec_cmd("waybar")
-	hl.exec_cmd("hyprlauncher -d")
-	hl.exec_cmd("nm-applet --indicator")
-	hl.exec_cmd("pidof blueman-applet >/dev/null || blueman-applet")
-	hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
-	hl.exec_cmd("hyprctl setcursor Adwaita 24")
+  hl.exec_cmd("pidof hyprpaper >/dev/null || hyprpaper")
+  hl.exec_cmd("pidof hypridle >/dev/null || hypridle")
+  hl.exec_cmd("waybar")
+  hl.exec_cmd("hyprlauncher -d")
+  hl.exec_cmd("nm-applet --indicator")
+  hl.exec_cmd("pidof blueman-applet >/dev/null || blueman-applet")
+  hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
+  hl.exec_cmd("hyprctl setcursor Adwaita 24")
 end)
 
 -------------------------------
@@ -63,47 +63,47 @@ hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 -----------------------
 
 hl.config({
-	general = {
-		gaps_in = 4,
-		gaps_out = 8,
-		border_size = 2,
-		layout = "dwindle",
-		col = {
-			active_border = "rgba(a6a6a6ff)",
-			inactive_border = "rgba(3a3a3aaa)",
-		},
-	},
+  general = {
+    gaps_in = 4,
+    gaps_out = 8,
+    border_size = 2,
+    layout = "dwindle",
+    col = {
+      active_border = "rgba(a6a6a6ff)",
+      inactive_border = "rgba(3a3a3aaa)",
+    },
+  },
 
-	decoration = {
-		rounding = 8,
-		active_opacity = 1.0,
-		inactive_opacity = 1.0,
-		blur = { enabled = false },
-		shadow = { enabled = false },
-	},
+  decoration = {
+    rounding = 8,
+    active_opacity = 1.0,
+    inactive_opacity = 1.0,
+    blur = { enabled = false },
+    shadow = { enabled = false },
+  },
 
-	animations = {
-		enabled = false,
-	},
+  animations = {
+    enabled = false,
+  },
 
-	input = {
-		kb_layout = "us",
-		kb_variant = "",
-		follow_mouse = 1,
-		sensitivity = 0,
-		touchpad = {
-			natural_scroll = true,
-		},
-	},
+  input = {
+    kb_layout = "us",
+    kb_variant = "",
+    follow_mouse = 1,
+    sensitivity = 0,
+    touchpad = {
+      natural_scroll = true,
+    },
+  },
 
-	dwindle = {
-		preserve_split = true,
-	},
+  dwindle = {
+    preserve_split = true,
+  },
 
-	misc = {
-		disable_hyprland_logo = true,
-		force_default_wallpaper = 0,
-	},
+  misc = {
+    disable_hyprland_logo = true,
+    force_default_wallpaper = 0,
+  },
 })
 
 ---------------------
@@ -155,9 +155,9 @@ hl.bind(mainMod .. " + SHIFT + L", hl.dsp.window.move({ direction = "right" }))
 
 -- Workspaces: Super + 1..0 switches, Super + Shift + 1..0 moves windows.
 for i = 1, 10 do
-	local key = i % 10
-	hl.bind(mainMod .. " + " .. key, hl.dsp.focus({ workspace = i }))
-	hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i }))
+  local key = i % 10
+  hl.bind(mainMod .. " + " .. key, hl.dsp.focus({ workspace = i }))
+  hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i }))
 end
 
 -- Mouse move/resize with Super + left/right click drag.
@@ -166,14 +166,14 @@ hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- Media keys.
 hl.bind(
-	"XF86AudioRaiseVolume",
-	hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"),
-	{ locked = true, repeating = true }
+  "XF86AudioRaiseVolume",
+  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"),
+  { locked = true, repeating = true }
 )
 hl.bind(
-	"XF86AudioLowerVolume",
-	hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
-	{ locked = true, repeating = true }
+  "XF86AudioLowerVolume",
+  hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
+  { locked = true, repeating = true }
 )
 hl.bind("XF86AudioMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), { locked = true })
 hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true })
