@@ -1,13 +1,9 @@
 { pkgs, ... }:
 
 {
-  imports = [ ../../modules/darwin/determinate-numtide-cache.nix ];
+  imports = [ ../../modules/darwin/determinate-nix.nix ];
 
   nixpkgs.config.allowUnfree = true;
-
-  # Nix itself is installed/managed by Determinate Nix on this Mac.
-  # Keep nix-darwin from replacing that daemon/config during activation.
-  nix.enable = false;
 
   networking = {
     hostName = "dkumlin-macbook-pro";
