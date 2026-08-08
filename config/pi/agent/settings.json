@@ -2,6 +2,10 @@
   "defaultModel": "gpt-5.6-sol",
   "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "low",
+  "extensions": [
+    "-extensions/pi-prompt/index.ts"
+  ],
+  "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.80.1",
   "packages": [
@@ -33,5 +37,6 @@
   "skills": [
     "~/.claude/skills"
   ],
-  "theme": "light/dark"
+  "theme": "light/dark",
+  "tuiMode": "fullscreen"
 }
