@@ -41,7 +41,11 @@ in
 
     extraGroups = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [ "wheel" "networkmanager" "docker" ];
+      default = [
+        "wheel"
+        "networkmanager"
+        "docker"
+      ];
       description = "Supplementary groups for the primary user.";
     };
 

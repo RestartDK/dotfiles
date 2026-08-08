@@ -153,8 +153,6 @@
       persistent-apps = [
         "/Applications/Slack.app"
         "/Applications/Linear.app"
-        "/Applications/Cursor.app"
-        "/Applications/Codex.app"
         "/Applications/Helium.app"
         "/Applications/Ghostty.app"
         "/Applications/Obsidian.app"

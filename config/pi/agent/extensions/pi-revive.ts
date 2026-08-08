@@ -68,15 +68,19 @@ function writeReviveRequest(profile: Profile, sessionFile: string, cwd: string):
 }
 
 function scheduleExecRevive(profile: Profile, sessionFile: string, cwd: string): boolean {
-  const execve = (process as typeof process & {
-    execve?: (file: string, args: string[], env: Record<string, string>) => void;
-  }).execve;
+  const execve = (
+    process as typeof process & {
+      execve?: (file: string, args: string[], env: Record<string, string>) => void;
+    }
+  ).execve;
 
   if (typeof execve !== "function") return false;
 
   const command = `cd ${shellQuote(cwd)} && ${piEnvPrefix(profile)}${profile.command} --session ${shellQuote(sessionFile)}`;
   const env = Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
   );
 
   process.once("exit", () => {
@@ -110,7 +114,8 @@ function discoverPiProfiles(): Profile[] {
 
   add("pi", "builtin", DEFAULT_AGENT_DIR);
 
-  if (!existsSync(ZSHRC)) return [...profiles.values()].sort((a, b) => a.name.localeCompare(b.name));
+  if (!existsSync(ZSHRC))
+    return [...profiles.values()].sort((a, b) => a.name.localeCompare(b.name));
 
   const text = readFileSync(ZSHRC, "utf8");
   const lines = text.split(/\r?\n/);
@@ -157,7 +162,10 @@ export default function (pi: ExtensionAPI) {
 
       const sessionFile = ctx.sessionManager.getSessionFile();
       if (!sessionFile) {
-        ctx.ui.notify("Current chat is not saved (--no-session/ephemeral), so there is no session file to revive.", "error");
+        ctx.ui.notify(
+          "Current chat is not saved (--no-session/ephemeral), so there is no session file to revive.",
+          "error",
+        );
         return;
       }
 
@@ -168,16 +176,21 @@ export default function (pi: ExtensionAPI) {
       }
 
       const requested = args.trim();
-      const selectedName = requested || await ctx.ui.select(
-        "Switch to Pi profile:",
-        profiles.map((profile) => profile.name),
-      );
+      const selectedName =
+        requested ||
+        (await ctx.ui.select(
+          "Switch to Pi profile:",
+          profiles.map((profile) => profile.name),
+        ));
 
       if (!selectedName) return;
 
       const profile = profiles.find((candidate) => candidate.name === selectedName);
       if (!profile) {
-        ctx.ui.notify(`Unknown Pi profile: ${selectedName}. Try one of: ${profiles.map((p) => p.name).join(", ")}`, "error");
+        ctx.ui.notify(
+          `Unknown Pi profile: ${selectedName}. Try one of: ${profiles.map((p) => p.name).join(", ")}`,
+          "error",
+        );
         return;
       }
 
@@ -187,7 +200,10 @@ export default function (pi: ExtensionAPI) {
         writeReviveRequest(profile, targetSessionFile, ctx.cwd);
       }
 
-      const historyNote = targetSessionFile === sessionFile ? "same session file" : "copied into target profile history";
+      const historyNote =
+        targetSessionFile === sessionFile
+          ? "same session file"
+          : "copied into target profile history";
       ctx.ui.notify(`Reviving to ${profile.name} with current chat (${historyNote})...`, "info");
       ctx.shutdown();
     },

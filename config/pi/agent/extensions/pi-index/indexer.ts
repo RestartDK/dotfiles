@@ -12,7 +12,8 @@ import type {
 } from "@kreuzberg/tree-sitter-language-pack";
 
 const require = createRequire(import.meta.url);
-const treeSitter = require("@kreuzberg/tree-sitter-language-pack") as typeof import("@kreuzberg/tree-sitter-language-pack");
+const treeSitter =
+  require("@kreuzberg/tree-sitter-language-pack") as typeof import("@kreuzberg/tree-sitter-language-pack");
 
 const MAX_IMPORTS = 80;
 const MAX_TOP_LEVEL_ITEMS = 250;
@@ -66,7 +67,18 @@ const KIND_LABELS: Record<string, string> = {
   Variable: "var",
 };
 
-const SECTION_ORDER = ["imports", "modules", "options", "types", "impls", "functions", "constants", "attributes", "headings", "items"] as const;
+const SECTION_ORDER = [
+  "imports",
+  "modules",
+  "options",
+  "types",
+  "impls",
+  "functions",
+  "constants",
+  "attributes",
+  "headings",
+  "items",
+] as const;
 type SectionName = (typeof SECTION_ORDER)[number];
 
 interface OutlineItem {
@@ -195,13 +207,21 @@ function structureToOutline(item: StructureItem, sourceBytes: Buffer): OutlineIt
   let text = itemSignature(item, sourceBytes);
   const label = KIND_LABELS[kind];
 
-  if (label && item.name && !new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)) {
+  if (
+    label &&
+    item.name &&
+    !new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)
+  ) {
     text = `${label} ${text || item.name}`;
   }
 
-  const includeChildren = ["Class", "Impl", "Interface", "Module", "Struct", "Trait"].includes(kind);
+  const includeChildren = ["Class", "Impl", "Interface", "Module", "Struct", "Trait"].includes(
+    kind,
+  );
   const sourceChildren = includeChildren ? topLevelStructures(item.children ?? []) : [];
-  const children = sourceChildren.slice(0, MAX_CHILDREN).map((child) => structureToOutline(child, sourceBytes));
+  const children = sourceChildren
+    .slice(0, MAX_CHILDREN)
+    .map((child) => structureToOutline(child, sourceBytes));
   if (sourceChildren.length > MAX_CHILDREN) {
     children.push({
       kind: "Other",
@@ -222,12 +242,14 @@ function containsSpan(outer?: Span, inner?: Span): boolean {
   const outerEnd = spanEnd(outer);
   const innerStart = spanStart(inner);
   const innerEnd = spanEnd(inner);
-  return typeof outerStart === "number"
-    && typeof outerEnd === "number"
-    && typeof innerStart === "number"
-    && typeof innerEnd === "number"
-    && outerStart <= innerStart
-    && outerEnd >= innerEnd;
+  return (
+    typeof outerStart === "number" &&
+    typeof outerEnd === "number" &&
+    typeof innerStart === "number" &&
+    typeof innerEnd === "number" &&
+    outerStart <= innerStart &&
+    outerEnd >= innerEnd
+  );
 }
 
 function flattenStructure(items: StructureItem[]): StructureItem[] {
@@ -245,20 +267,31 @@ function topLevelStructures(items: StructureItem[]): StructureItem[] {
     const start = spanStart(item.span);
     const end = spanEnd(item.span);
     if (typeof start === "number" && typeof end === "number") {
-      return items.findIndex((candidate) => spanStart(candidate.span) === start && spanEnd(candidate.span) === end) === index;
+      return (
+        items.findIndex(
+          (candidate) => spanStart(candidate.span) === start && spanEnd(candidate.span) === end,
+        ) === index
+      );
     }
     const key = `${kindName(item.kind)}:${item.name ?? ""}`;
-    return items.findIndex((candidate) => `${kindName(candidate.kind)}:${candidate.name ?? ""}` === key) === index;
+    return (
+      items.findIndex(
+        (candidate) => `${kindName(candidate.kind)}:${candidate.name ?? ""}` === key,
+      ) === index
+    );
   });
 
-  return deduplicated.filter((item, index) => !deduplicated.some((outer, outerIndex) => {
-    if (index === outerIndex || !containsSpan(outer.span, item.span)) return false;
-    const outerStart = spanStart(outer.span);
-    const outerEnd = spanEnd(outer.span);
-    const itemStart = spanStart(item.span);
-    const itemEnd = spanEnd(item.span);
-    return outerStart !== itemStart || outerEnd !== itemEnd;
-  }));
+  return deduplicated.filter(
+    (item, index) =>
+      !deduplicated.some((outer, outerIndex) => {
+        if (index === outerIndex || !containsSpan(outer.span, item.span)) return false;
+        const outerStart = spanStart(outer.span);
+        const outerEnd = spanEnd(outer.span);
+        const itemStart = spanStart(item.span);
+        const itemEnd = spanEnd(item.span);
+        return outerStart !== itemStart || outerEnd !== itemEnd;
+      }),
+  );
 }
 
 function uniqueImports(imports: ImportInfo[], sourceBytes: Buffer): OutlineItem[] {
@@ -282,25 +315,37 @@ function uniqueImports(imports: ImportInfo[], sourceBytes: Buffer): OutlineItem[
 
   const outline: OutlineItem[] = selected.map((item) => ({
     kind: "Import",
-    text: truncateText(item.source || sourceSlice(sourceBytes, spanStart(item.span), spanEnd(item.span)), 240).replace(/;$/, ""),
+    text: truncateText(
+      item.source || sourceSlice(sourceBytes, spanStart(item.span), spanEnd(item.span)),
+      240,
+    ).replace(/;$/, ""),
     span: item.span,
   }));
 
   if (imports.length > selected.length) {
-    outline.push({ kind: "Other", text: `[${imports.length - selected.length} more imports omitted]` });
+    outline.push({
+      kind: "Other",
+      text: `[${imports.length - selected.length} more imports omitted]`,
+    });
   }
   return outline;
 }
 
-function leftoverSymbols(symbols: SymbolInfo[], structures: StructureItem[], sourceBytes: Buffer): OutlineItem[] {
+function leftoverSymbols(
+  symbols: SymbolInfo[],
+  structures: StructureItem[],
+  sourceBytes: Buffer,
+): OutlineItem[] {
   const flattened = flattenStructure(structures);
   const seen = new Set<string>();
   const result: OutlineItem[] = [];
 
   for (const symbol of symbols) {
     const kind = kindName(symbol.kind);
-    if (!symbol.name || ["Class", "Enum", "Function", "Interface", "Module"].includes(kind)) continue;
-    if (flattened.some((item) => item.name === symbol.name && containsSpan(item.span, symbol.span))) continue;
+    if (!symbol.name || ["Class", "Enum", "Function", "Interface", "Module"].includes(kind))
+      continue;
+    if (flattened.some((item) => item.name === symbol.name && containsSpan(item.span, symbol.span)))
+      continue;
 
     const key = `${kind}:${symbol.name}:${symbol.span?.startByte ?? ""}`;
     if (seen.has(key)) continue;
@@ -310,7 +355,8 @@ function leftoverSymbols(symbols: SymbolInfo[], structures: StructureItem[], sou
     const label = KIND_LABELS[kind] ?? kind.toLowerCase();
     let text = truncateText(raw || symbol.name);
     if (!new RegExp(`\\b${label}\\b`, "i").test(text)) text = `${label} ${text}`;
-    if (symbol.typeAnnotation && !text.includes(symbol.typeAnnotation)) text += `: ${symbol.typeAnnotation}`;
+    if (symbol.typeAnnotation && !text.includes(symbol.typeAnnotation))
+      text += `: ${symbol.typeAnnotation}`;
 
     result.push({ kind, text: truncateText(text), span: symbol.span });
     if (result.length >= MAX_SYMBOLS) break;
@@ -322,13 +368,22 @@ function leftoverSymbols(symbols: SymbolInfo[], structures: StructureItem[], sou
   return result;
 }
 
-function uncoveredExports(exports: ExportInfo[], structures: StructureItem[], symbols: SymbolInfo[], sourceBytes: Buffer): OutlineItem[] {
-  const represented = [...flattenStructure(structures).map((item) => item.span), ...symbols.map((symbol) => symbol.span)];
+function uncoveredExports(
+  exports: ExportInfo[],
+  structures: StructureItem[],
+  symbols: SymbolInfo[],
+  sourceBytes: Buffer,
+): OutlineItem[] {
+  const represented = [
+    ...flattenStructure(structures).map((item) => item.span),
+    ...symbols.map((symbol) => symbol.span),
+  ];
   const result: OutlineItem[] = [];
 
   for (const item of exports) {
     if (represented.some((span) => containsSpan(item.span, span))) continue;
-    const raw = sourceSlice(sourceBytes, spanStart(item.span), spanEnd(item.span)) || item.name || "";
+    const raw =
+      sourceSlice(sourceBytes, spanStart(item.span), spanEnd(item.span)) || item.name || "";
     if (!/\b(const|let|static|type|val|var)\b/.test(raw)) continue;
     const kind = /\btype\b/.test(raw) ? "Type" : "Constant";
     result.push({ kind, text: truncateText(raw), span: item.span });
@@ -348,14 +403,21 @@ function firstNamedChild(node: TreeSitterNode): TreeSitterNode | null {
   return node.namedChildCount() > 0 ? node.namedChild(0) : null;
 }
 
-function markdownOutline(root: TreeSitterNode, sourceBytes: Buffer, totalLines: number): OutlineItem[] {
+function markdownOutline(
+  root: TreeSitterNode,
+  sourceBytes: Buffer,
+  totalLines: number,
+): OutlineItem[] {
   const headings: Array<{ level: number; item: OutlineItem }> = [];
   walkNamed(root, (node) => {
     if (node.kind() !== "atx_heading" && node.kind() !== "setext_heading") return;
     const raw = nodeText(node, sourceBytes).split(/\r?\n/, 1)[0]?.trim() ?? "";
     let level = raw.match(/^(#+)/)?.[1]?.length ?? 0;
     if (level === 0) level = /=+\s*$/.test(nodeText(node, sourceBytes)) ? 1 : 2;
-    const title = raw.replace(/^#+\s*/, "").replace(/\s*#+\s*$/, "").trim();
+    const title = raw
+      .replace(/^#+\s*/, "")
+      .replace(/\s*#+\s*$/, "")
+      .trim();
     headings.push({
       level,
       item: {
@@ -423,7 +485,11 @@ function nixOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[] {
     if (value?.kind() === "function_expression") {
       kind = "Function";
       const body = value.childByFieldName("body");
-      const prefix = sourceSlice(sourceBytes, value.startByte(), body?.startByte() ?? value.endByte()).replace(/\s+$/, "");
+      const prefix = sourceSlice(
+        sourceBytes,
+        value.startByte(),
+        body?.startByte() ?? value.endByte(),
+      ).replace(/\s+$/, "");
       text = `${name} = ${truncateText(prefix, 150)}`;
     } else if (value) {
       const rawValue = nodeText(value, sourceBytes);
@@ -438,7 +504,17 @@ function nixOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[] {
 
 function elixirOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[] {
   const result: OutlineItem[] = [];
-  const targets = new Set(["def", "defdelegate", "defguard", "defmacro", "defmacrop", "defmodule", "defp", "defprotocol", "defimpl"]);
+  const targets = new Set([
+    "def",
+    "defdelegate",
+    "defguard",
+    "defmacro",
+    "defmacrop",
+    "defmodule",
+    "defp",
+    "defprotocol",
+    "defimpl",
+  ]);
 
   walkNamed(root, (node) => {
     if (node.kind() !== "call") return;
@@ -447,9 +523,10 @@ function elixirOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[]
     if (!targets.has(targetText)) return;
 
     const raw = normalizeWhitespace(nodeText(node, sourceBytes));
-    const nameMatch = targetText === "defmodule" || targetText === "defprotocol" || targetText === "defimpl"
-      ? raw.match(/^\w+\s+([^\s,]+)(?:\s+do|,\s*do:)/)
-      : raw.match(/^\w+\s+([A-Za-z_][A-Za-z0-9_!?]*)/);
+    const nameMatch =
+      targetText === "defmodule" || targetText === "defprotocol" || targetText === "defimpl"
+        ? raw.match(/^\w+\s+([^\s,]+)(?:\s+do|,\s*do:)/)
+        : raw.match(/^\w+\s+([A-Za-z_][A-Za-z0-9_!?]*)/);
     if (!nameMatch?.[1]) return;
 
     const signature = raw
@@ -457,7 +534,12 @@ function elixirOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[]
       .replace(/\s+do\s.*$/, "")
       .replace(/\s+do$/, "");
     result.push({
-      kind: targetText.includes("module") || targetText.includes("protocol") || targetText.includes("impl") ? "Module" : "Function",
+      kind:
+        targetText.includes("module") ||
+        targetText.includes("protocol") ||
+        targetText.includes("impl")
+          ? "Module"
+          : "Function",
       text: truncateText(signature),
       span: nodeSpan(node),
     });
@@ -471,9 +553,14 @@ function zigOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[] {
     if (node.kind() === "FnProto") {
       const declaration = node.parent()?.kind() === "Decl" ? node.parent()! : node;
       const name = node.childByFieldName("function");
-      const body = Array.from({ length: declaration.namedChildCount() }, (_, index) => declaration.namedChild(index))
-        .find((child) => child?.kind() === "Block");
-      const raw = sourceSlice(sourceBytes, declaration.startByte(), body?.startByte() ?? node.endByte());
+      const body = Array.from({ length: declaration.namedChildCount() }, (_, index) =>
+        declaration.namedChild(index),
+      ).find((child) => child?.kind() === "Block");
+      const raw = sourceSlice(
+        sourceBytes,
+        declaration.startByte(),
+        body?.startByte() ?? node.endByte(),
+      );
       result.push({
         kind: "Function",
         text: truncateText(raw || (name ? nodeText(name, sourceBytes) : "anonymous")),
@@ -485,9 +572,19 @@ function zigOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[] {
     if (node.kind() !== "VarDecl") return;
     const name = node.childByFieldName("variable_type_function");
     if (!name) return;
-    const raw = truncateText(nodeText(node.parent()?.kind() === "Decl" ? node.parent()! : node, sourceBytes));
-    const kind = /\b(enum|struct|union|opaque)\b/.test(raw) ? (/\benum\b/.test(raw) ? "Enum" : "Struct") : "Constant";
-    result.push({ kind, text: raw, span: nodeSpan(node.parent()?.kind() === "Decl" ? node.parent()! : node) });
+    const raw = truncateText(
+      nodeText(node.parent()?.kind() === "Decl" ? node.parent()! : node, sourceBytes),
+    );
+    const kind = /\b(enum|struct|union|opaque)\b/.test(raw)
+      ? /\benum\b/.test(raw)
+        ? "Enum"
+        : "Struct"
+      : "Constant";
+    result.push({
+      kind,
+      text: raw,
+      span: nodeSpan(node.parent()?.kind() === "Decl" ? node.parent()! : node),
+    });
   });
   return result;
 }
@@ -518,10 +615,11 @@ function genericOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[
   walkNamed(root, (node) => {
     const kind = GENERIC_NODE_KINDS[node.kind()];
     if (!kind) return;
-    const name = node.childByFieldName("name")
-      ?? node.childByFieldName("function")
-      ?? node.childByFieldName("declarator")
-      ?? node.childByFieldName("target");
+    const name =
+      node.childByFieldName("name") ??
+      node.childByFieldName("function") ??
+      node.childByFieldName("declarator") ??
+      node.childByFieldName("target");
     const body = node.childByFieldName("body");
     const raw = sourceSlice(sourceBytes, node.startByte(), body?.startByte() ?? node.endByte());
     const fallbackName = name ? nodeText(name, sourceBytes) : node.kind();
@@ -530,7 +628,12 @@ function genericOutline(root: TreeSitterNode, sourceBytes: Buffer): OutlineItem[
   return result;
 }
 
-function specializedOutline(language: string, source: string, totalLines: number, needsFallback: boolean): OutlineItem[] {
+function specializedOutline(
+  language: string,
+  source: string,
+  totalLines: number,
+  needsFallback: boolean,
+): OutlineItem[] {
   const hasSpecializedExtractor = ["elixir", "markdown", "nix", "zig"].includes(language);
   if (!hasSpecializedExtractor && !needsFallback) return [];
 
@@ -555,14 +658,22 @@ function specializedOutline(language: string, source: string, totalLines: number
 }
 
 function sectionRange(items: OutlineItem[]): string {
-  const spans = items.map((item) => item.span).filter((span): span is Span => typeof span?.startLine === "number");
+  const spans = items
+    .map((item) => item.span)
+    .filter((span): span is Span => typeof span?.startLine === "number");
   if (spans.length === 0) return "";
   const start = Math.min(...spans.map((span) => span.startLine ?? 0));
   const end = Math.max(...spans.map((span) => span.endLine ?? span.startLine ?? 0));
   return rangeText({ startLine: start, endLine: end, endColumn: 1 });
 }
 
-function formatOutline(path: string, language: string, totalLines: number, parseErrors: number, items: OutlineItem[]): { text: string; itemCount: number } {
+function formatOutline(
+  path: string,
+  language: string,
+  totalLines: number,
+  parseErrors: number,
+  items: OutlineItem[],
+): { text: string; itemCount: number } {
   const sections = new Map<SectionName, OutlineItem[]>();
   for (const item of items) {
     const section = sectionForKind(item.kind);
@@ -573,7 +684,10 @@ function formatOutline(path: string, language: string, totalLines: number, parse
 
   const lines = [`${path} (${totalLines} lines, ${language})`];
   let itemCount = 0;
-  if (parseErrors > 0) lines.push(`[tree-sitter recovered from ${parseErrors} parse error${parseErrors === 1 ? "" : "s"}; outline may be incomplete]`);
+  if (parseErrors > 0)
+    lines.push(
+      `[tree-sitter recovered from ${parseErrors} parse error${parseErrors === 1 ? "" : "s"}; outline may be incomplete]`,
+    );
 
   for (const section of SECTION_ORDER) {
     const sectionItems = sections.get(section);
@@ -593,7 +707,8 @@ function formatOutline(path: string, language: string, totalLines: number, parse
         itemCount += 1;
       }
     }
-    if (sectionItems.length > limited.length) lines.push(`  [${sectionItems.length - limited.length} more items truncated]`);
+    if (sectionItems.length > limited.length)
+      lines.push(`  [${sectionItems.length - limited.length} more items truncated]`);
   }
 
   if (itemCount === 0) {
@@ -614,16 +729,21 @@ export function detectLanguage(path: string, source: string, override?: string):
   const special = FILE_NAME_LANGUAGES[basename(path)];
   if (special) return special;
 
-  const detected = treeSitter.detectLanguageFromPath(path)
-    ?? treeSitter.detectLanguageFromExtension(extname(path).replace(/^\./, ""))
-    ?? treeSitter.detectLanguageFromContent(source);
+  const detected =
+    treeSitter.detectLanguageFromPath(path) ??
+    treeSitter.detectLanguageFromExtension(extname(path).replace(/^\./, "")) ??
+    treeSitter.detectLanguageFromContent(source);
   return detected ? (LANGUAGE_ALIASES[detected.toLowerCase()] ?? detected.toLowerCase()) : null;
 }
 
 export function indexSource(path: string, source: string, languageOverride?: string): IndexResult {
   const language = detectLanguage(path, source, languageOverride);
-  if (!language) throw new Error(`Unsupported file type for ${path}. Use read instead, or pass a Tree-sitter language name.`);
-  if (!treeSitter.hasLanguage(language)) throw new Error(`Tree-sitter language '${language}' is not available. Use read instead.`);
+  if (!language)
+    throw new Error(
+      `Unsupported file type for ${path}. Use read instead, or pass a Tree-sitter language name.`,
+    );
+  if (!treeSitter.hasLanguage(language))
+    throw new Error(`Tree-sitter language '${language}' is not available. Use read instead.`);
 
   const analysis = treeSitter.process(source, {
     language,
@@ -645,14 +765,18 @@ export function indexSource(path: string, source: string, languageOverride?: str
 
   const items: OutlineItem[] = [
     ...uniqueImports(analysis.imports ?? [], sourceBytes),
-    ...visibleStructures.slice(0, MAX_TOP_LEVEL_ITEMS).map((item) => structureToOutline(item, sourceBytes)),
+    ...visibleStructures
+      .slice(0, MAX_TOP_LEVEL_ITEMS)
+      .map((item) => structureToOutline(item, sourceBytes)),
     ...leftoverSymbols(symbols, structures, sourceBytes),
     ...uncoveredExports(analysis.exports ?? [], structures, symbols, sourceBytes),
   ];
 
   const needsFallback = structures.length === 0 && symbols.length === 0;
   const special = specializedOutline(language, source, totalLines, needsFallback);
-  const existingKeys = new Set(items.map((item) => `${item.kind}:${item.span?.startByte ?? ""}:${item.text}`));
+  const existingKeys = new Set(
+    items.map((item) => `${item.kind}:${item.span?.startByte ?? ""}:${item.text}`),
+  );
   for (const item of special) {
     const key = `${item.kind}:${item.span?.startByte ?? ""}:${item.text}`;
     if (!existingKeys.has(key)) items.push(item);

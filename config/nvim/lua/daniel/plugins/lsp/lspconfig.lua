@@ -135,6 +135,7 @@ return {
       "yamlls",
       "gopls",
       "rust_analyzer",
+      "nixd",
     }
 
     for _, server_name in ipairs(servers) do

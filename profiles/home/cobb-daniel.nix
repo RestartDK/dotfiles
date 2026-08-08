@@ -1,4 +1,9 @@
-{ config, lib, osConfig ? null, ... }:
+{
+  config,
+  lib,
+  osConfig ? null,
+  ...
+}:
 
 let
   hostName = if osConfig == null then "" else osConfig.networking.hostName or "";

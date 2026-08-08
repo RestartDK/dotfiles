@@ -112,7 +112,11 @@ function lastAssistantMessage(event: AgentEndEvent): string | undefined {
   return undefined;
 }
 
-function sendHook(subcommand: string, ctx: ExtensionContext, extra: Record<string, unknown> = {}): void {
+function sendHook(
+  subcommand: string,
+  ctx: ExtensionContext,
+  extra: Record<string, unknown> = {},
+): void {
   if (process.env.CMUX_PI_HOOKS_DISABLED === "1") return;
   if (!process.env.CMUX_SURFACE_ID) return;
 

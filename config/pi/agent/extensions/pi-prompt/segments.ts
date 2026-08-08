@@ -1,8 +1,18 @@
 import { hostname as osHostname } from "node:os";
 import { basename } from "node:path";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { BuiltinStatusLineSegmentId, RenderedSegment, SegmentContext, SemanticColor, StatusLineSegment, StatusLineSegmentId } from "./types.ts";
-import { normalizeCompactExtensionStatus, normalizeExtensionStatusValue } from "./powerline-config.ts";
+import type {
+  BuiltinStatusLineSegmentId,
+  RenderedSegment,
+  SegmentContext,
+  SemanticColor,
+  StatusLineSegment,
+  StatusLineSegmentId,
+} from "./types.ts";
+import {
+  normalizeCompactExtensionStatus,
+  normalizeExtensionStatusValue,
+} from "./powerline-config.ts";
 import { fg, rainbow, applyColor } from "./theme.ts";
 import { getIcons, SEP_DOT, getThinkingText } from "./icons.ts";
 
@@ -136,7 +146,10 @@ function formatGitIndicator(symbol: string, count: number): string {
   return count === 1 ? symbol : `${symbol}${count}`;
 }
 
-function formatGitRelation(ahead: number | null, behind: number | null): {
+function formatGitRelation(
+  ahead: number | null,
+  behind: number | null,
+): {
   content: string;
   color: "error" | "warning" | "success";
 } | null {
@@ -178,7 +191,8 @@ const gitSegment: StatusLineSegment = {
     const showUnstaged = opts.showUnstaged !== false;
     const showUntracked = opts.showUntracked !== false;
     const showDetails = showStaged || showUnstaged || showUntracked;
-    const isDirty = conflicted + deleted + renamed + modified + staged + untracked + typechanged > 0;
+    const isDirty =
+      conflicted + deleted + renamed + modified + staged + untracked + typechanged > 0;
     const branchColor: SemanticColor = isDirty ? "gitDirty" : "gitClean";
     const statusSymbols = showDetails
       ? [
@@ -195,8 +209,10 @@ const gitSegment: StatusLineSegment = {
     const details: string[] = [];
 
     if (statusSymbols || relation) {
-      const indicatorColor = statusSymbols ? "error" : relation?.color ?? "error";
-      details.push(applyColor(ctx.theme, indicatorColor, `[${statusSymbols}${relation?.content ?? ""}]`));
+      const indicatorColor = statusSymbols ? "error" : (relation?.color ?? "error");
+      details.push(
+        applyColor(ctx.theme, indicatorColor, `[${statusSymbols}${relation?.content ?? ""}]`),
+      );
     }
     if (showDetails && linesAdded > 0) {
       details.push(applyColor(ctx.theme, "success", `+${linesAdded}`));
@@ -503,7 +519,9 @@ function renderCustomSegment(id: `custom:${string}`, ctx: SegmentContext): Rende
   const rawStatus = ctx.extensionStatuses.get(custom.statusKey);
   const normalizedStatus = rawStatus ? normalizeExtensionStatusValue(rawStatus) : null;
   if (!normalizedStatus) {
-    return custom.hideWhenMissing ? { content: "", visible: false } : { content: custom.prefix ?? custom.id, visible: true };
+    return custom.hideWhenMissing
+      ? { content: "", visible: false }
+      : { content: custom.prefix ?? custom.id, visible: true };
   }
 
   let content = normalizedStatus;

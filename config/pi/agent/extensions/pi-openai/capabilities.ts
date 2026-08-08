@@ -88,31 +88,26 @@ const CONTEXT_REQUEST_TIMEOUT_MS = 180_000;
 const CONTEXT_TRUNCATION_RESERVE_TOKENS = 3_000;
 const MAX_CONTEXT_PROBE_TOKENS = 4_500_000;
 const PI_THINKING_LEVELS: PiThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
-const REASONING_EFFORTS: OpenAIReasoningEffort[] = ["none", "minimal", "low", "medium", "high", "xhigh"];
-const ENABLED_REASONING_EFFORTS: OpenAIReasoningEffort[] = ["minimal", "low", "medium", "high", "xhigh"];
+const REASONING_EFFORTS: OpenAIReasoningEffort[] = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+];
+const ENABLED_REASONING_EFFORTS: OpenAIReasoningEffort[] = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+];
 const PROBE_IMAGE =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const COMMON_CONTEXT_WINDOWS = [
-  4_096,
-  8_192,
-  16_384,
-  32_768,
-  65_536,
-  114_688,
-  128_000,
-  131_072,
-  200_000,
-  256_000,
-  262_144,
-  272_000,
-  400_000,
-  524_288,
-  1_000_000,
-  1_047_576,
-  1_048_576,
-  1_050_000,
-  2_000_000,
-  2_097_152,
+  4_096, 8_192, 16_384, 32_768, 65_536, 114_688, 128_000, 131_072, 200_000, 256_000, 262_144,
+  272_000, 400_000, 524_288, 1_000_000, 1_047_576, 1_048_576, 1_050_000, 2_000_000, 2_097_152,
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -142,14 +137,22 @@ function normalizeThinkingLevelMap(value: unknown): ThinkingLevelMap | undefined
 }
 
 function normalizeTimedSupport(value: unknown): TimedSupport | undefined {
-  if (!isRecord(value) || typeof value.checkedAt !== "number" || typeof value.supported !== "boolean") {
+  if (
+    !isRecord(value) ||
+    typeof value.checkedAt !== "number" ||
+    typeof value.supported !== "boolean"
+  ) {
     return undefined;
   }
   return { checkedAt: value.checkedAt, supported: value.supported };
 }
 
 function normalizeTimedReasoning(value: unknown): TimedReasoning | undefined {
-  if (!isRecord(value) || typeof value.checkedAt !== "number" || typeof value.reasoning !== "boolean") {
+  if (
+    !isRecord(value) ||
+    typeof value.checkedAt !== "number" ||
+    typeof value.reasoning !== "boolean"
+  ) {
     return undefined;
   }
 
@@ -164,7 +167,8 @@ function normalizeTimedReasoning(value: unknown): TimedReasoning | undefined {
 }
 
 function normalizeTimedContextWindow(value: unknown): TimedContextWindow | undefined {
-  if (!isRecord(value) || typeof value.checkedAt !== "number" || !isPositiveInteger(value.value)) return undefined;
+  if (!isRecord(value) || typeof value.checkedAt !== "number" || !isPositiveInteger(value.value))
+    return undefined;
   return { checkedAt: value.checkedAt, value: value.value };
 }
 
@@ -173,7 +177,8 @@ function emptyCache(): CapabilityCache {
 }
 
 function normalizeCurrentCache(value: unknown): CapabilityCache | undefined {
-  if (!isRecord(value) || value.version !== CACHE_VERSION || !isRecord(value.models)) return undefined;
+  if (!isRecord(value) || value.version !== CACHE_VERSION || !isRecord(value.models))
+    return undefined;
 
   const cache = emptyCache();
   for (const [id, candidate] of Object.entries(value.models)) {
@@ -264,9 +269,7 @@ function getModelEntry(cache: CapabilityCache, model: LiveOpenAIModel): Capabili
   const existing = cache.models[model.id];
   if (existing && entryMatchesModel(existing, model)) return existing;
 
-  const entry: CapabilityCacheEntry = {
-    ...(model.created !== undefined ? { created: model.created } : {}),
-  };
+  const entry: CapabilityCacheEntry = model.created !== undefined ? { created: model.created } : {};
   cache.models[model.id] = entry;
   return entry;
 }
@@ -369,7 +372,9 @@ async function probeReasoningEffort(
   return { effort, outcome: "unknown" };
 }
 
-function reasoningResult(supportedEfforts: ReadonlySet<OpenAIReasoningEffort>): ReasoningProbeResult {
+function reasoningResult(
+  supportedEfforts: ReadonlySet<OpenAIReasoningEffort>,
+): ReasoningProbeResult {
   const reasoning = ENABLED_REASONING_EFFORTS.some((effort) => supportedEfforts.has(effort));
   if (!reasoning) return { reasoning: false };
 
@@ -386,7 +391,10 @@ function reasoningResult(supportedEfforts: ReadonlySet<OpenAIReasoningEffort>): 
   };
 }
 
-async function probeReasoning(apiKey: string, modelId: string): Promise<ReasoningProbeResult | undefined> {
+async function probeReasoning(
+  apiKey: string,
+  modelId: string,
+): Promise<ReasoningProbeResult | undefined> {
   const minimal = await probeReasoningEffort(apiKey, modelId, "minimal");
   if (minimal.advertisedEfforts) return reasoningResult(new Set(minimal.advertisedEfforts));
 
@@ -445,7 +453,8 @@ function extractInputTokenCount(body: string): number | undefined {
 function extractUsedInputTokens(body: string): number | undefined {
   try {
     const value = JSON.parse(body) as unknown;
-    if (!isRecord(value) || !isRecord(value.usage) || !isPositiveInteger(value.usage.input_tokens)) return undefined;
+    if (!isRecord(value) || !isRecord(value.usage) || !isPositiveInteger(value.usage.input_tokens))
+      return undefined;
     return value.usage.input_tokens;
   } catch {
     return undefined;
@@ -453,12 +462,15 @@ function extractUsedInputTokens(body: string): number | undefined {
 }
 
 function contextWindowCandidates(knownContextWindows: readonly number[]): number[] {
-  return Array.from(new Set([...COMMON_CONTEXT_WINDOWS, ...knownContextWindows].filter(isPositiveInteger))).sort(
-    (a, b) => a - b,
-  );
+  return Array.from(
+    new Set([...COMMON_CONTEXT_WINDOWS, ...knownContextWindows].filter(isPositiveInteger)),
+  ).sort((a, b) => a - b);
 }
 
-function inferContextWindow(retainedInputTokens: number, knownContextWindows: readonly number[]): number {
+function inferContextWindow(
+  retainedInputTokens: number,
+  knownContextWindows: readonly number[],
+): number {
   const estimated = retainedInputTokens + CONTEXT_TRUNCATION_RESERVE_TOKENS;
   const candidates = contextWindowCandidates(knownContextWindows);
   const nearest = candidates.reduce((best, candidate) =>
@@ -469,7 +481,11 @@ function inferContextWindow(retainedInputTokens: number, knownContextWindows: re
   return Math.max(1_000, Math.round(estimated / 1_000) * 1_000);
 }
 
-async function countProbeInputTokens(apiKey: string, modelId: string, input: string): Promise<number | undefined> {
+async function countProbeInputTokens(
+  apiKey: string,
+  modelId: string,
+  input: string,
+): Promise<number | undefined> {
   const result = await postProbe(
     apiKey,
     "responses/input_tokens",

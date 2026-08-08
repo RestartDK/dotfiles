@@ -1,6 +1,6 @@
 /**
  * Theme system for pi-prompt
- * 
+ *
  * Colors are resolved in order:
  * 1. User overrides from theme.json (if exists)
  * 2. Preset colors
@@ -20,9 +20,9 @@ export interface PowerlineThemeConfig {
 
 // Default color scheme (uses pi theme colors)
 const DEFAULT_COLORS: Required<ColorScheme> = {
-  model: "#d787af",  // Pink/mauve (matching original colors.ts)
+  model: "#d787af", // Pink/mauve (matching original colors.ts)
   shellMode: "accent",
-  path: "#00afaf",  // Teal/cyan (matching original colors.ts)
+  path: "#00afaf", // Teal/cyan (matching original colors.ts)
   gitDirty: "warning",
   gitClean: "success",
   thinking: "thinkingOff",
@@ -40,8 +40,14 @@ const DEFAULT_COLORS: Required<ColorScheme> = {
 
 // Rainbow colors for high thinking levels
 const RAINBOW_COLORS = [
-  "#b281d6", "#d787af", "#febc38", "#e4c00f", 
-  "#89d281", "#00afaf", "#178fb9", "#b281d6",
+  "#b281d6",
+  "#d787af",
+  "#febc38",
+  "#e4c00f",
+  "#89d281",
+  "#00afaf",
+  "#178fb9",
+  "#b281d6",
 ];
 
 // Cache for user theme overrides
@@ -132,16 +138,11 @@ function loadUserTheme(): ColorScheme {
 /**
  * Resolve a semantic color to an actual color value
  */
-export function resolveColor(
-  semantic: SemanticColor,
-  presetColors?: ColorScheme
-): ColorValue {
+export function resolveColor(semantic: SemanticColor, presetColors?: ColorScheme): ColorValue {
   const userTheme = loadUserTheme();
-  
+
   // Priority: user overrides > preset colors > defaults
-  return userTheme[semantic] 
-    ?? presetColors?.[semantic] 
-    ?? DEFAULT_COLORS[semantic];
+  return userTheme[semantic] ?? presetColors?.[semantic] ?? DEFAULT_COLORS[semantic];
 }
 
 /**
@@ -165,11 +166,7 @@ function hexToAnsi(hex: string): string {
 /**
  * Apply a color to text using the pi theme or custom hex
  */
-export function applyColor(
-  theme: ThemeLike,
-  color: ColorValue,
-  text: string
-): string {
+export function applyColor(theme: ThemeLike, color: ColorValue, text: string): string {
   if (isHexColor(color)) {
     return `${hexToAnsi(color)}${text}\x1b[0m`;
   }
@@ -196,7 +193,7 @@ export function fg(
   theme: ThemeLike,
   semantic: SemanticColor,
   text: string,
-  presetColors?: ColorScheme
+  presetColors?: ColorScheme,
 ): string {
   const color = resolveColor(semantic, presetColors);
   return applyColor(theme, color, text);

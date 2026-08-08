@@ -13,8 +13,8 @@ trap 'rm -f "$hook_input_file"' EXIT HUP INT TERM
 cat >"$hook_input_file" 2>/dev/null || true
 
 case "$action" in
-  session) ;;
-  *) exit 0 ;;
+session) ;;
+*) exit 0 ;;
 esac
 
 [ "${HERDR_ENV:-}" = "1" ] || exit 0

@@ -1,4 +1,6 @@
-function icon_map() {
+#!/bin/sh
+
+icon_map() {
   case "$1" in
   "Keynote" | "Keynote 讲演")
     icon_result=":keynote:"

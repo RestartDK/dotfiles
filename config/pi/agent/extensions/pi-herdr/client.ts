@@ -53,7 +53,11 @@ export class HerdrClient {
     this.#endpoint = process.platform === "win32" ? `\\\\.\\pipe\\${socketPath}` : socketPath;
   }
 
-  call<M extends Method>(method: M, params: ParamsFor<M>, options: CallOptions = {}): Promise<ResponseResult> {
+  call<M extends Method>(
+    method: M,
+    params: ParamsFor<M>,
+    options: CallOptions = {},
+  ): Promise<ResponseResult> {
     const id = `pi-herdr:${process.pid}:${Date.now()}:${++this.#requestId}`;
     const request = { id, method, params } as RequestFor<M>;
 
@@ -81,7 +85,10 @@ export class HerdrClient {
       options.signal?.addEventListener("abort", onAbort, { once: true });
 
       if (options.timeoutMs != null) {
-        timeout = setTimeout(() => finish(new Error(`Herdr request '${method}' timed out`)), options.timeoutMs);
+        timeout = setTimeout(
+          () => finish(new Error(`Herdr request '${method}' timed out`)),
+          options.timeoutMs,
+        );
         timeout.unref?.();
       }
 
@@ -98,7 +105,9 @@ export class HerdrClient {
         }
       });
       socket.on("error", (error) => finish(error));
-      socket.on("end", () => finish(new Error(`Herdr closed the socket before replying to '${method}'`)));
+      socket.on("end", () =>
+        finish(new Error(`Herdr closed the socket before replying to '${method}'`)),
+      );
     });
   }
 }

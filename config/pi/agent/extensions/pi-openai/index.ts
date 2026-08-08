@@ -35,7 +35,9 @@ function isPublicSnapshot(id: string): boolean {
 }
 
 function isNonChatModel(id: string): boolean {
-  return /embedding|image|tts|audio|transcribe|whisper|moderation|dall-e|search-api|realtime/i.test(id);
+  return /embedding|image|tts|audio|transcribe|whisper|moderation|dall-e|search-api|realtime/i.test(
+    id,
+  );
 }
 
 function shouldExposeLiveModel(id: string): boolean {
@@ -44,7 +46,12 @@ function shouldExposeLiveModel(id: string): boolean {
   if (isPublicSnapshot(lower)) return false;
   if (isNonChatModel(lower)) return false;
 
-  return lower.startsWith("gpt-") || /^o\d/.test(lower) || lower.includes("alpha") || lower.includes("codex");
+  return (
+    lower.startsWith("gpt-") ||
+    /^o\d/.test(lower) ||
+    lower.includes("alpha") ||
+    lower.includes("codex")
+  );
 }
 
 function fromBuiltInModel(model: Model<Api>) {
@@ -149,17 +156,21 @@ export default async function (pi: ExtensionAPI) {
       imageInput: false,
     };
     const now = Date.now();
-    const resolved = await mapWithConcurrency(liveModels, CAPABILITY_PROBE_CONCURRENCY, async (model) => ({
-      model,
-      capabilities: await resolveModelCapabilities(
-        apiKey,
+    const resolved = await mapWithConcurrency(
+      liveModels,
+      CAPABILITY_PROBE_CONCURRENCY,
+      async (model) => ({
         model,
-        fallback,
-        knownContextWindows,
-        cacheState,
-        now,
-      ),
-    }));
+        capabilities: await resolveModelCapabilities(
+          apiKey,
+          model,
+          fallback,
+          knownContextWindows,
+          cacheState,
+          now,
+        ),
+      }),
+    );
 
     for (const { model, capabilities } of resolved) {
       if (capabilities.responses === false) continue;

@@ -28,7 +28,7 @@ function normalizeLines(lines: string[] | undefined, width: number): string[] {
 
   return lines
     .filter((line) => line !== undefined && line !== null)
-    .map((line) => visibleWidth(line) > width ? truncateToWidth(line, width, "", true) : line);
+    .map((line) => (visibleWidth(line) > width ? truncateToWidth(line, width, "", true) : line));
 }
 
 function takeTail(lines: string[], count: number): string[] {
@@ -46,7 +46,12 @@ function capEditorLines(lines: string[], count: number): string[] {
     return lines.slice(start, start + count);
   }
 
-  const selectedRow = lines.findIndex((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimStart().startsWith("→ "));
+  const selectedRow = lines.findIndex((line) =>
+    line
+      .replace(/\x1b\[[0-9;]*m/g, "")
+      .trimStart()
+      .startsWith("→ "),
+  );
   if (selectedRow === -1) {
     return lines.slice(0, count);
   }

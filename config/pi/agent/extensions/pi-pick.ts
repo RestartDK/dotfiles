@@ -17,14 +17,17 @@ function textFromContent(content: unknown): string {
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("pick", {
-    description: "Start a new empty session using a previous user or assistant message as the prompt",
+    description:
+      "Start a new empty session using a previous user or assistant message as the prompt",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle();
 
       const sourceSession = ctx.sessionManager.getSessionFile();
       const messages = ctx.sessionManager
         .getBranch()
-        .filter((entry: any) => entry.message?.role === "user" || entry.message?.role === "assistant")
+        .filter(
+          (entry: any) => entry.message?.role === "user" || entry.message?.role === "assistant",
+        )
         .map((entry: any, index: number) => {
           const role = entry.message.role === "assistant" ? "assistant" : "user";
           const text = textFromContent(entry.message.content);

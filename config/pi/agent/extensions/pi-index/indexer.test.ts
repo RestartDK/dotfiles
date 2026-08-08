@@ -52,14 +52,7 @@ test("indexes Rust imports, constants, impl methods, and functions", () => {
 });
 
 test("uses Tree-sitter headings to map Markdown sections", () => {
-  const source = [
-    "# First",
-    "intro",
-    "## Child",
-    "details",
-    "# Second",
-    "ending",
-  ].join("\n");
+  const source = ["# First", "intro", "## Child", "details", "# Second", "ending"].join("\n");
 
   const result = indexSource("README.md", source);
   assert.equal(result.language, "markdown");
@@ -76,7 +69,7 @@ test("maps top-level Nix module bindings without dumping nested bodies", () => {
     "  helper = x: x + 1;",
     "in",
     "{",
-    "  options.test.enable = lib.mkEnableOption \"test\";",
+    '  options.test.enable = lib.mkEnableOption "test";',
     "  config = lib.mkIf config.test.enable { environment.systemPackages = [ pkgs.git ]; };",
     "}",
   ].join("\n");

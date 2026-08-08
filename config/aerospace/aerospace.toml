@@ -53,81 +53,81 @@ key-mapping.preset = 'qwerty'
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
 [workspace-to-monitor-force-assignment]
-A = 'main'                       # Main monitor
+A = 'main' # Main monitor
 
 [gaps]
 inner.horizontal = 10
-inner.vertical =   10
-outer.left =       10
-outer.bottom =     10
-outer.top =        10
-outer.right =      10
+inner.vertical = 10
+outer.left = 10
+outer.bottom = 10
+outer.top = 10
+outer.right = 10
 
 # Custom config for speciic apps
 [[on-window-detected]]
-  if.app-id = 'com.timpler.screenstudio'
-  check-further-callbacks = true
-  run = 'layout floating'
+if.app-id = 'com.timpler.screenstudio'
+check-further-callbacks = true
+run = 'layout floating'
 
 [[on-window-detected]]
-    if.app-id = 'com.mitchellh.ghostty'
-    run = 'move-node-to-workspace T' # mnemonics T - Terminal
+if.app-id = 'com.mitchellh.ghostty'
+run = 'move-node-to-workspace T'    # mnemonics T - Terminal
 
 [[on-window-detected]]
-    if.app-id = 'app.zen-browser.zen'
-    run = 'move-node-to-workspace B' # mnemonics B - Browser
+if.app-id = 'app.zen-browser.zen'
+run = 'move-node-to-workspace B'  # mnemonics B - Browser
 
 [[on-window-detected]]
-    if.app-id = 'com.anthropic.claudefordesktop'
-    run = 'move-node-to-workspace B' # mnemonics B - Browser
+if.app-id = 'com.anthropic.claudefordesktop'
+run = 'move-node-to-workspace B'             # mnemonics B - Browser
 
 [[on-window-detected]]
-    if.app-id = 'md.obsidian'
-    run = 'move-node-to-workspace A' # mnemonics A - All
+if.app-id = 'md.obsidian'
+run = 'move-node-to-workspace A' # mnemonics A - All
 
 [[on-window-detected]]
-    if.app-id = 'com.apple.mail'
-    run = 'move-node-to-workspace M' # mnemonics M - Messages
+if.app-id = 'com.apple.mail'
+run = 'move-node-to-workspace M' # mnemonics M - Messages
 
 [[on-window-detected]]
-    if.app-id = 'com.tinyspeck.slackmacgap'
-    run = 'move-node-to-workspace M' # mnemonics M - Messages
+if.app-id = 'com.tinyspeck.slackmacgap'
+run = 'move-node-to-workspace M'        # mnemonics M - Messages
 
 [[on-window-detected]]
-    if.app-id = 'com.hnc.Discord'
-    run = 'move-node-to-workspace M' # mnemonics M - Messages
+if.app-id = 'com.hnc.Discord'
+run = 'move-node-to-workspace M' # mnemonics M - Messages
 
 [[on-window-detected]]
-    if.app-id = 'com.apple.iCal'
-    run = 'move-node-to-workspace A' # mnemonics A - All
+if.app-id = 'com.apple.iCal'
+run = 'move-node-to-workspace A' # mnemonics A - All
 
 [[on-window-detected]]
-    if.app-id = 'com.todoist.mac.Todoist'
-    run = 'move-node-to-workspace A' # mnemonics P - All
+if.app-id = 'com.todoist.mac.Todoist'
+run = 'move-node-to-workspace A'      # mnemonics P - All
 
 [[on-window-detected]]
-    if.app-id = 'notion.id'
-    run = 'move-node-to-workspace M' # mnemonics A - All
+if.app-id = 'notion.id'
+run = 'move-node-to-workspace M' # mnemonics A - All
 
 [[on-window-detected]]
-    if.app-id = 'com.linear'
-    run = 'move-node-to-workspace M' # mnemonics A - All
+if.app-id = 'com.linear'
+run = 'move-node-to-workspace M' # mnemonics A - All
 
 [[on-window-detected]]
-    if.app-id = 'com.todesktop.230313mzl4w4u92'
-    run = 'move-node-to-workspace E' # mnemonics E - Editor
+if.app-id = 'com.todesktop.230313mzl4w4u92'
+run = 'move-node-to-workspace E'            # mnemonics E - Editor
 
 [[on-window-detected]]
-    if.app-id = 'com.spotify.client'
-    run = 'move-node-to-workspace S' # mnemonics S - Spotify
+if.app-id = 'com.spotify.client'
+run = 'move-node-to-workspace S' # mnemonics S - Spotify
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
 # 'main' binding mode must be always presented
 # Fallback value (if you omit the key): mode.main.binding = {}
 [mode.main.binding]
-    cmd-h = [] # Disable "hide application"
-    cmd-alt-h = [] # Disable "hide others"
+cmd-h = []     # Disable "hide application"
+cmd-alt-h = [] # Disable "hide others"
 
 # All possible keys:
 # - Letters.        a, b, c, ..., z
@@ -202,7 +202,10 @@ alt-shift-semicolon = 'mode service'
 [mode.service.binding]
 esc = ['reload-config', 'mode main']
 r = ['flatten-workspace-tree', 'mode main'] # reset layout
-f = ['layout floating tiling', 'mode main'] # Toggle between floating and tiling layout
+f = [
+  'layout floating tiling',
+  'mode main',
+] # Toggle between floating and tiling layout
 backspace = ['close-all-windows-but-current', 'mode main']
 
 # sticky is not yet supported https://github.com/nikitabobko/AeroSpace/issues/2

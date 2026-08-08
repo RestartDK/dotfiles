@@ -1,4 +1,10 @@
-{ config, dotfilesInputs, lib, pkgs, ... }:
+{
+  config,
+  dotfilesInputs,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.piNetnsWrapper;
@@ -399,8 +405,7 @@ let
   '';
 in
 {
-  options.my.piNetnsWrapper.enable =
-    lib.mkEnableOption "Pi and Herdr integration with Cobb development network namespaces";
+  options.my.piNetnsWrapper.enable = lib.mkEnableOption "Pi and Herdr integration with Cobb development network namespaces";
 
   config = lib.mkIf cfg.enable {
     home.packages = [ piWrapper ];

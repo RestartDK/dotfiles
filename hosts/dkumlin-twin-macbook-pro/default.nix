@@ -57,7 +57,6 @@
       "cormacrelf/tap/dark-notify"
       "deno"
       "dfu-util"
-      "dockutil"
       "eza"
       "fastfetch"
       "ffmpeg"
@@ -144,13 +143,17 @@
     defaults.dock = {
       autohide = true;
       orientation = "left";
+      persistent-apps = [
+        "/Applications/Slack.app"
+        "/Applications/Linear.app"
+        "/Applications/Helium.app"
+        "/Applications/Ghostty.app"
+        "/Applications/Obsidian.app"
+      ];
       show-recents = false;
       tilesize = 51;
     };
 
-    # nix-darwin's built-in Dock persistent-apps currently writes minimal Dock
-    # tiles that can show up as question marks on recent macOS. Use dockutil
-    # after Homebrew activation so the Dock gets proper LaunchServices entries.
     activationScripts.postActivation.text = ''
       runAsUser() {
         launchctl asuser "$(id -u -- danielkumlin)" sudo --user=danielkumlin --set-home -- "$@"
@@ -161,30 +164,6 @@
       runAsUser /usr/bin/defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 '{ enabled = 0; value = { parameters = (32, 49, 1572864); type = standard; }; }'
       if [[ -x /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings ]]; then
         runAsUser /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u || true
-      fi
-
-      dockutil=/opt/homebrew/bin/dockutil
-      if [[ -x "$dockutil" ]]; then
-        echo >&2 "configuring Dock items with dockutil..."
-        runAsUser "$dockutil" --remove all --no-restart || true
-        for app in \
-          "/Applications/Slack.app" \
-          "/Applications/Linear.app" \
-          "/Applications/Cursor.app" \
-          "/Applications/Codex.app" \
-          "/Applications/Helium.app" \
-          "/Applications/Ghostty.app" \
-          "/Applications/Obsidian.app"
-        do
-          if [[ -e "$app" ]]; then
-            runAsUser "$dockutil" --add "$app" --no-restart
-          else
-            echo >&2 "skipping missing Dock item: $app"
-          fi
-        done
-        killall -qu danielkumlin Dock || true
-      else
-        echo >&2 "dockutil not found; skipping Dock item configuration"
       fi
     '';
 

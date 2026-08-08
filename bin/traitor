@@ -30,7 +30,7 @@ EOF
 find_flake_up() {
   local dir
   dir="$(cd "${1:-.}" 2>/dev/null && pwd -P)" || return 1
-  while [[ "$dir" != / ]]; do
+  while [[ $dir != / ]]; do
     if [[ -f "$dir/flake.nix" ]]; then
       printf '%s\n' "$dir"
       return 0
@@ -45,14 +45,14 @@ resolve_flake_dir() {
   candidates+=("${FLAKE_DIR:-}")
   candidates+=("$(find_flake_up "$PWD" 2>/dev/null || true)")
   candidates+=("${DOTFILES:-}")
-  if [[ -n "${DOTFILES_BIN:-}" ]]; then
+  if [[ -n ${DOTFILES_BIN:-} ]]; then
     candidates+=("$(dirname "$DOTFILES_BIN")")
   fi
   candidates+=("$HOME/.config/dotfiles")
 
   local candidate
   for candidate in "${candidates[@]}"; do
-    [[ -n "$candidate" ]] || continue
+    [[ -n $candidate ]] || continue
     candidate="${candidate/#\~/$HOME}"
     if [[ -f "$candidate/flake.nix" ]]; then
       cd "$candidate" >/dev/null 2>&1 && pwd -P
@@ -69,7 +69,7 @@ is_darwin() {
 }
 
 current_host_attr() {
-  if [[ -n "${FLAKE_HOST:-}" ]]; then
+  if [[ -n ${FLAKE_HOST:-} ]]; then
     printf '%s\n' "$FLAKE_HOST"
     return 0
   fi
@@ -77,10 +77,10 @@ current_host_attr() {
   local short
   short="$(hostname -s 2>/dev/null || hostname)"
   case "$short" in
-    srv-nana|nana) printf '%s\n' "srv-nana" ;;
-    dkumlin-macbook-pro) printf '%s\n' "dkumlin-macbook-pro" ;;
-    dkumlin-twin-macbook-pro) printf '%s\n' "dkumlin-twin-macbook-pro" ;;
-    *) printf '%s\n' "$short" ;;
+  srv-nana | nana) printf '%s\n' "srv-nana" ;;
+  dkumlin-macbook-pro) printf '%s\n' "dkumlin-macbook-pro" ;;
+  dkumlin-twin-macbook-pro) printf '%s\n' "dkumlin-twin-macbook-pro" ;;
+  *) printf '%s\n' "$short" ;;
   esac
 }
 
@@ -178,66 +178,66 @@ cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
-  help|-h|--help)
-    usage
-    ;;
-  path)
-    resolve_flake_dir
-    ;;
-  re|rebuild)
-    run_rebuild "${1:-switch}" "${@:2}"
-    ;;
-  test)
-    run_rebuild test "$@"
-    ;;
-  rollback)
-    run_rollback
-    ;;
-  check)
-    flake_dir="$(resolve_flake_dir)"
-    cd "$flake_dir"
-    nix flake check "$@"
-    ;;
-  update)
-    flake_dir="$(resolve_flake_dir)"
-    cd "$flake_dir"
-    if (($#)); then
-      for input in "$@"; do
-        nix flake update "$input"
-      done
-    else
-      nix flake update
-    fi
-    ;;
-  upgrade)
-    flake_dir="$(resolve_flake_dir)"
-    cd "$flake_dir"
+help | -h | --help)
+  usage
+  ;;
+path)
+  resolve_flake_dir
+  ;;
+re | rebuild)
+  run_rebuild "${1:-switch}" "${@:2}"
+  ;;
+test)
+  run_rebuild test "$@"
+  ;;
+rollback)
+  run_rollback
+  ;;
+check)
+  flake_dir="$(resolve_flake_dir)"
+  cd "$flake_dir"
+  nix flake check "$@"
+  ;;
+update)
+  flake_dir="$(resolve_flake_dir)"
+  cd "$flake_dir"
+  if (($#)); then
+    for input in "$@"; do
+      nix flake update "$input"
+    done
+  else
     nix flake update
-    run_rebuild switch
-    ;;
-  show)
-    flake_dir="$(resolve_flake_dir)"
-    cd "$flake_dir"
-    nix flake show
-    ;;
-  twin)
-    flake_dir="$(resolve_flake_dir)"
-    cd "$flake_dir"
-    nix run github:nix-community/home-manager/release-26.05 -- switch --flake "$flake_dir#twin" -b hm-backup "$@"
-    ;;
-  nana)
-    FLAKE_HOST=srv-nana run_rebuild switch "$@"
-    ;;
-  mac)
-    FLAKE_HOST=dkumlin-macbook-pro run_rebuild switch "$@"
-    ;;
-  work-mac)
-    FLAKE_HOST=dkumlin-twin-macbook-pro run_rebuild switch "$@"
-    ;;
-  *)
-    echo "traitor: unknown command: $cmd" >&2
-    echo >&2
-    usage >&2
-    exit 2
-    ;;
+  fi
+  ;;
+upgrade)
+  flake_dir="$(resolve_flake_dir)"
+  cd "$flake_dir"
+  nix flake update
+  run_rebuild switch
+  ;;
+show)
+  flake_dir="$(resolve_flake_dir)"
+  cd "$flake_dir"
+  nix flake show
+  ;;
+twin)
+  flake_dir="$(resolve_flake_dir)"
+  cd "$flake_dir"
+  nix run github:nix-community/home-manager/release-26.05 -- switch --flake "$flake_dir#twin" -b hm-backup "$@"
+  ;;
+nana)
+  FLAKE_HOST=srv-nana run_rebuild switch "$@"
+  ;;
+mac)
+  FLAKE_HOST=dkumlin-macbook-pro run_rebuild switch "$@"
+  ;;
+work-mac)
+  FLAKE_HOST=dkumlin-twin-macbook-pro run_rebuild switch "$@"
+  ;;
+*)
+  echo "traitor: unknown command: $cmd" >&2
+  echo >&2
+  usage >&2
+  exit 2
+  ;;
 esac

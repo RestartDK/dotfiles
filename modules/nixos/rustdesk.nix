@@ -29,7 +29,10 @@ in
   # commit it to this repo.
   systemd.services.rustdesk = {
     description = "RustDesk remote desktop service";
-    after = [ "network-online.target" "display-manager.service" ];
+    after = [
+      "network-online.target"
+      "display-manager.service"
+    ];
     wants = [ "network-online.target" ];
     wantedBy = [ "graphical.target" ];
 

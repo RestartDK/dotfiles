@@ -15,7 +15,10 @@ export function getPromptStateDir(): string {
     try {
       renameSync(legacyDir, promptDir);
     } catch (error) {
-      console.debug(`[pi-prompt] Failed to migrate state from ${legacyDir} to ${promptDir}:`, error);
+      console.debug(
+        `[pi-prompt] Failed to migrate state from ${legacyDir} to ${promptDir}:`,
+        error,
+      );
       stateDir = legacyDir;
       return stateDir;
     }

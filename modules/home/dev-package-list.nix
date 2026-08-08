@@ -1,4 +1,14 @@
-{ pkgs, inputs, agentPackageNames ? [ "agent-browser" "codex" "claude-code" "opencode" "pi-coding-agent" ] }:
+{
+  pkgs,
+  inputs,
+  agentPackageNames ? [
+    "agent-browser"
+    "codex"
+    "claude-code"
+    "opencode"
+    "pi-coding-agent"
+  ],
+}:
 
 let
   llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
@@ -15,7 +25,8 @@ let
       throw "unknown agent package: ${name}"
   ) agentPackageNames;
 in
-with pkgs; [
+with pkgs;
+[
   eza
   fd
   ripgrep
@@ -53,6 +64,16 @@ with pkgs; [
   imagemagick
 
   neovim
+  nixd
+  nixfmt
+  deadnix
+  statix
+  actionlint
+  shellcheck
+  shfmt
+  oxlint
+  oxfmt
+  taplo
   gnumake
   nodejs
   pnpm
@@ -60,6 +81,8 @@ with pkgs; [
   unzip
   stylua
 
-] ++ lib.optionals stdenv.hostPlatform.isLinux [
+]
+++ lib.optionals stdenv.hostPlatform.isLinux [
   gcc
-] ++ agentPackages
+]
+++ agentPackages

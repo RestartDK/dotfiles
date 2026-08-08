@@ -1,7 +1,11 @@
 import { readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import type { AutocompleteItem, AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
+import type {
+  AutocompleteItem,
+  AutocompleteProvider,
+  AutocompleteSuggestions,
+} from "@earendil-works/pi-tui";
 import { matchHistoryEntries, readGlobalShellHistory, readProjectHistory } from "./history.ts";
 import type { ExtendedCompletionItem, GhostSuggestion } from "./types.ts";
 
@@ -24,9 +28,34 @@ export interface OneOffBashCommandContext {
 }
 
 const GIT_SUBCOMMANDS = [
-  "add", "bisect", "branch", "checkout", "cherry-pick", "clean", "clone", "commit", "diff", "fetch",
-  "grep", "init", "log", "merge", "mv", "pull", "push", "rebase", "reset", "restore", "revert", "rm",
-  "show", "stash", "status", "switch", "tag", "worktree",
+  "add",
+  "bisect",
+  "branch",
+  "checkout",
+  "cherry-pick",
+  "clean",
+  "clone",
+  "commit",
+  "diff",
+  "fetch",
+  "grep",
+  "init",
+  "log",
+  "merge",
+  "mv",
+  "pull",
+  "push",
+  "rebase",
+  "reset",
+  "restore",
+  "revert",
+  "rm",
+  "show",
+  "stash",
+  "status",
+  "switch",
+  "tag",
+  "worktree",
 ];
 
 function tokenizeBeforeCursor(text: string): string[] {
@@ -134,16 +163,21 @@ function supportsShouldTriggerFileCompletion(
 ): provider is AutocompleteProvider & {
   shouldTriggerFileCompletion(lines: string[], cursorLine: number, cursorCol: number): boolean;
 } {
-  return "shouldTriggerFileCompletion" in provider && typeof provider.shouldTriggerFileCompletion === "function";
+  return (
+    "shouldTriggerFileCompletion" in provider &&
+    typeof provider.shouldTriggerFileCompletion === "function"
+  );
 }
 
 function isExtendedCompletionItem(item: AutocompleteItem): item is ExtendedCompletionItem {
-  return "replacement" in item
-    && typeof item.replacement === "string"
-    && "startCol" in item
-    && typeof item.startCol === "number"
-    && "endCol" in item
-    && typeof item.endCol === "number";
+  return (
+    "replacement" in item &&
+    typeof item.replacement === "string" &&
+    "startCol" in item &&
+    typeof item.startCol === "number" &&
+    "endCol" in item &&
+    typeof item.endCol === "number"
+  );
 }
 
 function uniqueByReplacement(items: ExtendedCompletionItem[]): ExtendedCompletionItem[] {
@@ -158,10 +192,11 @@ function uniqueByReplacement(items: ExtendedCompletionItem[]): ExtendedCompletio
   return [...best.values()].sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
 }
 
-function pathBase(token: string, cwd: string): { dir: string; prefix: string; displayPrefix: string } {
-  const expanded = token.startsWith("~/")
-    ? join(process.env.HOME || "", token.slice(2))
-    : token;
+function pathBase(
+  token: string,
+  cwd: string,
+): { dir: string; prefix: string; displayPrefix: string } {
+  const expanded = token.startsWith("~/") ? join(process.env.HOME || "", token.slice(2)) : token;
 
   const hasSlash = expanded.includes("/");
   if (!hasSlash) {
@@ -171,7 +206,9 @@ function pathBase(token: string, cwd: string): { dir: string; prefix: string; di
   const baseDir = expanded.endsWith("/") ? expanded.slice(0, -1) : dirname(expanded);
   const resolvedDir = isAbsolute(baseDir) ? baseDir : resolve(cwd, baseDir);
   const prefix = expanded.endsWith("/") ? "" : basename(expanded);
-  const displayPrefix = token.endsWith("/") ? token : token.slice(0, Math.max(0, token.length - prefix.length));
+  const displayPrefix = token.endsWith("/")
+    ? token
+    : token.slice(0, Math.max(0, token.length - prefix.length));
   return { dir: resolvedDir, prefix, displayPrefix };
 }
 
@@ -216,7 +253,10 @@ function runGit(args: string[], cwd: string): string[] {
       stdio: ["ignore", "pipe", "ignore"],
     });
     if (result.status !== 0 || !result.stdout) return [];
-    return result.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+    return result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
   } catch {
     // Git-aware completions are optional and should not break the main completion flow.
     return [];
@@ -228,17 +268,15 @@ function getGitSuggestions(ctx: TokenContext, cwd: string): ExtendedCompletionIt
   if (tokens[0] !== "git") return [];
 
   if (ctx.tokenIndex <= 1) {
-    return GIT_SUBCOMMANDS
-      .filter((command) => command.startsWith(ctx.token))
-      .map((command) => ({
-        value: command,
-        label: command,
-        replacement: command,
-        startCol: 0,
-        endCol: 0,
-        source: "git",
-        score: 52,
-      }));
+    return GIT_SUBCOMMANDS.filter((command) => command.startsWith(ctx.token)).map((command) => ({
+      value: command,
+      label: command,
+      replacement: command,
+      startCol: 0,
+      endCol: 0,
+      source: "git",
+      score: 52,
+    }));
   }
 
   const subcommand = tokens[1] ?? "";
@@ -269,7 +307,11 @@ function canUseHistorySuggestion(ctx: TokenContext): boolean {
   return ctx.cursorCol === ctx.line.length && ctx.line.trim().length > 0;
 }
 
-function withRange(items: ExtendedCompletionItem[], startCol: number, endCol: number): ExtendedCompletionItem[] {
+function withRange(
+  items: ExtendedCompletionItem[],
+  startCol: number,
+  endCol: number,
+): ExtendedCompletionItem[] {
   return items.map((item) => ({ ...item, startCol, endCol }));
 }
 
@@ -281,7 +323,11 @@ function commandHead(value: string): string {
   return tokenizeBeforeCursor(value.trim())[0] ?? "";
 }
 
-function findNewestHistoryMatchForHead(entries: string[], prefix: string, head: string): string | null {
+function findNewestHistoryMatchForHead(
+  entries: string[],
+  prefix: string,
+  head: string,
+): string | null {
   for (const rawEntry of entries) {
     const entry = rawEntry.trim();
     if (!entry || !entry.startsWith(prefix)) continue;
@@ -332,7 +378,12 @@ function boostValidatedItemsFromGlobalHistory(
 }
 
 export class BashCompletionEngine {
-  async getGhostSuggestion(line: string, cwd: string, shellPath: string, signal: AbortSignal): Promise<GhostSuggestion | null> {
+  async getGhostSuggestion(
+    line: string,
+    cwd: string,
+    shellPath: string,
+    signal: AbortSignal,
+  ): Promise<GhostSuggestion | null> {
     const projectHistoryEntries = readProjectHistory(cwd);
 
     if (line.trim().length === 0) {
@@ -397,7 +448,10 @@ export class BashCompletionEngine {
     return getCuratedCommandFallback(line);
   }
 
-  private getDeterministicInlineSuggestions(ctx: TokenContext, cwd: string): ExtendedCompletionItem[] {
+  private getDeterministicInlineSuggestions(
+    ctx: TokenContext,
+    cwd: string,
+  ): ExtendedCompletionItem[] {
     const items: ExtendedCompletionItem[] = [];
     items.push(...withRange(getGitSuggestions(ctx, cwd), ctx.tokenStart, ctx.tokenEnd));
     items.push(...withRange(getPathSuggestions(ctx.token, cwd), ctx.tokenStart, ctx.tokenEnd));
@@ -412,7 +466,6 @@ export class BashCompletionEngine {
     }
     return value;
   }
-
 }
 
 export class BashAutocompleteProvider implements AutocompleteProvider {
@@ -420,7 +473,12 @@ export class BashAutocompleteProvider implements AutocompleteProvider {
     return null;
   }
 
-  applyCompletion(lines: string[], cursorLine: number, cursorCol: number, item: AutocompleteItem): {
+  applyCompletion(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItem,
+  ): {
     lines: string[];
     cursorLine: number;
     cursorCol: number;
@@ -437,7 +495,11 @@ export class BashAutocompleteProvider implements AutocompleteProvider {
   }
 }
 
-function applyExtendedCompletion(lines: string[], cursorLine: number, item: ExtendedCompletionItem): {
+function applyExtendedCompletion(
+  lines: string[],
+  cursorLine: number,
+  item: ExtendedCompletionItem,
+): {
   lines: string[];
   cursorLine: number;
   cursorCol: number;
@@ -460,7 +522,12 @@ export class OneOffBashAutocompleteProvider implements AutocompleteProvider {
     return null;
   }
 
-  applyCompletion(lines: string[], cursorLine: number, cursorCol: number, item: AutocompleteItem): {
+  applyCompletion(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItem,
+  ): {
     lines: string[];
     cursorLine: number;
     cursorCol: number;
@@ -506,8 +573,9 @@ export class ModeAwareAutocompleteProvider implements AutocompleteProvider {
       return this.bashProvider.getSuggestions(lines, cursorLine, cursorCol, options);
     }
 
-    const shouldUseOneOffBash = supportsShouldTriggerFileCompletion(this.oneOffBashProvider)
-      && this.oneOffBashProvider.shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
+    const shouldUseOneOffBash =
+      supportsShouldTriggerFileCompletion(this.oneOffBashProvider) &&
+      this.oneOffBashProvider.shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
     if (shouldUseOneOffBash) {
       return this.oneOffBashProvider.getSuggestions(lines, cursorLine, cursorCol, options);
     }
@@ -515,13 +583,20 @@ export class ModeAwareAutocompleteProvider implements AutocompleteProvider {
     return this.defaultProvider?.getSuggestions(lines, cursorLine, cursorCol, options) ?? null;
   }
 
-  applyCompletion(lines: string[], cursorLine: number, cursorCol: number, item: AutocompleteItem, prefix: string) {
+  applyCompletion(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItem,
+    prefix: string,
+  ) {
     if (this.isBashModeActive()) {
       return this.bashProvider.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
     }
 
-    const shouldUseOneOffBash = supportsShouldTriggerFileCompletion(this.oneOffBashProvider)
-      && this.oneOffBashProvider.shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
+    const shouldUseOneOffBash =
+      supportsShouldTriggerFileCompletion(this.oneOffBashProvider) &&
+      this.oneOffBashProvider.shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
     if (shouldUseOneOffBash) {
       return this.oneOffBashProvider.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
     }
@@ -541,8 +616,9 @@ export class ModeAwareAutocompleteProvider implements AutocompleteProvider {
       return this.bashProvider.shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
     }
 
-    const shouldUseOneOffBash = supportsShouldTriggerFileCompletion(this.oneOffBashProvider)
-      && this.oneOffBashProvider.shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
+    const shouldUseOneOffBash =
+      supportsShouldTriggerFileCompletion(this.oneOffBashProvider) &&
+      this.oneOffBashProvider.shouldTriggerFileCompletion(lines, cursorLine, cursorCol);
     if (shouldUseOneOffBash) {
       return true;
     }

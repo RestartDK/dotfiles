@@ -93,8 +93,9 @@ export class BashTranscriptStore {
 
   private enforceLimits(): void {
     while (
-      this.commands.length > 1
-      && (this.totalLines > this.settings.transcriptMaxLines || this.totalBytes > this.settings.transcriptMaxBytes)
+      this.commands.length > 1 &&
+      (this.totalLines > this.settings.transcriptMaxLines ||
+        this.totalBytes > this.settings.transcriptMaxBytes)
     ) {
       const removed = this.commands.shift();
       if (!removed) break;

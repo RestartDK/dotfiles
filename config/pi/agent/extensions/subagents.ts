@@ -144,12 +144,17 @@ function readJsonFile(path: string): JsonRecord {
 
 function readStringList(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
-    const strings = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+    const strings = value.filter(
+      (item): item is string => typeof item === "string" && item.trim().length > 0,
+    );
     return strings.length > 0 ? strings.map((item) => item.trim()) : undefined;
   }
 
   if (typeof value === "string") {
-    const strings = value.split(",").map((item) => item.trim()).filter(Boolean);
+    const strings = value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
     return strings.length > 0 ? strings : undefined;
   }
 
@@ -205,7 +210,7 @@ function parseConfig(value: unknown): Partial<SubagentsConfig> {
 function mergeConfig(base: SubagentsConfig, override: Partial<SubagentsConfig>): SubagentsConfig {
   const agents: Record<string, WorkerPreset> = { ...base.agents };
   for (const [name, preset] of Object.entries(override.agents ?? {})) {
-    agents[name] = { ...(agents[name] ?? {}), ...preset };
+    agents[name] = { ...agents[name], ...preset };
   }
 
   return {
@@ -255,7 +260,8 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 function getFinalOutput(messages: unknown[]): string {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
-    if (!isRecord(message) || message.role !== "assistant" || !Array.isArray(message.content)) continue;
+    if (!isRecord(message) || message.role !== "assistant" || !Array.isArray(message.content))
+      continue;
 
     for (const part of message.content) {
       if (isRecord(part) && part.type === "text" && typeof part.text === "string") return part.text;
@@ -279,7 +285,8 @@ function addUsage(result: WorkerResult, message: JsonRecord) {
   result.usage.output += typeof usage.output === "number" ? usage.output : 0;
   result.usage.cacheRead += typeof usage.cacheRead === "number" ? usage.cacheRead : 0;
   result.usage.cacheWrite += typeof usage.cacheWrite === "number" ? usage.cacheWrite : 0;
-  result.usage.contextTokens = typeof usage.totalTokens === "number" ? usage.totalTokens : result.usage.contextTokens;
+  result.usage.contextTokens =
+    typeof usage.totalTokens === "number" ? usage.totalTokens : result.usage.contextTokens;
 
   if (isRecord(usage.cost) && typeof usage.cost.total === "number") {
     result.usage.cost += usage.cost.total;
@@ -313,7 +320,11 @@ function workerHasWriteTools(task: ResolvedWorkerTask): boolean {
   return task.tools.some((tool) => WRITE_TOOLS.has(tool));
 }
 
-function resolveWorkerTask(input: WorkerTaskInput, config: SubagentsConfig, parentCwd: string): ResolvedWorkerTask {
+function resolveWorkerTask(
+  input: WorkerTaskInput,
+  config: SubagentsConfig,
+  parentCwd: string,
+): ResolvedWorkerTask {
   const preset = input.agent ? config.agents[input.agent] : undefined;
   if (input.agent && !preset) {
     const available = Object.keys(config.agents).sort().join(", ") || "none";
@@ -345,7 +356,10 @@ async function assertDirectory(path: string): Promise<void> {
   if (!metadata.isDirectory()) throw new Error(`${path} is not a directory`);
 }
 
-async function runWorker(task: ResolvedWorkerTask, signal: AbortSignal | undefined): Promise<WorkerResult> {
+async function runWorker(
+  task: ResolvedWorkerTask,
+  signal: AbortSignal | undefined,
+): Promise<WorkerResult> {
   const result: WorkerResult = {
     name: task.name,
     task: task.task,
@@ -401,7 +415,10 @@ async function runWorker(task: ResolvedWorkerTask, signal: AbortSignal | undefin
         }
 
         if (!isRecord(event)) return;
-        if ((event.type === "message_end" || event.type === "tool_result_end") && isRecord(event.message)) {
+        if (
+          (event.type === "message_end" || event.type === "tool_result_end") &&
+          isRecord(event.message)
+        ) {
           result.messages.push(event.message);
           addUsage(result, event.message);
         }
@@ -463,13 +480,16 @@ function truncateOutput(output: string): string {
   if (byteLength <= OUTPUT_CAP_BYTES) return output;
 
   let truncated = output.slice(0, OUTPUT_CAP_BYTES);
-  while (Buffer.byteLength(truncated, "utf-8") > OUTPUT_CAP_BYTES) truncated = truncated.slice(0, -1);
+  while (Buffer.byteLength(truncated, "utf-8") > OUTPUT_CAP_BYTES)
+    truncated = truncated.slice(0, -1);
   const omitted = byteLength - Buffer.byteLength(truncated, "utf-8");
   return `${truncated}\n\n[subagents truncated ${omitted} bytes from this worker output; full output is in tool details.]`;
 }
 
 function cleanTerminalOutput(output: string): string {
-  return output.replace(/\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\))/g, "").trim();
+  return output
+    .replace(/\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\))/g, "")
+    .trim();
 }
 
 function formatUsage(usage: UsageStats): string {
@@ -493,7 +513,9 @@ function formatResults(results: WorkerResult[]): string {
     const error = result.errorMessage ? `\nerror: ${result.errorMessage}` : "";
     const cleanStderr = cleanTerminalOutput(result.stderr);
     const stderr = cleanStderr ? `\nstderr:\n${cleanStderr}` : "";
-    const output = truncateOutput(result.output || result.errorMessage || cleanStderr || "(no output)");
+    const output = truncateOutput(
+      result.output || result.errorMessage || cleanStderr || "(no output)",
+    );
     return `## ${result.name} ${status}${model}${usageLine}${error}${stderr}\n\n${output}`;
   });
 
@@ -521,26 +543,54 @@ async function mapWithConcurrency<TIn, TOut>(
 }
 
 const WorkerTask = Type.Object({
-  agent: Type.Optional(Type.String({ description: "Configured worker preset name, such as scout-haiku or reviewer-sonnet." })),
+  agent: Type.Optional(
+    Type.String({
+      description: "Configured worker preset name, such as scout-haiku or reviewer-sonnet.",
+    }),
+  ),
   task: Type.String({ description: "Self-contained task to give this worker." }),
-  model: Type.Optional(Type.String({ description: "Override model for this worker, for example anthropic/claude-haiku-4-5." })),
-  thinking: Type.Optional(Type.String({ description: "Optional Pi thinking level override: off, minimal, low, medium, high, xhigh." })),
-  tools: Type.Optional(Type.Array(Type.String(), { description: "Override enabled tools for this worker." })),
-  systemPrompt: Type.Optional(Type.String({ description: "Additional worker-specific system prompt." })),
-  cwd: Type.Optional(Type.String({ description: "Worker cwd. Relative paths resolve against the parent Pi cwd." })),
+  model: Type.Optional(
+    Type.String({
+      description: "Override model for this worker, for example anthropic/claude-haiku-4-5.",
+    }),
+  ),
+  thinking: Type.Optional(
+    Type.String({
+      description: "Optional Pi thinking level override: off, minimal, low, medium, high, xhigh.",
+    }),
+  ),
+  tools: Type.Optional(
+    Type.Array(Type.String(), { description: "Override enabled tools for this worker." }),
+  ),
+  systemPrompt: Type.Optional(
+    Type.String({ description: "Additional worker-specific system prompt." }),
+  ),
+  cwd: Type.Optional(
+    Type.String({ description: "Worker cwd. Relative paths resolve against the parent Pi cwd." }),
+  ),
 });
 
 const SubagentsParams = Type.Object({
-  agent: Type.Optional(Type.String({ description: "Configured worker preset name for a single worker." })),
+  agent: Type.Optional(
+    Type.String({ description: "Configured worker preset name for a single worker." }),
+  ),
   task: Type.Optional(Type.String({ description: "Single worker task. Use tasks for fan-out." })),
   model: Type.Optional(Type.String({ description: "Single worker model override." })),
   thinking: Type.Optional(Type.String({ description: "Single worker thinking override." })),
   tools: Type.Optional(Type.Array(Type.String(), { description: "Single worker tools override." })),
   systemPrompt: Type.Optional(Type.String({ description: "Single worker extra system prompt." })),
   cwd: Type.Optional(Type.String({ description: "Single worker cwd." })),
-  tasks: Type.Optional(Type.Array(WorkerTask, { description: "Parallel worker tasks. Each can choose a different agent/model." })),
+  tasks: Type.Optional(
+    Type.Array(WorkerTask, {
+      description: "Parallel worker tasks. Each can choose a different agent/model.",
+    }),
+  ),
   concurrency: Type.Optional(Type.Number({ description: "Max concurrent workers for this call." })),
-  allowParallelWrites: Type.Optional(Type.Boolean({ description: "Allow multiple-task runs when any worker has edit/write tools. Default false." })),
+  allowParallelWrites: Type.Optional(
+    Type.Boolean({
+      description: "Allow multiple-task runs when any worker has edit/write tools. Default false.",
+    }),
+  ),
 });
 
 export default function (pi: ExtensionAPI) {
@@ -566,7 +616,12 @@ export default function (pi: ExtensionAPI) {
 
       if (Number(hasSingle) + Number(hasTasks) !== 1) {
         return {
-          content: [{ type: "text", text: `Provide exactly one of task or tasks.\n\nConfigured workers:\n${configuredAgentSummary(config)}` }],
+          content: [
+            {
+              type: "text",
+              text: `Provide exactly one of task or tasks.\n\nConfigured workers:\n${configuredAgentSummary(config)}`,
+            },
+          ],
           details: { results: [] },
           isError: true,
         };
@@ -582,19 +637,23 @@ export default function (pi: ExtensionAPI) {
             systemPrompt: task.systemPrompt,
             cwd: task.cwd,
           }))
-        : [{
-            agent: params.agent,
-            task: params.task!,
-            model: params.model,
-            thinking: params.thinking,
-            tools: params.tools,
-            systemPrompt: params.systemPrompt,
-            cwd: params.cwd,
-          }];
+        : [
+            {
+              agent: params.agent,
+              task: params.task!,
+              model: params.model,
+              thinking: params.thinking,
+              tools: params.tools,
+              systemPrompt: params.systemPrompt,
+              cwd: params.cwd,
+            },
+          ];
 
       if (taskInputs.length > MAX_TASKS) {
         return {
-          content: [{ type: "text", text: `Too many workers: ${taskInputs.length}. Max is ${MAX_TASKS}.` }],
+          content: [
+            { type: "text", text: `Too many workers: ${taskInputs.length}. Max is ${MAX_TASKS}.` },
+          ],
           details: { results: [] },
           isError: true,
         };
@@ -605,29 +664,48 @@ export default function (pi: ExtensionAPI) {
         resolvedTasks = taskInputs.map((task) => resolveWorkerTask(task, config, ctx.cwd));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return { content: [{ type: "text", text: message }], details: { results: [] }, isError: true };
-      }
-
-      if (resolvedTasks.length > 1 && resolvedTasks.some(workerHasWriteTools) && params.allowParallelWrites !== true) {
         return {
-          content: [{
-            type: "text",
-            text: "Refusing a multi-worker run because at least one worker has edit/write tools. Run read-only workers in parallel, then run one write-capable worker, or set allowParallelWrites=true explicitly.",
-          }],
+          content: [{ type: "text", text: message }],
           details: { results: [] },
           isError: true,
         };
       }
 
-      const requestedConcurrency = typeof params.concurrency === "number" && Number.isFinite(params.concurrency)
-        ? Math.floor(params.concurrency)
-        : config.maxParallel;
-      const concurrency = Math.max(1, Math.min(config.maxParallel, requestedConcurrency, resolvedTasks.length));
+      if (
+        resolvedTasks.length > 1 &&
+        resolvedTasks.some(workerHasWriteTools) &&
+        params.allowParallelWrites !== true
+      ) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Refusing a multi-worker run because at least one worker has edit/write tools. Run read-only workers in parallel, then run one write-capable worker, or set allowParallelWrites=true explicitly.",
+            },
+          ],
+          details: { results: [] },
+          isError: true,
+        };
+      }
+
+      const requestedConcurrency =
+        typeof params.concurrency === "number" && Number.isFinite(params.concurrency)
+          ? Math.floor(params.concurrency)
+          : config.maxParallel;
+      const concurrency = Math.max(
+        1,
+        Math.min(config.maxParallel, requestedConcurrency, resolvedTasks.length),
+      );
       const runningResults: WorkerResult[] = [];
 
       const emitUpdate = () => {
         onUpdate?.({
-          content: [{ type: "text", text: `subagents: ${runningResults.length}/${resolvedTasks.length} workers finished...` }],
+          content: [
+            {
+              type: "text",
+              text: `subagents: ${runningResults.length}/${resolvedTasks.length} workers finished...`,
+            },
+          ],
           details: { results: [...runningResults] },
         });
       };
