@@ -1,4 +1,7 @@
 {
+  "settings": {
+    "mcpFooterStatus": "off"
+  },
   "mcpServers": {
     "linear": {
       "url": "https://mcp.linear.app/mcp",

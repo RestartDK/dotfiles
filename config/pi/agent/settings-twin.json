@@ -2,8 +2,12 @@
   "defaultModel": "gpt-5.6-sol",
   "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "high",
+  "extensions": [
+    "-extensions/pi-prompt/index.ts"
+  ],
+  "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.83.0",
+  "lastChangelogVersion": "0.84.0",
   "subagents": {
     "maxParallel": 4,
     "defaultTools": [
@@ -92,6 +96,9 @@
     "greeting": "hey twin :)"
   },
   "quietStartup": true,
-  "skills": ["~/.claude/skills"],
-  "theme": "light/dark"
+  "skills": [
+    "~/.claude/skills"
+  ],
+  "theme": "light/dark",
+  "tuiMode": "fullscreen"
 }
