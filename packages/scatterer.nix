@@ -1,4 +1,12 @@
-{ bashNonInteractive, gitMinimal, lib, libiconv, rustPlatform, src, stdenv }:
+{
+  bashNonInteractive,
+  gitMinimal,
+  lib,
+  libiconv,
+  rustPlatform,
+  src,
+  stdenv,
+}:
 
 let
   manifest = builtins.fromTOML (builtins.readFile "${src}/herdr-plugin.toml");

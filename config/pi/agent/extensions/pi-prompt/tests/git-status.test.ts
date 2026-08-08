@@ -12,21 +12,23 @@ import {
 } from "../git-status.ts";
 
 test("parses Starship-compatible porcelain status categories", () => {
-  const status = parseGitStatusOutput([
-    "# branch.oid 0123456789abcdef",
-    "# branch.head feature",
-    "# branch.upstream origin/feature",
-    "# branch.ab +4 -2",
-    "1 .M N... 100644 100644 100644 abc abc modified.txt",
-    "1 M. N... 100644 100644 100644 abc abc staged.txt",
-    "1 A. N... 000000 100644 100644 abc abc added.txt",
-    "1 D. N... 100644 000000 000000 abc abc deleted-index.txt",
-    "1 .D N... 100644 100644 000000 abc abc deleted-worktree.txt",
-    "1 .T N... 100644 100755 100755 abc abc typechanged.txt",
-    "2 R. N... 100644 100644 100644 abc abc R100 renamed.txt\told.txt",
-    "u UU N... 100644 100644 100644 100644 abc abc abc conflict.txt",
-    "? untracked.txt",
-  ].join("\n"));
+  const status = parseGitStatusOutput(
+    [
+      "# branch.oid 0123456789abcdef",
+      "# branch.head feature",
+      "# branch.upstream origin/feature",
+      "# branch.ab +4 -2",
+      "1 .M N... 100644 100644 100644 abc abc modified.txt",
+      "1 M. N... 100644 100644 100644 abc abc staged.txt",
+      "1 A. N... 000000 100644 100644 abc abc added.txt",
+      "1 D. N... 100644 000000 000000 abc abc deleted-index.txt",
+      "1 .D N... 100644 100644 000000 abc abc deleted-worktree.txt",
+      "1 .T N... 100644 100755 100755 abc abc typechanged.txt",
+      "2 R. N... 100644 100644 100644 abc abc R100 renamed.txt\told.txt",
+      "u UU N... 100644 100644 100644 100644 abc abc abc conflict.txt",
+      "? untracked.txt",
+    ].join("\n"),
+  );
 
   assert.deepEqual(status, {
     branch: "feature",
@@ -47,14 +49,13 @@ test("parses parent-branch ahead and behind counts", () => {
 });
 
 test("sums text line changes and ignores binary numstat entries", () => {
-  assert.deepEqual(parseLineDiffOutput([
-    "10\t2\tfirst.ts",
-    "3\t7\tsecond.ts",
-    "-\t-\timage.png",
-  ].join("\n")), {
-    linesAdded: 13,
-    linesRemoved: 9,
-  });
+  assert.deepEqual(
+    parseLineDiffOutput(["10\t2\tfirst.ts", "3\t7\tsecond.ts", "-\t-\timage.png"].join("\n")),
+    {
+      linesAdded: 13,
+      linesRemoved: 9,
+    },
+  );
 });
 
 test("compares commits and working tree lines with the parent branch", async () => {
@@ -65,11 +66,27 @@ test("compares commits and working tree lines with the parent branch", async () 
     git("init", "-b", "main");
     writeFileSync(join(cwd, "tracked.txt"), "one\ntwo\n");
     git("add", "tracked.txt");
-    git("-c", "user.name=Pi Prompt", "-c", "user.email=pi-prompt@example.test", "commit", "-m", "base");
+    git(
+      "-c",
+      "user.name=Pi Prompt",
+      "-c",
+      "user.email=pi-prompt@example.test",
+      "commit",
+      "-m",
+      "base",
+    );
     git("switch", "-c", "feature");
     writeFileSync(join(cwd, "tracked.txt"), "one\nchanged\nthree\n");
     git("add", "tracked.txt");
-    git("-c", "user.name=Pi Prompt", "-c", "user.email=pi-prompt@example.test", "commit", "-m", "feature");
+    git(
+      "-c",
+      "user.name=Pi Prompt",
+      "-c",
+      "user.email=pi-prompt@example.test",
+      "commit",
+      "-m",
+      "feature",
+    );
     writeFileSync(join(cwd, "tracked.txt"), "one\nchanged\nthree\nfour\n");
     writeFileSync(join(cwd, "untracked.txt"), "ignored by line metrics\n");
 

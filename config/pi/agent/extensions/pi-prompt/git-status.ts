@@ -157,8 +157,11 @@ export function parseLineDiffOutput(output: string): { linesAdded: number; lines
 }
 
 async function firstExistingRef(candidates: string[], cwd: string): Promise<string | null> {
-  for (const candidate of [...new Set(candidates.filter(Boolean))]) {
-    const resolved = await runGit(["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`], cwd);
+  for (const candidate of new Set(candidates.filter(Boolean))) {
+    const resolved = await runGit(
+      ["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`],
+      cwd,
+    );
     if (resolved !== null) return candidate;
   }
   return null;
@@ -169,7 +172,7 @@ async function resolveParentBranch(parsed: ParsedGitStatus, cwd: string): Promis
     ? await runGit(["config", "--get", `branch.${parsed.branch}.remote`], cwd)
     : null;
   const upstreamRemote = parsed.upstream?.split("/", 1)[0] ?? null;
-  const remote = branchRemote && branchRemote !== "." ? branchRemote : upstreamRemote ?? "origin";
+  const remote = branchRemote && branchRemote !== "." ? branchRemote : (upstreamRemote ?? "origin");
 
   const [configuredBase, remoteHead] = await Promise.all([
     parsed.branch
@@ -184,17 +187,20 @@ async function resolveParentBranch(parsed: ParsedGitStatus, cwd: string): Promis
       : [`${remote}/${configuredBase}`, configuredBase]
     : [];
 
-  return firstExistingRef([
-    ...configuredCandidates,
-    remoteHead ?? "",
-    `${remote}/main`,
-    `${remote}/master`,
-    "origin/main",
-    "origin/master",
-    "main",
-    "master",
-    parsed.upstream ?? "",
-  ], cwd);
+  return firstExistingRef(
+    [
+      ...configuredCandidates,
+      remoteHead ?? "",
+      `${remote}/main`,
+      `${remote}/master`,
+      "origin/main",
+      "origin/master",
+      "main",
+      "master",
+      parsed.upstream ?? "",
+    ],
+    cwd,
+  );
 }
 
 export async function fetchGitStatus(cwd: string): Promise<GitStatus | null> {
@@ -227,7 +233,11 @@ export async function fetchGitStatus(cwd: string): Promise<GitStatus | null> {
     behind = relation?.behind ?? null;
 
     if (mergeBase) {
-      const diffOutput = await runGit(["diff", "--no-ext-diff", "--numstat", mergeBase, "--"], cwd, 1500);
+      const diffOutput = await runGit(
+        ["diff", "--no-ext-diff", "--numstat", mergeBase, "--"],
+        cwd,
+        1500,
+      );
       if (diffOutput !== null) {
         ({ linesAdded, linesRemoved } = parseLineDiffOutput(diffOutput));
       }
@@ -270,18 +280,20 @@ export function getGitStatus(providerBranch: string | null, cwd = process.cwd())
 
   if (!pendingFetch) {
     const fetchId = invalidationCounter;
-    const fetchPromise = fetchGitStatus(cwd).then((result) => {
-      if (fetchId === invalidationCounter) {
-        cachedStatus = {
-          ...emptyGitStatus(providerBranch),
-          ...result,
-          cwd,
-          timestamp: Date.now(),
-        };
-      }
-    }).finally(() => {
-      if (pendingFetch === fetchPromise) pendingFetch = null;
-    });
+    const fetchPromise = fetchGitStatus(cwd)
+      .then((result) => {
+        if (fetchId === invalidationCounter) {
+          cachedStatus = {
+            ...emptyGitStatus(providerBranch),
+            ...result,
+            cwd,
+            timestamp: Date.now(),
+          };
+        }
+      })
+      .finally(() => {
+        if (pendingFetch === fetchPromise) pendingFetch = null;
+      });
     pendingFetch = fetchPromise;
   }
 

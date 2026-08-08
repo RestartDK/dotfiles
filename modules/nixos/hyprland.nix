@@ -24,7 +24,8 @@ in
 
   environment.systemPackages = [
     hyprlandSettings
-  ] ++ (with pkgs; [
+  ]
+  ++ (with pkgs; [
     ghostty
     waybar
     fuzzel

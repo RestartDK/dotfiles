@@ -33,9 +33,8 @@ function normalizePersistedEntries(value: unknown): PersistedHistoryEntry[] {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
     const command = typeof entry.command === "string" ? entry.command.trim() : "";
     const cwd = typeof entry.cwd === "string" ? entry.cwd.trim() : "";
-    const timestamp = typeof entry.timestamp === "number" && Number.isFinite(entry.timestamp)
-      ? entry.timestamp
-      : 0;
+    const timestamp =
+      typeof entry.timestamp === "number" && Number.isFinite(entry.timestamp) ? entry.timestamp : 0;
     if (!command || !cwd || !timestamp) continue;
     entries.push({ command, cwd, timestamp });
   }
@@ -49,8 +48,9 @@ export function readProjectHistory(cwd: string): PersistedHistoryEntry[] {
   try {
     const parsed = JSON.parse(readFileSync(filePath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return [];
-    return normalizePersistedEntries((parsed as { entries?: unknown }).entries)
-      .sort((a, b) => b.timestamp - a.timestamp);
+    return normalizePersistedEntries((parsed as { entries?: unknown }).entries).sort(
+      (a, b) => b.timestamp - a.timestamp,
+    );
   } catch (error) {
     // Project history is a best-effort cache. If it is unreadable or malformed,
     // bash mode should keep working instead of failing command entry entirely.

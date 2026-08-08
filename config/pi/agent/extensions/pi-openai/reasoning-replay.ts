@@ -20,7 +20,11 @@ function isReasoningPayloadItem(value: unknown): boolean {
 }
 
 function hasEncryptedReasoningPayload(value: unknown): boolean {
-  return isRecord(value) && typeof value.encrypted_content === "string" && value.encrypted_content.length > 0;
+  return (
+    isRecord(value) &&
+    typeof value.encrypted_content === "string" &&
+    value.encrypted_content.length > 0
+  );
 }
 
 function isUnreplayableReasoningBlock(value: unknown): boolean {
@@ -48,7 +52,9 @@ export function stripUnreplayableReasoningBlocksFromMessages<T>(messages: T[]): 
     const candidate = message as MessageWithContent;
     if (candidate.role !== "assistant" || !Array.isArray(candidate.content)) return message;
 
-    const content = candidate.content.filter((block: ContentBlock) => !isUnreplayableReasoningBlock(block));
+    const content = candidate.content.filter(
+      (block: ContentBlock) => !isUnreplayableReasoningBlock(block),
+    );
     if (content.length === candidate.content.length) return message;
 
     changed = true;

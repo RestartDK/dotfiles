@@ -32,7 +32,7 @@ in
       if [ -S "$agent_link" ]; then
         export SSH_AUTH_SOCK="$agent_link"
       fi
-  '';
+    '';
 
     username = settings.userName;
     inherit (settings) homeDirectory;

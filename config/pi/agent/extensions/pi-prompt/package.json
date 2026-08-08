@@ -2,7 +2,21 @@
   "name": "pi-prompt",
   "version": "0.5.2",
   "description": "Powerline prompt extension for pi coding agent",
-  "type": "module",
+  "keywords": [
+    "coding-agent",
+    "extension",
+    "pi",
+    "pi-package",
+    "powerline",
+    "status-bar"
+  ],
+  "license": "MIT",
+  "author": "Nico Bailon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RestartDK/dotfiles.git",
+    "directory": "config/pi/agent/extensions/pi-prompt"
+  },
   "files": [
     "*.ts",
     "*.md",
@@ -11,30 +25,16 @@
     "bash-mode/**/*.ts",
     "fixed-editor/**/*.ts"
   ],
-  "keywords": [
-    "pi-package",
-    "pi",
-    "coding-agent",
-    "powerline",
-    "status-bar",
-    "extension"
-  ],
-  "author": "Nico Bailon",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/RestartDK/dotfiles.git",
-    "directory": "config/pi/agent/extensions/pi-prompt"
-  },
+  "type": "module",
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
-  "peerDependencies": {
+  "devDependencies": {
     "@earendil-works/pi-ai": "^0.80.6",
     "@earendil-works/pi-coding-agent": "^0.80.6",
     "@earendil-works/pi-tui": "^0.80.6"
   },
-  "devDependencies": {
+  "peerDependencies": {
     "@earendil-works/pi-ai": "^0.80.6",
     "@earendil-works/pi-coding-agent": "^0.80.6",
     "@earendil-works/pi-tui": "^0.80.6"

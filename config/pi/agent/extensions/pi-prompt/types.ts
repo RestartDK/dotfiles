@@ -77,11 +77,16 @@ export type StatusLinePreset =
 // Per-segment options
 export interface StatusLineSegmentOptions {
   model?: { showThinkingLevel?: boolean };
-  path?: { 
+  path?: {
     mode?: "basename" | "abbreviated" | "full";
     maxLength?: number;
   };
-  git?: { showBranch?: boolean; showStaged?: boolean; showUnstaged?: boolean; showUntracked?: boolean };
+  git?: {
+    showBranch?: boolean;
+    showStaged?: boolean;
+    showUnstaged?: boolean;
+    showUntracked?: boolean;
+  };
   time?: { format?: "12h" | "24h"; showSeconds?: boolean };
 }
 
@@ -154,7 +159,7 @@ export interface SegmentContext {
   thinkingLevel: string;
   sessionId: string | undefined;
   cwd?: string;
-  
+
   // Computed
   usageStats: UsageStats;
   contextPercent: number;
@@ -167,18 +172,18 @@ export interface SegmentContext {
   shellRunning: boolean;
   shellName: string | null;
   shellCwd: string | null;
-  
+
   // Git
   git: GitStatus;
-  
+
   // Extension statuses
   extensionStatuses: ReadonlyMap<string, string>;
   hiddenExtensionStatusKeys: ReadonlySet<string>;
   customItemsById: ReadonlyMap<string, CustomStatusItem>;
-  
+
   // Options
   options: StatusLineSegmentOptions;
-  
+
   // Theming
   theme: ThemeLike;
   colors: ColorScheme;

@@ -1,5 +1,12 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { ColorValue, CustomItemPosition, CustomStatusItem, PresetDef, StatusLinePreset, StatusLineSegmentId } from "./types.ts";
+import type {
+  ColorValue,
+  CustomItemPosition,
+  CustomStatusItem,
+  PresetDef,
+  StatusLinePreset,
+  StatusLineSegmentId,
+} from "./types.ts";
 
 export interface PowerlineConfig {
   preset: StatusLinePreset;
@@ -13,10 +20,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function normalizePreset(value: unknown, presets: readonly StatusLinePreset[]): StatusLinePreset | null {
+function normalizePreset(
+  value: unknown,
+  presets: readonly StatusLinePreset[],
+): StatusLinePreset | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
-  return (presets as readonly string[]).includes(normalized) ? (normalized as StatusLinePreset) : null;
+  return (presets as readonly string[]).includes(normalized)
+    ? (normalized as StatusLinePreset)
+    : null;
 }
 
 function normalizeCustomItemId(value: unknown): string | null {
@@ -48,7 +60,8 @@ function normalizeCustomStatusItem(raw: unknown, idOverride?: string): CustomSta
   const id = normalizeCustomItemId(idOverride ?? raw.id);
   if (!id) return null;
 
-  const statusKey = typeof raw.statusKey === "string" && raw.statusKey.trim() ? raw.statusKey.trim() : id;
+  const statusKey =
+    typeof raw.statusKey === "string" && raw.statusKey.trim() ? raw.statusKey.trim() : id;
 
   return {
     id,
@@ -97,8 +110,17 @@ function normalizeHiddenSegments(raw: unknown): StatusLineSegmentId[] {
   return [...deduped.values()];
 }
 
-export function parsePowerlineConfig(value: unknown, presets: readonly StatusLinePreset[]): PowerlineConfig {
-  const defaultConfig: PowerlineConfig = { preset: "default", customItems: [], hiddenSegments: [], mouseScroll: true, fixedEditor: true };
+export function parsePowerlineConfig(
+  value: unknown,
+  presets: readonly StatusLinePreset[],
+): PowerlineConfig {
+  const defaultConfig: PowerlineConfig = {
+    preset: "default",
+    customItems: [],
+    hiddenSegments: [],
+    mouseScroll: true,
+    fixedEditor: true,
+  };
 
   const directPreset = normalizePreset(value, presets);
   if (directPreset) return { ...defaultConfig, preset: directPreset };
@@ -142,7 +164,10 @@ export function mergeSegmentsWithCustomItems(
   };
 }
 
-export function nextPowerlineSettingWithPreset(existingPowerlineSetting: unknown, preset: StatusLinePreset): unknown {
+export function nextPowerlineSettingWithPreset(
+  existingPowerlineSetting: unknown,
+  preset: StatusLinePreset,
+): unknown {
   if (!isRecord(existingPowerlineSetting)) {
     return preset;
   }
@@ -160,7 +185,9 @@ export function nextPowerlineSettingWithOptions(
   return { ...existingPowerlineSetting, ...updates };
 }
 
-export function collectHiddenExtensionStatusKeys(customItems: readonly CustomStatusItem[]): Set<string> {
+export function collectHiddenExtensionStatusKeys(
+  customItems: readonly CustomStatusItem[],
+): Set<string> {
   const hidden = new Set<string>();
   for (const item of customItems) {
     if (item.excludeFromExtensionStatuses) hidden.add(item.statusKey);

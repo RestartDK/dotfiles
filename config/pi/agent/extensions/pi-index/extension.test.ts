@@ -29,7 +29,10 @@ interface RegisteredTool {
 }
 
 interface RegisteredCommand {
-  handler(args: string, ctx: { ui: { notify(message: string, level: string): void } }): Promise<void>;
+  handler(
+    args: string,
+    ctx: { ui: { notify(message: string, level: string): void } },
+  ): Promise<void>;
 }
 
 test("registers and executes the index tool with mtime caching", async () => {
@@ -60,13 +63,17 @@ test("registers and executes the index tool with mtime caching", async () => {
     const path = join(directory, "sample.ts");
     await writeFile(path, "export function answer(): number { return 42; }\n", "utf8");
 
-    const first = await registered.execute("call-1", { path }, undefined, undefined, { cwd: directory });
+    const first = await registered.execute("call-1", { path }, undefined, undefined, {
+      cwd: directory,
+    });
     assert.equal(first.details.language, "typescript");
     assert.equal(first.details.cacheHit, false);
     assert.ok(first.details.itemCount > 0);
     assert.match(first.content[0]?.text ?? "", /function answer\(\): number.*\[1\]/);
 
-    const second = await registered.execute("call-2", { path }, undefined, undefined, { cwd: directory });
+    const second = await registered.execute("call-2", { path }, undefined, undefined, {
+      cwd: directory,
+    });
     assert.equal(second.details.cacheHit, true);
 
     const notifications: string[] = [];

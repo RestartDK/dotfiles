@@ -5,11 +5,11 @@ local wezterm = require("wezterm")
 local config = wezterm.config_builder()
 
 local function scheme_for_appearance(appearance)
-  if appearance:find("Dark") then
-    return "Tokyo Night"
-  end
+	if appearance:find("Dark") then
+		return "Tokyo Night"
+	end
 
-  return "Tokyo Night Day"
+	return "Tokyo Night Day"
 end
 
 -- This is where you actually apply your config choices

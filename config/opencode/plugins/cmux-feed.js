@@ -68,7 +68,7 @@ export const CMUXFeed = async (ctx) => {
     return await fn({
       ...options,
       throwOnError: true,
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      headers: { "Content-Type": "application/json", ...options.headers },
     });
   };
 
@@ -104,7 +104,13 @@ export const CMUXFeed = async (ctx) => {
       return;
     }
 
-    if (await callClientMethod(ctx?.client?.permission, "reply", { requestID: requestId, reply, message })) {
+    if (
+      await callClientMethod(ctx?.client?.permission, "reply", {
+        requestID: requestId,
+        reply,
+        message,
+      })
+    ) {
       return;
     }
 
@@ -156,7 +162,10 @@ export const CMUXFeed = async (ctx) => {
       return true;
     }
 
-    return await callClientMethod(ctx?.client?.session, "update", { path: { id: sessionId }, body: { permission } });
+    return await callClientMethod(ctx?.client?.session, "update", {
+      path: { id: sessionId },
+      body: { permission },
+    });
   };
 
   const sendPlanFeedback = async (sessionId, text) => {
@@ -230,11 +239,11 @@ export const CMUXFeed = async (ctx) => {
 
   const resolveSessionPlanPath = (sid, rawPlanPath) => {
     if (!rawPlanPath) return null;
-    const root = path.resolve(sessionState(sid).cwd || ctx?.worktree || ctx?.directory || process.cwd());
+    const root = path.resolve(
+      sessionState(sid).cwd || ctx?.worktree || ctx?.directory || process.cwd(),
+    );
     const raw = String(rawPlanPath);
-    const relativeInput = path.isAbsolute(raw)
-      ? path.relative(root, path.resolve(raw))
-      : raw;
+    const relativeInput = path.isAbsolute(raw) ? path.relative(root, path.resolve(raw)) : raw;
     const candidate = path.resolve(root, relativeInput);
     const relative = path.relative(root, candidate);
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;
@@ -263,12 +272,16 @@ export const CMUXFeed = async (ctx) => {
     const prompt = firstString(first.question, first.prompt) || "";
     const header = firstString(first.header, first.title) || "";
     const labels = Array.isArray(first.options)
-      ? first.options.map((option) => firstString(option?.label, option?.title, option)).filter(Boolean)
+      ? first.options
+          .map((option) => firstString(option?.label, option?.title, option))
+          .filter(Boolean)
       : [];
     const looksLikePlanExit =
       header === "Build Agent" ||
       /Plan at .+ is complete\./.test(prompt) ||
-      (labels.includes("Yes") && labels.includes("No") && /switch to the build agent/i.test(prompt));
+      (labels.includes("Yes") &&
+        labels.includes("No") &&
+        /switch to the build agent/i.test(prompt));
     if (!looksLikePlanExit) return null;
 
     const match = prompt.match(/Plan at (.+?) is complete\./);
@@ -296,7 +309,7 @@ export const CMUXFeed = async (ctx) => {
       await replyQuestion(requestId, [["No"]]);
       await sendPlanFeedback(
         sid,
-        `User rejected the plan via cmux Feed and wants this change: ${feedback}\n\nUpdate the plan file, then call plan_exit again.`
+        `User rejected the plan via cmux Feed and wants this change: ${feedback}\n\nUpdate the plan file, then call plan_exit again.`,
       );
       return;
     }
@@ -310,7 +323,7 @@ export const CMUXFeed = async (ctx) => {
       await replyQuestion(requestId, [["No"]]);
       await sendPlanFeedback(
         sid,
-        "User chose Ultraplan via cmux Feed. Refine the plan more deeply, update the plan file, then call plan_exit again."
+        "User chose Ultraplan via cmux Feed. Refine the plan more deeply, update the plan file, then call plan_exit again.",
       );
       return;
     }
@@ -326,7 +339,7 @@ export const CMUXFeed = async (ctx) => {
       await replyQuestion(requestId, [["No"]]);
       await sendPlanFeedback(
         sid,
-        "cmux could not apply the selected permission mode. Ask the user to approve the plan again before switching to build mode."
+        "cmux could not apply the selected permission mode. Ask the user to approve the plan again before switching to build mode.",
       );
       return;
     }
@@ -499,36 +512,44 @@ export const CMUXFeed = async (ctx) => {
           const info = event.properties?.info || {};
           const state = sessionState(info.id || "unknown");
           state.cwd = info.directory || ctx?.directory || state.cwd;
-          pushTelemetry(base(info.id || "unknown", {
-            hook_event_name: "SessionStart",
-            cwd: state.cwd,
-          }));
+          pushTelemetry(
+            base(info.id || "unknown", {
+              hook_event_name: "SessionStart",
+              cwd: state.cwd,
+            }),
+          );
           break;
         }
         case "session.idle": {
           const sid = event.properties?.sessionID;
           if (!sid) break;
-          pushTelemetry(base(sid, {
-            hook_event_name: "Stop",
-          }));
+          pushTelemetry(
+            base(sid, {
+              hook_event_name: "Stop",
+            }),
+          );
           break;
         }
         case "session.deleted": {
           const sid = event.properties?.info?.id;
           if (!sid) break;
           sessions.delete(sid);
-          pushTelemetry(base(sid, {
-            hook_event_name: "SessionEnd",
-          }));
+          pushTelemetry(
+            base(sid, {
+              hook_event_name: "SessionEnd",
+            }),
+          );
           break;
         }
         case "todo.updated": {
           const sid = event.properties?.sessionID;
           if (!sid) break;
-          pushTelemetry(base(sid, {
-            hook_event_name: "TodoWrite",
-            tool_input: event.properties?.todos || [],
-          }));
+          pushTelemetry(
+            base(sid, {
+              hook_event_name: "TodoWrite",
+              tool_input: event.properties?.todos || [],
+            }),
+          );
           break;
         }
         case "permission.asked": {
@@ -550,7 +571,7 @@ export const CMUXFeed = async (ctx) => {
               tool: props.tool,
             },
             context: {
-              ...(contextForSession(sid) || {}),
+              ...contextForSession(sid),
               permissionMode: "opencode",
             },
           });
@@ -567,7 +588,9 @@ export const CMUXFeed = async (ctx) => {
                 reply: permissionReplyForMode(mode),
                 message: mode === "deny" ? "User denied permission via cmux Feed." : undefined,
               });
-            } catch (e) { /* ignore - opencode already moved on */ }
+            } catch (e) {
+              /* ignore - opencode already moved on */
+            }
           }
           break;
         }
@@ -599,7 +622,7 @@ export const CMUXFeed = async (ctx) => {
                 question: planExit.question,
               },
               context: {
-                ...(contextForSession(sid) || {}),
+                ...contextForSession(sid),
                 permissionMode: "plan",
               },
             });
@@ -623,7 +646,9 @@ export const CMUXFeed = async (ctx) => {
             try {
               await replyQuestion(requestId, questionAnswers(result.decision.selections));
             } catch (_) {
-              try { await rejectQuestion(requestId); } catch (_) {}
+              try {
+                await rejectQuestion(requestId);
+              } catch (_) {}
             }
           }
           break;

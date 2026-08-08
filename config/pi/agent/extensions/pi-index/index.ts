@@ -50,7 +50,12 @@ export default function (pi: ExtensionAPI) {
     ],
     parameters: Type.Object({
       path: Type.String({ description: "Path to the source file, relative or absolute" }),
-      language: Type.Optional(Type.String({ description: "Optional Tree-sitter language override, such as typescript, rust, nix, or python" })),
+      language: Type.Optional(
+        Type.String({
+          description:
+            "Optional Tree-sitter language override, such as typescript, rust, nix, or python",
+        }),
+      ),
     }),
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -64,16 +69,22 @@ export default function (pi: ExtensionAPI) {
       try {
         metadata = await stat(absolutePath);
       } catch (error) {
-        throw new Error(`Cannot index ${shownPath}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(
+          `Cannot index ${shownPath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
 
       if (!metadata.isFile()) {
-        throw new Error(metadata.isDirectory()
-          ? `${shownPath} is a directory. Use index on a source file or ls/find on the directory.`
-          : `${shownPath} is not a regular file.`);
+        throw new Error(
+          metadata.isDirectory()
+            ? `${shownPath} is a directory. Use index on a source file or ls/find on the directory.`
+            : `${shownPath} is not a regular file.`,
+        );
       }
       if (metadata.size > MAX_SOURCE_BYTES) {
-        throw new Error(`${shownPath} is ${formatSize(metadata.size)}, above the ${formatSize(MAX_SOURCE_BYTES)} index limit. Use read with offset/limit instead.`);
+        throw new Error(
+          `${shownPath} is ${formatSize(metadata.size)}, above the ${formatSize(MAX_SOURCE_BYTES)} index limit. Use read with offset/limit instead.`,
+        );
       }
 
       const languageOverride = params.language?.trim().toLowerCase() || undefined;
@@ -81,10 +92,12 @@ export default function (pi: ExtensionAPI) {
       let result: IndexResult;
       let cacheHit = false;
 
-      if (cached
-        && cached.mtimeMs === metadata.mtimeMs
-        && cached.size === metadata.size
-        && cached.languageOverride === languageOverride) {
+      if (
+        cached &&
+        cached.mtimeMs === metadata.mtimeMs &&
+        cached.size === metadata.size &&
+        cached.languageOverride === languageOverride
+      ) {
         result = cached.result;
         cacheHit = true;
       } else {
@@ -95,7 +108,8 @@ export default function (pi: ExtensionAPI) {
 
         const source = await readFile(absolutePath, "utf8");
         if (signal?.aborted) throw new Error("Index cancelled");
-        if (source.includes("\0")) throw new Error(`${shownPath} appears to be binary. Use read instead.`);
+        if (source.includes("\0"))
+          throw new Error(`${shownPath} appears to be binary. Use read instead.`);
 
         try {
           result = indexSource(shownPath, source, languageOverride);
@@ -139,7 +153,11 @@ export default function (pi: ExtensionAPI) {
 
     renderCall(args, theme) {
       const language = args.language ? theme.fg("dim", ` (${args.language})`) : "";
-      return new Text(`${theme.fg("toolTitle", theme.bold("index "))}${theme.fg("accent", args.path)}${language}`, 0, 0);
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold("index "))}${theme.fg("accent", args.path)}${language}`,
+        0,
+        0,
+      );
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
@@ -155,7 +173,10 @@ export default function (pi: ExtensionAPI) {
         details.parseErrors > 0 ? `${details.parseErrors} parse errors` : undefined,
         details.truncated ? "truncated" : undefined,
       ].filter(Boolean);
-      let text = theme.fg("success", `${details.language} · ${details.sourceLines} lines · ${details.itemCount} items`);
+      let text = theme.fg(
+        "success",
+        `${details.language} · ${details.sourceLines} lines · ${details.itemCount} items`,
+      );
       if (flags.length > 0) text += theme.fg("dim", ` (${flags.join(", ")})`);
 
       if (expanded) {

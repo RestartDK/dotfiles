@@ -32,7 +32,7 @@ function rewriteRefs(value, schemaName) {
   const copy = {};
   for (const [key, child] of Object.entries(value)) {
     if (key === "$ref" && typeof child === "string") {
-      copy[key] = child.replace(`#\/schemas\/${schemaName}\/`, "#/");
+      copy[key] = child.replace(`#/schemas/${schemaName}/`, "#/");
     } else {
       copy[key] = rewriteRefs(child, schemaName);
     }

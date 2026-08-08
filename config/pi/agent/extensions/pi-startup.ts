@@ -48,14 +48,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function mergeSettings(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+function mergeSettings(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>,
+): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...base };
 
   for (const [key, overrideValue] of Object.entries(override)) {
     const baseValue = merged[key];
-    merged[key] = isRecord(baseValue) && isRecord(overrideValue)
-      ? mergeSettings(baseValue, overrideValue)
-      : overrideValue;
+    merged[key] =
+      isRecord(baseValue) && isRecord(overrideValue)
+        ? mergeSettings(baseValue, overrideValue)
+        : overrideValue;
   }
 
   return merged;
@@ -91,9 +95,10 @@ function readStartupConfig(cwd: string): StartupConfig {
     return { enabled: false, greeting: fallbackGreeting };
   }
 
-  const greeting = typeof raw.greeting === "string" && raw.greeting.trim().length > 0
-    ? raw.greeting.trim()
-    : fallbackGreeting;
+  const greeting =
+    typeof raw.greeting === "string" && raw.greeting.trim().length > 0
+      ? raw.greeting.trim()
+      : fallbackGreeting;
 
   return {
     enabled: raw.enabled === true,
@@ -105,7 +110,10 @@ function countExtensionEntries(cwd: string): number {
   const home = homedir();
   const counted = new Set<string>();
 
-  for (const settingsPath of [join(home, ".pi", "agent", "settings.json"), join(cwd, ".pi", "settings.json")]) {
+  for (const settingsPath of [
+    join(home, ".pi", "agent", "settings.json"),
+    join(cwd, ".pi", "settings.json"),
+  ]) {
     try {
       if (!existsSync(settingsPath)) continue;
       const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -132,7 +140,8 @@ function countExtensionEntries(cwd: string): number {
         const entryPath = join(dir, entry);
         const stats = statSync(entryPath);
         if (stats.isDirectory()) {
-          if (existsSync(join(entryPath, "index.ts")) || existsSync(join(entryPath, "index.js"))) counted.add(entry);
+          if (existsSync(join(entryPath, "index.ts")) || existsSync(join(entryPath, "index.js")))
+            counted.add(entry);
         } else if ((entry.endsWith(".ts") || entry.endsWith(".js")) && !entry.startsWith(".")) {
           counted.add(basename(entry, entry.endsWith(".ts") ? ".ts" : ".js"));
         }
@@ -148,7 +157,11 @@ function countExtensionEntries(cwd: string): number {
 function countSkillDirs(cwd: string): number {
   const home = homedir();
   const counted = new Set<string>();
-  for (const dir of [join(home, ".pi", "agent", "skills"), join(cwd, ".pi", "skills"), join(cwd, "skills")]) {
+  for (const dir of [
+    join(home, ".pi", "agent", "skills"),
+    join(cwd, ".pi", "skills"),
+    join(cwd, "skills"),
+  ]) {
     try {
       if (!existsSync(dir)) continue;
       for (const entry of readdirSync(dir)) {
@@ -175,7 +188,12 @@ function countPromptTemplates(cwd: string): number {
     }
   }
 
-  for (const dir of [join(home, ".pi", "agent", "commands"), join(home, ".claude", "commands"), join(cwd, ".pi", "commands"), join(cwd, ".claude", "commands")]) {
+  for (const dir of [
+    join(home, ".pi", "agent", "commands"),
+    join(home, ".claude", "commands"),
+    join(cwd, ".pi", "commands"),
+    join(cwd, ".claude", "commands"),
+  ]) {
     try {
       walk(dir);
     } catch {

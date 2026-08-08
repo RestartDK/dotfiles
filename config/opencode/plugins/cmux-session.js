@@ -30,7 +30,7 @@ function sessionIdFor(event) {
     props.session && props.session.id,
     event && event.sessionID,
     event && event.sessionId,
-    event && event.id
+    event && event.id,
   );
 }
 
@@ -41,7 +41,7 @@ function cwdFor(ctx, event) {
     props.cwd,
     props.directory,
     ctx && ctx.directory,
-    process.cwd()
+    process.cwd(),
   );
 }
 

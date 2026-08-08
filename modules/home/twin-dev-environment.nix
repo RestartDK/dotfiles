@@ -1,4 +1,10 @@
-{ config, dotfilesInputs, lib, pkgs, ... }:
+{
+  config,
+  dotfilesInputs,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.twinDevEnvironment;
@@ -9,8 +15,7 @@ in
     ./pi-opencode-netns-wrapper.nix
   ];
 
-  options.my.twinDevEnvironment.enable =
-    lib.mkEnableOption "Daniel's reusable Twin development environment";
+  options.my.twinDevEnvironment.enable = lib.mkEnableOption "Daniel's reusable Twin development environment";
 
   config = lib.mkIf cfg.enable {
     services.lorri.enable = true;

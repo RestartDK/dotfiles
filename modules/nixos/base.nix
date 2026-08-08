@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   host = config.my.host;
@@ -6,7 +11,10 @@ in
 {
   imports = [ ./host-options.nix ];
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
   nix.settings.auto-optimise-store = true;
 
   nix.gc = {
@@ -32,7 +40,10 @@ in
   };
 
   networking.networkmanager.enable = true;
-  networking.nameservers = [ "1.1.1.1" "9.9.9.9" ];
+  networking.nameservers = [
+    "1.1.1.1"
+    "9.9.9.9"
+  ];
 
   # Avoid remote setup being interrupted by desktop idle suspend.
   systemd.sleep.settings.Sleep = {
@@ -48,10 +59,11 @@ in
     home = host.homeDirectory;
     description = host.fullName;
     shell = pkgs.zsh;
-    extraGroups = host.extraGroups;
+    inherit (host) extraGroups;
     openssh.authorizedKeys.keys = host.authorizedKeys;
-  } // lib.optionalAttrs (host.uid != null) {
-    uid = host.uid;
+  }
+  // lib.optionalAttrs (host.uid != null) {
+    inherit (host) uid;
   };
 
   # Break-glass root SSH access. Password login stays disabled; only these

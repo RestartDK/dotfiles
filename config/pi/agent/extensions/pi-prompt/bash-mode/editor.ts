@@ -97,7 +97,12 @@ export class BashModeEditor extends CustomEditor {
   private ghostAbort: AbortController | null = null;
   private ghostToken = 0;
 
-  constructor(tui: any, theme: any, keybindings: KeybindingsManager, options: BashModeEditorOptions) {
+  constructor(
+    tui: any,
+    theme: any,
+    keybindings: KeybindingsManager,
+    options: BashModeEditorOptions,
+  ) {
     super(tui, theme, keybindings);
     this.keybindingsRef = keybindings;
     this.optionsRef = options;
@@ -168,7 +173,11 @@ export class BashModeEditor extends CustomEditor {
         return;
       }
 
-      if (bashMode && this.keybindingsRef.matches(data, "app.clear") && this.optionsRef.isShellRunning()) {
+      if (
+        bashMode &&
+        this.keybindingsRef.matches(data, "app.clear") &&
+        this.optionsRef.isShellRunning()
+      ) {
         this.optionsRef.onInterrupt();
         return;
       }
@@ -183,8 +192,12 @@ export class BashModeEditor extends CustomEditor {
         return;
       }
 
-      const editorBoundaryShortcuts = this.optionsRef.editorBoundaryShortcuts ?? DEFAULT_EDITOR_BOUNDARY_SHORTCUTS;
-      if (!isKeyRelease(data) && matchesEditorBoundaryShortcut(data, editorBoundaryShortcuts.start)) {
+      const editorBoundaryShortcuts =
+        this.optionsRef.editorBoundaryShortcuts ?? DEFAULT_EDITOR_BOUNDARY_SHORTCUTS;
+      if (
+        !isKeyRelease(data) &&
+        matchesEditorBoundaryShortcut(data, editorBoundaryShortcuts.start)
+      ) {
         this.moveCursorToEditorBoundary("start");
         return;
       }
@@ -200,14 +213,18 @@ export class BashModeEditor extends CustomEditor {
       }
 
       if (
-        (bashMode || oneOffBashCommand)
-        && this.keybindingsRef.matches(data, "tui.editor.cursorRight")
-        && this.acceptGhostSuggestion()
+        (bashMode || oneOffBashCommand) &&
+        this.keybindingsRef.matches(data, "tui.editor.cursorRight") &&
+        this.acceptGhostSuggestion()
       ) {
         return;
       }
 
-      if (bashMode && this.keybindingsRef.matches(data, "tui.input.submit") && !this.keybindingsRef.matches(data, "tui.input.newLine")) {
+      if (
+        bashMode &&
+        this.keybindingsRef.matches(data, "tui.input.submit") &&
+        !this.keybindingsRef.matches(data, "tui.input.newLine")
+      ) {
         if (this.optionsRef.isShellRunning()) {
           this.optionsRef.onNotify("Shell command already running", "warning");
           return;
@@ -238,18 +255,17 @@ export class BashModeEditor extends CustomEditor {
     }
 
     if (
-      pasteInProgress
-      ||
-      isPrintableInput(data)
-      || this.keybindingsRef.matches(data, "tui.editor.deleteCharBackward")
-      || this.keybindingsRef.matches(data, "tui.editor.deleteCharForward")
-      || this.keybindingsRef.matches(data, "tui.editor.deleteWordBackward")
-      || this.keybindingsRef.matches(data, "tui.editor.deleteWordForward")
-      || this.keybindingsRef.matches(data, "tui.editor.deleteToLineStart")
-      || this.keybindingsRef.matches(data, "tui.editor.deleteToLineEnd")
-      || this.keybindingsRef.matches(data, "tui.input.newLine")
-      || this.keybindingsRef.matches(data, "tui.editor.cursorLeft")
-      || this.keybindingsRef.matches(data, "tui.editor.cursorRight")
+      pasteInProgress ||
+      isPrintableInput(data) ||
+      this.keybindingsRef.matches(data, "tui.editor.deleteCharBackward") ||
+      this.keybindingsRef.matches(data, "tui.editor.deleteCharForward") ||
+      this.keybindingsRef.matches(data, "tui.editor.deleteWordBackward") ||
+      this.keybindingsRef.matches(data, "tui.editor.deleteWordForward") ||
+      this.keybindingsRef.matches(data, "tui.editor.deleteToLineStart") ||
+      this.keybindingsRef.matches(data, "tui.editor.deleteToLineEnd") ||
+      this.keybindingsRef.matches(data, "tui.input.newLine") ||
+      this.keybindingsRef.matches(data, "tui.editor.cursorLeft") ||
+      this.keybindingsRef.matches(data, "tui.editor.cursorRight")
     ) {
       this.shellHistoryIndex = -1;
       this.shellHistoryItems = [];
@@ -279,7 +295,9 @@ export class BashModeEditor extends CustomEditor {
     const shownSuffix = truncateToWidth(suffix, availableWidth, "", true);
     if (!shownSuffix) return lines;
 
-    const padding = " ".repeat(Math.max(0, width - visibleWidth(text) - 1 - visibleWidth(shownSuffix)));
+    const padding = " ".repeat(
+      Math.max(0, width - visibleWidth(text) - 1 - visibleWidth(shownSuffix)),
+    );
     const ghost = `\x1b[38;5;244m${shownSuffix}\x1b[0m`;
     lines[contentLine] = `${text}${cursorBlock}${ghost}${padding}`;
     return lines;
@@ -306,7 +324,11 @@ export class BashModeEditor extends CustomEditor {
     } else {
       const lastLine = Math.max(0, lines.length - 1);
       Reflect.set(state, "cursorLine", lastLine);
-      Reflect.set(state, "cursorCol", typeof lines[lastLine] === "string" ? lines[lastLine].length : 0);
+      Reflect.set(
+        state,
+        "cursorCol",
+        typeof lines[lastLine] === "string" ? lines[lastLine].length : 0,
+      );
     }
 
     Reflect.set(this, "lastAction", null);
@@ -342,7 +364,10 @@ export class BashModeEditor extends CustomEditor {
     }
 
     if (direction < 0) {
-      this.shellHistoryIndex = Math.min(this.shellHistoryItems.length - 1, this.shellHistoryIndex + 1);
+      this.shellHistoryIndex = Math.min(
+        this.shellHistoryItems.length - 1,
+        this.shellHistoryIndex + 1,
+      );
       this.setText(this.shellHistoryItems[this.shellHistoryIndex] ?? this.shellHistoryDraft);
       this.clearGhostSuggestion();
       return;
@@ -367,7 +392,8 @@ export class BashModeEditor extends CustomEditor {
 
     const controller = new AbortController();
     this.ghostAbort = controller;
-    this.optionsRef.resolveGhostSuggestion(text, controller.signal)
+    this.optionsRef
+      .resolveGhostSuggestion(text, controller.signal)
       .then((ghost) => {
         if (controller.signal.aborted || currentToken !== this.ghostToken) return;
         this.ghost = ghost;

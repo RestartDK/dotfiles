@@ -73,7 +73,13 @@ function entryToSearchItem(entry: any): SearchItem | null {
   if (entry.type === "compaction") {
     const text = String(entry.summary ?? "").trim();
     if (!text) return null;
-    return { id, role: "compaction", timestamp, text, haystack: `compaction ${timestamp} ${id} ${text}` };
+    return {
+      id,
+      role: "compaction",
+      timestamp,
+      text,
+      haystack: `compaction ${timestamp} ${id} ${text}`,
+    };
   }
 
   if (entry.type === "branch_summary") {
@@ -118,7 +124,10 @@ class SessionSearchOverlay implements Component, Focusable {
     initialQuery: string,
     private readonly theme: ThemeLike,
     private readonly done: (result: SearchItem | null) => void,
-    FzfCtor: new (items: SearchItem[], options: { selector: (item: SearchItem) => string }) => { find: (query: string) => Array<{ item: SearchItem }> },
+    FzfCtor: new (
+      items: SearchItem[],
+      options: { selector: (item: SearchItem) => string },
+    ) => { find: (query: string) => Array<{ item: SearchItem }> },
   ) {
     this.query = initialQuery;
     this.cursor = initialQuery.length;
@@ -219,20 +228,33 @@ class SessionSearchOverlay implements Component, Focusable {
       const title = ` ${label} `;
       const left = Math.max(1, Math.floor((modalWidth - title.length) / 2));
       const right = Math.max(1, modalWidth - title.length - left);
-      return truncateToWidth(this.theme.fg(color, `╭${"─".repeat(left - 1)}${title}${"─".repeat(right - 1)}╮`), modalWidth);
+      return truncateToWidth(
+        this.theme.fg(color, `╭${"─".repeat(left - 1)}${title}${"─".repeat(right - 1)}╮`),
+        modalWidth,
+      );
     };
     const divider = (label: string, color: string) => {
       const title = ` ${label} `;
       const left = Math.max(1, Math.floor((modalWidth - title.length) / 2));
       const right = Math.max(1, modalWidth - title.length - left);
-      return truncateToWidth(this.theme.fg(color, `├${"─".repeat(left - 1)}${title}${"─".repeat(right - 1)}┤`), modalWidth);
+      return truncateToWidth(
+        this.theme.fg(color, `├${"─".repeat(left - 1)}${title}${"─".repeat(right - 1)}┤`),
+        modalWidth,
+      );
     };
-    const bottom = (color: string) => truncateToWidth(this.theme.fg(color, `╰${"─".repeat(Math.max(0, modalWidth - 2))}╯`), modalWidth);
+    const bottom = (color: string) =>
+      truncateToWidth(
+        this.theme.fg(color, `╰${"─".repeat(Math.max(0, modalWidth - 2))}╯`),
+        modalWidth,
+      );
     const row = (text: string, color = "border") => {
       const inner = Math.max(0, modalWidth - 2);
       const clipped = truncateToWidth(text, inner, "");
       const padding = Math.max(0, inner - visibleWidth(clipped));
-      return truncateToWidth(this.theme.fg(color, "│") + clipped + " ".repeat(padding) + this.theme.fg(color, "│"), modalWidth);
+      return truncateToWidth(
+        this.theme.fg(color, "│") + clipped + " ".repeat(padding) + this.theme.fg(color, "│"),
+        modalWidth,
+      );
     };
     const widthOf = (text: string) => visibleWidth(text.replace(/\x1b_pi:c\x07/g, ""));
     const rowRight = (left: string, right: string, color = "border") => {
@@ -272,22 +294,32 @@ class SessionSearchOverlay implements Component, Focusable {
         continue;
       }
       const absoluteIndex = start + i;
-        const selected = absoluteIndex === this.selected;
-        const prefix = selected ? this.theme.fg("accent", "▸ ") : "  ";
-        const role = selected ? this.theme.fg("accent", item.role) : this.theme.fg("muted", item.role);
-        const preview = highlight(item.text.replace(/\s+/g, " "));
+      const selected = absoluteIndex === this.selected;
+      const prefix = selected ? this.theme.fg("accent", "▸ ") : "  ";
+      const role = selected
+        ? this.theme.fg("accent", item.role)
+        : this.theme.fg("muted", item.role);
+      const preview = highlight(item.text.replace(/\s+/g, " "));
       const line = `${prefix}${role} ${this.theme.fg("dim", item.id)}  ${preview}`;
       lines.push(row(line, "accent"));
     }
 
-    const allPreviewLines = selectedItem ? wrapTextWithAnsi(highlight(selectedItem.text), innerWidth) : [];
-    this.previewOffset = Math.min(this.previewOffset, Math.max(0, allPreviewLines.length - previewHeight));
+    const allPreviewLines = selectedItem
+      ? wrapTextWithAnsi(highlight(selectedItem.text), innerWidth)
+      : [];
+    this.previewOffset = Math.min(
+      this.previewOffset,
+      Math.max(0, allPreviewLines.length - previewHeight),
+    );
     const previewEnd = Math.min(allPreviewLines.length, this.previewOffset + previewHeight);
     const previewLabel = selectedItem
       ? `Preview ${selectedItem.role} ${selectedItem.id} ${allPreviewLines.length ? `${this.previewOffset + 1}-${previewEnd}/${allPreviewLines.length}` : ""}`
       : "Preview";
     lines.push(divider(previewLabel, "success"));
-    const previewLines = allPreviewLines.slice(this.previewOffset, this.previewOffset + previewHeight);
+    const previewLines = allPreviewLines.slice(
+      this.previewOffset,
+      this.previewOffset + previewHeight,
+    );
     for (let i = 0; i < previewHeight; i++) {
       lines.push(row(previewLines[i] ? ` ${previewLines[i]}` : "", "success"));
     }
@@ -299,7 +331,15 @@ class SessionSearchOverlay implements Component, Focusable {
     const count = this.theme.fg("dim", `${this.results.length} / ${this.items.length}`);
     const prompt = `${this.theme.fg("accent", "> ")}${before}${this.focused ? CURSOR_MARKER : ""}${this.theme.bg("selectedBg", at)}${after}`;
     lines.push(rowRight(prompt, count, "warning"));
-    lines.push(row(this.theme.fg("dim", " ↑/↓ results • mouse wheel over panes • Ctrl-u/d preview • Enter jump • Esc close"), "warning"));
+    lines.push(
+      row(
+        this.theme.fg(
+          "dim",
+          " ↑/↓ results • mouse wheel over panes • Ctrl-u/d preview • Enter jump • Esc close",
+        ),
+        "warning",
+      ),
+    );
     lines.push(bottom("warning"));
 
     const modalLines = lines.map((line) => `${" ".repeat(leftPad)}${line}${" ".repeat(rightPad)}`);
@@ -399,7 +439,10 @@ class CurrentSessionViewport implements Component {
     if (this.initializedKey !== key) {
       this.initializedKey = key;
       const targetLine = this.findSelectedLine(chatLines);
-      this.scrollOffset = Math.max(0, Math.min(maxOffset, targetLine - Math.floor(this.chatHeight / 3)));
+      this.scrollOffset = Math.max(
+        0,
+        Math.min(maxOffset, targetLine - Math.floor(this.chatHeight / 3)),
+      );
     }
 
     this.scrollOffset = Math.max(0, Math.min(maxOffset, this.scrollOffset));
@@ -409,13 +452,19 @@ class CurrentSessionViewport implements Component {
     if (visibleChat.length > 0) {
       const help = this.theme.bg(
         "selectedBg",
-        this.theme.fg("dim", ` search jump: ${this.selected.role} ${this.selected.id} • mouse/PageUp/PageDown scroll • Esc/Ctrl-G bottom `),
+        this.theme.fg(
+          "dim",
+          ` search jump: ${this.selected.role} ${this.selected.id} • mouse/PageUp/PageDown scroll • Esc/Ctrl-G bottom `,
+        ),
       );
       const clipped = truncateToWidth(help, width, "");
-      visibleChat[visibleChat.length - 1] = clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
+      visibleChat[visibleChat.length - 1] =
+        clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
     }
 
-    return [...visibleChat, ...lowerLines].slice(0, termHeight).map((line) => truncateToWidth(line, width, "").padEnd(width));
+    return [...visibleChat, ...lowerLines]
+      .slice(0, termHeight)
+      .map((line) => truncateToWidth(line, width, "").padEnd(width));
   }
 
   invalidate(): void {
@@ -431,8 +480,13 @@ class CurrentSessionViewport implements Component {
       if (index !== -1) return index;
     }
 
-    const itemIndex = Math.max(0, this.items.findIndex((item) => item.id === this.selected.id));
-    return Math.floor((itemIndex / Math.max(1, this.items.length - 1)) * Math.max(0, lines.length - 1));
+    const itemIndex = Math.max(
+      0,
+      this.items.findIndex((item) => item.id === this.selected.id),
+    );
+    return Math.floor(
+      (itemIndex / Math.max(1, this.items.length - 1)) * Math.max(0, lines.length - 1),
+    );
   }
 
   private getSearchCandidates(): string[] {
@@ -445,7 +499,11 @@ class CurrentSessionViewport implements Component {
     }
     if (normalized.length >= 8) candidates.add(normalized.slice(0, 100));
     if (normalized.length >= 24) candidates.add(normalized.slice(0, 50));
-    for (const word of normalized.split(" ").filter((word) => word.length >= 12).slice(0, 8)) candidates.add(word);
+    for (const word of normalized
+      .split(" ")
+      .filter((word) => word.length >= 12)
+      .slice(0, 8))
+      candidates.add(word);
     return [...candidates].sort((a, b) => b.length - a.length);
   }
 
@@ -462,140 +520,161 @@ class CurrentSessionViewport implements Component {
 
 let activeJumpCleanup: (() => void) | undefined;
 
-async function showCurrentSessionAtSelection(ctx: any, selected: SearchItem, items: SearchItem[]): Promise<void> {
+async function showCurrentSessionAtSelection(
+  ctx: any,
+  selected: SearchItem,
+  items: SearchItem[],
+): Promise<void> {
   activeJumpCleanup?.();
   activeJumpCleanup = undefined;
 
-  await ctx.ui.custom<void>((tui: any, _theme: ThemeLike, _keybindings: unknown, done: () => void) => {
-    const terminal = tui.terminal;
-    const chat = tui.children[0] as Component & { render: (width: number) => string[] };
-    if (!chat?.render) {
-      done(undefined);
-      return { render: () => [""], invalidate: () => {} };
-    }
-
-    const originalRender = chat.render.bind(chat);
-    let active = true;
-    let mouseMode = true;
-    let scrollOffset = 0;
-    let initializedKey = "";
-    let visibleChatHeight = 1;
-
-    const normalize = (text: string) =>
-      text
-        .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
-        .replace(/\x1b\].*?(?:\x07|\x1b\\)/g, "")
-        .replace(/\x1b_[^\x1b]*(?:\x1b\\|\x07)/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-
-    const searchCandidates = () => {
-      const normalized = normalize(selected.text);
-      const candidates = new Set<string>();
-      for (const line of selected.text.split("\n")) {
-        const candidate = normalize(line);
-        if (candidate.length >= 8) candidates.add(candidate.slice(0, 80));
-        if (candidate.length >= 24) candidates.add(candidate.slice(0, 40));
-      }
-      if (normalized.length >= 8) candidates.add(normalized.slice(0, 100));
-      if (normalized.length >= 24) candidates.add(normalized.slice(0, 50));
-      for (const word of normalized.split(" ").filter((word) => word.length >= 12).slice(0, 8)) candidates.add(word);
-      return [...candidates].sort((a, b) => b.length - a.length);
-    };
-
-    const findSelectedLine = (lines: string[]) => {
-      const plain = lines.map(normalize);
-      for (const candidate of searchCandidates()) {
-        const index = plain.findIndex((line) => line.includes(candidate));
-        if (index !== -1) return index;
-      }
-      const itemIndex = Math.max(0, items.findIndex((item) => item.id === selected.id));
-      return Math.floor((itemIndex / Math.max(1, items.length - 1)) * Math.max(0, lines.length - 1));
-    };
-
-    const scroll = (delta: number) => {
-      scrollOffset = Math.max(0, scrollOffset + delta);
-      tui.requestRender();
-    };
-
-    chat.render = (width: number) => {
-      const allChatLines = originalRender(width);
-      const otherLines = tui.children.filter((child: Component) => child !== chat).flatMap((child: Component) => child.render(width));
-      visibleChatHeight = Math.max(1, (terminal?.rows ?? 24) - otherLines.length);
-      const maxOffset = Math.max(0, allChatLines.length - visibleChatHeight);
-      const key = `${width}:${allChatLines.length}:${selected.id}`;
-
-      if (initializedKey !== key) {
-        initializedKey = key;
-        const targetLine = findSelectedLine(allChatLines);
-        scrollOffset = Math.max(0, Math.min(maxOffset, targetLine - Math.floor(visibleChatHeight / 3)));
+  await ctx.ui.custom<void>(
+    (tui: any, _theme: ThemeLike, _keybindings: unknown, done: () => void) => {
+      const terminal = tui.terminal;
+      const chat = tui.children[0] as Component & { render: (width: number) => string[] };
+      if (!chat?.render) {
+        done(undefined);
+        return { render: () => [""], invalidate: () => {} };
       }
 
-      scrollOffset = Math.max(0, Math.min(maxOffset, scrollOffset));
-      const visible = allChatLines.slice(scrollOffset, scrollOffset + visibleChatHeight);
-      while (visible.length < visibleChatHeight) visible.push("");
-      return visible;
-    };
+      const originalRender = chat.render.bind(chat);
+      let active = true;
+      let mouseMode = true;
+      let scrollOffset = 0;
+      let initializedKey = "";
+      let visibleChatHeight = 1;
 
-    let unsubscribe: (() => void) | undefined;
-    const cleanup = () => {
-      if (!active) return;
-      active = false;
-      chat.render = originalRender;
-      if (mouseMode) {
-        mouseMode = false;
-        terminal?.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
-      }
-      unsubscribe?.();
-      if (activeJumpCleanup === cleanup) activeJumpCleanup = undefined;
-      tui.requestRender(true);
-    };
+      const normalize = (text: string) =>
+        text
+          .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+          .replace(/\x1b\].*?(?:\x07|\x1b\\)/g, "")
+          .replace(/\x1b_[^\x1b]*(?:\x1b\\|\x07)/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
 
-    unsubscribe = tui.addInputListener((data: string) => {
-      if (!active) return undefined;
-      const mouse = data.match(/^\x1b\[<(\d+);(\d+);(\d+)([mM])$/);
-      if (mouse) {
-        const button = Number(mouse[1]);
-        if (button === 64 || button === 65) {
-          scroll(button === 64 ? -3 : 3);
+      const searchCandidates = () => {
+        const normalized = normalize(selected.text);
+        const candidates = new Set<string>();
+        for (const line of selected.text.split("\n")) {
+          const candidate = normalize(line);
+          if (candidate.length >= 8) candidates.add(candidate.slice(0, 80));
+          if (candidate.length >= 24) candidates.add(candidate.slice(0, 40));
+        }
+        if (normalized.length >= 8) candidates.add(normalized.slice(0, 100));
+        if (normalized.length >= 24) candidates.add(normalized.slice(0, 50));
+        for (const word of normalized
+          .split(" ")
+          .filter((word) => word.length >= 12)
+          .slice(0, 8))
+          candidates.add(word);
+        return [...candidates].sort((a, b) => b.length - a.length);
+      };
+
+      const findSelectedLine = (lines: string[]) => {
+        const plain = lines.map(normalize);
+        for (const candidate of searchCandidates()) {
+          const index = plain.findIndex((line) => line.includes(candidate));
+          if (index !== -1) return index;
+        }
+        const itemIndex = Math.max(
+          0,
+          items.findIndex((item) => item.id === selected.id),
+        );
+        return Math.floor(
+          (itemIndex / Math.max(1, items.length - 1)) * Math.max(0, lines.length - 1),
+        );
+      };
+
+      const scroll = (delta: number) => {
+        scrollOffset = Math.max(0, scrollOffset + delta);
+        tui.requestRender();
+      };
+
+      chat.render = (width: number) => {
+        const allChatLines = originalRender(width);
+        const otherLines = tui.children
+          .filter((child: Component) => child !== chat)
+          .flatMap((child: Component) => child.render(width));
+        visibleChatHeight = Math.max(1, (terminal?.rows ?? 24) - otherLines.length);
+        const maxOffset = Math.max(0, allChatLines.length - visibleChatHeight);
+        const key = `${width}:${allChatLines.length}:${selected.id}`;
+
+        if (initializedKey !== key) {
+          initializedKey = key;
+          const targetLine = findSelectedLine(allChatLines);
+          scrollOffset = Math.max(
+            0,
+            Math.min(maxOffset, targetLine - Math.floor(visibleChatHeight / 3)),
+          );
+        }
+
+        scrollOffset = Math.max(0, Math.min(maxOffset, scrollOffset));
+        const visible = allChatLines.slice(scrollOffset, scrollOffset + visibleChatHeight);
+        while (visible.length < visibleChatHeight) visible.push("");
+        return visible;
+      };
+
+      let unsubscribe: (() => void) | undefined;
+      const cleanup = () => {
+        if (!active) return;
+        active = false;
+        chat.render = originalRender;
+        if (mouseMode) {
+          mouseMode = false;
+          terminal?.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+        }
+        unsubscribe?.();
+        if (activeJumpCleanup === cleanup) activeJumpCleanup = undefined;
+        tui.requestRender(true);
+      };
+
+      unsubscribe = tui.addInputListener((data: string) => {
+        if (!active) return undefined;
+        const mouse = data.match(/^\x1b\[<(\d+);(\d+);(\d+)([mM])$/);
+        if (mouse) {
+          const button = Number(mouse[1]);
+          if (button === 64 || button === 65) {
+            scroll(button === 64 ? -3 : 3);
+            return { consume: true };
+          }
           return { consume: true };
         }
-        return { consume: true };
-      }
-      if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
-        scroll(Math.max(3, Math.floor(visibleChatHeight * 0.8)));
-        return { consume: true };
-      }
-      if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
-        scroll(-Math.max(3, Math.floor(visibleChatHeight * 0.8)));
-        return { consume: true };
-      }
-      if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("g"))) {
-        cleanup();
-        return { consume: true };
-      }
-      // Keep the user's existing input and normal editor behavior intact.
-      // Non-scroll keys pass through to Pi's normal editor/input handling.
-      return undefined;
-    });
+        if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
+          scroll(Math.max(3, Math.floor(visibleChatHeight * 0.8)));
+          return { consume: true };
+        }
+        if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
+          scroll(-Math.max(3, Math.floor(visibleChatHeight * 0.8)));
+          return { consume: true };
+        }
+        if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("g"))) {
+          cleanup();
+          return { consume: true };
+        }
+        // Keep the user's existing input and normal editor behavior intact.
+        // Non-scroll keys pass through to Pi's normal editor/input handling.
+        return undefined;
+      });
 
-    activeJumpCleanup = cleanup;
-    terminal?.write("\x1b[?1000h\x1b[?1002h\x1b[?1006h");
-    tui.requestRender(true);
+      activeJumpCleanup = cleanup;
+      terminal?.write("\x1b[?1000h\x1b[?1002h\x1b[?1006h");
+      tui.requestRender(true);
 
-    // We only use ctx.ui.custom to get access to the live TUI instance. Close the
-    // temporary custom UI immediately so focus stays on Pi's real editor.
-    done(undefined);
-    return {
-      render: () => [""],
-      invalidate: () => {},
-      dispose: () => {},
-    };
-  }, {
-    overlay: true,
-    overlayOptions: { width: 1, maxHeight: 1, anchor: "top-left", margin: 0, nonCapturing: true },
-  });
+      // We only use ctx.ui.custom to get access to the live TUI instance. Close the
+      // temporary custom UI immediately so focus stays on Pi's real editor.
+      done(undefined);
+      return {
+        render: () => [""],
+        invalidate: () => {},
+        dispose: () => {},
+      };
+    },
+    {
+      overlay: true,
+      overlayOptions: { width: 1, maxHeight: 1, anchor: "top-left", margin: 0, nonCapturing: true },
+    },
+  );
 }
 
 export default function (pi: ExtensionAPI) {
@@ -623,64 +702,76 @@ export default function (pi: ExtensionAPI) {
       let alternateScreen = false;
       let mouseMode = false;
 
-      const selected = await ctx.ui.custom<SearchItem | null>((tui, theme, _keybindings, done) => {
-        activeTui = tui;
-        activeTerminal = tui.terminal;
-        const previousChildren = [...tui.children];
-        let restored = false;
-        const overlay = new SessionSearchOverlay(tui, items, args.trim(), theme as ThemeLike, done, Fzf);
+      const selected = await ctx.ui.custom<SearchItem | null>(
+        (tui, theme, _keybindings, done) => {
+          activeTui = tui;
+          activeTerminal = tui.terminal;
+          const previousChildren = [...tui.children];
+          let restored = false;
+          const overlay = new SessionSearchOverlay(
+            tui,
+            items,
+            args.trim(),
+            theme as ThemeLike,
+            done,
+            Fzf,
+          );
 
-        return {
-          render: (width: number) => overlay.render(width),
-          invalidate: () => overlay.invalidate(),
-          handleInput: (data: string) => {
-            overlay.handleInput(data);
-            tui.requestRender();
+          return {
+            render: (width: number) => overlay.render(width),
+            invalidate: () => overlay.invalidate(),
+            handleInput: (data: string) => {
+              overlay.handleInput(data);
+              tui.requestRender();
+            },
+            dispose: () => {
+              if (!restored) {
+                restored = true;
+                tui.children = previousChildren;
+              }
+              if (mouseMode) {
+                mouseMode = false;
+                activeTerminal?.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+              }
+              if (alternateScreen) {
+                alternateScreen = false;
+                // Return to Pi's normal screen, then force Pi to redraw itself from scratch.
+                activeTerminal?.write("\x1b[?1049l");
+              }
+              activeTui?.requestRender(true);
+            },
+            get focused() {
+              return overlay.focused;
+            },
+            set focused(value: boolean) {
+              overlay.focused = value;
+            },
+          };
+        },
+        {
+          overlay: true,
+          overlayOptions: {
+            width: "100%",
+            maxHeight: "100%",
+            anchor: "center",
+            margin: 0,
           },
-          dispose: () => {
-            if (!restored) {
-              restored = true;
-              tui.children = previousChildren;
-            }
-            if (mouseMode) {
-              mouseMode = false;
-              activeTerminal?.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
-            }
-            if (alternateScreen) {
-              alternateScreen = false;
-              // Return to Pi's normal screen, then force Pi to redraw itself from scratch.
-              activeTerminal?.write("\x1b[?1049l");
-            }
+          onHandle: () => {
+            if (alternateScreen) return;
+            alternateScreen = true;
+            // Enter alternate screen only after the overlay has been registered.
+            // Also remove Pi's normal root children while search is active: otherwise
+            // a full redraw would still print the whole chat above the overlay into
+            // alternate-screen scrollback, which mouse-wheel scrolling can reveal.
+            if (activeTui) activeTui.children = [];
+            mouseMode = true;
+            activeTerminal?.write(
+              "\x1b[?1049h\x1b[2J\x1b[H\x1b[3J\x1b[?1000h\x1b[?1002h\x1b[?1006h",
+            );
             activeTui?.requestRender(true);
           },
-          get focused() {
-            return overlay.focused;
-          },
-          set focused(value: boolean) {
-            overlay.focused = value;
-          },
-        };
-      }, {
-        overlay: true,
-        overlayOptions: {
-          width: "100%",
-          maxHeight: "100%",
-          anchor: "center",
-          margin: 0,
         },
-        onHandle: () => {
-          if (alternateScreen) return;
-          alternateScreen = true;
-          // Enter alternate screen only after the overlay has been registered.
-          // Also remove Pi's normal root children while search is active: otherwise
-          // a full redraw would still print the whole chat above the overlay into
-          // alternate-screen scrollback, which mouse-wheel scrolling can reveal.
-          if (activeTui) activeTui.children = [];
-          mouseMode = true;
-          activeTerminal?.write("\x1b[?1049h\x1b[2J\x1b[H\x1b[3J\x1b[?1000h\x1b[?1002h\x1b[?1006h");
-          activeTui?.requestRender(true);
-        },
-      });
+      );
 
       if (selected) {
         await showCurrentSessionAtSelection(ctx, selected, items);

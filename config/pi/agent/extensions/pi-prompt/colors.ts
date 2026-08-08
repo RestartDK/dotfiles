@@ -18,20 +18,16 @@ export const ansi: AnsiColors = {
 // Convert hex to RGB tuple
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
 
 // Colors used by welcome/editor chrome rendering
 const THEME = {
-  sep: 244,               // ANSI 256 gray
-  model: "#d787af",       // Pink/mauve
-  path: "#00afaf",        // Teal/cyan
-  gitClean: "#5faf5f",    // Green
-  accent: "#febc38",      // Orange
+  sep: 244, // ANSI 256 gray
+  model: "#d787af", // Pink/mauve
+  path: "#00afaf", // Teal/cyan
+  gitClean: "#5faf5f", // Green
+  accent: "#febc38", // Orange
 };
 
 // Color name to ANSI code mapping
@@ -39,20 +35,20 @@ type ColorName = "sep" | "model" | "path" | "gitClean" | "accent";
 
 function getAnsiCode(color: ColorName): string {
   const value = THEME[color as keyof typeof THEME];
-  
+
   if (value === undefined || value === "") {
     return ""; // No color, use terminal default
   }
-  
+
   if (typeof value === "number") {
     return ansi.getFgAnsi256(value);
   }
-  
+
   if (typeof value === "string" && value.startsWith("#")) {
     const [r, g, b] = hexToRgb(value);
     return ansi.getFgAnsi(r, g, b);
   }
-  
+
   return "";
 }
 
@@ -66,4 +62,3 @@ export function fgOnly(color: ColorName, text: string): string {
 export function getFgAnsiCode(color: ColorName): string {
   return getAnsiCode(color);
 }
-
