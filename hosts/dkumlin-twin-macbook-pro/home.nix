@@ -1,4 +1,4 @@
-_:
+{ pkgs, ... }:
 
 {
   imports = [
@@ -12,6 +12,11 @@ _:
     username = "danielkumlin";
     homeDirectory = "/Users/danielkumlin";
     stateVersion = "26.05";
+
+    packages = with pkgs; [
+      esp-generate
+      espflash
+    ];
   };
 
   my.liveConfig = {
