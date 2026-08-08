@@ -1,7 +1,12 @@
 { pkgs, ... }:
 
 {
-  imports = [ ../../modules/darwin/determinate-nix.nix ];
+  imports = [
+    ../../modules/darwin/determinate-nix.nix
+    ../../modules/darwin/spotlight-hotkeys.nix
+  ];
+
+  my.darwin.spotlightHotkeys.enable = true;
 
   nixpkgs.config.allowUnfree = true;
 

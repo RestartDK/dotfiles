@@ -1,7 +1,12 @@
 { pkgs, ... }:
 
 {
-  imports = [ ../../modules/darwin/determinate-nix.nix ];
+  imports = [
+    ../../modules/darwin/determinate-nix.nix
+    ../../modules/darwin/spotlight-hotkeys.nix
+  ];
+
+  my.darwin.spotlightHotkeys.enable = true;
 
   nixpkgs.config.allowUnfree = true;
 
@@ -153,19 +158,6 @@
       show-recents = false;
       tilesize = 51;
     };
-
-    activationScripts.postActivation.text = ''
-      runAsUser() {
-        launchctl asuser "$(id -u -- danielkumlin)" sudo --user=danielkumlin --set-home -- "$@"
-      }
-
-      echo >&2 "disabling Spotlight Cmd-Space hotkeys for Raycast..."
-      runAsUser /usr/bin/defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }'
-      runAsUser /usr/bin/defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 '{ enabled = 0; value = { parameters = (32, 49, 1572864); type = standard; }; }'
-      if [[ -x /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings ]]; then
-        runAsUser /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u || true
-      fi
-    '';
 
     stateVersion = 6;
   };
