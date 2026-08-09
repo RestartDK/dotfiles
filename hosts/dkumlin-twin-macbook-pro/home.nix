@@ -15,7 +15,6 @@
 
     packages = with pkgs; [
       esp-generate
-      espflash
     ];
   };
 
