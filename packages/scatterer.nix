@@ -26,7 +26,8 @@ rustPlatform.buildRustPackage {
 
   postPatch = ''
     substituteInPlace herdr-plugin.toml \
-      --replace-fail '"bash", "scripts/scatterer.sh"' '"${bashNonInteractive}/bin/bash", "scripts/scatterer.sh"'
+      --replace-fail '"bash", "scripts/scatterer.sh"' '"${bashNonInteractive}/bin/bash", "scripts/scatterer.sh"' \
+      --replace-warn '"/bin/bash", "scripts/scatterer.sh"' '"${bashNonInteractive}/bin/bash", "scripts/scatterer.sh"'
   '';
 
   installPhase = ''
