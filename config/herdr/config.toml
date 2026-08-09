@@ -4,7 +4,7 @@ onboarding = false
 directory = "~/.herdr/worktrees"
 
 [ui.toast]
-delivery = "system"
+delivery = "herdr"
 
 [ui]
 agent_panel_sort = "priority"
@@ -79,6 +79,12 @@ key = "prefix+shift+g"
 type = "plugin_action"
 command = "daniel.scatterer.lazygit"
 description = "lazygit"
+
+[[keys.command]]
+key = "prefix+u"
+type = "plugin_action"
+command = "daniel.scatterer.review-toggle"
+description = "toggle Review pane"
 
 [[keys.command]]
 key = "prefix+shift+f"
