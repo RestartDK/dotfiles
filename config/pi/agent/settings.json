@@ -37,6 +37,6 @@
   "skills": [
     "~/.claude/skills"
   ],
-  "theme": "light/dark",
+  "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen"
 }

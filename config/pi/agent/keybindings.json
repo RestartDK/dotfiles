@@ -1,5 +1,11 @@
 {
   "app.models.clearAll": "ctrl+shift+x",
   "app.model.select": [],
+  "tui.altScreen.pageUp": [],
+  "tui.altScreen.pageDown": [],
+  "tui.altScreen.previousPrompt": [],
+  "tui.altScreen.nextPrompt": [],
+  "tui.altScreen.top": [],
+  "tui.altScreen.bottom": [],
   "tui.input.newLine": "shift+enter"
 }

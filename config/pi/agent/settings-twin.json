@@ -1,6 +1,6 @@
 {
   "defaultModel": "gpt-5.6-sol",
-  "defaultProvider": "openai-codex",
+  "defaultProvider": "openai",
   "defaultThinkingLevel": "high",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
@@ -99,6 +99,6 @@
   "skills": [
     "~/.claude/skills"
   ],
-  "theme": "light/dark",
+  "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen"
 }
