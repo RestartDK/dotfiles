@@ -159,6 +159,9 @@ setopt hist_ignore_dups
 setopt hist_verify
 
 # fzf config
+# Use fzf's terminal-palette-driven 16-color scheme so it follows the
+# active terminal theme reasonably well, including Tokyo Night/Day themes.
+export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:+$FZF_DEFAULT_OPTS }--style=minimal --color=base16"
 if [[ -t 0 && -t 1 ]]; then
   command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
 fi
