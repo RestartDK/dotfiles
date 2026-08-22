@@ -11,12 +11,12 @@ let
   hasScattererInput = dotfilesInputs ? scatterer;
   herdrPackage = dotfilesInputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
+  # Upstream's packages.plugin is a ready-to-link Herdr plugin root: the
+  # store manifest invokes the built binary directly (no bash launcher, no
+  # cargo build hook), so no local assembly package is needed.
   scattererPackage =
     if hasScattererInput then
-      pkgs.callPackage ../../../packages/scatterer.nix {
-        src = dotfilesInputs.scatterer;
-        scatterer = dotfilesInputs.scatterer.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      }
+      dotfilesInputs.scatterer.packages.${pkgs.stdenv.hostPlatform.system}.plugin
     else
       null;
   scattererPluginRoot =
@@ -59,15 +59,21 @@ in
             home.packages = [ scattererPackage ];
 
             home.activation.linkScattererHerdrPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-              # Herdr 0.7.5 stores one user-global plugin registry and can update it
-              # while the server is offline. Never start or restore a session only
-              # to refresh this declarative plugin link. Preserve an explicit local
-              # development link; otherwise refresh the immutable Nix registration.
-              existing_manifest="$(
-                "${herdrPackage}/bin/herdr" plugin list --json 2>/dev/null \
-                  | ${pkgs.jq}/bin/jq -r '.result.plugins[]? | select(.plugin_id == "daniel.scatterer") | .manifest_path // empty' \
-                  | ${pkgs.coreutils}/bin/head -n 1
-              )"
+              # Herdr stores its plugin registry in a plain JSON file that the
+              # CLI can edit offline. Read that file directly instead of asking
+              # the server, so activation never races a running-but-mismatched
+              # Herdr server (CLI/server protocol_mismatch during upgrades).
+              # Preserve an explicit local development link; otherwise refresh
+              # the immutable Nix registration.
+              registry="${config.xdg.configHome}/herdr/plugins.json"
+              existing_manifest=""
+              if [ -f "$registry" ]; then
+                existing_manifest="$(
+                  ${pkgs.jq}/bin/jq -r \
+                    'map(select(.plugin_id == "daniel.scatterer")) | first | .manifest_path // empty' \
+                    "$registry" 2>/dev/null || true
+                )"
+              fi
               if [ -n "$existing_manifest" ] && [[ "$existing_manifest" != /nix/store/* ]]; then
                 echo "Preserving local Scatterer plugin link at $existing_manifest"
               elif ! run "${herdrPackage}/bin/herdr" plugin link "${scattererPluginRoot}" >/dev/null 2>&1; then

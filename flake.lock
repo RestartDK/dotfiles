@@ -448,11 +448,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1787414969,
-        "narHash": "sha256-1nRb4tfJLZ/8ghixyQNljHSIeSo3bkjL2EKw+ksOGfw=",
+        "lastModified": 1787416435,
+        "narHash": "sha256-Hk8x8mGToW4oo8nm+fIvVs3pSCITM4h4fQSRcNNJCtQ=",
         "owner": "RestartDK",
         "repo": "scatterer",
-        "rev": "61900f2125951cb5f4ab076960a8c5d18ad1fe50",
+        "rev": "c5677da3afa8837de7ea424cdc850dc4bc598510",
         "type": "github"
       },
       "original": {
