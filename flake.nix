@@ -18,9 +18,9 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
 
-    scatterer-src = {
+    scatterer = {
       url = "github:RestartDK/scatterer";
-      flake = false;
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";

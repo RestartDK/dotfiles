@@ -1,29 +1,31 @@
+# Assembles the Herdr plugin root around the scatterer binary built by the
+# upstream flake (packages.default). The upstream package is pinned by its own
+# Cargo.lock, so this file no longer tracks a cargoHash.
 {
   bashNonInteractive,
-  gitMinimal,
   lib,
-  libiconv,
-  rustPlatform,
+  stdenvNoCC,
+  # Upstream flake source tree (manifest + launcher script).
   src,
-  stdenv,
+  # Built scatterer package from the upstream flake.
+  scatterer,
 }:
 
 let
   manifest = builtins.fromTOML (builtins.readFile "${src}/herdr-plugin.toml");
 in
-rustPlatform.buildRustPackage {
+stdenvNoCC.mkDerivation {
   pname = "scatterer-herdr-plugin";
   inherit (manifest) version;
 
   inherit src;
-  cargoHash = "sha256-DSQMSzVo9FiVbC9JptkiGtBFkrFg9prCbz8mKgdRi3A=";
-  buildInputs = lib.optionals stdenv.isDarwin [ libiconv ];
-  nativeCheckInputs = [ gitMinimal ];
+
+  dontConfigure = true;
+  dontBuild = true;
 
   # The plugin root is immutable in /nix/store, so Herdr should execute the
   # already-built binary we install below rather than relying on cargo at
   # runtime. Link/install-time build commands are only used outside Nix.
-
   postPatch = ''
     substituteInPlace herdr-plugin.toml \
       --replace-fail '"bash", "scripts/scatterer.sh"' '"${bashNonInteractive}/bin/bash", "scripts/scatterer.sh"' \
@@ -33,17 +35,12 @@ rustPlatform.buildRustPackage {
   installPhase = ''
     runHook preInstall
 
-    binary="$(find target -type f -path '*/release/scatterer' -perm -111 | head -n 1)"
-    if [ -z "$binary" ]; then
-      echo "failed to find built scatterer binary" >&2
-      exit 1
-    fi
-
     pluginRoot="$out/share/herdr/plugins/scatterer"
-    install -Dm755 "$binary" "$out/bin/scatterer"
+    mkdir -p "$out/bin" "$pluginRoot/target/release"
+    ln -s ${lib.getExe scatterer} "$out/bin/scatterer"
+    ln -s ${lib.getExe scatterer} "$pluginRoot/target/release/scatterer"
     install -Dm644 herdr-plugin.toml "$pluginRoot/herdr-plugin.toml"
     install -Dm755 scripts/scatterer.sh "$pluginRoot/scripts/scatterer.sh"
-    install -Dm755 "$binary" "$pluginRoot/target/release/scatterer"
 
     runHook postInstall
   '';
