@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve as resolvePath } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 type JsonRecord = Record<string, unknown>;
@@ -220,9 +220,72 @@ function mergeConfig(base: SubagentsConfig, override: Partial<SubagentsConfig>):
   };
 }
 
+function loadMarkdownAgents(dir: string): Record<string, WorkerPreset> {
+  const agents: Record<string, WorkerPreset> = {};
+  if (!existsSync(dir)) return agents;
+
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return agents;
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".md")) continue;
+    const filePath = join(dir, entry);
+    let content: string;
+    try {
+      content = readFileSync(filePath, "utf-8");
+    } catch {
+      continue;
+    }
+
+    const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
+    const name = frontmatter.name?.trim();
+    const description = frontmatter.description?.trim();
+    if (!name || !description) {
+      console.warn(`[subagents] Ignoring ${filePath}: markdown agents need name and description frontmatter.`);
+      continue;
+    }
+
+    const preset: WorkerPreset = { description, systemPrompt: body.trim() };
+    if (frontmatter.model?.trim()) preset.model = frontmatter.model.trim();
+    if (frontmatter.thinking?.trim()) preset.thinking = frontmatter.thinking.trim();
+    const tools = readStringList(frontmatter.tools);
+    if (tools) preset.tools = tools;
+
+    agents[name] = preset;
+  }
+
+  return agents;
+}
+
+function findProjectMarkdownAgentsDir(cwd: string): string | undefined {
+  let currentDir = resolvePath(cwd);
+  while (true) {
+    const candidate = join(currentDir, ".agents", "agents");
+    if (existsSync(candidate)) return candidate;
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) return undefined;
+    currentDir = parentDir;
+  }
+}
+
 function readConfig(cwd: string, includeProject: boolean): SubagentsConfig {
+  let config = mergeConfig(DEFAULT_CONFIG, {
+    agents: loadMarkdownAgents(join(homedir(), ".agents", "agents")),
+  });
+
+  if (includeProject) {
+    const projectMarkdownDir = findProjectMarkdownAgentsDir(cwd);
+    if (projectMarkdownDir) {
+      config = mergeConfig(config, { agents: loadMarkdownAgents(projectMarkdownDir) });
+    }
+  }
+
   const globalSettings = readJsonFile(join(getAgentDir(), "settings.json"));
-  let config = mergeConfig(DEFAULT_CONFIG, parseConfig(globalSettings.subagents));
+  config = mergeConfig(config, parseConfig(globalSettings.subagents));
 
   if (includeProject) {
     const projectSettings = readJsonFile(join(cwd, CONFIG_DIR_NAME, "settings.json"));

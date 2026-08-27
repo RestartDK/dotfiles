@@ -37,7 +37,9 @@ in
       (lib.mkIf agentSkillsEnabled {
         home.file.".agents/.skill-lock.json" = file "config/agents/.skill-lock.json";
         home.file.".agents/skills" = dir agentSkillsPath;
+        home.file.".agents/agents" = dir "config/agents/agents";
         xdg.configFile."agents/skills" = dir agentSkillsPath;
+        xdg.configFile."agents/agents" = dir "config/agents/agents";
       })
 
       (lib.mkIf codex {
@@ -62,6 +64,7 @@ in
       })
 
       (lib.mkIf pi {
+        home.file.".pi/agent/AGENTS.md" = file "config/pi/agent/AGENTS.md";
         home.file.".pi/agent/keybindings.json" = file "config/pi/agent/keybindings.json";
         home.file.".pi/agent/settings.json" = file cfg.piSettingsFile;
         home.file.".pi/agent/models.json" = file "config/pi/agent/models.json";

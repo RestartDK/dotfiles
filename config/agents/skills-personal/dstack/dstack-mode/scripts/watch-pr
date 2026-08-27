@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Stack-agnostic PR verdict watcher. Reads GitHub state, never mutates anything.
+# Verdicts: READY | CONFLICT | CI_FAIL | THREADS | REVIEW | WAITING | MERGED | CLOSED
+# usage: watch-pr <pr-number> [--repo owner/name] [--status-only] [--pretty] [--interval N]
+set -euo pipefail
+
+PR="" REPO="" STATUS_ONLY=0 PRETTY=0 INTERVAL=60
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo) REPO="$2"; shift 2 ;;
+    --status-only) STATUS_ONLY=1; shift ;;
+    --pretty) PRETTY=1; shift ;;
+    --interval) INTERVAL="$2"; shift 2 ;;
+    -*) echo "unknown flag $1" >&2; exit 1 ;;
+    *) PR="$1"; shift ;;
+  esac
+done
+[ -n "$PR" ] || { echo "usage: watch-pr <pr-number> [--repo owner/name] [--status-only] [--pretty] [--interval N]" >&2; exit 1; }
+
+REPO_ARGS=()
+[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO_ARGS=(--repo "$REPO")
+OWNER="${REPO%%/*}" NAME="${REPO##*/}"
+
+snapshot() {
+  local view threads
+  view=$(gh pr view "$PR" "${REPO_ARGS[@]}" --json state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,isDraft)
+  threads=$(gh api graphql -f query='
+    query($owner:String!,$name:String!,$pr:Int!){
+      repository(owner:$owner,name:$name){
+        pullRequest(number:$pr){
+          reviewThreads(first:100){nodes{isResolved isOutdated}}
+        }
+      }
+    }' -F owner="$OWNER" -F name="$NAME" -F pr="$PR" \
+    --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)] | length')
+
+  jq -cn --argjson v "$view" --argjson threads "$threads" --arg pr "$PR" --arg repo "$REPO" '
+    ($v.statusCheckRollup // []) as $checks
+    | [$checks[] | select((.conclusion // .state // "") as $c
+        | ($c=="FAILURE" or $c=="ERROR" or $c=="TIMED_OUT" or $c=="ACTION_REQUIRED"))] as $failed
+    | [$checks[] | select((.status // "") as $s | ($s=="IN_PROGRESS" or $s=="QUEUED" or $s=="PENDING")
+        or ((.state // "")=="PENDING"))] as $pending
+    | (if $v.state=="MERGED" then "MERGED"
+       elif $v.state=="CLOSED" then "CLOSED"
+       elif $v.mergeable=="CONFLICTING" then "CONFLICT"
+       elif ($failed|length)>0 then "CI_FAIL"
+       elif $threads>0 then "THREADS"
+       elif ($pending|length)>0 then "WAITING"
+       elif ($v.reviewDecision=="CHANGES_REQUESTED" or $v.reviewDecision=="REVIEW_REQUIRED") then "REVIEW"
+       elif ($v.mergeStateStatus=="CLEAN" or $v.mergeStateStatus=="UNSTABLE" or $v.mergeStateStatus=="HAS_HOOKS") then "READY"
+       else "WAITING" end) as $verdict
+    | {verdict:$verdict, pr:($pr|tonumber), repo:$repo, draft:$v.isDraft,
+       merge_state:$v.mergeStateStatus, review:$v.reviewDecision,
+       unresolved_threads:$threads,
+       failing_checks:[$failed[].name // $failed[].context],
+       pending_checks:($pending|length)}'
+}
+
+emit() {
+  if [ "$PRETTY" = 1 ]; then
+    echo "$1" | jq -r '"\(.verdict)  PR #\(.pr) \(.repo)  merge=\(.merge_state) review=\(.review) threads=\(.unresolved_threads) pending=\(.pending_checks) failing=\(.failing_checks|join(","))"'
+  else
+    echo "$1"
+  fi
+}
+
+terminal() { case "$1" in READY|CONFLICT|CI_FAIL|THREADS|REVIEW|MERGED|CLOSED) return 0 ;; *) return 1 ;; esac; }
+
+s=$(snapshot); emit "$s"
+[ "$STATUS_ONLY" = 1 ] && exit 0
+v=$(echo "$s" | jq -r .verdict)
+while ! terminal "$v"; do
+  sleep "$INTERVAL"
+  s=$(snapshot); emit "$s"
+  v=$(echo "$s" | jq -r .verdict)
+done
