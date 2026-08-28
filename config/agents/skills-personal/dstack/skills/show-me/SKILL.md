@@ -7,6 +7,8 @@ dstack wiring: the workflow behind **principle-show-me**.
 
 Help the user understand the current topic of conversation visually. Skip the preamble and keep prose brief. Pick the smallest view that makes the key point clear.
 
+Default to the inline forms below. Build the HTML artifact only when the user asks for it, or when no inline form can carry the point.
+
 - Show logic or an algorithm as pseudocode:
 
 ```text

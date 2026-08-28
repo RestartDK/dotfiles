@@ -11,9 +11,8 @@ import {
   matchesKey,
   truncateToWidth,
   type TUI,
-  visibleWidth,
 } from "@earendil-works/pi-tui";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { renderStatusLine } from "./status-line.ts";
 
 type VimMode = "normal" | "insert";
 type PiEditorFactory = (
@@ -75,38 +74,6 @@ function addUsage(
   totals.cost += usage.cost.total;
 }
 
-function formatTokens(count: number): string {
-  if (count < 1_000) return count.toString();
-  if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
-  if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
-  if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  return `${Math.round(count / 1_000_000)}M`;
-}
-
-function formatDirectory(cwd: string): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE;
-  if (!home) return cwd;
-  const resolvedCwd = resolve(cwd);
-  const resolvedHome = resolve(home);
-  const relativeToHome = relative(resolvedHome, resolvedCwd);
-  const insideHome =
-    relativeToHome === "" ||
-    (relativeToHome !== ".." &&
-      !relativeToHome.startsWith(`..${sep}`) &&
-      !isAbsolute(relativeToHome));
-  if (!insideHome) return cwd;
-  return relativeToHome === "" ? "~" : `~${sep}${relativeToHome}`;
-}
-
-function alignSides(left: string, right: string, width: number): string {
-  if (!right) return truncateToWidth(left, width, "");
-  const rightWidth = visibleWidth(right);
-  if (rightWidth >= width) return truncateToWidth(right, width, "");
-  const leftWidth = Math.max(0, width - rightWidth - 1);
-  const fittedLeft = truncateToWidth(left, leftWidth, "");
-  return `${fittedLeft}${" ".repeat(width - visibleWidth(fittedLeft) - rightWidth)}${right}`;
-}
-
 function sanitizeStatus(text: string): string {
   return text
     .replace(/[\r\n\t]/g, " ")
@@ -135,12 +102,12 @@ export default function piVim(pi: ExtensionAPI) {
         ? previousEditorFactory(tui, editorTheme, keybindings)
         : new CustomEditor(tui, editorTheme, keybindings);
       const viewport = vimViewport(tui);
-      const insertBindings = {
+      const insertBindings: ReturnType<KeybindingsManager["getUserBindings"]> = {
         ...keybindings.getUserBindings(),
         "tui.altScreen.halfPageUp": [],
         "tui.altScreen.halfPageDown": [],
       };
-      const normalBindings = {
+      const normalBindings: ReturnType<KeybindingsManager["getUserBindings"]> = {
         ...insertBindings,
         "tui.altScreen.halfPageUp": "ctrl+u",
         "tui.altScreen.halfPageDown": "ctrl+d",
@@ -222,6 +189,25 @@ export default function piVim(pi: ExtensionAPI) {
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([, text]) => sanitizeStatus(text));
           const branch = footerData.getGitBranch();
+          const extensionStatus = otherStatuses.length
+            ? theme.fg("muted", ` ${otherStatuses.join(" ")}`)
+            : "";
+          const vimStatus = `${modeChip(theme, mode, branch ?? undefined)}${extensionStatus}`;
+
+          return [truncateToWidth(vimStatus, width, "")];
+        },
+        invalidate() {
+          tui.requestRender();
+        },
+        dispose() {
+          unsubscribe();
+        },
+      };
+    });
+    ctx.ui.setWidget(
+      "pi-vim-status-line",
+      (_tui, theme) => ({
+        render(width: number): string[] {
           const totals: UsageTotals = {
             input: 0,
             output: 0,
@@ -245,57 +231,25 @@ export default function piVim(pi: ExtensionAPI) {
               addUsage(totals, entry.usage);
             }
           }
-
-          const stats: string[] = [];
-          if (totals.input) stats.push(`↑${formatTokens(totals.input)}`);
-          if (totals.output) stats.push(`↓${formatTokens(totals.output)}`);
-          if (totals.cacheRead) stats.push(`R${formatTokens(totals.cacheRead)}`);
-          if (totals.cacheWrite) stats.push(`W${formatTokens(totals.cacheWrite)}`);
-          if (totals.cost) stats.push(`$${totals.cost.toFixed(3)}`);
-
           const context = ctx.getContextUsage();
-          const contextWindow = context?.contextWindow ?? ctx.model?.contextWindow ?? 0;
-          const contextPercent = context?.percent;
-          const contextLabel = `${contextPercent === null || contextPercent === undefined ? "?" : contextPercent.toFixed(1)}%/${formatTokens(contextWindow)} (auto)`;
-          const styledContext =
-            (contextPercent ?? 0) > 90
-              ? theme.fg("error", contextLabel)
-              : (contextPercent ?? 0) > 70
-                ? theme.fg("warning", contextLabel)
-                : contextLabel;
-          stats.push(styledContext);
-          const statsLine = theme.fg("dim", stats.join(" "));
-
-          const modelName = ctx.model?.id ?? "no-model";
-          const modelLabel = ctx.model?.reasoning
-            ? `${modelName} · ${ctx.thinkingLevel ?? "off"}`
-            : modelName;
-          const model = theme.fg("accent", theme.bold(modelLabel));
-
-          const extensionStatus = otherStatuses.length
-            ? theme.fg("muted", ` ${otherStatuses.join(" ")}`)
-            : "";
-          const vimStatus = `${modeChip(theme, mode, branch)}${extensionStatus}`;
-
-          return [alignSides(statsLine, model, width), truncateToWidth(vimStatus, width, "")];
-        },
-        invalidate() {
-          tui.requestRender();
-        },
-        dispose() {
-          unsubscribe();
-        },
-      };
-    });
-    ctx.ui.setWidget(
-      "pi-vim-context",
-      () => ({
-        render(width: number): string[] {
-          const theme = ctx.ui.theme;
-          const directory = theme.fg("dim", formatDirectory(ctx.sessionManager.getCwd()));
+          const model = ctx.model;
           const netns = footerDataRef?.getExtensionStatuses().get("netns");
-          const namespace = netns ? theme.fg("dim", `  ${sanitizeStatus(netns)}`) : "";
-          return [truncateToWidth(`${directory}${namespace}`, width, "")];
+          return [
+            renderStatusLine(
+              {
+                model: (model?.name ?? model?.id ?? "no-model").replace(/^Claude /, ""),
+                reasoning: model?.reasoning ?? false,
+                thinkingLevel: ctx.thinkingLevel ?? "off",
+                cwd: ctx.sessionManager.getCwd(),
+                contextPercent: context?.percent ?? null,
+                contextWindow: context?.contextWindow ?? model?.contextWindow ?? 0,
+                cost: totals.cost,
+                netns: netns ? sanitizeStatus(netns) : undefined,
+              },
+              theme,
+              width,
+            ),
+          ];
         },
         invalidate() {},
       }),
@@ -307,7 +261,7 @@ export default function piVim(pi: ExtensionAPI) {
     restoreBindings?.();
     restoreBindings = undefined;
     if (ctx.mode !== "tui") return;
-    ctx.ui.setWidget("pi-vim-context", undefined);
+    ctx.ui.setWidget("pi-vim-status-line", undefined);
     ctx.ui.setFooter(undefined);
     if (activeFactory && ctx.ui.getEditorComponent() === activeFactory) {
       ctx.ui.setEditorComponent(previousFactory);

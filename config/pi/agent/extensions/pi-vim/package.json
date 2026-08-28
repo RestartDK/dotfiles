@@ -1,0 +1,7 @@
+{
+  "name": "pi-vim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vim modal editing and status line chrome for pi",
+  "type": "module"
+}
