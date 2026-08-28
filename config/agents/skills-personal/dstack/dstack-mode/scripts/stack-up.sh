@@ -23,20 +23,45 @@ USAGE
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --port) PORT="$2"; shift 2 ;;
-    --reset) RESET=1; shift ;;
-    --seed) SEED=1; shift ;;
-    --fixture) FIXTURE=1; shift ;;
-    --reauth) REAUTH=1; shift ;;
-    --demo) DEMO=1; shift ;;
-    *) usage ;;
+  --port)
+    PORT="$2"
+    shift 2
+    ;;
+  --reset)
+    RESET=1
+    shift
+    ;;
+  --seed)
+    SEED=1
+    shift
+    ;;
+  --fixture)
+    FIXTURE=1
+    shift
+    ;;
+  --reauth)
+    REAUTH=1
+    shift
+    ;;
+  --demo)
+    DEMO=1
+    shift
+    ;;
+  *) usage ;;
   esac
 done
 
-[ -f process-compose.yaml ] || { echo "FAIL: run from the cobb repo root" >&2; exit 1; }
+[ -f process-compose.yaml ] || {
+  echo "FAIL: run from the cobb repo root" >&2
+  exit 1
+}
 
 step() { printf '\n==> %s\n' "$1"; }
-fail() { echo "FAIL: $1" >&2; echo "logs: journalctl -t cobb-server --since -10min (see process-compose.yaml for other service tags)" >&2; exit 1; }
+fail() {
+  echo "FAIL: $1" >&2
+  echo "logs: journalctl -t cobb-server --since -10min (see process-compose.yaml for other service tags)" >&2
+  exit 1
+}
 
 running() { process-compose -p "$PORT" list >/dev/null 2>&1; }
 
@@ -58,10 +83,13 @@ fi
 
 step "waiting for services to be ready"
 for i in $(seq 1 90); do
-  not_ready=$(process-compose -p "$PORT" list -o json 2>/dev/null \
-    | jq -r '[.[] | select(.is_ready != "Ready" and .is_ready != "-" and .status != "Completed")] | length' 2>/dev/null || echo unknown)
+  not_ready=$(process-compose -p "$PORT" list -o json 2>/dev/null |
+    jq -r '[.[] | select(.is_ready != "Ready" and .is_ready != "-" and .status != "Completed")] | length' 2>/dev/null || echo unknown)
   if [ "$not_ready" = "0" ]; then break; fi
-  [ "$i" = 90 ] && { process-compose -p "$PORT" list -o json | jq -r '.[] | [.name,.status,.is_ready] | @tsv' >&2; fail "services not ready after 15min"; }
+  [ "$i" = 90 ] && {
+    process-compose -p "$PORT" list -o json | jq -r '.[] | [.name,.status,.is_ready] | @tsv' >&2
+    fail "services not ready after 15min"
+  }
   sleep 10
 done
 process-compose -p "$PORT" list -o json | jq -r '.[] | [.name,.status,.is_ready] | @tsv'
@@ -94,8 +122,8 @@ if [ "$DEMO" = 1 ]; then
   SHOT="/tmp/cobb-demo-$(date +%s).png"
   CHROME=$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)
   if [ -n "$CHROME" ]; then
-    "$CHROME" --headless --disable-gpu --window-size=1440,900 --screenshot="$SHOT" "$LOGIN_URL" 2>/dev/null \
-      && echo "screenshot: $SHOT" || echo "WARN: screenshot failed; fall back to the browser skill" >&2
+    "$CHROME" --headless --disable-gpu --window-size=1440,900 --screenshot="$SHOT" "$LOGIN_URL" 2>/dev/null &&
+      echo "screenshot: $SHOT" || echo "WARN: screenshot failed; fall back to the browser skill" >&2
   else
     echo "WARN: no chromium found; fall back to the browser skill" >&2
   fi
