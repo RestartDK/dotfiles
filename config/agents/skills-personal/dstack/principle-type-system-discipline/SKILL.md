@@ -24,6 +24,7 @@ Applies to any typed language. Skills like `typescript-best-practices` ground it
 **The tests:**
 
 - "Can I write a comment explaining when this combination of fields is valid?" If yes, the type is too loose. Split it into a sum type.
+- "Am I adding a boolean that selects between modes, states, or kinds?" Make it an enum with named variants, so call sites read as intent and new variants stay addable.
 - "Do two of my function arguments share a primitive type but mean different things?" Brand them.
 - "Where did this `any`, this `as`, this `assertNotNull` come from?" Trace it to the boundary and validate there instead.
 - "If a new variant is added next month, will the compiler tell the next agent where to add a case?" If no, the match isn't exhaustive.

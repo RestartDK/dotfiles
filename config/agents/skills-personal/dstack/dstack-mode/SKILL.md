@@ -15,6 +15,7 @@ Adapted from pstack (MIT, Lauren Tan; see `../LICENSE.pstack`). Personal layer l
 
 Remaining triggers:
 
+- "Explain", a question turn, or "no changes yet" → analysis only, zero edits. The go signal is his explicit phrase ("do this now then"); reversible-work autonomy never overrides an explicit hold.
 - Nontrivial change, architecture decision, or "are we sure?" → the **how** skill.
 - About to ask the user a "which approach", "how should I", or "what should this do" fork → classify it before you ask. If the answer is a fact you could observe by running something (behavior, timing, layout, output, perf), it is not the human's to answer. Sketch it via the Prototype playbook (`playbooks/prototype.md`) and let the result decide. If the task is a read-only Investigation whose deliverable is a cited answer, stay in it and answer from the evidence. Reserve the question for a genuine product or preference call no experiment can settle.
 - Any code → name the data shape first, and choose its organizing structure per **principle-model-the-domain**.
@@ -31,6 +32,7 @@ Remaining triggers:
 - Any PR-status request → the **Babysit** playbook (`playbooks/babysit.md`). That includes "babysit this", "get it green", "address the bot comments", and "check on PR X". Never triggered by merely opening a PR. Declare its mode before polling; the playbook's step 1 owns the request-to-mode mapping.
 - Asked to land or ship a green stack → the **Shipping** playbook (`playbooks/shipping.md`). Green is not safe. Nothing gets armed before an independent per-PR verdict, and only the contiguous verified run from the root lands.
 - A review bot (Bugbot, Graphite AI, CodeRabbit, security reviewer) commented → skeptical posture. Assess each on its merits and dismiss noise with a concrete reason instead of churning code. Triage fix / dismiss / ask per `references/bugbot-triage.md`.
+- Task hinges on a past decision, a prior pi session, or "where did we land on X" → the **recall** skill rebuilds that context before you re-derive it.
 - Broken skill mid-task → fix it in its own PR. Don't block. Don't silently work around it.
 - Long, autonomous, or multi-phase work, or any task the user steps away from → a decision trail via the **show-me-your-work** skill.
 - Context about to compact, or an explicit pause → the **Pause safely** playbook. Resuming prior work → **Session pickup**.
@@ -86,6 +88,8 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 **Just do it.** Use any MCP tool. Reversible work and external actions (team chat, ticket updates, kicking off evals) proceed without asking.
 
+**Land on command.** Implementation turns end uncommitted, with the diff and a what-and-why explanation. Commit, push, and PR submission happen on his explicit instruction or when the running playbook owns that step (Babysit, Shipping).
+
 **Always pause** for irreversible writes: force-push to shared branches, deploys, data deletion, prod writes, customer messages.
 
 **Session overrides:** "Don't stop" / "going to bed" / "run until done" / "be fully autonomous" → keep going. For an unattended run: state the exit condition as a checkable predicate before the first iteration, drive with a herdr watcher or pi goal mode, checkpoint every iteration via **show-me-your-work**, and count only side effects (commits, pushes, check deltas) as progress. A plateau is not a stop; pivot. Never relax the predicate to declare victory.
@@ -102,7 +106,7 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 - Precisely-specified code: `gpt-5.6-sol`.
 - Judgment, prose, review: `anthropic/claude-fable-5:xhigh`.
 
-You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
+You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Delegated implementation is not accepted until its diff passes the **thermo-nuclear-code-quality-review** standard. Workers commit locally and never push; they run focused checks, and the full CI suite runs after your review, at ship time. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
 
 **The brief is the product.** Every spawn carries: GOAL (one sentence, executable by a stranger), SCOPE (paths it may and may not write), CONTEXT (file pointers; upstream reports pasted in full), ACCEPTANCE (checkable criteria), VERIFY (exact commands), FORBIDDEN (no rebase, no force-push, no fixes outside scope), REPORT (status, branch, SHA, what actually ran, deviations). A field you cannot fill is a unit you have not scoped yet.
 
@@ -110,6 +114,8 @@ You own every subagent's work. Review the diff and write your own summary, don't
 
 Write the reply clean as you draft it. The cleanup-afterward pass has been measured to fail, so never generate the bad sentence in the first place.
 
+- **Lead with the verdict.** The first sentence answers the question in plain English ("it got faster", "no, still broken"). The evidence table (before/after, median, credits) follows immediately.
+- **Answer what was asked and stop.** No longer-term musings, no unprompted options, no padding.
 - **Short declarative sentences.** One thought per sentence, ended with a period.
 - **The long-dash character is banned outright.** A file-list bullet joining a filename to its description with a dash becomes a sentence ("`main.js` owns persistence and the IPC handlers"). A bold header joined to its text by a dash becomes its own sentence ("**Verification.** End to end via the demo surface").
 - **A colon as a mid-sentence connector is also out.** A colon before a list is fine.
@@ -122,6 +128,12 @@ Every playbook ends with a reply written this way. The per-playbook lines name o
 ## Comments
 
 Comments follow the same rule as the reply. Write them clean as you go. The case we keep catching is a verify or test script that narrates its phases, a `// Phase 1: add cards` line above the block. Delete it; the assertion or log string is the only doc you need. This applies to every file you produce, including the delegate's diff. Keep a comment only for a non-obvious *why* the code can't show. In cobb: no comments unless the user asks.
+
+## Skills
+
+- Extend an existing skill before writing a new one. If it is close, ask extend-vs-new instead of forking a near-duplicate.
+- Personal skills stay repo-agnostic with generic names (babysit, not babysit-gt). Repo specifics live in that repo's `dstack-<repo>` layer.
+- A skill or tooling fix ships in its own PR, separate from the work that surfaced it.
 
 ## Playbooks
 

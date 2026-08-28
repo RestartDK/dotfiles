@@ -25,21 +25,49 @@ USAGE
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --port) PORT="$2"; shift 2 ;;
-    --reset) RESET=1; shift ;;
-    --seed) SEED=1; shift ;;
-    --fixture) FIXTURE=1; shift ;;
-    --reauth) REAUTH=1; shift ;;
-    --demo) DEMO=1; shift ;;
-    --video) VIDEO=1; shift ;;
-    *) usage ;;
+  --port)
+    PORT="$2"
+    shift 2
+    ;;
+  --reset)
+    RESET=1
+    shift
+    ;;
+  --seed)
+    SEED=1
+    shift
+    ;;
+  --fixture)
+    FIXTURE=1
+    shift
+    ;;
+  --reauth)
+    REAUTH=1
+    shift
+    ;;
+  --demo)
+    DEMO=1
+    shift
+    ;;
+  --video)
+    VIDEO=1
+    shift
+    ;;
+  *) usage ;;
   esac
 done
 
-[ -f process-compose.yaml ] || { echo "FAIL: run from the cobb repo root" >&2; exit 1; }
+[ -f process-compose.yaml ] || {
+  echo "FAIL: run from the cobb repo root" >&2
+  exit 1
+}
 
 step() { printf '\n==> %s\n' "$1"; }
-fail() { echo "FAIL: $1" >&2; echo "logs: journalctl -t cobb-server --since -10min (see process-compose.yaml for other service tags)" >&2; exit 1; }
+fail() {
+  echo "FAIL: $1" >&2
+  echo "logs: journalctl -t cobb-server --since -10min (see process-compose.yaml for other service tags)" >&2
+  exit 1
+}
 
 running() { process-compose -p "$PORT" list >/dev/null 2>&1; }
 
@@ -48,7 +76,7 @@ jwt_expired() {
   local payload exp pad
   payload=$(jq -r '.jwt // empty' "$AUTH_FILE" 2>/dev/null | cut -d. -sf2 | tr '_-' '/+')
   [ -n "$payload" ] || return 0
-  pad=$(( (4 - ${#payload} % 4) % 4 ))
+  pad=$(((4 - ${#payload} % 4) % 4))
   exp=$(printf '%s%.*s' "$payload" "$pad" "===" | base64 -d 2>/dev/null | jq -r '.exp // empty' 2>/dev/null)
   [ -n "$exp" ] || return 0
   [ "$exp" -lt "$(date +%s)" ]
@@ -72,10 +100,13 @@ fi
 
 step "waiting for services to be ready"
 for i in $(seq 1 90); do
-  not_ready=$(process-compose -p "$PORT" list -o json 2>/dev/null \
-    | jq -r '[.[] | select(.status == "Pending" or .status == "Failed" or (.is_ready != "Ready" and .is_ready != "-" and .status != "Completed"))] | length' 2>/dev/null || echo unknown)
+  not_ready=$(process-compose -p "$PORT" list -o json 2>/dev/null |
+    jq -r '[.[] | select(.status == "Pending" or .status == "Failed" or (.is_ready != "Ready" and .is_ready != "-" and .status != "Completed"))] | length' 2>/dev/null || echo unknown)
   if [ "$not_ready" = "0" ]; then break; fi
-  [ "$i" = 90 ] && { process-compose -p "$PORT" list -o json | jq -r '.[] | [.name,.status,.is_ready] | @tsv' >&2; fail "services not ready after 15min"; }
+  [ "$i" = 90 ] && {
+    process-compose -p "$PORT" list -o json | jq -r '.[] | [.name,.status,.is_ready] | @tsv' >&2
+    fail "services not ready after 15min"
+  }
   sleep 10
 done
 process-compose -p "$PORT" list -o json | jq -r '.[] | [.name,.status,.is_ready] | @tsv'
@@ -95,7 +126,10 @@ fi
 
 if [ "$FIXTURE" = 1 ]; then
   step "importing store-analytics fixture"
-  ./testing/store-analytics-fixture/seed.sh || { echo "hint: fixture import is not idempotent on a stale local DB; rerun with --reset" >&2; fail "store-analytics-fixture/seed.sh"; }
+  ./testing/store-analytics-fixture/seed.sh || {
+    echo "hint: fixture import is not idempotent on a stale local DB; rerun with --reset" >&2
+    fail "store-analytics-fixture/seed.sh"
+  }
 fi
 
 step "endpoint evidence"
@@ -103,15 +137,15 @@ curl -fsS -o /dev/null -w "GET $APP_URL -> %{http_code}\n" "$APP_URL" || fail "a
 
 LOGIN_URL="$APP_URL/auth/dev-login?user_id=store-analytics&redirect_to=/"
 
-CHROME=$(command -v chromium 2>/dev/null || command -v chromium-browser 2>/dev/null || command -v google-chrome 2>/dev/null \
-  || { ls -d /nix/store/*-chromium-1*/bin/chromium 2>/dev/null | sort -V | tail -1; } || true)
+CHROME=$(command -v chromium 2>/dev/null || command -v chromium-browser 2>/dev/null || command -v google-chrome 2>/dev/null ||
+  { find /nix/store -maxdepth 3 -path '/nix/store/*-chromium-1*/bin/chromium' 2>/dev/null | sort -V | tail -1; } || true)
 
 if [ "$DEMO" = 1 ]; then
   step "demo screenshot (headless chromium)"
   SHOT="/tmp/cobb-demo-$(date +%s).png"
   if [ -n "$CHROME" ]; then
-    timeout 90 "$CHROME" --headless --disable-gpu --no-sandbox --window-size=1440,900 --screenshot="$SHOT" "$LOGIN_URL" 2>/dev/null \
-      && echo "screenshot: $SHOT" || echo "WARN: screenshot failed (route may never reach load; --video records regardless); fall back to the browser skill" >&2
+    timeout 90 "$CHROME" --headless --disable-gpu --no-sandbox --window-size=1440,900 --screenshot="$SHOT" "$LOGIN_URL" 2>/dev/null &&
+      echo "screenshot: $SHOT" || echo "WARN: screenshot failed (route may never reach load; --video records regardless); fall back to the browser skill" >&2
   else
     echo "WARN: no chromium found; fall back to the browser skill" >&2
   fi
@@ -120,11 +154,11 @@ fi
 if [ "$VIDEO" = 1 ]; then
   step "demo video (Xvfb + ffmpeg x11grab)"
   VID="/tmp/cobb-demo-$(date +%s).mp4"
-  XVFB=$(command -v Xvfb 2>/dev/null || { ls -d /nix/store/*-xorg-server-2*/bin/Xvfb 2>/dev/null | sort -V | tail -1; } || true)
+  XVFB=$(command -v Xvfb 2>/dev/null || { find /nix/store -maxdepth 3 -path '/nix/store/*-xorg-server-2*/bin/Xvfb' 2>/dev/null | sort -V | tail -1; } || true)
   FFMPEG=$(command -v ffmpeg 2>/dev/null || true)
   if [ -n "$FFMPEG" ] && ! "$FFMPEG" -hide_banner -formats 2>/dev/null | grep -q x11grab; then FFMPEG=""; fi
   if [ -z "$FFMPEG" ]; then
-    FFMPEG=$(ls -d /nix/store/*-ffmpeg-full-*-bin/bin/ffmpeg 2>/dev/null | sort -V | tail -1 || true)
+    FFMPEG=$(find /nix/store -maxdepth 3 -path '/nix/store/*-ffmpeg-full-*-bin/bin/ffmpeg' 2>/dev/null | sort -V | tail -1 || true)
   fi
   if [ -n "$XVFB" ] && [ -n "$FFMPEG" ] && [ -n "$CHROME" ]; then
     DISP=$((RANDOM % 100 + 100))
