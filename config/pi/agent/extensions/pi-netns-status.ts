@@ -44,6 +44,6 @@ async function currentNamedNetworkNamespace(): Promise<string | undefined> {
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     const namespace = await currentNamedNetworkNamespace();
-    ctx.ui.setStatus("netns", namespace ? `󰖩 [${namespace}]` : undefined);
+    ctx.ui.setStatus("netns", namespace);
   });
 }

@@ -105,6 +105,7 @@ path_prepend "$HOME/.bun/bin"
 path_prepend "$HOME/railpack/bin"
 path_append "$HOME/.pub-cache/bin"
 path_append "$HOME/.kluster/cli/bin"
+path_append "$HOME/.greptile/bin"
 
 [[ -r "$HOME/.config/herdr/netns-hook.zsh" ]] && source "$HOME/.config/herdr/netns-hook.zsh"
 

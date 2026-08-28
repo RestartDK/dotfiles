@@ -2,6 +2,8 @@
 
 Use this reference when the Babysit playbook (`../playbooks/babysit.md`) handles Bugbot or review-automation comments. The goal is not to ignore Bugbot by default. The goal is to stop treating every comment as a required code change.
 
+Greptile findings are also available locally before the bot posts on the PR: `greptile review --agent` reviews the current branch against its base with plain output (`npx greptile@latest review --agent` when the binary is not installed; `--json` for machine-readable comments, `--instructions` to focus). Classify what it returns with the rubric below. When a finding is wrong, pair the dismissal with a re-review request carrying the same explanation. Reply `@greptile <why it is wrong>` on the thread through the fixed `gh api` call, or re-run locally with `greptile review --instructions "..."`. Dismissing the thread alone does not move the published score; only the re-review does.
+
 ## Decision rubric
 
 Classify each Bugbot thread before acting:

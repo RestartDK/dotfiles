@@ -291,7 +291,9 @@ function loadMarkdownAgents(dir: string): Record<string, WorkerPreset> {
     const name = frontmatter.name?.trim();
     const description = frontmatter.description?.trim();
     if (!name || !description) {
-      console.warn(`[subagents] Ignoring ${filePath}: markdown agents need name and description frontmatter.`);
+      console.warn(
+        `[subagents] Ignoring ${filePath}: markdown agents need name and description frontmatter.`,
+      );
       continue;
     }
 
