@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve as resolvePath } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -617,6 +617,11 @@ function tailCap(text: string, capBytes: number): string {
 
 const runRegistry = new Map<RunId, RunRecord>();
 
+const FLEET_WIDGET_KEY = "subagents-fleet";
+
+let fleetCtx: ExtensionContext | undefined;
+let fleetTimer: ReturnType<typeof setInterval> | undefined;
+
 function newRunId(name: string): RunId {
   return `run-${name}-${randomBytes(4).toString("hex")}` as RunId;
 }
@@ -729,6 +734,40 @@ function formatRunLine(record: RunRecord): string {
   const usageText = formatUsage(usage);
   const taskText = record.task.task.replace(/\s+/g, " ").slice(0, 60);
   return `${record.id}  ${record.status}  ${elapsed}${usageText ? `  ${usageText}` : ""}  ${taskText}`;
+}
+
+function fleetWidgetLines(): string[] {
+  const records = [...runRegistry.values()];
+  const lines = records.filter((run) => run.status === "running").map(formatRunLine);
+  const unjoined = records.filter((run) => run.status !== "running" && !run.joined);
+  if (unjoined.length > 0) {
+    lines.push(`${unjoined.length} run(s) finished: join with subagents_runs to collect`);
+  }
+  return lines;
+}
+
+function refreshFleetWidget() {
+  const ctx = fleetCtx;
+  if (ctx?.hasUI !== true) return;
+  const lines = fleetWidgetLines();
+  if (lines.length === 0) {
+    ctx.ui.setWidget(FLEET_WIDGET_KEY, undefined);
+    return;
+  }
+  ctx.ui.setWidget(FLEET_WIDGET_KEY, lines, { placement: "belowEditor" });
+}
+
+function ensureFleetTimer() {
+  if (fleetTimer || fleetCtx?.hasUI !== true) return;
+  if (runningRuns().length === 0) return;
+  fleetTimer = setInterval(() => {
+    if (runningRuns().length === 0) {
+      clearInterval(fleetTimer);
+      fleetTimer = undefined;
+    }
+    refreshFleetWidget();
+  }, 1000);
+  fleetTimer.unref();
 }
 
 function summarizeRun(record: RunRecord): RunSummary {
@@ -900,6 +939,7 @@ export default function (pi: ExtensionAPI) {
     parameters: SubagentsParams,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      if (ctx.hasUI) fleetCtx = ctx;
       const config = readConfig(ctx.cwd, ctx.isProjectTrusted());
       const hasSingle = typeof params.task === "string" && params.task.trim().length > 0;
       const hasTasks = Array.isArray(params.tasks) && params.tasks.length > 0;
@@ -1010,6 +1050,8 @@ export default function (pi: ExtensionAPI) {
         }
 
         const runs = resolvedTasks.map(launchRun);
+        refreshFleetWidget();
+        ensureFleetTimer();
         const lines = runs.map(
           (run) => `- ${run.id}: ${run.task.task.replace(/\s+/g, " ").slice(0, 80)}`,
         );
@@ -1073,7 +1115,8 @@ export default function (pi: ExtensionAPI) {
     ].join("\n"),
     parameters: SubagentsRunsParams,
 
-    async execute(_toolCallId, params, signal, onUpdate) {
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      if (ctx.hasUI) fleetCtx = ctx;
       if (params.action === "status") {
         let records = [...runRegistry.values()];
         if (params.runIds && params.runIds.length > 0) {
@@ -1088,6 +1131,8 @@ export default function (pi: ExtensionAPI) {
             };
           }
         }
+        refreshFleetWidget();
+        ensureFleetTimer();
         const text =
           records.length > 0 ? records.map(formatRunLine).join("\n") : "No background runs.";
         return {
@@ -1118,6 +1163,8 @@ export default function (pi: ExtensionAPI) {
           };
         }
         const { signaled, alreadyTerminal } = stopRuns(ids);
+        refreshFleetWidget();
+        ensureFleetTimer();
         const lines = [
           ...signaled.map((id) => `${id}: SIGTERM sent (was running).`),
           ...alreadyTerminal.map((run) => `${run.id}: already terminal (${run.status}).`),
@@ -1142,6 +1189,8 @@ export default function (pi: ExtensionAPI) {
       }
 
       if (records.length === 0) {
+        refreshFleetWidget();
+        ensureFleetTimer();
         return {
           content: [{ type: "text", text: "No unjoined background runs." }],
           details: { results: [] },
@@ -1157,6 +1206,8 @@ export default function (pi: ExtensionAPI) {
       });
 
       if (outcome === "interrupted") {
+        refreshFleetWidget();
+        ensureFleetTimer();
         return {
           content: [
             {
@@ -1169,6 +1220,8 @@ export default function (pi: ExtensionAPI) {
       }
 
       for (const terminal of outcome) terminal.joined = true;
+      refreshFleetWidget();
+      ensureFleetTimer();
       const results = outcome.map((terminal) => terminal.result);
       return {
         content: [{ type: "text", text: formatResults(results) }],
@@ -1180,6 +1233,11 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async () => {
     terminateLiveChildren();
+    if (fleetTimer) {
+      clearInterval(fleetTimer);
+      fleetTimer = undefined;
+    }
+    if (fleetCtx?.hasUI) fleetCtx.ui.setWidget(FLEET_WIDGET_KEY, undefined);
   });
 
   pi.registerCommand("orchestrate", {
