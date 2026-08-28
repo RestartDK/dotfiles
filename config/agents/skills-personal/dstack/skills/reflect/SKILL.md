@@ -22,10 +22,10 @@ Skip when the conversation is trivial, off-topic, or already covered by an exist
 
 ### 1. Locate the active transcript
 
-The parent finds its own transcript file before fanning out. The system prompt names the pi sessions directory for this cwd (`~/.pi/agent/sessions/<cwd-slug>/`); use that path. Do not glob across other cwd slugs. That crosses workspace boundaries and reads private chats from unrelated projects.
+The parent finds its own transcript file before fanning out. The pi sessions directory for this cwd is `~/.pi/agent/sessions/<cwd-slug>/` (slug = absolute cwd path with slashes turned into dashes); use that path. Do not glob across unrelated cwd slugs. That crosses workspace boundaries and reads private chats from unrelated projects. Worktree exception: slugs that are worktrees of the same repo count as this workspace; when the reflected session ran in a worktree, or the lesson spans worktree sessions, include the sibling slugs by matching the repo name (for `~/cobb`: `--home-daniel-cobb--` plus every `*worktrees-cobb-*` slug).
 
 ```bash
-ls -t ~/.pi/agent/sessions/<cwd-slug>/*.jsonl 2>/dev/null | head -10
+ls -t ~/.pi/agent/sessions/<cwd-slug>/*.jsonl ~/.pi/agent/sessions/*worktrees-<repo>-*/*.jsonl 2>/dev/null | head -10
 ```
 
 Three transcript layouts: legacy flat (`<id>.jsonl`), current nested (`<id>/<id>.jsonl`), and subagent (`<parent>/subagents/<child>.jsonl`).
