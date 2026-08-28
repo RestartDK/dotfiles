@@ -27,16 +27,30 @@ start() {
   nohup "$CHROME" --headless --disable-gpu --no-sandbox --window-size=1440,900 \
     --remote-debugging-port="$PORT" --user-data-dir="$PROFILE" about:blank \
     >/dev/null 2>&1 &
+  echo $! > "$PROFILE/browser.pid"
   for _ in $(seq 1 60); do alive && { echo "ready on port $PORT ($CHROME)"; return 0; }; sleep 0.25; done
   echo "FAIL: chromium did not open CDP on port $PORT" >&2
   exit 1
 }
 
 stop() {
+  local rc=0
+  [ -f "$PROFILE/browser.pid" ] && kill "$(cat "$PROFILE/browser.pid")" 2>/dev/null || true
   pkill -f "user-data-dir=$PROFILE" 2>/dev/null || true
-  for _ in $(seq 1 24); do pgrep -f "user-data-dir=$PROFILE" >/dev/null 2>&1 || break; sleep 0.25; done
-  rm -rf "$PROFILE" "$CDP_CLIENT"
-  echo "stopped (port $PORT)"
+  for _ in $(seq 1 20); do pgrep -f "user-data-dir=$PROFILE" >/dev/null 2>&1 || break; sleep 0.25; done
+  pkill -9 -f "user-data-dir=$PROFILE" 2>/dev/null || true
+  sleep 0.5
+  if pgrep -f "user-data-dir=$PROFILE" >/dev/null 2>&1; then
+    echo "FAIL: chromium processes survived stop on port $PORT" >&2
+    pgrep -af "user-data-dir=$PROFILE" >&2
+    rc=1
+  fi
+  if ! rm -rf "$PROFILE" "$CDP_CLIENT"; then
+    echo "FAIL: could not remove $PROFILE" >&2
+    rc=1
+  fi
+  [ "$rc" = 0 ] && echo "stopped (port $PORT)"
+  return "$rc"
 }
 
 write_client() {
