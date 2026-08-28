@@ -1,5 +1,5 @@
 {
-  "defaultModel": "gpt-5.6-sol",
+  "defaultModel": "accounts/fireworks/routers/kimi-k3-fast:xhigh",
   "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "low",
   "extensions": [
