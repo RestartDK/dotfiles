@@ -122,6 +122,7 @@ Write the reply clean as you draft it. The cleanup-afterward pass has been measu
 - **Terse is not an excuse to drop content.** Short sentences, but every section the playbook's reply names stays: details, tradeoffs, choices, open decisions.
 - **Frame impact for the consumer and the maintainer.** Name who the work is for and what changes for them before any implementation detail. Then what the next engineer inherits.
 - **Never fabricate a link, citation, or transcript reference.** Link only artifacts you produced or read this session.
+- **Show visual proof in the reply.** When verification produced screenshots or frame captures, display the decisive before/after frames in the final reply and keep them at durable paths. Never leave them buried in `/tmp` or only summarize them.
 
 Every playbook ends with a reply written this way. The per-playbook lines name only the content unique to that playbook.
 
