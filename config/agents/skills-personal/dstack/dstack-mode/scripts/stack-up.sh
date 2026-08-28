@@ -59,7 +59,7 @@ fi
 step "waiting for services to be ready"
 for i in $(seq 1 90); do
   not_ready=$(process-compose -p "$PORT" list -o json 2>/dev/null \
-    | jq -r '[.[] | select(.is_ready != "Ready" and .is_ready != "-" and .status != "Completed")] | length' 2>/dev/null || echo unknown)
+    | jq -r '[.[] | select(.status == "Pending" or .status == "Failed" or (.is_ready != "Ready" and .is_ready != "-" and .status != "Completed"))] | length' 2>/dev/null || echo unknown)
   if [ "$not_ready" = "0" ]; then break; fi
   [ "$i" = 90 ] && { process-compose -p "$PORT" list -o json | jq -r '.[] | [.name,.status,.is_ready] | @tsv' >&2; fail "services not ready after 15min"; }
   sleep 10
