@@ -37,10 +37,10 @@ Launch all reviewers in a single message in one subagents call. Use the `interro
 
 | Subagent | Default model |
 |----------|---------------|
-| Reviewer A | `claude-sonnet-4-5` |
+| Reviewer A | `anthropic/claude-fable-5:xhigh` |
 | Reviewer B | `gpt-5.6-sol` |
 | Reviewer C | `kimi-k3` |
-| Reviewer D | `claude-opus-5-thinking-xhigh` |
+| Reviewer D | `anthropic/claude-opus-5:xhigh` |
 
 For each reviewer:
 - spawn via the subagents tool

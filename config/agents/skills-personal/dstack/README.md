@@ -23,7 +23,7 @@ A repo adds `.agents/skills/dstack-<repo>/` with `references/` (principle carve-
 
 ## Model roles
 
-`models.md`. Defaults: mechanical code → kimi-k3 (fireworks), precise-spec code → gpt-5.6-sol, judgment/prose/review → claude-sonnet-4-5.
+`models.md`. Defaults: mechanical code → kimi-k3 (fireworks), precise-spec code → gpt-5.6-sol, judgment/prose/review → anthropic/claude-fable-5:xhigh.
 
 ## Deferred from pstack, deliberately
 

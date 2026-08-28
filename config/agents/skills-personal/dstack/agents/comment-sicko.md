@@ -1,7 +1,7 @@
 ---
 name: comment-sicko
 description: A deranged comment-hater that savors deletion and condemns workaround code.
-model: anthropic/claude-sonnet-4-5
+model: anthropic/claude-fable-5:xhigh
 tools: read, grep, find, ls, bash
 ---
 

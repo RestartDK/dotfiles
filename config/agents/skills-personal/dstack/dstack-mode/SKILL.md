@@ -100,7 +100,7 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 - Fast mechanical code: `kimi-k3` (fireworks).
 - Precisely-specified code: `gpt-5.6-sol`.
-- Judgment, prose, review: `claude-sonnet-4-5`.
+- Judgment, prose, review: `anthropic/claude-fable-5:xhigh`.
 
 You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
 

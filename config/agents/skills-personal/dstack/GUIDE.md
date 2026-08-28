@@ -37,7 +37,7 @@ Audit rule: every cited principle must name the decision it changed. A bare cita
 
 - kimi-k3 (fireworks): fast mechanical edits, swarm workers.
 - gpt-5.6-sol: precisely-specified implementation.
-- claude-sonnet-4-5: judgment, prose, review, cross-judging.
+- anthropic/claude-fable-5:xhigh: judgment, prose, review, cross-judging.
 Change them in `models.md`. Fan-out list lengths set panel sizes (arena runners, interrogate reviewers).
 
 ## Recipes and pitfalls
