@@ -22,7 +22,7 @@ Skip when the conversation is trivial, off-topic, or already covered by an exist
 
 ### 1. Locate the active transcript
 
-The parent finds its own transcript file before fanning out. The pi sessions directory for this cwd is `~/.pi/agent/sessions/<cwd-slug>/` (slug = absolute cwd path with slashes turned into dashes); use that path. Do not glob across unrelated cwd slugs. That crosses workspace boundaries and reads private chats from unrelated projects. Worktree exception: slugs that are worktrees of the same repo count as this workspace; when the reflected session ran in a worktree, or the lesson spans worktree sessions, include the sibling slugs by matching the repo name (for `~/cobb`: `--home-daniel-cobb--` plus every `*worktrees-cobb-*` slug).
+The parent finds its own transcript file before fanning out. The pi sessions directory for this cwd is `~/.pi/agent/sessions/<cwd-slug>/` (slug = absolute cwd path with slashes turned into dashes); use that path. Do not glob across unrelated cwd slugs. That crosses workspace boundaries and reads private chats from unrelated projects. Worktree exception: slugs that are worktrees of the same repo count as this workspace and usually hold most of the history. Derive them, don't guess: `git worktree list --porcelain | awk '/^worktree /{print $2}'` prints every checkout path of the current repo; slugify each (slashes to dashes) and include those slug directories. Slugs of removed worktrees can be added by matching the repo directory name in the slug. The do-not-glob rule guards against unrelated projects, not your own repo's worktrees.
 
 ```bash
 ls -t ~/.pi/agent/sessions/<cwd-slug>/*.jsonl ~/.pi/agent/sessions/*worktrees-<repo>-*/*.jsonl 2>/dev/null | head -10
