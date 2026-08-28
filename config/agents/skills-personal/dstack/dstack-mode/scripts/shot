@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# shot - persistent headless chromium for fast repeated screenshots.
+# One browser per task; every shot reuses it. Kill it when the task ends.
+#
+# usage:
+#   shot <url> [out.png] [--settle ms] [--timeout ms]   navigate + capture (starts the browser on first use)
+#   shot start                                          warm the browser explicitly (idempotent)
+#   shot stop                                           kill the browser and remove its profile
+#
+# env: SHOT_PORT (default 9222), SHOT_PROFILE (default /tmp/shot-profile-<port>)
+set -euo pipefail
+
+PORT="${SHOT_PORT:-9222}"
+PROFILE="${SHOT_PROFILE:-/tmp/shot-profile-$PORT}"
+CDP_CLIENT="/tmp/shot-cdp-$PORT.cjs"
+BASE="http://127.0.0.1:$PORT"
+
+CHROME=$(command -v chromium 2>/dev/null || command -v chromium-browser 2>/dev/null || command -v google-chrome 2>/dev/null ||
+  { find /nix/store -maxdepth 3 -path '/nix/store/*-chromium-1*/bin/chromium' 2>/dev/null | sort -V | tail -1; } || true)
+
+alive() { curl -sf --max-time 2 "$BASE/json/version" >/dev/null 2>&1; }
+
+start() {
+  [ -n "$CHROME" ] || { echo "FAIL: no chromium found (PATH or /nix/store)" >&2; exit 1; }
+  if alive; then echo "already running on port $PORT"; return 0; fi
+  mkdir -p "$PROFILE"
+  nohup "$CHROME" --headless --disable-gpu --no-sandbox --window-size=1440,900 \
+    --remote-debugging-port="$PORT" --user-data-dir="$PROFILE" about:blank \
+    >/dev/null 2>&1 &
+  for _ in $(seq 1 60); do alive && { echo "ready on port $PORT ($CHROME)"; return 0; }; sleep 0.25; done
+  echo "FAIL: chromium did not open CDP on port $PORT" >&2
+  exit 1
+}
+
+stop() {
+  pkill -f "user-data-dir=$PROFILE" 2>/dev/null || true
+  for _ in $(seq 1 24); do pgrep -f "user-data-dir=$PROFILE" >/dev/null 2>&1 || break; sleep 0.25; done
+  rm -rf "$PROFILE" "$CDP_CLIENT"
+  echo "stopped (port $PORT)"
+}
+
+write_client() {
+  cat > "$CDP_CLIENT" <<'EOF'
+const [url, out, port, settle, timeout] = process.argv.slice(2);
+const base = `http://127.0.0.1:${port}`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function getPageTarget() {
+  const list = await (await fetch(`${base}/json/list`)).json();
+  const page = list.find((t) => t.type === 'page');
+  if (page) return page;
+  const res = await fetch(`${base}/json/new?about:blank`, { method: 'PUT' });
+  return res.json();
+}
+
+(async () => {
+  const target = await getPageTarget();
+  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  let seq = 0;
+  const pending = new Map();
+  let loadFired = false;
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.id && pending.has(msg.id)) {
+      pending.get(msg.id)(msg.result);
+      pending.delete(msg.id);
+    }
+    if (msg.method === 'Page.loadEventFired') loadFired = true;
+  };
+  const send = (method, params = {}) =>
+    new Promise((resolve) => {
+      pending.set(++seq, resolve);
+      ws.send(JSON.stringify({ id: seq, method, params }));
+    });
+  await new Promise((r) => (ws.onopen = r));
+  await send('Page.enable');
+  await send('Page.navigate', { url });
+  const deadline = Date.now() + Number(timeout);
+  while (!loadFired && Date.now() < deadline) await sleep(50);
+  await sleep(Number(settle));
+  const shot = await send('Page.captureScreenshot', { format: 'png' });
+  require('fs').writeFileSync(out, Buffer.from(shot.data, 'base64'));
+  console.log(out);
+  process.exit(0);
+})().catch((e) => {
+  console.error(`shot: ${e.message}`);
+  process.exit(1);
+});
+EOF
+}
+
+capture() {
+  local url="$1" out="$2" settle="$3" timeout="$4"
+  start >/dev/null
+  write_client
+  node "$CDP_CLIENT" "$url" "$out" "$PORT" "$settle" "$timeout"
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop) stop ;;
+  ''|-h|--help)
+    sed -n '2,11p' "$0" ;;
+  *)
+    URL="$1"; OUT="${2:-/tmp/shot-$(date +%s).png}"; SETTLE=1500; TIMEOUT=15000
+    shift; [ "$#" -gt 0 ] && [[ "$1" != -* ]] && shift
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --settle) SETTLE="$2"; shift 2 ;;
+        --timeout) TIMEOUT="$2"; shift 2 ;;
+        *) echo "FAIL: unknown arg $1" >&2; exit 1 ;;
+      esac
+    done
+    capture "$URL" "$OUT" "$SETTLE" "$TIMEOUT" ;;
+esac
