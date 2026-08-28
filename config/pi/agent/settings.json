@@ -1,7 +1,7 @@
 {
-  "defaultModel": "accounts/fireworks/routers/kimi-k3-fast:xhigh",
-  "defaultProvider": "openai-codex",
-  "defaultThinkingLevel": "low",
+  "defaultModel": "accounts/fireworks/routers/kimi-k3-fast",
+  "defaultProvider": "fireworks",
+  "defaultThinkingLevel": "xhigh",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
   ],
