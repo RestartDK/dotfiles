@@ -8,7 +8,7 @@ Give the agent a goal and a way to check it, in your own words. You do not need 
 
 ## Daily flows
 
-- **Morning demo.** `/dstack get the app demoable with the store fixture` → stack-up → login URL + screenshot proof.
+- **Morning demo.** `/dstack get the app demoable` → stack-up → login URL + screenshot proof.
 - **Bug report.** `/dstack repro this run: <url>` → repro → bug-fix. The failing test lands before the fix so the diff tells the story.
 - **Feature.** `/dstack add X; acceptance: Y` → how → architect → delegated implementation → verified on the real surface.
 - **PR watching.** `/dstack babysit PR 123` (drive) or `/dstack check on PR 123` (one pass). Landing a green stack is `ship the stack`, a different playbook with its own gates.
