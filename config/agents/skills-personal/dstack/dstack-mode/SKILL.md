@@ -13,6 +13,8 @@ Adapted from pstack (MIT, Lauren Tan; see `../LICENSE.pstack`). Personal layer l
 
 **Repo hook.** If the cwd repo has `AGENTS.md`, its rules are non-negotiable principles; cite them the same way. If it has `.agents/skills/dstack-*/`, read that repo layer's references before playbook work. Repo skills in `.agents/skills/` are the capability layer; route to them, do not duplicate them.
 
+**Leave the machine as found.** Before declaring done, stop everything the task started: work tabs, panes, watchers, demo browsers, X servers, temp profiles. Whatever is deliberately left running (a demo stack the user asked for) ships with its teardown command in the reply. Failure mode this prevents: a headless chromium launched for one screenshot leaking 60 renderer processes, or a detached stack squatting on a shared machine's ports.
+
 Remaining triggers:
 
 - "Explain", a question turn, or "no changes yet" → analysis only, zero edits. The go signal is his explicit phrase ("do this now then"); reversible-work autonomy never overrides an explicit hold.
