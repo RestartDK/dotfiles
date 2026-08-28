@@ -98,7 +98,7 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 **Model roles** (overrides in `~/.agents/skills/dstack/models.md`; a role with no line keeps its default):
 
-- Fast mechanical code: `kimi-k3` (fireworks).
+- Fast mechanical code: `openrouter/z-ai/glm-5.3-flash:xhigh`.
 - Precisely-specified code: `gpt-5.6-sol`.
 - Judgment, prose, review: `anthropic/claude-fable-5:xhigh`.
 

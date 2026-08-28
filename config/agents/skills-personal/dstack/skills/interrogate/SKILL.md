@@ -39,7 +39,7 @@ Launch all reviewers in a single message in one subagents call. Use the `interro
 |----------|---------------|
 | Reviewer A | `anthropic/claude-fable-5:xhigh` |
 | Reviewer B | `gpt-5.6-sol` |
-| Reviewer C | `kimi-k3` |
+| Reviewer C | `openrouter/z-ai/glm-5.3-flash:xhigh` |
 | Reviewer D | `anthropic/claude-opus-5:xhigh` |
 
 For each reviewer:

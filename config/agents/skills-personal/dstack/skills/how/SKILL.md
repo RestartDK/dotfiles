@@ -45,7 +45,7 @@ The right decomposition depends on the question. Use your judgment. Narrow quest
 Spawn all explorers in a single message:
 
 - spawn via the subagents tool
-- `model`: your configured how-explorer model (default `kimi-k3`)
+- `model`: your configured how-explorer model (default `openrouter/z-ai/glm-5.3-flash:xhigh`)
 - `readonly`: `true`
 
 Each explorer gets the same base prompt from `references/explorer-prompt.md` plus a specific exploration angle naming its slice. Each explorer should:
@@ -109,7 +109,7 @@ Run the full explain flow above (Steps 1-4). You must understand the architectur
 
 ### Step 2. Spawn Critics
 
-After the explanation is complete, spawn one architectural critic per model in your configured how-critics list (defaults `anthropic/claude-fable-5:xhigh`, `gpt-5.6-sol`, `kimi-k3`, `anthropic/claude-opus-5:xhigh`), all in a single message.
+After the explanation is complete, spawn one architectural critic per model in your configured how-critics list (defaults `anthropic/claude-fable-5:xhigh`, `gpt-5.6-sol`, `openrouter/z-ai/glm-5.3-flash:xhigh`, `anthropic/claude-opus-5:xhigh`), all in a single message.
 
 For each critic:
 - spawn via the subagents tool

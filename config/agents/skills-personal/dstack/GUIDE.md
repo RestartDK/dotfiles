@@ -35,10 +35,10 @@ Audit rule: every cited principle must name the decision it changed. A bare cita
 
 ## Subagent roles
 
-- kimi-k3 (fireworks): fast mechanical edits, swarm workers.
+- openrouter/z-ai/glm-5.3-flash:xhigh: fast mechanical edits, swarm workers.
 - gpt-5.6-sol: precisely-specified implementation.
 - anthropic/claude-fable-5:xhigh: judgment, prose, review, cross-judging.
-Change them in `models.md`. Fan-out list lengths set panel sizes (arena runners, interrogate reviewers).
+  Change them in `models.md`. Fan-out list lengths set panel sizes (arena runners, interrogate reviewers).
 
 ## Recipes and pitfalls
 
@@ -48,4 +48,3 @@ Add a line here after every session that surprised you. This page appreciates.
 - Babysit works the merge frontier only. If the agent is fixing an upstack thread while the bottom PR is red, stop it.
 - Shipping: verdicts go stale on restack. The patch-id check is not optional.
 - Eval anything reflect proposes before promoting it. Blind, sanitized dirs, judge scores from files-actually-read.
-- One writer per worktree. Parallel workers on the same branch is how work vanishes.

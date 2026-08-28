@@ -117,7 +117,7 @@ Launch all matching investigators in a single message so they run concurrently. 
 
 Subagent config (each):
 - spawn via the subagents tool
-- `model`: your configured why-investigators model (default `kimi-k3`)
+- `model`: your configured why-investigators model (default `openrouter/z-ai/glm-5.3-flash:xhigh`)
 - `readonly`: `false` (agent mode). **Do not use readonly/Ask mode.** It strips MCP access, which disables MCP-backed investigators entirely. The source control investigator would be safe in readonly, but keep modes uniform. Investigators still shouldn't write anything. That's a posture, not a sandbox.
 
 Each investigator gets:

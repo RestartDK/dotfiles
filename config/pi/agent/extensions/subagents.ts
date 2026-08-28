@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -71,10 +72,55 @@ interface WorkerResult {
 
 interface SubagentsDetails {
   results: WorkerResult[];
+  runs?: RunSummary[];
+}
+
+type RunId = string & { readonly __brand: "RunId" };
+
+interface RunAccumulator {
+  usage: UsageStats;
+  stderr: string;
+  output: string;
+}
+
+interface RunningRun {
+  status: "running";
+  id: RunId;
+  task: ResolvedWorkerTask;
+  writeCapable: boolean;
+  startedAt: number;
+  abort: AbortController;
+  live: RunAccumulator;
+  done: Promise<TerminalRun>;
+  joined: boolean;
+}
+
+interface TerminalRun {
+  status: "completed" | "failed" | "stopped";
+  id: RunId;
+  task: ResolvedWorkerTask;
+  writeCapable: boolean;
+  startedAt: number;
+  finishedAt: number;
+  result: WorkerResult;
+  joined: boolean;
+}
+
+type RunRecord = RunningRun | TerminalRun;
+
+interface RunSummary {
+  runId: string;
+  name: string;
+  status: string;
+  startedAt: number;
+  finishedAt?: number;
 }
 
 const MAX_TASKS = 8;
 const OUTPUT_CAP_BYTES = 50 * 1024;
+const MAX_TERMINAL_RUNS = 16;
+const MAX_LIVE_RUNS = 8;
+const STDERR_CAP_BYTES = 16 * 1024;
 const WRITE_TOOLS = new Set(["edit", "write"]);
 const DEFAULT_TOOLS = ["read", "grep", "find", "ls", "bash"];
 
@@ -419,9 +465,20 @@ async function assertDirectory(path: string): Promise<void> {
   if (!metadata.isDirectory()) throw new Error(`${path} is not a directory`);
 }
 
+const liveChildren = new Set<ChildProcess>();
+
+function terminateLiveChildren() {
+  for (const child of liveChildren) {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+  }
+}
+
+process.on("exit", terminateLiveChildren);
+
 async function runWorker(
   task: ResolvedWorkerTask,
   signal: AbortSignal | undefined,
+  live?: RunAccumulator,
 ): Promise<WorkerResult> {
   const result: WorkerResult = {
     name: task.name,
@@ -434,7 +491,7 @@ async function runWorker(
     messages: [],
     stderr: "",
     output: "",
-    usage: initialUsage(),
+    usage: live ? live.usage : initialUsage(),
   };
 
   let promptPath: string | undefined;
@@ -460,6 +517,9 @@ async function runWorker(
       let settled = false;
       let stdoutBuffer = "";
       let aborted = false;
+      let killTimer: ReturnType<typeof setTimeout> | undefined;
+
+      liveChildren.add(child);
 
       const finish = (code: number) => {
         if (settled) return;
@@ -482,7 +542,12 @@ async function runWorker(
           (event.type === "message_end" || event.type === "tool_result_end") &&
           isRecord(event.message)
         ) {
-          result.messages.push(event.message);
+          if (live) {
+            const text = getFinalOutput([event.message]);
+            if (text) live.output = text;
+          } else {
+            result.messages.push(event.message);
+          }
           addUsage(result, event.message);
         }
       };
@@ -494,16 +559,25 @@ async function runWorker(
         for (const line of lines) processLine(line);
       });
 
+      const appendStderr = (text: string) => {
+        if (live) live.stderr = tailCap(live.stderr + text, STDERR_CAP_BYTES);
+        else result.stderr += text;
+      };
+
       child.stderr.on("data", (data) => {
-        result.stderr += data.toString();
+        appendStderr(data.toString());
       });
 
       child.on("error", (error) => {
-        result.stderr += `${error.message}\n`;
+        liveChildren.delete(child);
+        appendStderr(`${error.message}\n`);
         finish(1);
       });
 
       child.on("close", (code) => {
+        liveChildren.delete(child);
+        if (killTimer) clearTimeout(killTimer);
+        signal?.removeEventListener("abort", abort);
         if (stdoutBuffer.trim().length > 0) processLine(stdoutBuffer);
         if (aborted) {
           result.stopReason = "aborted";
@@ -515,9 +589,10 @@ async function runWorker(
       const abort = () => {
         aborted = true;
         child.kill("SIGTERM");
-        setTimeout(() => {
-          if (!child.killed) child.kill("SIGKILL");
-        }, 5000).unref();
+        killTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        }, 5000);
+        killTimer.unref();
       };
 
       if (signal?.aborted) abort();
@@ -530,8 +605,140 @@ async function runWorker(
     await cleanupPromptFile(promptPath);
   }
 
-  result.output = getFinalOutput(result.messages);
+  if (live) result.stderr = live.stderr;
+  result.output = live ? live.output : getFinalOutput(result.messages);
   return result;
+}
+
+function tailCap(text: string, capBytes: number): string {
+  while (Buffer.byteLength(text, "utf-8") > capBytes) text = text.slice(Math.ceil(text.length / 2));
+  return text;
+}
+
+const runRegistry = new Map<RunId, RunRecord>();
+
+function newRunId(name: string): RunId {
+  return `run-${name}-${randomBytes(4).toString("hex")}` as RunId;
+}
+
+function runningRuns(): RunningRun[] {
+  return [...runRegistry.values()].filter((run): run is RunningRun => run.status === "running");
+}
+
+function evictTerminalRuns() {
+  const terminals = [...runRegistry.values()].filter(
+    (run): run is TerminalRun => run.status !== "running",
+  );
+  if (terminals.length <= MAX_TERMINAL_RUNS) return;
+  terminals.sort((a, b) => a.finishedAt - b.finishedAt);
+  for (const run of terminals.slice(0, terminals.length - MAX_TERMINAL_RUNS)) {
+    runRegistry.delete(run.id);
+  }
+}
+
+function transitionRun(run: RunningRun, result: WorkerResult): TerminalRun {
+  result.messages = [];
+  result.stderr = tailCap(result.stderr, STDERR_CAP_BYTES);
+  const terminal: TerminalRun = {
+    status: result.stopReason === "aborted" ? "stopped" : isFailed(result) ? "failed" : "completed",
+    id: run.id,
+    task: run.task,
+    writeCapable: run.writeCapable,
+    startedAt: run.startedAt,
+    finishedAt: Date.now(),
+    result,
+    joined: false,
+  };
+  runRegistry.set(run.id, terminal);
+  evictTerminalRuns();
+  return terminal;
+}
+
+function launchRun(task: ResolvedWorkerTask): RunningRun {
+  const run: RunningRun = {
+    status: "running",
+    id: newRunId(task.name),
+    task,
+    writeCapable: workerHasWriteTools(task),
+    startedAt: Date.now(),
+    abort: new AbortController(),
+    live: { usage: initialUsage(), stderr: "", output: "" },
+    done: undefined as unknown as Promise<TerminalRun>,
+    joined: false,
+  };
+  run.done = runWorker(task, run.abort.signal, run.live).then((result) =>
+    transitionRun(run, result),
+  );
+  runRegistry.set(run.id, run);
+  return run;
+}
+
+function stopRuns(ids: RunId[]): { signaled: RunId[]; alreadyTerminal: TerminalRun[] } {
+  const signaled: RunId[] = [];
+  const alreadyTerminal: TerminalRun[] = [];
+  for (const id of ids) {
+    const record = runRegistry.get(id);
+    if (!record) continue;
+    if (record.status === "running") {
+      record.abort.abort();
+      signaled.push(id);
+    } else {
+      alreadyTerminal.push(record);
+    }
+  }
+  return { signaled, alreadyTerminal };
+}
+
+function parseRunIds(raw: string[]): RunId[] {
+  const unknown = raw.filter((id) => !runRegistry.has(id as RunId));
+  if (unknown.length > 0) {
+    const known = [...runRegistry.keys()].join(", ") || "none";
+    throw new Error(`Unknown run id(s): ${unknown.join(", ")}. Known runs: ${known}.`);
+  }
+  return raw as RunId[];
+}
+
+async function awaitRuns(
+  records: RunRecord[],
+  signal: AbortSignal | undefined,
+  onProgress?: (finished: number, total: number) => void,
+): Promise<TerminalRun[] | "interrupted"> {
+  if (signal?.aborted) return "interrupted";
+  let finished = records.filter((record) => record.status !== "running").length;
+  onProgress?.(finished, records.length);
+  const terminals = Promise.all(
+    records.map((record) => {
+      if (record.status !== "running") return Promise.resolve(record);
+      return record.done.then((terminal) => {
+        finished += 1;
+        onProgress?.(finished, records.length);
+        return terminal;
+      });
+    }),
+  );
+  const interrupted = new Promise<"interrupted">((resolve) => {
+    signal?.addEventListener("abort", () => resolve("interrupted"), { once: true });
+  });
+  return Promise.race([terminals, interrupted]);
+}
+
+function formatRunLine(record: RunRecord): string {
+  const end = record.status === "running" ? Date.now() : record.finishedAt;
+  const elapsed = `${Math.max(0, Math.round((end - record.startedAt) / 1000))}s`;
+  const usage = record.status === "running" ? record.live.usage : record.result.usage;
+  const usageText = formatUsage(usage);
+  const taskText = record.task.task.replace(/\s+/g, " ").slice(0, 60);
+  return `${record.id}  ${record.status}  ${elapsed}${usageText ? `  ${usageText}` : ""}  ${taskText}`;
+}
+
+function summarizeRun(record: RunRecord): RunSummary {
+  return {
+    runId: record.id,
+    name: record.task.name,
+    status: record.status,
+    startedAt: record.startedAt,
+    ...(record.status === "running" ? {} : { finishedAt: record.finishedAt }),
+  };
 }
 
 function isFailed(result: WorkerResult): boolean {
@@ -654,6 +861,25 @@ const SubagentsParams = Type.Object({
       description: "Allow multiple-task runs when any worker has edit/write tools. Default false.",
     }),
   ),
+  background: Type.Optional(
+    Type.Boolean({
+      description:
+        "Launch workers in the background and return run handles immediately instead of blocking. Collect results later with the subagents_runs tool. Default false.",
+    }),
+  ),
+});
+
+const SubagentsRunsParams = Type.Object({
+  action: Type.Union([Type.Literal("join"), Type.Literal("status"), Type.Literal("stop")], {
+    description:
+      "join: block until the runs finish and return the same report as a synchronous subagents call. status: non-blocking snapshot. stop: SIGTERM live children; safe to repeat.",
+  }),
+  runIds: Type.Optional(
+    Type.Array(Type.String(), {
+      description:
+        "Run handles from a background subagents launch. join with no runIds joins all unjoined runs. status with no runIds covers all known runs; stop with no runIds covers all live runs.",
+    }),
+  ),
 });
 
 export default function (pi: ExtensionAPI) {
@@ -668,6 +894,7 @@ export default function (pi: ExtensionAPI) {
       "Use this only when the user explicitly asks for subagents, delegation, orchestration, parallel workers, or a second model opinion.",
       "The current Pi session/model is the orchestrator; this tool runs child workers with their own models/tools/prompts and returns their outputs.",
       "Prefer parallel read-only scouts/reviewers/planners, then at most one write-capable worker.",
+      "With background=true every worker starts immediately and the call returns run handles right away; collect results later with the subagents_runs tool (join, status, stop).",
       `Configured global workers:\n${startupAgents}`,
     ].join("\n"),
     parameters: SubagentsParams,
@@ -734,6 +961,22 @@ export default function (pi: ExtensionAPI) {
         };
       }
 
+      if (resolvedTasks.some(workerHasWriteTools) && params.allowParallelWrites !== true) {
+        const blocking = runningRuns().find((run) => run.writeCapable);
+        if (blocking) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Refusing to launch a write-capable worker while background run ${blocking.id} (${blocking.task.name}) is still running. Join or stop it first, or set allowParallelWrites=true explicitly.`,
+              },
+            ],
+            details: { results: [] },
+            isError: true,
+          };
+        }
+      }
+
       if (
         resolvedTasks.length > 1 &&
         resolvedTasks.some(workerHasWriteTools) &&
@@ -748,6 +991,36 @@ export default function (pi: ExtensionAPI) {
           ],
           details: { results: [] },
           isError: true,
+        };
+      }
+
+      if (params.background === true) {
+        const live = runningRuns();
+        if (live.length + resolvedTasks.length > MAX_LIVE_RUNS) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Refusing background launch: ${live.length} live run(s) plus ${resolvedTasks.length} new would exceed the max of ${MAX_LIVE_RUNS}. Live runs: ${live.map((run) => run.id).join(", ")}.`,
+              },
+            ],
+            details: { results: [] },
+            isError: true,
+          };
+        }
+
+        const runs = resolvedTasks.map(launchRun);
+        const lines = runs.map(
+          (run) => `- ${run.id}: ${run.task.task.replace(/\s+/g, " ").slice(0, 80)}`,
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Launched ${runs.length} background run${runs.length === 1 ? "" : "s"}. All children are running now.\n${lines.join("\n")}\nJoin with subagents_runs { action: "join", runIds: [...] }.`,
+            },
+          ],
+          details: { results: [], runs: runs.map(summarizeRun) },
         };
       }
 
@@ -789,6 +1062,126 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  pi.registerTool<typeof SubagentsRunsParams, SubagentsDetails>({
+    name: "subagents_runs",
+    label: "Subagent Runs",
+    description: [
+      "Manage background runs launched by the subagents tool with background=true.",
+      "join blocks until the given runs (or all unjoined runs when runIds is omitted) reach a terminal state and returns the same per-worker report as a synchronous subagents call; interrupting a join detaches and the children keep running.",
+      "status returns a non-blocking snapshot with live usage counters.",
+      "stop SIGTERMs the live children of the given runs (all live runs when runIds is omitted); it is idempotent and reports already-terminal runs.",
+    ].join("\n"),
+    parameters: SubagentsRunsParams,
+
+    async execute(_toolCallId, params, signal, onUpdate) {
+      if (params.action === "status") {
+        let records = [...runRegistry.values()];
+        if (params.runIds && params.runIds.length > 0) {
+          try {
+            records = parseRunIds(params.runIds).map((id) => runRegistry.get(id)!);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+              content: [{ type: "text", text: message }],
+              details: { results: [] },
+              isError: true,
+            };
+          }
+        }
+        const text =
+          records.length > 0 ? records.map(formatRunLine).join("\n") : "No background runs.";
+        return {
+          content: [{ type: "text", text }],
+          details: { results: [], runs: records.map(summarizeRun) },
+        };
+      }
+
+      if (params.action === "stop") {
+        let ids: RunId[];
+        try {
+          ids =
+            params.runIds && params.runIds.length > 0
+              ? parseRunIds(params.runIds)
+              : runningRuns().map((run) => run.id);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            content: [{ type: "text", text: message }],
+            details: { results: [] },
+            isError: true,
+          };
+        }
+        if (ids.length === 0) {
+          return {
+            content: [{ type: "text", text: "No live background runs to stop." }],
+            details: { results: [] },
+          };
+        }
+        const { signaled, alreadyTerminal } = stopRuns(ids);
+        const lines = [
+          ...signaled.map((id) => `${id}: SIGTERM sent (was running).`),
+          ...alreadyTerminal.map((run) => `${run.id}: already terminal (${run.status}).`),
+        ];
+        return { content: [{ type: "text", text: lines.join("\n") }], details: { results: [] } };
+      }
+
+      let records: RunRecord[];
+      try {
+        const ids =
+          params.runIds && params.runIds.length > 0
+            ? parseRunIds(params.runIds)
+            : [...runRegistry.values()].filter((run) => !run.joined).map((run) => run.id);
+        records = ids.map((id) => runRegistry.get(id)!);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: message }],
+          details: { results: [] },
+          isError: true,
+        };
+      }
+
+      if (records.length === 0) {
+        return {
+          content: [{ type: "text", text: "No unjoined background runs." }],
+          details: { results: [] },
+        };
+      }
+
+      const outcome = await awaitRuns(records, signal, (finished, total) => {
+        onUpdate?.({
+          content: [
+            { type: "text", text: `subagents_runs: ${finished}/${total} runs finished...` },
+          ],
+        });
+      });
+
+      if (outcome === "interrupted") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Join interrupted; detached. The children keep running. Join again or stop them with subagents_runs.\n\n${records.map(formatRunLine).join("\n")}`,
+            },
+          ],
+          details: { results: [], runs: records.map(summarizeRun) },
+        };
+      }
+
+      for (const terminal of outcome) terminal.joined = true;
+      const results = outcome.map((terminal) => terminal.result);
+      return {
+        content: [{ type: "text", text: formatResults(results) }],
+        details: { results },
+        isError: results.some(isFailed),
+      };
+    },
+  });
+
+  pi.on("session_shutdown", async () => {
+    terminateLiveChildren();
+  });
+
   pi.registerCommand("orchestrate", {
     description: "Ask the current model to orchestrate work with subagents",
     handler: async (args, ctx) => {
@@ -823,7 +1216,13 @@ export default function (pi: ExtensionAPI) {
     description: "Show configured subagents workers",
     handler: async (_args, ctx) => {
       const config = readConfig(ctx.cwd, ctx.isProjectTrusted());
-      ctx.ui.notify(`Configured subagents workers:\n${configuredAgentSummary(config)}`, "info");
+      const live = runningRuns();
+      const liveText =
+        live.length > 0 ? `\n\nLive background runs:\n${live.map(formatRunLine).join("\n")}` : "";
+      ctx.ui.notify(
+        `Configured subagents workers:\n${configuredAgentSummary(config)}${liveText}`,
+        "info",
+      );
     },
   });
 }
