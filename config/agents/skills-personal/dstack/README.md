@@ -27,4 +27,4 @@ A repo adds `.agents/skills/dstack-<repo>/` with `references/` (principle carve-
 
 ## Deferred from pstack, deliberately
 
-`orchestrate` + the orch CLI, `autopilot-full`/`autopilot-stack`, `autonomous-run` (folded into the mode's Autonomy section), `multi-phase-plan` + check-plan.mjs, `visual-parity`, `worktree-cleanup` + worktree-audit.sh, `runtime-forensics`/`trace-forensics`, `authoring-a-skill`, `create/maintain-verification-skill`, `setup-pstack` (pattern noted in models.md), benny. Adopt when the need shows up; the pinned pstack commit has the sources.
+`orchestrate` + the orch CLI, `autopilot-full`/`autopilot-stack`, `autonomous-run` (folded into the mode's Autonomy section), `multi-phase-plan` + check-plan.mjs, `visual-parity`, `runtime-forensics`/`trace-forensics`, `authoring-a-skill`, `create/maintain-verification-skill`, `setup-pstack` (pattern noted in models.md), benny. Adopt when the need shows up; the pinned pstack commit has the sources.
