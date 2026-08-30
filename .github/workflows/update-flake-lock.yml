@@ -1,0 +1,30 @@
+name: Update flake lock
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update flake.lock
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Determinate Nix
+        uses: DeterminateSystems/determinate-nix-action@v3.21.9
+
+      - name: Update flake.lock
+        uses: DeterminateSystems/update-flake-lock@v28
+        with:
+          branch: automation/update-flake-lock
+          commit-msg: "chore: update flake inputs"
+          pr-title: "chore: update flake inputs"
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN }}
