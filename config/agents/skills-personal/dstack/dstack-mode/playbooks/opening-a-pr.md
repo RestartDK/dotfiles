@@ -4,6 +4,8 @@ Invoked at the end of every other playbook.
 
 **Worktree.** Work from a git worktree off main; subagents inherit it. Multiple subagent tasks on the same branch each get their own worktree, or `git fetch && git reset --hard origin/<branch>` between them. Dirty branch with unrelated work: patch out, fresh worktree, apply. Snarled worktree: reset from main, redo minimally.
 
+**Ticket.** When the Linear MCP is connected, every PR carries a Linear issue. The task arrived without one: create it before branching, so the branch follows `<handle>/<ticket-id>` instead of a floating description. Production bugs get the `Bug` label and an incident writeup (root cause, evidence, affected identifiers). When the PR opens, attach the PR link to the issue and move the issue to In Review. Park out-of-scope follow-ups as issue checklist items, not chat messages. Linear not connected: skip this step and note the missing ticket in the PR description.
+
 **Commits.** Commit liberally; rebase into small, ordered commits before opening PRs. Each commit is a future PR: landable, ordered to tell the story. Amend when the fix belongs in a just-made commit; new commit when separable.
 
 **PRs.** Run the **unslop** skill over the diff-facing prose before commit. Run `/no-comments` before review. Write every PR title, PR description, and commit body with `/technical-writing`, then apply `/unslop`. Apply every technical-writing layer except Diátaxis. Use one word for each action, keep articles, and avoid `-ing` when a plain verb works.
