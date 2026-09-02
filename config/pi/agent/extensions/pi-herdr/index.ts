@@ -9,9 +9,9 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 
-import { expectResult, HerdrClient } from "./client.ts";
+import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import type {
   AgentStatus,
   PaneInfo,
@@ -40,6 +40,7 @@ interface PendingRun {
   marker: string | null;
   startedAt: number;
   abort: AbortController;
+  notifying: boolean;
 }
 
 type Completion =
@@ -112,7 +113,6 @@ export default function (pi: ExtensionAPI) {
   const managedPanes = new Map<string, ManagedPane>();
   const aliasOrder: string[] = [];
   const pendingRuns = new Map<string, PendingRun>();
-  const notifyingRunIds = new Set<string>();
   const lastCommandByPane = new Map<string, string>();
 
   function snapshotAliases(): Record<string, ManagedPane> {
@@ -223,7 +223,6 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", async () => {
     for (const pendingRun of pendingRuns.values()) pendingRun.abort.abort();
     pendingRuns.clear();
-    notifyingRunIds.clear();
     await releaseAgent();
   });
 
@@ -325,6 +324,71 @@ export default function (pi: ExtensionAPI) {
   async function getWorkspaceList(signal?: AbortSignal): Promise<WorkspaceInfo[]> {
     return expectResult(await herdr.call("workspace.list", {}, { signal }), "workspace_list")
       .workspaces;
+  }
+
+  async function resolveWorkspaceRef(
+    ref: string | undefined,
+    currentWorkspaceId: string,
+    signal?: AbortSignal,
+  ): Promise<string | undefined> {
+    if (ref == null) return undefined;
+    if (ref === "current" || ref === ".") return currentWorkspaceId;
+
+    const workspaces = await getWorkspaceList(signal);
+    const exactId = workspaces.find((workspace) => workspace.workspace_id === ref);
+    if (exactId) return exactId.workspace_id;
+
+    const matches = workspaces.filter(
+      (workspace) =>
+        workspace.label === ref ||
+        String(workspace.number) === ref ||
+        (workspace.worktree != null && basename(workspace.worktree.checkout_path) === ref),
+    );
+    const formatWorkspace = (workspace: WorkspaceInfo) =>
+      `${workspace.label} [${workspace.workspace_id}]`;
+    if (matches.length === 1) return matches[0]?.workspace_id;
+    if (matches.length === 0) {
+      const openWorkspaces = workspaces.length
+        ? workspaces.map(formatWorkspace).join(", ")
+        : "none";
+      throw new Error(`Workspace '${ref}' not found. Open workspaces: ${openWorkspaces}`);
+    }
+    throw new Error(
+      `Workspace '${ref}' is ambiguous. Matches: ${matches.map(formatWorkspace).join(", ")}`,
+    );
+  }
+
+  async function resolveWorktreeParent(
+    workspaceRef: string | undefined,
+    explicitCwd: string | undefined,
+    requestCwd: string,
+    currentWorkspaceId: string,
+    signal?: AbortSignal,
+  ): Promise<{ workspaceId: string | undefined; cwd: string | undefined }> {
+    if (explicitCwd !== undefined) {
+      return { workspaceId: undefined, cwd: absolutePath(explicitCwd, requestCwd) };
+    }
+
+    const workspaceId =
+      (await resolveWorkspaceRef(workspaceRef, currentWorkspaceId, signal)) ?? currentWorkspaceId;
+    const workspace = (await getWorkspaceList(signal)).find(
+      (candidate) => candidate.workspace_id === workspaceId,
+    );
+    if (workspace?.worktree?.is_linked_worktree !== true) {
+      return { workspaceId, cwd: undefined };
+    }
+
+    const source = expectResult(
+      await herdr.call(
+        "worktree.list",
+        { cwd: workspace.worktree.checkout_path, workspace_id: undefined },
+        { signal },
+      ),
+      "worktree_list",
+    ).source;
+    return source.source_workspace_id != null
+      ? { workspaceId: source.source_workspace_id, cwd: undefined }
+      : { workspaceId: undefined, cwd: source.repo_root };
   }
 
   async function getWorkspacePanes(workspaceId: string, signal?: AbortSignal): Promise<PaneInfo[]> {
@@ -547,10 +611,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function isPaneGoneError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /(?:pane.*(?:not found|does not exist|no longer exists|closed))|(?:(?:not found|does not exist).*pane)/i.test(
-      message,
-    );
+    return error instanceof HerdrRequestError && error.code === "pane_not_found";
   }
 
   function sendNotifierMessage(content: string, details: Record<string, unknown>) {
@@ -564,14 +625,20 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  function startNotifier(pendingRun: PendingRun, lines: number, initialDelayMs: number) {
-    if (
-      notifyingRunIds.has(pendingRun.runId) ||
-      pendingRuns.get(pendingRun.paneId) !== pendingRun
-    ) {
-      return;
+  function settleNotifier(
+    pendingRun: PendingRun,
+    content: string,
+    details: Record<string, unknown>,
+  ) {
+    sendNotifierMessage(content, details);
+    if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
+      pendingRuns.delete(pendingRun.paneId);
     }
-    notifyingRunIds.add(pendingRun.runId);
+  }
+
+  function startNotifier(pendingRun: PendingRun, lines: number, initialDelayMs: number) {
+    if (pendingRun.notifying || pendingRuns.get(pendingRun.paneId) !== pendingRun) return;
+    pendingRun.notifying = true;
 
     void (async () => {
       const signal = pendingRun.abort.signal;
@@ -585,25 +652,21 @@ export default function (pi: ExtensionAPI) {
           } catch (error) {
             if (isAbortError(error, signal)) return;
             if (isPaneGoneError(error)) {
-              sendNotifierMessage(
+              settleNotifier(
+                pendingRun,
                 `herdr: pane '${pendingRun.paneLabel}' closed before '${pendingRun.command}' finished`,
                 { paneId: pendingRun.paneId, runId: pendingRun.runId },
               );
-              if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
-                pendingRuns.delete(pendingRun.paneId);
-              }
               return;
             }
             logLifecycleError("probe command completion", error);
             const elapsedMs = Date.now() - pendingRun.startedAt;
             if (elapsedMs >= NOTIFIER_MAX_ELAPSED_MS) {
-              sendNotifierMessage(
+              settleNotifier(
+                pendingRun,
                 `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' still running after 6h; stopped watching`,
                 { paneId: pendingRun.paneId, runId: pendingRun.runId, elapsedMs },
               );
-              if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
-                pendingRuns.delete(pendingRun.paneId);
-              }
               return;
             }
             await sleep(
@@ -616,7 +679,8 @@ export default function (pi: ExtensionAPI) {
           if (completion.kind === "done") {
             const exitCode = completion.exitCode == null ? "unknown" : completion.exitCode;
             const tail = completion.tail.split("\n").slice(-40).join("\n");
-            sendNotifierMessage(
+            settleNotifier(
+              pendingRun,
               `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' finished: exit ${exitCode} after ${formatElapsed(completion.elapsedMs)}\n\n${tail}`,
               {
                 paneId: pendingRun.paneId,
@@ -625,14 +689,12 @@ export default function (pi: ExtensionAPI) {
                 elapsedMs: completion.elapsedMs,
               },
             );
-            if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
-              pendingRuns.delete(pendingRun.paneId);
-            }
             return;
           }
 
           if (completion.elapsedMs >= NOTIFIER_MAX_ELAPSED_MS) {
-            sendNotifierMessage(
+            settleNotifier(
+              pendingRun,
               `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' still running after 6h; stopped watching`,
               {
                 paneId: pendingRun.paneId,
@@ -640,9 +702,6 @@ export default function (pi: ExtensionAPI) {
                 elapsedMs: completion.elapsedMs,
               },
             );
-            if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
-              pendingRuns.delete(pendingRun.paneId);
-            }
             return;
           }
 
@@ -659,7 +718,7 @@ export default function (pi: ExtensionAPI) {
           logLifecycleError("watch command completion", error);
         }
       } finally {
-        notifyingRunIds.delete(pendingRun.runId);
+        pendingRun.notifying = false;
       }
     })();
   }
@@ -668,17 +727,13 @@ export default function (pi: ExtensionAPI) {
     action: "run" | "wait",
     pendingRun: PendingRun,
     completion: Extract<Completion, { kind: "done" }>,
-    untracked: boolean,
   ) {
     const exitCode = completion.exitCode == null ? "unknown" : completion.exitCode;
-    const untrackedText = untracked
-      ? "\n\nno exit code: the command was not started with run wait/notify"
-      : "";
     return {
       content: [
         {
           type: "text" as const,
-          text: `Finished '${pendingRun.command}' in pane '${pendingRun.paneLabel}' (${pendingRun.paneId}): exit ${exitCode} after ${formatElapsed(completion.elapsedMs)}${untrackedText}\n\n${completion.tail}`,
+          text: `Finished '${pendingRun.command}' in pane '${pendingRun.paneLabel}' (${pendingRun.paneId}): exit ${exitCode} after ${formatElapsed(completion.elapsedMs)}\n\n${completion.tail}`,
         },
       ],
       details: withSnapshot({
@@ -697,21 +752,17 @@ export default function (pi: ExtensionAPI) {
     action: "run" | "wait",
     pendingRun: PendingRun,
     completion: Extract<Completion, { kind: "running" }>,
-    untracked: boolean,
     notifierStarted: boolean,
   ) {
     const foreground = completion.foreground ?? "unknown";
     const notifierText = notifierStarted
       ? " A notifier is active and will deliver a message when the command exits."
       : "";
-    const untrackedText = untracked
-      ? "\n\nno exit code: the command was not started with run wait/notify"
-      : "";
     return {
       content: [
         {
           type: "text" as const,
-          text: `STILL RUNNING after ${formatElapsed(completion.elapsedMs)} in pane '${pendingRun.paneLabel}' (${pendingRun.paneId}): foreground ${foreground}. This is a status, not an error. Call wait again with a longer timeout, or wait with notify: true to get a message when it exits.${notifierText}${untrackedText}`,
+          text: `STILL RUNNING after ${formatElapsed(completion.elapsedMs)} in pane '${pendingRun.paneLabel}' (${pendingRun.paneId}): foreground ${foreground}. This is a status, not an error. Call wait again with a longer timeout, or wait with notify: true to get a message when it exits.${notifierText}`,
         },
       ],
       details: withSnapshot({
@@ -829,7 +880,7 @@ export default function (pi: ExtensionAPI) {
       "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab.",
       "Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
       "Use `worktree_create` to create a Git worktree checkout and open it as a Herdr workspace.",
-      "Use `worktree_remove` to delete a Herdr-managed worktree checkout; it runs git worktree remove and does not delete the branch.",
+      "Use `worktree_remove` to delete a Herdr-managed worktree checkout; identify by workspace id or label, or by path or branch; never the workspace pi runs in. It runs git worktree remove and does not delete the branch.",
       "For any command that finishes (tests, builds, clippy, scripts, CI suites), use `run` with `wait: true` (blocks up to `timeout`, default 10 minutes, returns exit code and tail) or `notify: true` (returns at once; a message arrives when it exits). Never poll with bash `sleep`. Never re-arm a timed-out watch.",
       "`watch` is for readiness patterns only, such as a server's listen line. Do not watch for sentinel echoes like `CI_EXIT=`; the shell echoes your command line and the match fires before the command runs.",
       "A `wait` result of STILL RUNNING is a status, not an error: call `wait` with `notify: true`, do other work, and act when the finished message arrives.",
@@ -855,7 +906,9 @@ export default function (pi: ExtensionAPI) {
         Type.Array(Type.String(), { description: "Pane aliases or pane ids for multi-pane waits" }),
       ),
       workspace: Type.Optional(
-        Type.String({ description: "Workspace id for workspace, worktree, or tab actions" }),
+        Type.String({
+          description: "Workspace id, label, number, worktree directory name, or `current`",
+        }),
       ),
       tab: Type.Optional(
         Type.String({
@@ -1022,7 +1075,11 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "workspace_focus": {
-          const workspaceId = params.workspace;
+          const workspaceId = await resolveWorkspaceRef(
+            params.workspace,
+            currentWorkspaceId,
+            signal,
+          );
           if (!workspaceId) throw new Error("'workspace' is required for workspace_focus");
           const workspace = expectResult(
             await herdr.call("workspace.focus", { workspace_id: workspaceId }, { signal }),
@@ -1035,12 +1092,17 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "worktree_list": {
+          const workspaceId = await resolveWorkspaceRef(
+            params.workspace,
+            currentWorkspaceId,
+            signal,
+          );
           const result = expectResult(
             await herdr.call(
               "worktree.list",
               {
-                workspace_id: params.workspace,
-                cwd: params.workspace ? undefined : absolutePath(params.cwd, requestCwd),
+                workspace_id: workspaceId,
+                cwd: workspaceId ? undefined : absolutePath(params.cwd, requestCwd),
               },
               { signal },
             ),
@@ -1057,12 +1119,19 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "worktree_create": {
+          const parent = await resolveWorktreeParent(
+            params.workspace,
+            params.cwd,
+            requestCwd,
+            currentWorkspaceId,
+            signal,
+          );
           const created = expectResult(
             await herdr.call(
               "worktree.create",
               {
-                workspace_id: params.workspace,
-                cwd: params.workspace ? undefined : absolutePath(params.cwd, requestCwd),
+                workspace_id: parent.workspaceId,
+                cwd: parent.cwd,
                 branch: params.branch,
                 base: params.base,
                 path: absolutePath(params.path, requestCwd),
@@ -1097,12 +1166,19 @@ export default function (pi: ExtensionAPI) {
         case "worktree_open": {
           if (!params.path && !params.branch)
             throw new Error("'path' or 'branch' is required for worktree_open");
+          const parent = await resolveWorktreeParent(
+            params.workspace,
+            params.cwd,
+            requestCwd,
+            currentWorkspaceId,
+            signal,
+          );
           const opened = expectResult(
             await herdr.call(
               "worktree.open",
               {
-                workspace_id: params.workspace,
-                cwd: params.workspace ? undefined : absolutePath(params.cwd, requestCwd),
+                workspace_id: parent.workspaceId,
+                cwd: parent.cwd,
                 path: absolutePath(params.path, requestCwd),
                 branch: params.branch,
                 label: params.label,
@@ -1130,8 +1206,39 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "worktree_remove": {
-          const workspaceId = params.workspace;
-          if (!workspaceId) throw new Error("'workspace' is required for worktree_remove");
+          let workspaceId = await resolveWorkspaceRef(params.workspace, currentWorkspaceId, signal);
+          if (!workspaceId) {
+            const target = params.path ?? params.branch;
+            if (!target) {
+              throw new Error(
+                "worktree_remove needs 'workspace' (id or label), 'path', or 'branch'",
+              );
+            }
+            const targetPath = absolutePath(params.path, requestCwd);
+            const result = expectResult(
+              await herdr.call(
+                "worktree.list",
+                { workspace_id: currentWorkspaceId, cwd: undefined },
+                { signal },
+              ),
+              "worktree_list",
+            );
+            const worktree = result.worktrees.find(
+              (candidate) =>
+                (targetPath == null || resolve(candidate.path) === targetPath) &&
+                (params.branch == null || candidate.branch === params.branch),
+            );
+            if (!worktree) throw new Error(`Worktree '${target}' not found.`);
+            if (!worktree.open_workspace_id) {
+              throw new Error(
+                `Worktree '${target}' is not open as a herdr workspace; remove it with git worktree remove`,
+              );
+            }
+            workspaceId = worktree.open_workspace_id;
+          }
+          if (workspaceId === currentWorkspaceId) {
+            throw new Error("Refusing to remove the workspace pi is running in.");
+          }
           const removed = expectResult(
             await herdr.call(
               "worktree.remove",
@@ -1155,7 +1262,9 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "tab_list": {
-          const workspaceId = params.workspace ?? currentWorkspaceId;
+          const workspaceId =
+            (await resolveWorkspaceRef(params.workspace, currentWorkspaceId, signal)) ??
+            currentWorkspaceId;
           const tabs = await getTabList(workspaceId, signal);
           const text = tabs.length ? tabs.map(summarizeTab).join("\n") : "No tabs.";
           return {
@@ -1165,7 +1274,9 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "tab_create": {
-          const workspaceId = params.workspace ?? currentWorkspaceId;
+          const workspaceId =
+            (await resolveWorkspaceRef(params.workspace, currentWorkspaceId, signal)) ??
+            currentWorkspaceId;
           const created = expectResult(
             await herdr.call(
               "tab.create",
@@ -1251,8 +1362,11 @@ export default function (pi: ExtensionAPI) {
             };
           }
           if (params.workspace) {
+            const workspaceId =
+              (await resolveWorkspaceRef(params.workspace, currentWorkspaceId, signal)) ??
+              currentWorkspaceId;
             const workspace = expectResult(
-              await herdr.call("workspace.focus", { workspace_id: params.workspace }, { signal }),
+              await herdr.call("workspace.focus", { workspace_id: workspaceId }, { signal }),
               "workspace_info",
             ).workspace;
             return {
@@ -1397,6 +1511,7 @@ export default function (pi: ExtensionAPI) {
             marker,
             startedAt: Date.now(),
             abort: new AbortController(),
+            notifying: false,
           };
 
           expectResult(
@@ -1466,12 +1581,12 @@ export default function (pi: ExtensionAPI) {
               pendingRun.abort.abort();
               pendingRuns.delete(paneId);
             }
-            return doneResult("run", pendingRun, completion, false);
+            return doneResult("run", pendingRun, completion);
           }
 
           const notifierStarted = params.notify === true;
           if (notifierStarted) startNotifier(pendingRun, lines, 0);
-          return runningResult("run", pendingRun, completion, false, notifierStarted);
+          return runningResult("run", pendingRun, completion, notifierStarted);
         }
 
         case "read": {
@@ -1584,17 +1699,24 @@ export default function (pi: ExtensionAPI) {
           const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
           const paneId = resolved.pane.pane_id;
           const paneLabel = resolved.alias || paneRef;
-          const registeredRun = pendingRuns.get(paneId);
-          const untracked = registeredRun == null;
-          const pendingRun: PendingRun = registeredRun ?? {
-            paneId,
-            paneLabel,
-            runId: randomBytes(3).toString("hex"),
-            command: "the running command",
-            marker: null,
-            startedAt: Date.now(),
-            abort: new AbortController(),
-          };
+          const pendingRun = pendingRuns.get(paneId);
+          if (!pendingRun) {
+            const { foreground } = await readForeground(paneId, signal);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `No pending run in pane '${paneLabel}' (${paneId}). Nothing to wait on: start the command with run wait or notify. Foreground now: ${foreground ?? "unknown"}.`,
+                },
+              ],
+              details: withSnapshot({
+                action: "wait",
+                pane: paneLabel,
+                paneId,
+                state: "untracked",
+              }),
+            };
+          }
           const lines = params.lines ?? 60;
 
           if (params.notify === true) {
@@ -1604,11 +1726,10 @@ export default function (pi: ExtensionAPI) {
                 pendingRun.abort.abort();
                 pendingRuns.delete(paneId);
               }
-              return doneResult("wait", pendingRun, completion, untracked);
+              return doneResult("wait", pendingRun, completion);
             }
-            if (untracked) pendingRuns.set(paneId, pendingRun);
             startNotifier(pendingRun, lines, 0);
-            return runningResult("wait", pendingRun, completion, untracked, true);
+            return runningResult("wait", pendingRun, completion, true);
           }
 
           const publishWaitUpdate = () => {
@@ -1645,9 +1766,9 @@ export default function (pi: ExtensionAPI) {
               pendingRun.abort.abort();
               pendingRuns.delete(paneId);
             }
-            return doneResult("wait", pendingRun, completion, untracked);
+            return doneResult("wait", pendingRun, completion);
           }
-          return runningResult("wait", pendingRun, completion, untracked, false);
+          return runningResult("wait", pendingRun, completion, false);
         }
 
         case "wait_agent": {

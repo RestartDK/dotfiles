@@ -14,6 +14,16 @@ interface CallOptions {
   timeoutMs?: number;
 }
 
+export class HerdrRequestError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "HerdrRequestError";
+    this.code = code;
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -25,7 +35,10 @@ function parseResponse(value: unknown, expectedId: string): ResponseResult {
 
   if ("error" in value) {
     const response = value as unknown as ErrorResponse;
-    throw new Error(response.error.message || response.error.code || "Herdr request failed");
+    throw new HerdrRequestError(
+      response.error.code,
+      response.error.message || response.error.code || "Herdr request failed",
+    );
   }
 
   const response = value as unknown as SuccessResponse;
