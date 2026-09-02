@@ -20,7 +20,7 @@ Invoked at the end of every other playbook.
 - `## Blast Radius`. State who and what the change touches. Explain why the change is safe or risky. If main is red without the fix, name the continuing cost.
 - `## Verification`. State how you ran each check and its rigor. Name the real path, such as the live demo surface (headless chromium screenshot, browser automation, or the CLI itself) or the targeted tests. State the outcome of each check, not only the command name.
 
-After these sections, attach videos or screenshots when they prove a claim. Do not use `## Summary` or `## Test plan` boilerplate. A commit body does not restate its subject.
+After these sections, attach videos or screenshots when they prove a claim. UI changes always have a claim to prove: attach the decisive before/after frames. When the host cannot inline images into the body through its API, upload the frames to the Linear issue with the attachment upload flow (`prepare_attachment_upload`, PUT, `create_attachment_from_upload`) and link them from the body. Do not use `## Summary` or `## Test plan` boilerplate. A commit body does not restate its subject.
 
 **Size and stacks.** Prefer five narrow PRs to one large PR. Stack follow-ups with Graphite (`gt`), and keep the ordered stack visible to reviewers. Branch from main only for independent work. Rebase on `main` before substantial stack work.
 

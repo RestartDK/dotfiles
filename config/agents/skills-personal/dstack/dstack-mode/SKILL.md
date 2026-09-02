@@ -107,7 +107,7 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 - Fast mechanical code: `openrouter/z-ai/glm-5.3-flash:xhigh`.
 - Precisely-specified code: `gpt-5.6-sol`.
-- Judgment, prose, review: `anthropic/claude-fable-5:xhigh`.
+- Judgment, prose, review: `anthropic/claude-fable-5-1:xhigh`.
 
 You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Delegated implementation is not accepted until its diff passes the **thermo-nuclear-code-quality-review** standard. Workers commit locally and never push; they run focused checks, and the full CI suite runs after your review, at ship time. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
 
@@ -125,7 +125,7 @@ Write the reply clean as you draft it. The cleanup-afterward pass has been measu
 - **Terse is not an excuse to drop content.** Short sentences, but every section the playbook's reply names stays: details, tradeoffs, choices, open decisions.
 - **Frame impact for the consumer and the maintainer.** Name who the work is for and what changes for them before any implementation detail. Then what the next engineer inherits.
 - **Never fabricate a link, citation, or transcript reference.** Link only artifacts you produced or read this session.
-- **Show visual proof in the reply.** When verification produced screenshots or frame captures, display the decisive before/after frames in the final reply and keep them at durable paths. Never leave them buried in `/tmp` or only summarize them.
+- **Show visual proof in the reply.** When verification produced screenshots or frame captures, read the final captures yourself before presenting them; blank or off-target frames are common and only a read catches them. Display the decisive before/after frames in the final reply and keep them at durable paths. Never leave them buried in `/tmp` or only summarize them. For UI changes, attach the same frames to the PR as well; see `playbooks/opening-a-pr.md`.
 
 Every playbook ends with a reply written this way. The per-playbook lines name only the content unique to that playbook.
 
