@@ -818,7 +818,7 @@ const WorkerTask = Type.Object({
   agent: Type.Optional(
     Type.String({
       description:
-        "Configured worker preset name, one of the markdown agents in ~/.agents/agents (dstack-agent, comment-sicko) or a project .agents/agents entry.",
+        "Configured worker preset name. The tool description lists the available presets: markdown agents from ~/.agents/agents and the project's .agents/agents.",
     }),
   ),
   task: Type.String({ description: "Self-contained task to give this worker." }),

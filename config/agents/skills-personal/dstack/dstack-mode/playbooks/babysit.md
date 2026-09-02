@@ -2,7 +2,7 @@
 
 **You own the merge frontier. Declare a mode, clear one PR at a time, stop where the human's call begins.** For "babysit this", "get it green", "all green", "merge-ready", "watch CI", "address the bugbot comments", or "check on PR X". Step 1 owns the request-to-mode mapping. A request to land or ship is `~/.agents/skills/dstack/dstack-mode/playbooks/shipping.md`, which begins where this playbook ends.
 
-Babysitting starts when the user asks for it, which is normally once a phase or a whole stack is built, not when a PR opens. Building and babysitting compete for the same agent, and interleaving them stalls the build while spending checks on commits a later wave will restart. Finish the stack, get it green here, then land it through Shipping.
+Babysitting starts on request and after every PR the agent opens; the Opening a PR playbook hands off here in `drive` mode. A single PR is driven as soon as it opens. A stack is opened in full first and then driven from the root, so building and babysitting do not interleave and checks are not spent on commits a later wave restarts. Get it green here, then land it through Shipping.
 
 Babysitting fails the same few ways every time. Each step below exists because that failure cost a night.
 
