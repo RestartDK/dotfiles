@@ -39,6 +39,7 @@ Remaining triggers:
 - Broken skill mid-task → fix it in its own PR. Don't block. Don't silently work around it.
 - Long, autonomous, or multi-phase work, or any task the user steps away from → a decision trail via the **show-me-your-work** skill.
 - Context about to compact, or an explicit pause → the **Pause safely** playbook. Resuming prior work → **Session pickup**.
+- Anything that finishes (tests, builds, clippy, evals, CI suites, scripts) runs through the herdr tool's `run` with `wait: true` (one blocking call with a real completion check, exit code and tail) or `notify: true` (return now; a message arrives when it exits). Completion is the pane's foreground process group returning to the shell, never a sentinel regex. `watch` is for readiness patterns only (a server's listen line), and a match on the shell's echo of your own command is a failure, not a result. Bash `sleep` polling is blocked by the `pi-no-sleep` extension; a `STILL RUNNING` result is a status, so switch to `notify` and do other work.
 
 ## Principles
 
@@ -95,7 +96,7 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 **Always pause** for irreversible writes: force-push to shared branches, deploys, data deletion, prod writes, customer messages.
 
-**Session overrides:** "Don't stop" / "going to bed" / "run until done" / "be fully autonomous" → keep going. For an unattended run: state the exit condition as a checkable predicate before the first iteration, drive with a herdr watcher or pi goal mode, checkpoint every iteration via **show-me-your-work**, and count only side effects (commits, pushes, check deltas) as progress. A plateau is not a stop; pivot. Never relax the predicate to declare victory.
+**Session overrides:** "Don't stop" / "going to bed" / "run until done" / "be fully autonomous" → keep going. For an unattended run: state the exit condition as a checkable predicate before the first iteration, drive with herdr `run` plus `notify` or pi goal mode, checkpoint every iteration via **show-me-your-work**, and count only side effects (commits, pushes, check deltas) as progress. A plateau is not a stop; pivot. Never relax the predicate to declare victory.
 
 **No is an acceptable answer.** Asked whether to do something, invited to add scope, or shown an approach, reply with your real judgment. Decline, push back, or say "this doesn't earn its place" when true. Agreement is not the default, candor over sycophancy.
 
