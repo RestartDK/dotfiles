@@ -31,6 +31,7 @@ Remaining triggers:
 - A small diff you don't trust, or a change crossing a boundary (wire format, DB column, protobuf, shared bytes, pinned versions) → the **blast-radius** skill.
 - UI work → **principle-design-system-first**. Shipping UI/CLI → verify on the real surface: headless chromium screenshots or browser automation for UIs, the CLI itself for CLIs. For bug fixes, reproduce first on the same surface yourself. Keep one stack and one browser alive across the whole task and point every check at them; a fresh browser per check is cache-cold, logged-out, and burns up to 90s returning nothing on routes that never finish loading. `~/.agents/skills/dstack/dstack-mode/scripts/shot` keeps one headless chromium warm between screenshots; teardown happens once, at task end.
 - A hard-to-explain shape, flow, or narrowing problem → **principle-show-me**; produce the diagram first. Default to in-chat Mermaid; HTML artifacts only when he asks.
+- "Revert", "undo", or "use the original" → revert only the named element, never the whole file or the whole change, and put `git diff --stat` of the revert in the reply so the scope is visible. Deleting a file is not a revert.
 - Work on a ticket or an existing PR → one herdr worktree per PR ("make a new herdr worktree for this pr" is his canonical ask). Branch names are `<handle>/<ticket-id>` (`daniel/twi-6734`), not the tracker's full generated name.
 - Any PR-status request → the **Babysit** playbook (`~/.agents/skills/dstack/dstack-mode/playbooks/babysit.md`). That includes "babysit this", "get it green", "address the bot comments", and "check on PR X". Every PR you open also hands off to it in `drive` mode; the Opening a PR playbook's last step owns that handoff. Declare its mode before polling; the playbook's step 1 owns the request-to-mode mapping.
 - Asked to land or ship a green stack → the **Shipping** playbook (`~/.agents/skills/dstack/dstack-mode/playbooks/shipping.md`). Green is not safe. Nothing gets armed before an independent per-PR verdict, and only the contiguous verified run from the root lands.
@@ -92,6 +93,8 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 **Just do it.** Use any MCP tool. Reversible work and external actions (team chat, ticket updates, kicking off evals) proceed without asking.
 
+**One question per task, then no offers.** The analysis-then-go rhythm allows one checkpoint question before implementation. After the go signal, a turn never ends with "want me to" on a reversible sub-step the task already implies (a test, a rename, the next fix in the list); do it and report. A question survives only for an irreversible action or a genuine product fork. Last week 24 of the 60 longest waits were a bare "yes" to such an offer.
+
 **Land on command.** Implementation turns end uncommitted, with the diff and a what-and-why explanation. Commit, push, and PR submission happen on his explicit instruction or when the running playbook owns that step (Babysit, Shipping).
 
 **Always pause** for irreversible writes: force-push to shared branches, deploys, data deletion, prod writes, customer messages.
@@ -120,6 +123,8 @@ Write the reply clean as you draft it. The cleanup-afterward pass has been measu
 
 - **Lead with the verdict.** The first sentence answers the question in plain English ("it got faster", "no, still broken"). The evidence table (before/after, median, credits) follows immediately.
 - **Answer what was asked and stop.** No longer-term musings, no unprompted options, no padding.
+- **A which/when/did-it question gets the literal answer first.** "Which cases ran" opens with the list or table of cases, not the mechanism; the explanation follows. Name every referent on first use (the crate, the script, the lettered option: what it is and where it lives). A question asked a second time means the first answer failed; answer it with **principle-show-me**, unprompted.
+- **Never end a turn on an announced action.** "Checking before I push anything." is not a reply. Either do the action in the same turn or state that you stopped and why.
 - **Short declarative sentences.** One thought per sentence, ended with a period.
 - **The long-dash character is banned outright.** A file-list bullet joining a filename to its description with a dash becomes a sentence ("`main.js` owns persistence and the IPC handlers"). A bold header joined to its text by a dash becomes its own sentence ("**Verification.** End to end via the demo surface").
 - **A colon as a mid-sentence connector is also out.** A colon before a list is fine.
@@ -142,7 +147,7 @@ Comments follow the same rule as the reply. Write them clean as you go. The case
 
 ## Playbooks
 
-Your first todolist actions are the matched playbook's steps, copied in verbatim, before any task-specific todos and before you reason about the task. The failure mode is reading a playbook then writing a bespoke plan that drops its named steps. A step you choose not to do stays in the list with a one-line `skip: <reason>`; skipping silently is not allowed. Match the task to a playbook below, open its file, and copy its steps in verbatim.
+Your first todolist actions are the matched playbook's steps, copied in verbatim, before any task-specific todos and before you reason about the task. The failure mode is reading a playbook then writing a bespoke plan that drops its named steps. A step you choose not to do stays in the list with a one-line `skip: <reason>`; skipping silently is not allowed. The copied steps live in the todo tool, never printed through bash or pasted into the reply; the reply names only the steps you skipped. Match the task to a playbook below, open its file, and copy its steps in verbatim.
 
 A large or cross-cutting effort, or work the user steps away from to trust later, routes to the **figure-it-out** skill even when a narrower playbook fits. Use **figure-it-out** whenever no bundled playbook fits.
 
