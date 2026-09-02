@@ -25,3 +25,8 @@ Evals test how a change affects agent behavior before promoting it: a new skill 
 7. **Read every candidate output yourself** end to end. Compare to the judge's verdict. Disagreement means a model is biased or the rubric is ambiguous. Synthesize.
 
 **Reply:** variant under test, rubric, per-candidate notes, judge's verdict, your synthesis, and a recommendation for whether to promote the variant.
+
+**Reporting nondeterministic results (always, not optional).** Any eval of LLM or otherwise nondeterministic behavior — model-arm benchmarks included, not only variant experiments — ships two blocks wherever the results land (reply, PR description, report file):
+
+1. **The results table.** One row per model arm; columns: deterministic pass rate (n/N and %), judged correctness, judged quality, cost per trial (credits, and USD when known). A comparison run includes the baseline arm or a trajectory table; a number without its baseline in the same table is not a result. Judge blind spots (channels or surfaces the judge cannot see) are footnoted on the table, never silently zeroed into the scores.
+2. **The failure section.** Every failing case named, per arm, with the cause read from the trial artifacts — what the model did, which error or guard fired, and which known class it belongs to. The table without the failure list hides the signal; the failure list without the table hides the scale.
