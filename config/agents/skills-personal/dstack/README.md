@@ -23,7 +23,7 @@ A repo adds `.agents/skills/dstack-<repo>/` with `references/` (principle carve-
 
 ## Model roles
 
-`models.md`. Defaults: mechanical code → openrouter/z-ai/glm-5.3-flash:xhigh, precise-spec code → gpt-5.6-sol, judgment/prose/review → anthropic/claude-fable-5-1:xhigh.
+`models.md`. Defaults: mechanical code → openrouter/z-ai/glm-5.3-flash:xhigh, precise-spec code → openai/gpt-5.6-sol, judgment/prose/review → anthropic/claude-fable-5-1:xhigh.
 
 ## Deferred from pstack, deliberately
 

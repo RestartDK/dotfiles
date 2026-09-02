@@ -127,46 +127,7 @@ const DEFAULT_TOOLS = ["read", "grep", "find", "ls", "bash"];
 const DEFAULT_CONFIG: SubagentsConfig = {
   maxParallel: 4,
   defaultTools: DEFAULT_TOOLS,
-  agents: {
-    "scout-haiku": {
-      description: "Fast read-only codebase reconnaissance.",
-      model: "anthropic/claude-haiku-4-5",
-      tools: DEFAULT_TOOLS,
-      systemPrompt: [
-        "You are scout-haiku, a fast read-only codebase reconnaissance worker.",
-        "Find relevant files and facts quickly. Do not edit files.",
-        "Return concise findings with exact file paths and line ranges where possible.",
-      ].join("\n"),
-    },
-    "planner-gemini": {
-      description: "Read-only planner that turns findings into a concrete plan.",
-      model: "google/gemini-2.5-flash",
-      tools: DEFAULT_TOOLS,
-      systemPrompt: [
-        "You are planner-gemini, a read-only planning worker.",
-        "Do not edit files. Produce a concrete, ordered plan with risks and validation steps.",
-      ].join("\n"),
-    },
-    "reviewer-sonnet": {
-      description: "Read-only implementation reviewer.",
-      model: "anthropic/claude-sonnet-4-5",
-      tools: DEFAULT_TOOLS,
-      systemPrompt: [
-        "You are reviewer-sonnet, a read-only review worker.",
-        "Review the requested code or diff for correctness, missing tests, safety, and unnecessary complexity.",
-        "Do not edit files. Return prioritized findings with paths and line numbers.",
-      ].join("\n"),
-    },
-    "worker-gpt-mini": {
-      description: "Write-capable implementation worker. Run at most one at a time.",
-      model: "openai/gpt-5.4-mini",
-      tools: ["read", "grep", "find", "ls", "bash", "edit", "write"],
-      systemPrompt: [
-        "You are worker-gpt-mini, a focused implementation worker.",
-        "Make only the requested changes. Keep the diff small. Report exactly what changed and what validation you ran.",
-      ].join("\n"),
-    },
-  },
+  agents: {},
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -856,7 +817,8 @@ async function mapWithConcurrency<TIn, TOut>(
 const WorkerTask = Type.Object({
   agent: Type.Optional(
     Type.String({
-      description: "Configured worker preset name, such as scout-haiku or reviewer-sonnet.",
+      description:
+        "Configured worker preset name. The tool description lists the available presets: markdown agents from ~/.agents/agents and the project's .agents/agents.",
     }),
   ),
   task: Type.String({ description: "Self-contained task to give this worker." }),

@@ -1,6 +1,6 @@
 ---
 name: dstack-agent
-description: Routing target for `/dstack-mode` and any request for dstack's style. Resume an existing `dstack-agent` for the conversation rather than spawning a sibling. Reads the `dstack-mode` skill's `SKILL.md` in full before any work, including its inline Principles index. Substituting `generalPurpose` skips that read and drifts.
+description: Routing target for `/dstack-mode` and any request for dstack's style. Resume an existing `dstack-agent` for the conversation rather than spawning a sibling. Reads the `dstack-mode` skill's `SKILL.md` in full before any work, including its inline Principles index. Substituting any other preset skips that read and drifts.
 is_background: true
 ---
 

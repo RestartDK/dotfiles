@@ -26,6 +26,6 @@ After these sections, attach videos or screenshots when they prove a claim. UI c
 
 **Readiness.** Open every PR ready, never as a draft. Cloud-agent PR tools default to draft, so set `draft: false` on every PR creation call. If a PR still opens as a draft, run the host's ready command, such as `gh pr ready <number>`. Run `gh pr view <number>` before you refer to PR status.
 
-**Babysit.** Opening a PR does not start a babysit. Post the URL and keep building. Finish the phase or stack first. Run a separate babysit pass only when the user asks for one after the whole stack exists. A babysit for each new PR stalls the build and spends checks on commits that later waves restart. Push back when feedback drifts from intent.
+**Babysit.** Every PR you open hands off to `~/.agents/skills/dstack/dstack-mode/playbooks/babysit.md` in `drive` mode until it reports `READY`, with the review bot's score topped out when the repo runs one. Post the URL, then start the babysit in the same turn. For a stack, open the whole stack first, then babysit from the root. Push back when feedback drifts from intent.
 
-A subagent that opens a PR runs `interrogate`, `unslop`, and `no-comments`. It returns the URL and does not babysit. Return to the parent.
+A subagent that opens a PR runs `interrogate`, `unslop`, and `no-comments`. It returns the URL and does not babysit; the parent starts the babysit. Return to the parent.

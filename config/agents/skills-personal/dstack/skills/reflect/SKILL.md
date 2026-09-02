@@ -39,7 +39,7 @@ One subagents call, three tasks, explicit `model:` on each. Reviewers need MCP a
 | Lens | `model` | Prompt template |
 |---|---|---|
 | Judgment | your configured reflect-judgment model (default `anthropic/claude-fable-5-1:xhigh`) | `references/judgment-reviewer.md` |
-| Tooling | your configured reflect-tooling model (default `gpt-5.6-sol`) | `references/tooling-reviewer.md` |
+| Tooling | your configured reflect-tooling model (default `openai/gpt-5.6-sol`) | `references/tooling-reviewer.md` |
 | Divergent | your configured reflect-judgment model (default `anthropic/claude-fable-5-1:xhigh`) | `references/divergent-reviewer.md` |
 
 Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in their subagent response body.
