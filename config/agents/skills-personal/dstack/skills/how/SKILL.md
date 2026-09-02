@@ -109,7 +109,7 @@ Run the full explain flow above (Steps 1-4). You must understand the architectur
 
 ### Step 2. Spawn Critics
 
-After the explanation is complete, spawn one architectural critic per model in your configured how-critics list (defaults `anthropic/claude-fable-5-1:xhigh`, `gpt-5.6-sol`, `openrouter/z-ai/glm-5.3-flash:xhigh`, `anthropic/claude-opus-5:xhigh`), all in a single message.
+After the explanation is complete, spawn one architectural critic per model in your configured how-critics list (defaults `anthropic/claude-fable-5-1:xhigh`, `openai/gpt-5.6-sol`, `openrouter/z-ai/glm-5.3-flash:xhigh`, `anthropic/claude-opus-5:xhigh`), all in a single message.
 
 For each critic:
 - spawn via the subagents tool

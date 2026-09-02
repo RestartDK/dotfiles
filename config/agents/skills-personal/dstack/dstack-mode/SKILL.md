@@ -19,7 +19,7 @@ Remaining triggers:
 
 - "Explain", a question turn, or "no changes yet" → analysis only, zero edits. The go signal is his explicit phrase ("do this now then"); reversible-work autonomy never overrides an explicit hold.
 - Nontrivial change, architecture decision, or "are we sure?" → the **how** skill.
-- About to ask the user a "which approach", "how should I", or "what should this do" fork → classify it before you ask. If the answer is a fact you could observe by running something (behavior, timing, layout, output, perf), it is not the human's to answer. Sketch it via the Prototype playbook (`playbooks/prototype.md`) and let the result decide. If the task is a read-only Investigation whose deliverable is a cited answer, stay in it and answer from the evidence. Reserve the question for a genuine product or preference call no experiment can settle.
+- About to ask the user a "which approach", "how should I", or "what should this do" fork → classify it before you ask. If the answer is a fact you could observe by running something (behavior, timing, layout, output, perf), it is not the human's to answer. Sketch it via the Prototype playbook (`~/.agents/skills/dstack/dstack-mode/playbooks/prototype.md`) and let the result decide. If the task is a read-only Investigation whose deliverable is a cited answer, stay in it and answer from the evidence. Reserve the question for a genuine product or preference call no experiment can settle.
 - Any code → name the data shape first, and choose its organizing structure per **principle-model-the-domain**.
 - Code crossing a function boundary → the **architect** skill, parallel design exploration before implementing.
 - Parallel fan-out → the **swarm** skill for coverage matrices, races, gauntlets, and exploration partitions. Use **arena** for design or code bakeoffs with base selection and grafting.
@@ -29,12 +29,12 @@ Remaining triggers:
 - Docs, RFCs, readmes, PR descriptions, or commit messages → the **technical-writing** skill.
 - Before review → the **no-comments** skill.
 - A small diff you don't trust, or a change crossing a boundary (wire format, DB column, protobuf, shared bytes, pinned versions) → the **blast-radius** skill.
-- UI work → **principle-design-system-first**. Shipping UI/CLI → verify on the real surface: headless chromium screenshots or browser automation for UIs, the CLI itself for CLIs. For bug fixes, reproduce first on the same surface yourself. Keep one stack and one browser alive across the whole task and point every check at them; a fresh browser per check is cache-cold, logged-out, and burns up to 90s returning nothing on routes that never finish loading. `scripts/shot` keeps one headless chromium warm between screenshots; teardown happens once, at task end.
+- UI work → **principle-design-system-first**. Shipping UI/CLI → verify on the real surface: headless chromium screenshots or browser automation for UIs, the CLI itself for CLIs. For bug fixes, reproduce first on the same surface yourself. Keep one stack and one browser alive across the whole task and point every check at them; a fresh browser per check is cache-cold, logged-out, and burns up to 90s returning nothing on routes that never finish loading. `~/.agents/skills/dstack/dstack-mode/scripts/shot` keeps one headless chromium warm between screenshots; teardown happens once, at task end.
 - A hard-to-explain shape, flow, or narrowing problem → **principle-show-me**; produce the diagram first. Default to in-chat Mermaid; HTML artifacts only when he asks.
 - Work on a ticket or an existing PR → one herdr worktree per PR ("make a new herdr worktree for this pr" is his canonical ask). Branch names are `<handle>/<ticket-id>` (`daniel/twi-6734`), not the tracker's full generated name.
-- Any PR-status request → the **Babysit** playbook (`playbooks/babysit.md`). That includes "babysit this", "get it green", "address the bot comments", and "check on PR X". Never triggered by merely opening a PR. Declare its mode before polling; the playbook's step 1 owns the request-to-mode mapping.
-- Asked to land or ship a green stack → the **Shipping** playbook (`playbooks/shipping.md`). Green is not safe. Nothing gets armed before an independent per-PR verdict, and only the contiguous verified run from the root lands.
-- A review bot (Bugbot, Graphite AI, CodeRabbit, security reviewer) commented → skeptical posture. Assess each on its merits and dismiss noise with a concrete reason instead of churning code. Triage fix / dismiss / ask per `references/bugbot-triage.md`.
+- Any PR-status request → the **Babysit** playbook (`~/.agents/skills/dstack/dstack-mode/playbooks/babysit.md`). That includes "babysit this", "get it green", "address the bot comments", and "check on PR X". Every PR you open also hands off to it in `drive` mode; the Opening a PR playbook's last step owns that handoff. Declare its mode before polling; the playbook's step 1 owns the request-to-mode mapping.
+- Asked to land or ship a green stack → the **Shipping** playbook (`~/.agents/skills/dstack/dstack-mode/playbooks/shipping.md`). Green is not safe. Nothing gets armed before an independent per-PR verdict, and only the contiguous verified run from the root lands.
+- A review bot (Bugbot, Graphite AI, CodeRabbit, security reviewer) commented → skeptical posture. Assess each on its merits and dismiss noise with a concrete reason instead of churning code. Triage fix / dismiss / ask per `~/.agents/skills/dstack/dstack-mode/references/bugbot-triage.md`.
 - Task hinges on a past decision, a prior pi session, or "where did we land on X" → the **recall** skill rebuilds that context before you re-derive it.
 - Broken skill mid-task → fix it in its own PR. Don't block. Don't silently work around it.
 - Long, autonomous, or multi-phase work, or any task the user steps away from → a decision trail via the **show-me-your-work** skill.
@@ -101,12 +101,12 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 ## Subagents
 
-**Spawn subagents via the pi `subagents` tool. Use the `dstack-agent` definition (`~/.agents/skills/dstack/agents/dstack-agent.md`) for any delegate working inside a playbook step**, so delegation inherits this mode. Until markdown agent discovery lands in the subagents extension, replicate it by prefixing the worker's systemPrompt with dstack-agent's body. Routed workflow skills (`how`, `why`, `interrogate`, `reflect`, `swarm`, `arena`) prescribe their own models; respect what the skill prescribes.
+**Spawn subagents via the pi `subagents` tool. Use the `dstack-agent` definition (`~/.agents/skills/dstack/agents/dstack-agent.md`) for any delegate working inside a playbook step**, so delegation inherits this mode. The subagents extension discovers it from `~/.agents/agents/`, so pass `agent: "dstack-agent"` on every spawn (or `agent: "comment-sicko"` for its review). No other preset exists; a spawn that names one, or omits `model`, is wrong. Every `model` value is fully qualified with its provider (`openai/gpt-5.6-sol`, never `gpt-5.6-sol`; pi rejects bare ids as ambiguous). Routed workflow skills (`how`, `why`, `interrogate`, `reflect`, `swarm`, `arena`) prescribe their own models; respect what the skill prescribes.
 
 **Model roles** (overrides in `~/.agents/skills/dstack/models.md`; a role with no line keeps its default):
 
 - Fast mechanical code: `openrouter/z-ai/glm-5.3-flash:xhigh`.
-- Precisely-specified code: `gpt-5.6-sol`.
+- Precisely-specified code: `openai/gpt-5.6-sol`.
 - Judgment, prose, review: `anthropic/claude-fable-5-1:xhigh`.
 
 You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Delegated implementation is not accepted until its diff passes the **thermo-nuclear-code-quality-review** standard. Workers commit locally and never push; they run focused checks, and the full CI suite runs after your review, at ship time. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
@@ -125,7 +125,7 @@ Write the reply clean as you draft it. The cleanup-afterward pass has been measu
 - **Terse is not an excuse to drop content.** Short sentences, but every section the playbook's reply names stays: details, tradeoffs, choices, open decisions.
 - **Frame impact for the consumer and the maintainer.** Name who the work is for and what changes for them before any implementation detail. Then what the next engineer inherits.
 - **Never fabricate a link, citation, or transcript reference.** Link only artifacts you produced or read this session.
-- **Show visual proof in the reply.** When verification produced screenshots or frame captures, read the final captures yourself before presenting them; blank or off-target frames are common and only a read catches them. Display the decisive before/after frames in the final reply and keep them at durable paths. Never leave them buried in `/tmp` or only summarize them. For UI changes, attach the same frames to the PR as well; see `playbooks/opening-a-pr.md`.
+- **Show visual proof in the reply.** When verification produced screenshots or frame captures, read the final captures yourself before presenting them; blank or off-target frames are common and only a read catches them. Display the decisive before/after frames in the final reply and keep them at durable paths. Never leave them buried in `/tmp` or only summarize them. For UI changes, attach the same frames to the PR as well; see `~/.agents/skills/dstack/dstack-mode/playbooks/opening-a-pr.md`.
 
 Every playbook ends with a reply written this way. The per-playbook lines name only the content unique to that playbook.
 
@@ -145,19 +145,19 @@ Your first todolist actions are the matched playbook's steps, copied in verbatim
 
 A large or cross-cutting effort, or work the user steps away from to trust later, routes to the **figure-it-out** skill even when a narrower playbook fits. Use **figure-it-out** whenever no bundled playbook fits.
 
-- **Stack-up.** Get the local dev environment demo-ready: stack, auth, seeds, one-click login, visual proof. `playbooks/stack-up.md`.
-- **Repro.** Turn a reported production or local failure into a minimal failing reproduction with evidence. Hands off to Bug fix. `playbooks/repro.md`.
-- **Investigation.** Read-only question: how does X work, why was Y built this way, are we sure about Z. `playbooks/investigation.md`.
-- **Bug fix.** A reported defect to reproduce, root-cause, and fix with runtime evidence. `playbooks/bug-fix.md`.
-- **Perf issue.** A measured slowness to trace and improve against a baseline. `playbooks/perf-issue.md`.
-- **Hillclimb.** Sustained, scientific improvement of one metric against a target: loop hypotheses with before/after measurement, a decision log, and one commit per accepted win. Distinct from Perf issue, which is a one-off fix. `playbooks/hillclimb.md`.
-- **Feature.** New or changed behavior, built from a named data shape. `playbooks/feature.md`.
-- **Refactoring.** A behavior-preserving change to structure or shape (rename, extract, inline, dedupe, move). `playbooks/refactoring.md`.
-- **Prototype.** A throwaway sketch to make a design or behavioral decision cheaply, or to settle an empirical fork by observing it instead of asking the human. `playbooks/prototype.md`.
-- **Eval.** Testing how a skill, structure, or prompt change affects agent behavior before promoting it. `playbooks/eval.md`.
-- **Babysit.** Driving a PR or a stack to merge-ready: conflicts, review threads, CI. `playbooks/babysit.md`.
-- **Shipping.** The half after Babysit. Independently verifying a green stack, then landing the contiguous verified run with Graphite merge-when-ready. `playbooks/shipping.md`.
-- **Session pickup.** Resuming or taking over a prior agent's in-flight work from a transcript, session file, or pushed branch. `playbooks/session-pickup.md`.
-- **Pause safely.** Suspending in-flight work cleanly so it can be resumed, on an explicit pause, going offline, or imminent context compaction. The complement to Session pickup. `playbooks/pause-safely.md`.
-- **Worktree and simulator cleanup.** Reclaiming local disk by pruning merged or abandoned git worktrees and stale iOS simulators ("what's using my disk", "clean up worktrees", "prune safe-to-prune worktrees", "free up space", "delete old simulators"). `playbooks/worktree-cleanup.md`.
-- **Opening a PR.** Invoked at the end of every other playbook. `playbooks/opening-a-pr.md`.
+- **Stack-up.** Get the local dev environment demo-ready: stack, auth, seeds, one-click login, visual proof. `~/.agents/skills/dstack/dstack-mode/playbooks/stack-up.md`.
+- **Repro.** Turn a reported production or local failure into a minimal failing reproduction with evidence. Hands off to Bug fix. `~/.agents/skills/dstack/dstack-mode/playbooks/repro.md`.
+- **Investigation.** Read-only question: how does X work, why was Y built this way, are we sure about Z. `~/.agents/skills/dstack/dstack-mode/playbooks/investigation.md`.
+- **Bug fix.** A reported defect to reproduce, root-cause, and fix with runtime evidence. `~/.agents/skills/dstack/dstack-mode/playbooks/bug-fix.md`.
+- **Perf issue.** A measured slowness to trace and improve against a baseline. `~/.agents/skills/dstack/dstack-mode/playbooks/perf-issue.md`.
+- **Hillclimb.** Sustained, scientific improvement of one metric against a target: loop hypotheses with before/after measurement, a decision log, and one commit per accepted win. Distinct from Perf issue, which is a one-off fix. `~/.agents/skills/dstack/dstack-mode/playbooks/hillclimb.md`.
+- **Feature.** New or changed behavior, built from a named data shape. `~/.agents/skills/dstack/dstack-mode/playbooks/feature.md`.
+- **Refactoring.** A behavior-preserving change to structure or shape (rename, extract, inline, dedupe, move). `~/.agents/skills/dstack/dstack-mode/playbooks/refactoring.md`.
+- **Prototype.** A throwaway sketch to make a design or behavioral decision cheaply, or to settle an empirical fork by observing it instead of asking the human. `~/.agents/skills/dstack/dstack-mode/playbooks/prototype.md`.
+- **Eval.** Testing how a skill, structure, or prompt change affects agent behavior before promoting it. `~/.agents/skills/dstack/dstack-mode/playbooks/eval.md`.
+- **Babysit.** Driving a PR or a stack to merge-ready: conflicts, review threads, CI. `~/.agents/skills/dstack/dstack-mode/playbooks/babysit.md`.
+- **Shipping.** The half after Babysit. Independently verifying a green stack, then landing the contiguous verified run with Graphite merge-when-ready. `~/.agents/skills/dstack/dstack-mode/playbooks/shipping.md`.
+- **Session pickup.** Resuming or taking over a prior agent's in-flight work from a transcript, session file, or pushed branch. `~/.agents/skills/dstack/dstack-mode/playbooks/session-pickup.md`.
+- **Pause safely.** Suspending in-flight work cleanly so it can be resumed, on an explicit pause, going offline, or imminent context compaction. The complement to Session pickup. `~/.agents/skills/dstack/dstack-mode/playbooks/pause-safely.md`.
+- **Worktree and simulator cleanup.** Reclaiming local disk by pruning merged or abandoned git worktrees and stale iOS simulators ("what's using my disk", "clean up worktrees", "prune safe-to-prune worktrees", "free up space", "delete old simulators"). `~/.agents/skills/dstack/dstack-mode/playbooks/worktree-cleanup.md`.
+- **Opening a PR.** Invoked at the end of every other playbook. `~/.agents/skills/dstack/dstack-mode/playbooks/opening-a-pr.md`.

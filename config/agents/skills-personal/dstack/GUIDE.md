@@ -36,7 +36,7 @@ Audit rule: every cited principle must name the decision it changed. A bare cita
 ## Subagent roles
 
 - openrouter/z-ai/glm-5.3-flash:xhigh: fast mechanical edits, swarm workers.
-- gpt-5.6-sol: precisely-specified implementation.
+- openai/gpt-5.6-sol: precisely-specified implementation.
 - anthropic/claude-fable-5-1:xhigh: judgment, prose, review, cross-judging.
   Change them in `models.md`. Fan-out list lengths set panel sizes (arena runners, interrogate reviewers).
 
