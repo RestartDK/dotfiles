@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated from Herdr protocol 19, schema version 1.
+ * Generated from Herdr protocol 20, schema version 1.
  * Run `npm run generate` after updating Herdr. Do not edit by hand.
  */
 

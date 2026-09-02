@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated from Herdr protocol 19, schema version 1.
+ * Generated from Herdr protocol 20, schema version 1.
  * Run `npm run generate` after updating Herdr. Do not edit by hand.
  */
 
@@ -189,8 +189,29 @@ export type ResponseResult =
       [k: string]: unknown;
     }
   | {
+      revision: number;
+      sequence: number;
+      type: "pane_graphics_frame_ack";
+      [k: string]: unknown;
+    }
+  | {
       cell_height_px: number;
       cell_width_px: number;
+      /**
+       * Accepts damage metadata while still consuming a complete canonical file.
+       */
+      file_frame_damage?: boolean;
+      file_frame_direct_max_bytes?: number | null;
+      file_frame_directory?: string | null;
+      file_frame_formats?: string[];
+      file_frame_max_bytes?: number | null;
+      file_frame_transport?: string | null;
+      max_layers_per_pane?: number;
+      /**
+       * True only when this pane is on the currently rendered terminal surface.
+       */
+      pane_visible: boolean;
+      pixel_mouse?: boolean;
       type: "pane_graphics_info";
       [k: string]: unknown;
     }
@@ -567,6 +588,7 @@ export type IntegrationTarget =
   | "kilo"
   | "hermes"
   | "qodercli"
+  | "qwen"
   | "cursor"
   | "mastracode"
   | "antigravity_cli"

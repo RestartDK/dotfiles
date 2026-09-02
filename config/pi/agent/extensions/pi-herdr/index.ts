@@ -7,6 +7,7 @@ import {
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
@@ -14,6 +15,7 @@ import { expectResult, HerdrClient } from "./client.ts";
 import type {
   AgentStatus,
   PaneInfo,
+  PaneProcessInfo,
   TabInfo,
   WorkspaceInfo,
   WorktreeInfo,
@@ -21,10 +23,28 @@ import type {
 
 type ToolReadSource = "visible" | "recent" | "recent-unwrapped";
 
+const DEFAULT_COMPLETION_TIMEOUT_MS = 600_000;
+const NOTIFIER_MAX_ELAPSED_MS = 6 * 60 * 60 * 1000;
+const SHELL_PROCESS_PATTERN = /^(zsh|bash|fish|sh|starship)$/;
+
 interface ManagedPane {
   paneId: string;
   workspaceId: string;
 }
+
+interface PendingRun {
+  paneId: string;
+  paneLabel: string;
+  runId: string;
+  command: string;
+  marker: string | null;
+  startedAt: number;
+  abort: AbortController;
+}
+
+type Completion =
+  | { kind: "running"; foreground: string | null; elapsedMs: number }
+  | { kind: "done"; exitCode: number | null; elapsedMs: number; tail: string };
 
 interface HerdrToolDetails {
   action?: string;
@@ -52,6 +72,7 @@ const ActionEnum = StringEnum(
     "run",
     "read",
     "watch",
+    "wait",
     "wait_agent",
     "send",
     "stop",
@@ -90,6 +111,9 @@ export default function (pi: ExtensionAPI) {
 
   const managedPanes = new Map<string, ManagedPane>();
   const aliasOrder: string[] = [];
+  const pendingRuns = new Map<string, PendingRun>();
+  const notifyingRunIds = new Set<string>();
+  const lastCommandByPane = new Map<string, string>();
 
   function snapshotAliases(): Record<string, ManagedPane> {
     return Object.fromEntries(managedPanes.entries());
@@ -196,7 +220,12 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, ctx) =>
     reportAgentState(ctx.isIdle() ? "idle" : "working", ctx),
   );
-  pi.on("session_shutdown", async () => releaseAgent());
+  pi.on("session_shutdown", async () => {
+    for (const pendingRun of pendingRuns.values()) pendingRun.abort.abort();
+    pendingRuns.clear();
+    notifyingRunIds.clear();
+    await releaseAgent();
+  });
 
   function recordAlias(alias: string, paneId: string, workspaceId: string) {
     managedPanes.set(alias, { paneId, workspaceId });
@@ -239,7 +268,11 @@ export default function (pi: ExtensionAPI) {
 
   function protocolReadSource(
     source: ToolReadSource | undefined,
+    lines?: number,
   ): "visible" | "recent" | "recent_unwrapped" {
+    // herdr's recent sources slice `lines` from scrolled-off text only, so a pane whose output is
+    // still on screen reads back empty; visible carries the same tail when a line count is given.
+    if (lines != null) return "visible";
     return source === "recent-unwrapped" ? "recent_unwrapped" : (source ?? "recent");
   }
 
@@ -385,7 +418,7 @@ export default function (pi: ExtensionAPI) {
         "pane.read",
         {
           pane_id: paneId,
-          source: protocolReadSource(options.source),
+          source: protocolReadSource(options.source, options.lines),
           lines: options.lines,
           format: options.raw ? "ansi" : "text",
           strip_ansi: options.raw !== true,
@@ -408,6 +441,290 @@ export default function (pi: ExtensionAPI) {
       text = `[Showing last ${truncation.outputLines} of ${truncation.totalLines} lines]\n${text}`;
     }
     return text;
+  }
+
+  function abortPendingRun(paneId: string) {
+    const pendingRun = pendingRuns.get(paneId);
+    if (!pendingRun) return;
+    pendingRun.abort.abort();
+    pendingRuns.delete(paneId);
+  }
+
+  function completionPollInterval(elapsedMs: number): number {
+    if (elapsedMs < 30_000) return 1_000;
+    if (elapsedMs < 10 * 60_000) return 3_000;
+    return 5_000;
+  }
+
+  function formatElapsed(elapsedMs: number): string {
+    const elapsedSeconds = Math.floor(elapsedMs / 1000);
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = String(elapsedSeconds % 60).padStart(2, "0");
+    return `${minutes}m ${seconds}s`;
+  }
+
+  function parseExitCode(output: string, marker: string | null): number | null {
+    if (!marker) return null;
+    const matches = output.matchAll(new RegExp(`^${marker}=(\\d+)\\s*$`, "gm"));
+    let exitCode: number | null = null;
+    for (const match of matches) exitCode = Number(match[1]);
+    return exitCode;
+  }
+
+  async function readForeground(
+    paneId: string,
+    signal?: AbortSignal,
+  ): Promise<{ done: boolean; foreground: string | null }> {
+    const processInfo: PaneProcessInfo = expectResult(
+      await herdr.call("pane.process_info", { pane_id: paneId }, { signal, timeoutMs: 5_000 }),
+      "pane_process_info",
+    ).process_info;
+    const names = (processInfo.foreground_processes ?? []).map((process) => process.name);
+    const shellPid = processInfo.shell_pid;
+    const done =
+      (shellPid != null && processInfo.foreground_process_group_id === shellPid) ||
+      (shellPid == null && names.every((name) => SHELL_PROCESS_PATTERN.test(name)));
+    return { done, foreground: names.length ? names.join(",") : null };
+  }
+
+  async function probe(
+    pendingRun: PendingRun,
+    lines: number,
+    signal?: AbortSignal,
+  ): Promise<Completion> {
+    const { done: shellIdle, foreground } = await readForeground(pendingRun.paneId, signal);
+    const elapsedMs = Date.now() - pendingRun.startedAt;
+    if (!shellIdle) return { kind: "running", foreground, elapsedMs };
+
+    const output = await readPane(
+      pendingRun.paneId,
+      { source: "visible", lines, raw: false },
+      signal,
+    );
+    const exitCode = parseExitCode(output, pendingRun.marker);
+    if (pendingRun.marker && exitCode == null) {
+      return {
+        kind: "running",
+        foreground: `${foreground ?? "unknown"}; exit marker not printed yet`,
+        elapsedMs,
+      };
+    }
+    return {
+      kind: "done",
+      exitCode,
+      elapsedMs,
+      tail: formatReadOutput(stripMarkerLines(output)),
+    };
+  }
+
+  function stripMarkerLines(output: string): string {
+    return output
+      .split("\n")
+      .filter((line) => !/^__pi_rc_[0-9a-f]{6}=\d+\s*$/.test(line))
+      .join("\n");
+  }
+
+  async function waitForCompletion(
+    pendingRun: PendingRun,
+    lines: number,
+    timeoutMs: number,
+    initialDelayMs: number,
+    signal?: AbortSignal,
+  ): Promise<Completion> {
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    if (initialDelayMs > 0) {
+      await sleep(Math.min(initialDelayMs, Math.max(0, deadline - Date.now())), signal);
+    }
+
+    while (true) {
+      const completion = await probe(pendingRun, lines, signal);
+      if (completion.kind === "done") return completion;
+
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) return completion;
+      await sleep(Math.min(completionPollInterval(completion.elapsedMs), remainingMs), signal);
+    }
+  }
+
+  function isPaneGoneError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /(?:pane.*(?:not found|does not exist|no longer exists|closed))|(?:(?:not found|does not exist).*pane)/i.test(
+      message,
+    );
+  }
+
+  function sendNotifierMessage(content: string, details: Record<string, unknown>) {
+    try {
+      pi.sendMessage(
+        { customType: "herdr-run-finished", content, display: true, details },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    } catch (error) {
+      logLifecycleError("deliver a command completion notification", error);
+    }
+  }
+
+  function startNotifier(pendingRun: PendingRun, lines: number, initialDelayMs: number) {
+    if (
+      notifyingRunIds.has(pendingRun.runId) ||
+      pendingRuns.get(pendingRun.paneId) !== pendingRun
+    ) {
+      return;
+    }
+    notifyingRunIds.add(pendingRun.runId);
+
+    void (async () => {
+      const signal = pendingRun.abort.signal;
+      try {
+        if (initialDelayMs > 0) await sleep(initialDelayMs, signal);
+
+        while (!signal.aborted && pendingRuns.get(pendingRun.paneId) === pendingRun) {
+          let completion: Completion;
+          try {
+            completion = await probe(pendingRun, lines, signal);
+          } catch (error) {
+            if (isAbortError(error, signal)) return;
+            if (isPaneGoneError(error)) {
+              sendNotifierMessage(
+                `herdr: pane '${pendingRun.paneLabel}' closed before '${pendingRun.command}' finished`,
+                { paneId: pendingRun.paneId, runId: pendingRun.runId },
+              );
+              if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
+                pendingRuns.delete(pendingRun.paneId);
+              }
+              return;
+            }
+            logLifecycleError("probe command completion", error);
+            const elapsedMs = Date.now() - pendingRun.startedAt;
+            if (elapsedMs >= NOTIFIER_MAX_ELAPSED_MS) {
+              sendNotifierMessage(
+                `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' still running after 6h; stopped watching`,
+                { paneId: pendingRun.paneId, runId: pendingRun.runId, elapsedMs },
+              );
+              if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
+                pendingRuns.delete(pendingRun.paneId);
+              }
+              return;
+            }
+            await sleep(
+              Math.min(completionPollInterval(elapsedMs), NOTIFIER_MAX_ELAPSED_MS - elapsedMs),
+              signal,
+            );
+            continue;
+          }
+
+          if (completion.kind === "done") {
+            const exitCode = completion.exitCode == null ? "unknown" : completion.exitCode;
+            const tail = completion.tail.split("\n").slice(-40).join("\n");
+            sendNotifierMessage(
+              `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' finished: exit ${exitCode} after ${formatElapsed(completion.elapsedMs)}\n\n${tail}`,
+              {
+                paneId: pendingRun.paneId,
+                runId: pendingRun.runId,
+                exitCode: completion.exitCode,
+                elapsedMs: completion.elapsedMs,
+              },
+            );
+            if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
+              pendingRuns.delete(pendingRun.paneId);
+            }
+            return;
+          }
+
+          if (completion.elapsedMs >= NOTIFIER_MAX_ELAPSED_MS) {
+            sendNotifierMessage(
+              `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' still running after 6h; stopped watching`,
+              {
+                paneId: pendingRun.paneId,
+                runId: pendingRun.runId,
+                elapsedMs: completion.elapsedMs,
+              },
+            );
+            if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
+              pendingRuns.delete(pendingRun.paneId);
+            }
+            return;
+          }
+
+          await sleep(
+            Math.min(
+              completionPollInterval(completion.elapsedMs),
+              NOTIFIER_MAX_ELAPSED_MS - completion.elapsedMs,
+            ),
+            signal,
+          );
+        }
+      } catch (error) {
+        if (!isAbortError(error, signal)) {
+          logLifecycleError("watch command completion", error);
+        }
+      } finally {
+        notifyingRunIds.delete(pendingRun.runId);
+      }
+    })();
+  }
+
+  function doneResult(
+    action: "run" | "wait",
+    pendingRun: PendingRun,
+    completion: Extract<Completion, { kind: "done" }>,
+    untracked: boolean,
+  ) {
+    const exitCode = completion.exitCode == null ? "unknown" : completion.exitCode;
+    const untrackedText = untracked
+      ? "\n\nno exit code: the command was not started with run wait/notify"
+      : "";
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Finished '${pendingRun.command}' in pane '${pendingRun.paneLabel}' (${pendingRun.paneId}): exit ${exitCode} after ${formatElapsed(completion.elapsedMs)}${untrackedText}\n\n${completion.tail}`,
+        },
+      ],
+      details: withSnapshot({
+        action,
+        pane: pendingRun.paneLabel,
+        paneId: pendingRun.paneId,
+        command: pendingRun.command,
+        exitCode: completion.exitCode,
+        elapsedMs: completion.elapsedMs,
+        state: "done",
+      }),
+    };
+  }
+
+  function runningResult(
+    action: "run" | "wait",
+    pendingRun: PendingRun,
+    completion: Extract<Completion, { kind: "running" }>,
+    untracked: boolean,
+    notifierStarted: boolean,
+  ) {
+    const foreground = completion.foreground ?? "unknown";
+    const notifierText = notifierStarted
+      ? " A notifier is active and will deliver a message when the command exits."
+      : "";
+    const untrackedText = untracked
+      ? "\n\nno exit code: the command was not started with run wait/notify"
+      : "";
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `STILL RUNNING after ${formatElapsed(completion.elapsedMs)} in pane '${pendingRun.paneLabel}' (${pendingRun.paneId}): foreground ${foreground}. This is a status, not an error. Call wait again with a longer timeout, or wait with notify: true to get a message when it exits.${notifierText}${untrackedText}`,
+        },
+      ],
+      details: withSnapshot({
+        action,
+        pane: pendingRun.paneLabel,
+        paneId: pendingRun.paneId,
+        command: pendingRun.command,
+        exitCode: null,
+        elapsedMs: completion.elapsedMs,
+        state: "running",
+        foreground: completion.foreground,
+      }),
+    };
   }
 
   function summarizePane(pane: PaneInfo, alias?: string, currentPaneId?: string): string {
@@ -499,7 +816,7 @@ export default function (pi: ExtensionAPI) {
     label: "herdr",
     description:
       "Herdr-native pane and dedicated-tab orchestration for long-running workflows. " +
-      "Actions: list panes, manage workspaces, Git worktrees, and tabs, split panes in dedicated work tabs, submit lines atomically, read output, watch readiness, wait for one or more agent panes to reach target statuses, send raw text or keys, focus contexts, and stop panes.",
+      "Actions: list panes, manage workspaces, Git worktrees, and tabs, split panes in dedicated work tabs, submit lines atomically, detect command completion with exit codes and output tails, watch readiness, wait for one or more agent panes to reach target statuses, send raw text or keys, focus contexts, and stop panes.",
     promptGuidelines: [
       "Use `herdr` run for long-running processes in other panes instead of `bash`.",
       "Keep the tab containing Pi dedicated to the interactive Pi session. For tests, builds, servers, watchers, or other background work in the current project, first use `tab_create` with a descriptive label and a friendly `pane` alias for its root pane, then run work there.",
@@ -509,14 +826,17 @@ export default function (pi: ExtensionAPI) {
       "When you want to submit a line or prompt to a pane, prefer `run` over `send` + `Enter` so text and Enter happen atomically.",
       "Use `send` only for low-level literal text or key injection when you do not want command-style submission semantics.",
       "Preserve the current UI focus by default. Create work tabs and panes with focus disabled unless the user explicitly asks to view them or the workflow truly requires visible interaction there.",
-      "Pane actions like run, read, watch, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab.",
+      "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab.",
       "Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
       "Use `worktree_create` to create a Git worktree checkout and open it as a Herdr workspace.",
       "Use `worktree_remove` to delete a Herdr-managed worktree checkout; it runs git worktree remove and does not delete the branch.",
-      "Use `herdr` watch for normal command output, including server readiness, test completion, or regex matches.",
-      "Use `herdr` wait_agent only for panes running a recognized coding agent. It waits on agent statuses, not normal process completion; use watch/read for commands like tests or servers.",
+      "For any command that finishes (tests, builds, clippy, scripts, CI suites), use `run` with `wait: true` (blocks up to `timeout`, default 10 minutes, returns exit code and tail) or `notify: true` (returns at once; a message arrives when it exits). Never poll with bash `sleep`. Never re-arm a timed-out watch.",
+      "`watch` is for readiness patterns only, such as a server's listen line. Do not watch for sentinel echoes like `CI_EXIT=`; the shell echoes your command line and the match fires before the command runs.",
+      "A `wait` result of STILL RUNNING is a status, not an error: call `wait` with `notify: true`, do other work, and act when the finished message arrives.",
+      "Use `herdr` wait_agent only for panes running a recognized coding agent. It waits on agent statuses, not normal process completion; use run with wait/notify or the wait action for commands like tests or servers.",
+      "Start every command you will wait on with `run` plus `wait` or `notify`. A bare `wait` on a pane whose command was started without them can only see process state, and panes inside the netns wrapper show only the wrapper, so it may report done early with exit code unknown.",
       "For agent panes, background finished panes usually become `done` while focused finished panes usually become `idle`.",
-      "Use `recent-unwrapped` when you need log matching or reads that ignore soft wrapping.",
+      "Use `recent-unwrapped` when you need log matching or reads that ignore soft wrapping. Giving `lines` switches any read or watch to the visible screen, because herdr's recent sources exclude text that has not scrolled off yet.",
       "Pane references can be either friendly aliases you created earlier or real herdr pane ids from `list`.",
       "Use `tab_create` with `pane` set to a friendly root-pane alias as the default way to establish a target for current-project background work. `pane_split` requires an existing pane alias/id outside Pi's tab and defaults its direction to right. `run` only works with an existing pane alias or pane id.",
       "When PI_NETNS_SELECTED is set, newly split panes automatically enter that network namespace before later commands are run in them.",
@@ -572,7 +892,22 @@ export default function (pi: ExtensionAPI) {
       ),
       mode: Type.Optional(WaitModeEnum),
       timeout: Type.Optional(
-        Type.Number({ description: "Timeout in ms (for watch or wait_agent action)" }),
+        Type.Number({
+          description:
+            "Timeout in ms for run/wait completion, watch, or wait_agent. Run/wait defaults to 600000 ms.",
+        }),
+      ),
+      wait: Type.Optional(
+        Type.Boolean({
+          description:
+            "For run or wait: block until the command in the pane exits, then return exit code and output tail. Timeout via `timeout` (default 600000 ms). A timeout returns a STILL RUNNING status, not an error.",
+        }),
+      ),
+      notify: Type.Optional(
+        Type.Boolean({
+          description:
+            "For run or wait: return at once; a message arrives in this session when the command exits, with exit code and output tail.",
+        }),
       ),
       lines: Type.Optional(Type.Number({ description: "Scrollback lines to capture or inspect" })),
       source: Type.Optional(SourceEnum),
@@ -891,6 +1226,10 @@ export default function (pi: ExtensionAPI) {
               .map((pane) => pane.pane_id),
           );
           expectResult(await herdr.call("tab.close", { tab_id: tabId }, { signal }), "ok");
+          for (const paneId of paneIds) {
+            abortPendingRun(paneId);
+            lastCommandByPane.delete(paneId);
+          }
           for (const [alias, managed] of Array.from(managedPanes.entries())) {
             if (paneIds.has(managed.paneId)) forgetAlias(alias);
           }
@@ -1000,42 +1339,139 @@ export default function (pi: ExtensionAPI) {
           if (!command) throw new Error("'command' is required for run");
 
           const targetPane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const paneId = targetPane.pane.pane_id;
+          const paneLabel = targetPane.alias || paneRef;
+          abortPendingRun(paneId);
+
+          if (params.wait !== true && params.notify !== true) {
+            expectResult(
+              await herdr.call(
+                "pane.send_input",
+                { pane_id: paneId, text: command, keys: ["Enter"] },
+                { signal },
+              ),
+              "ok",
+            );
+            lastCommandByPane.set(paneId, command);
+
+            await sleep(800, signal);
+            const initialOutput = await readPane(
+              paneId,
+              {
+                source: params.source ?? "recent",
+                lines: params.lines ?? 20,
+                raw: params.raw,
+              },
+              signal,
+            );
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Started '${command}' in pane '${paneLabel}' (${paneId})\n\n${formatReadOutput(initialOutput)}`,
+                },
+              ],
+              details: withSnapshot({
+                action: "run",
+                pane: paneLabel,
+                paneId,
+                command,
+                workspaceId: currentWorkspaceId,
+              }),
+            };
+          }
+
+          const normalizedCommand = command.trim().replace(/;+$/, "").trimEnd();
+          if (!normalizedCommand) throw new Error("'command' is required for run");
+          const runId = randomBytes(3).toString("hex");
+          const marker = normalizedCommand.endsWith("&") ? null : `__pi_rc_${runId}`;
+          const submittedCommand = marker
+            ? `{ ${normalizedCommand}; }; echo "${marker}=$?"`
+            : normalizedCommand;
+          const pendingRun: PendingRun = {
+            paneId,
+            paneLabel,
+            runId,
+            command: normalizedCommand,
+            marker,
+            startedAt: Date.now(),
+            abort: new AbortController(),
+          };
+
           expectResult(
             await herdr.call(
               "pane.send_input",
-              { pane_id: targetPane.pane.pane_id, text: command, keys: ["Enter"] },
+              { pane_id: paneId, text: submittedCommand, keys: ["Enter"] },
               { signal },
             ),
             "ok",
           );
+          lastCommandByPane.set(paneId, normalizedCommand);
+          pendingRuns.set(paneId, pendingRun);
 
-          await sleep(800, signal);
-          const initialOutput = await readPane(
-            targetPane.pane.pane_id,
-            {
-              source: params.source ?? "recent",
-              lines: params.lines ?? 20,
-              raw: params.raw,
-            },
-            signal,
-          );
+          const lines = params.lines ?? 60;
+          if (params.wait !== true) {
+            startNotifier(pendingRun, lines, 1_000);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Started '${normalizedCommand}' in pane '${paneLabel}' (${paneId}); a message will arrive when it exits.`,
+                },
+              ],
+              details: withSnapshot({
+                action: "run",
+                pane: paneLabel,
+                paneId,
+                command: normalizedCommand,
+                exitCode: null,
+                elapsedMs: Date.now() - pendingRun.startedAt,
+                state: "running",
+              }),
+            };
+          }
 
-          const paneLabel = targetPane.alias || paneRef;
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Started '${command}' in pane '${paneLabel}' (${targetPane.pane.pane_id})\n\n${formatReadOutput(initialOutput)}`,
-              },
-            ],
-            details: withSnapshot({
-              action: "run",
-              pane: paneLabel,
-              paneId: targetPane.pane.pane_id,
-              command,
-              workspaceId: currentWorkspaceId,
-            }),
+          const publishRunUpdate = () => {
+            onUpdate?.({
+              content: [{ type: "text", text: `Waiting for ${paneLabel}...` }],
+              details: withSnapshot({
+                action: "run",
+                pane: paneLabel,
+                paneId,
+                command: normalizedCommand,
+                elapsedMs: Date.now() - pendingRun.startedAt,
+                state: "running",
+              }),
+            });
           };
+          publishRunUpdate();
+          const updateTimer = onUpdate ? setInterval(publishRunUpdate, 1_000) : null;
+
+          let completion: Completion;
+          try {
+            completion = await waitForCompletion(
+              pendingRun,
+              lines,
+              params.timeout ?? DEFAULT_COMPLETION_TIMEOUT_MS,
+              1_000,
+              signal,
+            );
+          } finally {
+            if (updateTimer) clearInterval(updateTimer);
+          }
+
+          if (completion.kind === "done") {
+            if (pendingRuns.get(paneId) === pendingRun) {
+              pendingRun.abort.abort();
+              pendingRuns.delete(paneId);
+            }
+            return doneResult("run", pendingRun, completion, false);
+          }
+
+          const notifierStarted = params.notify === true;
+          if (notifierStarted) startNotifier(pendingRun, lines, 0);
+          return runningResult("run", pendingRun, completion, false, notifierStarted);
         }
 
         case "read": {
@@ -1099,7 +1535,7 @@ export default function (pi: ExtensionAPI) {
                 "pane.wait_for_output",
                 {
                   pane_id: resolved.pane.pane_id,
-                  source: protocolReadSource(params.source),
+                  source: protocolReadSource(params.source, params.lines),
                   lines: params.lines,
                   match: { type: params.regex ? "regex" : "substring", value: match },
                   timeout_ms: params.timeout,
@@ -1112,6 +1548,16 @@ export default function (pi: ExtensionAPI) {
               ),
               "output_matched",
             );
+            const commandPrefix = lastCommandByPane.get(resolved.pane.pane_id)?.trim().slice(0, 30);
+            if (
+              matched.matched_line &&
+              (matched.matched_line.includes("$?") ||
+                (commandPrefix && matched.matched_line.includes(commandPrefix)))
+            ) {
+              throw new Error(
+                `watch matched the shell's echo of the command line, not command output: ${matched.matched_line}. Use run with wait or notify for completion; watch is for readiness patterns only.`,
+              );
+            }
             const matchedLine = matched.matched_line ?? match;
             const text = matched.read.text ? formatReadOutput(matched.read.text) : matchedLine;
 
@@ -1128,6 +1574,80 @@ export default function (pi: ExtensionAPI) {
           } finally {
             if (updateTimer) clearInterval(updateTimer);
           }
+        }
+
+        case "wait": {
+          rejectUnexpectedParams("wait", params, ["workspace", "tab"]);
+          const paneRef = params.pane;
+          if (!paneRef) throw new Error("'pane' is required for wait");
+
+          const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const paneId = resolved.pane.pane_id;
+          const paneLabel = resolved.alias || paneRef;
+          const registeredRun = pendingRuns.get(paneId);
+          const untracked = registeredRun == null;
+          const pendingRun: PendingRun = registeredRun ?? {
+            paneId,
+            paneLabel,
+            runId: randomBytes(3).toString("hex"),
+            command: "the running command",
+            marker: null,
+            startedAt: Date.now(),
+            abort: new AbortController(),
+          };
+          const lines = params.lines ?? 60;
+
+          if (params.notify === true) {
+            const completion = await probe(pendingRun, lines, signal);
+            if (completion.kind === "done") {
+              if (pendingRuns.get(paneId) === pendingRun) {
+                pendingRun.abort.abort();
+                pendingRuns.delete(paneId);
+              }
+              return doneResult("wait", pendingRun, completion, untracked);
+            }
+            if (untracked) pendingRuns.set(paneId, pendingRun);
+            startNotifier(pendingRun, lines, 0);
+            return runningResult("wait", pendingRun, completion, untracked, true);
+          }
+
+          const publishWaitUpdate = () => {
+            onUpdate?.({
+              content: [{ type: "text", text: `Waiting for ${paneLabel}...` }],
+              details: withSnapshot({
+                action: "wait",
+                pane: paneLabel,
+                paneId,
+                command: pendingRun.command,
+                elapsedMs: Date.now() - pendingRun.startedAt,
+                state: "running",
+              }),
+            });
+          };
+          publishWaitUpdate();
+          const updateTimer = onUpdate ? setInterval(publishWaitUpdate, 1_000) : null;
+
+          let completion: Completion;
+          try {
+            completion = await waitForCompletion(
+              pendingRun,
+              lines,
+              params.timeout ?? DEFAULT_COMPLETION_TIMEOUT_MS,
+              0,
+              signal,
+            );
+          } finally {
+            if (updateTimer) clearInterval(updateTimer);
+          }
+
+          if (completion.kind === "done") {
+            if (pendingRuns.get(paneId) === pendingRun) {
+              pendingRun.abort.abort();
+              pendingRuns.delete(paneId);
+            }
+            return doneResult("wait", pendingRun, completion, untracked);
+          }
+          return runningResult("wait", pendingRun, completion, untracked, false);
         }
 
         case "wait_agent": {
@@ -1276,6 +1796,8 @@ export default function (pi: ExtensionAPI) {
             await herdr.call("pane.close", { pane_id: resolved.pane.pane_id }, { signal }),
             "ok",
           );
+          abortPendingRun(resolved.pane.pane_id);
+          lastCommandByPane.delete(resolved.pane.pane_id);
           if (resolved.alias) forgetAlias(resolved.alias);
 
           return {
@@ -1316,6 +1838,8 @@ export default function (pi: ExtensionAPI) {
       if (args.mode) text += theme.fg("dim", ` ${args.mode}`);
       if (args.text) text += theme.fg("dim", ` › "${args.text}"`);
       if (args.keys) text += theme.fg("dim", ` › ${args.keys}`);
+      if (args.wait) text += theme.fg("dim", " › wait");
+      if (args.notify) text += theme.fg("dim", " › notify");
 
       component.setText(text);
       return component;
@@ -1323,7 +1847,7 @@ export default function (pi: ExtensionAPI) {
 
     renderResult(result, { expanded, isPartial }, theme, context) {
       const details = result.details as Record<string, any> | undefined;
-      const state = context.state as { watchElapsed?: number };
+      const state = context.state as { watchElapsed?: number; completionElapsed?: number };
       if (context.args?.action === "watch") {
         if (isPartial) {
           state.watchElapsed = typeof details?.elapsed === "number" ? details.elapsed : 0;
@@ -1337,6 +1861,20 @@ export default function (pi: ExtensionAPI) {
         }
         delete state.watchElapsed;
       }
+      if (context.args?.action === "run" || context.args?.action === "wait") {
+        if (isPartial) {
+          state.completionElapsed =
+            typeof details?.elapsedMs === "number" ? Math.floor(details.elapsedMs / 1000) : 0;
+          const pane = details?.pane || context.args?.pane || "?";
+          return new Text(
+            theme.fg("warning", `◌ waiting ${pane}`) +
+              theme.fg("dim", ` (${state.completionElapsed}s)`),
+            0,
+            0,
+          );
+        }
+        delete state.completionElapsed;
+      }
       if (!details) {
         const content = result.content?.[0];
         return new Text(content?.type === "text" ? content.text : "", 0, 0);
@@ -1348,10 +1886,12 @@ export default function (pi: ExtensionAPI) {
           text += theme.fg("dim", ` ‹ ${details.direction} from ${details.pane}`);
           return new Text(text, 0, 0);
         }
-        case "run": {
-          let text = theme.fg("success", `▶ ${details.pane}`);
-          text += theme.fg("dim", ` › ${details.command}`);
-          return new Text(text, 0, 0);
+        case "run":
+        case "wait": {
+          const content = result.content?.[0];
+          const firstLine = content?.type === "text" ? (content.text.split("\n")[0] ?? "") : "";
+          const color = details.state === "running" ? "warning" : "success";
+          return new Text(theme.fg(color, firstLine), 0, 0);
         }
         case "read": {
           let text = theme.fg("accent", `📄 ${details.pane}`);
