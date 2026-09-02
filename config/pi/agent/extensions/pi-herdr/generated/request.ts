@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated from Herdr protocol 19, schema version 1.
+ * Generated from Herdr protocol 20, schema version 1.
  * Run `npm run generate` after updating Herdr. Do not edit by hand.
  */
 
@@ -304,6 +304,11 @@ export type Request = {
       [k: string]: unknown;
     }
   | {
+      method: "pane.input.set";
+      params: PaneInputSetParams;
+      [k: string]: unknown;
+    }
+  | {
       method: "pane.rename";
       params: PaneRenameParams;
       [k: string]: unknown;
@@ -564,7 +569,8 @@ export type LayoutNode =
       type: "split";
       [k: string]: unknown;
     };
-export type PaneGraphicsFormat = "png" | "rgb" | "rgba";
+export type PaneRightClickTarget = "herdr" | "pane";
+export type PaneGraphicsFormat = "png" | "rgb" | "rgba" | "bgra";
 export type PaneAgentState = "idle" | "working" | "blocked" | "unknown";
 export type Subscription =
   | {
@@ -810,6 +816,7 @@ export type IntegrationTarget =
   | "kilo"
   | "hermes"
   | "qodercli"
+  | "qwen"
   | "cursor"
   | "mastracode"
   | "antigravity_cli"
@@ -1009,6 +1016,7 @@ export interface PaneSplitParams {
   };
   focus?: boolean;
   ratio?: number | null;
+  right_click?: "herdr" | "pane";
   target_pane_id?: string | null;
   workspace_id?: string | null;
   [k: string]: unknown;
@@ -1091,6 +1099,11 @@ export interface PaneTarget {
   pane_id: string;
   [k: string]: unknown;
 }
+export interface PaneInputSetParams {
+  pane_id: string;
+  right_click: PaneRightClickTarget;
+  [k: string]: unknown;
+}
 export interface PaneRenameParams {
   label?: string | null;
   pane_id: string;
@@ -1125,8 +1138,10 @@ export interface PaneGraphicsSetParams {
   format: PaneGraphicsFormat;
   image_height: number;
   image_width: number;
+  layer_id?: string | null;
   pane_id: string;
   placement?: PaneGraphicsPlacementParams;
+  z_index?: number;
   [k: string]: unknown;
 }
 export interface PaneGraphicsPlacementParams {
@@ -1137,6 +1152,7 @@ export interface PaneGraphicsPlacementParams {
   [k: string]: unknown;
 }
 export interface PaneGraphicsClearParams {
+  layer_id?: string | null;
   pane_id: string;
   [k: string]: unknown;
 }
