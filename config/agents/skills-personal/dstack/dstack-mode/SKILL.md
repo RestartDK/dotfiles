@@ -107,7 +107,7 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 - Fast mechanical code: `openrouter/z-ai/glm-5.3-flash:xhigh`.
 - Precisely-specified code: `gpt-5.6-sol`.
-- Judgment, prose, review: `anthropic/claude-fable-5:xhigh`.
+- Judgment, prose, review: `anthropic/claude-fable-5-1:xhigh`.
 
 You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Delegated implementation is not accepted until its diff passes the **thermo-nuclear-code-quality-review** standard. Workers commit locally and never push; they run focused checks, and the full CI suite runs after your review, at ship time. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
 
