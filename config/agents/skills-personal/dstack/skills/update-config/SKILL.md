@@ -69,7 +69,7 @@ Only use raw `nix eval`, `nix build`, or Cobb-specific commands for targeted dia
 5. Add new Nix files and new dotfiles to Git before evaluating; flakes only see tracked files.
 6. Validate with `traitor check` when practical. For targeted validation, evaluate/build the affected flake output.
 7. If a rebuild is requested, use `traitor re`/`traitor test` or an explicit host command (`traitor nana`, `traitor mac`, `traitor work-mac`).
-8. For PRs, create a branch, commit only intended changes, push, and create the PR with validation notes.
+8. After any edit, offer to open a PR for it; edits to `config/agents/skills-personal/dstack` always get this offer, since they take effect live and are otherwise unversioned. For PRs, create a branch, commit only intended changes, push, and create the PR with validation notes.
 
 ## Repo map
 

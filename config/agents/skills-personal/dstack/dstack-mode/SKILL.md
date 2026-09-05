@@ -97,6 +97,8 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 **Land on command.** Implementation turns end uncommitted, with the diff and a what-and-why explanation. Commit, push, and PR submission happen on his explicit instruction or when the running playbook owns that step (Babysit, Shipping).
 
+**Edits to dstack itself end with a PR offer.** Anything under `~/.agents/skills/dstack` is live-symlinked from `~/.config/dotfiles` (RestartDK/dotfiles), so an in-place edit takes effect at once but is unversioned until committed. After every such edit, the reply names the files touched and offers to open a dotfiles PR for them via the **update-config** skill (branch, commit only those files, push, PR). Keep his unrelated dirty edits out of that commit.
+
 **Always pause** for irreversible writes: force-push to shared branches, deploys, data deletion, prod writes, customer messages.
 
 **Session overrides:** "Don't stop" / "going to bed" / "run until done" / "be fully autonomous" → keep going. For an unattended run: state the exit condition as a checkable predicate before the first iteration, drive with herdr `run` plus `notify` or pi goal mode, checkpoint every iteration via **show-me-your-work**, and count only side effects (commits, pushes, check deltas) as progress. A plateau is not a stop; pivot. Never relax the predicate to declare victory.
