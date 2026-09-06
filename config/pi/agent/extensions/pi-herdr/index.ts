@@ -12,6 +12,7 @@ import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
 
 import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
+import { registerTabTitle } from "./tab-title.ts";
 import type {
   AgentStatus,
   PaneInfo,
@@ -106,6 +107,7 @@ export default function (pi: ExtensionAPI) {
   }
   const currentPaneTarget = currentPaneTargetEnv;
   const herdr = new HerdrClient(socketPath);
+  registerTabTitle(pi, herdr, currentPaneTarget);
   const lifecycleSource = `pi-herdr:${process.pid}:${Date.now()}`;
   let lifecycleSeq = 0;
   let lifecycleErrorLogged = false;
