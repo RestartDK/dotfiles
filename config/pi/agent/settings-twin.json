@@ -19,8 +19,8 @@
     ]
   },
   "packages": [
-    "npm:pi-mcp-adapter",
-    "npm:pi-web-access"
+    "./packages/pi-mcp-adapter",
+    "./packages/pi-web-access"
   ],
   "powerline": {
     "preset": "default",

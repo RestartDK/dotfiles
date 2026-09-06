@@ -1,4 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  dotfilesInputs,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.liveConfig;
@@ -20,6 +26,8 @@ let
   claude = allAgents || cfg.groups.claude;
   opencode = allAgents || cfg.groups.opencode;
   pi = allAgents || cfg.groups.pi;
+  piPackageNames = import ../../../packages/pi-package-names.nix;
+  piPackages = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system};
   link = path: config.lib.file.mkOutOfStoreSymlink "${cfg.repoRoot}/${path}";
   file = path: {
     source = link path;
@@ -30,6 +38,17 @@ let
     recursive = false;
     force = true;
   };
+  piPackage = name: {
+    source = "${piPackages.${name}}/lib/node_modules/${name}";
+    recursive = false;
+    force = true;
+  };
+  piPackageFiles = builtins.listToAttrs (
+    map (name: {
+      name = ".pi/agent/packages/${name}";
+      value = piPackage name;
+    }) piPackageNames
+  );
 in
 {
   config = lib.mkIf cfg.enable (
@@ -71,9 +90,12 @@ in
         home.file.".pi/agent/mcp.json" = file "config/pi/agent/mcp.json";
         home.file.".pi/agent/extensions" = dir "config/pi/agent/extensions";
         home.file.".pi/agent/bin" = dir "config/pi/agent/bin";
-        home.file.".pi/agent/npm" = dir "config/pi/agent/npm";
         home.file.".pi/agent/prompts" = dir "config/pi/agent/prompts";
         home.file.".pi/agent/themes" = dir "config/pi/agent/themes";
+      })
+
+      (lib.mkIf pi {
+        home.file = piPackageFiles;
       })
 
       (lib.mkIf (pi && agentSkillsEnabled) {

@@ -43,6 +43,7 @@
         linuxSystem
         darwinSystem
       ];
+      piPackageNames = import ./packages/pi-package-names.nix;
       forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor =
         system:
@@ -67,6 +68,87 @@
             chmod +x $out/bin/traitor
           '';
         };
+      mkPiPackageUpdater =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "update-pi-packages";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.gnutar
+            pkgs.jq
+            pkgs.nix-update
+            pkgs.nodejs
+          ];
+          text = ''
+            packages=(${nixpkgs.lib.escapeShellArgs piPackageNames})
+            backup_dir="$(mktemp -d)"
+
+            restore() {
+              trap - ERR INT TERM
+              for package in "''${packages[@]}"; do
+                cp "$backup_dir/$package/package.nix" "packages/$package/package.nix"
+                cp "$backup_dir/$package/package-lock.json" "packages/$package/package-lock.json"
+              done
+              rm -rf "$backup_dir"
+            }
+
+            restore_on_error() {
+              local status=$?
+              restore
+              exit "$status"
+            }
+
+            restore_on_signal() {
+              restore
+              exit 1
+            }
+
+            for package in "''${packages[@]}"; do
+              mkdir -p "$backup_dir/$package"
+              cp "packages/$package/package.nix" "$backup_dir/$package/package.nix"
+              cp "packages/$package/package-lock.json" "$backup_dir/$package/package-lock.json"
+            done
+
+            trap restore_on_error ERR
+            trap restore_on_signal INT TERM
+
+            for package in "''${packages[@]}"; do
+              package_file="packages/$package/package.nix"
+              nix-update "$package" \
+                --flake \
+                --src-only \
+                --override-filename "$package_file"
+
+              version="$(nix eval --raw ".#$package.version")"
+              package_work="$backup_dir/work/$package"
+              mkdir -p "$package_work"
+              archive="$(npm pack "$package@$version" --silent --pack-destination "$package_work")"
+              tar -xzf "$package_work/$archive" -C "$package_work"
+              jq 'del(.devDependencies)' "$package_work/package/package.json" > "$package_work/package/package.json.tmp"
+              mv "$package_work/package/package.json.tmp" "$package_work/package/package.json"
+              (
+                cd "$package_work/package"
+                npm install \
+                  --package-lock-only \
+                  --ignore-scripts \
+                  --legacy-peer-deps \
+                  --no-audit \
+                  --no-fund
+              )
+              cp "$package_work/package/package-lock.json" "packages/$package/package-lock.json"
+
+              nix-update "$package" \
+                --flake \
+                --version=skip \
+                --no-src \
+                --build \
+                --override-filename "$package_file"
+            done
+
+            trap - ERR INT TERM
+            rm -rf "$backup_dir"
+          '';
+        };
       twinPkgs = import inputs.nixpkgs-unstable {
         system = linuxSystem;
         config.allowUnfree = true;
@@ -81,10 +163,16 @@
         system:
         let
           pkgs = pkgsFor system;
+          piPackages = nixpkgs.lib.genAttrs piPackageNames (
+            name: pkgs.callPackage (./packages + "/${name}/package.nix") { }
+          );
+          piPackageUpdater = mkPiPackageUpdater pkgs;
           traitor = mkTraitorPackage pkgs;
         in
-        {
+        piPackages
+        // {
           inherit traitor;
+          pi-package-updater = piPackageUpdater;
           default = traitor;
         }
       );
@@ -93,6 +181,10 @@
         traitor = {
           type = "app";
           program = "${self.packages.${system}.traitor}/bin/traitor";
+        };
+        update-pi-packages = {
+          type = "app";
+          program = "${self.packages.${system}.pi-package-updater}/bin/update-pi-packages";
         };
         default = self.apps.${system}.traitor;
       });
