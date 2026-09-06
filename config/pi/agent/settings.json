@@ -2,6 +2,7 @@
   "defaultModel": "accounts/fireworks/routers/kimi-k3-fast",
   "defaultProvider": "fireworks",
   "defaultThinkingLevel": "xhigh",
+  "shellPath": "~/.config/dotfiles/bin/repo-bash",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
   ],
