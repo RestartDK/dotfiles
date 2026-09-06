@@ -1,12 +1,26 @@
 {
+  "defaultModel": "accounts/fireworks/routers/kimi-k3-fast",
+  "defaultProvider": "fireworks",
+  "defaultThinkingLevel": "xhigh",
+  "shellPath": "~/.config/dotfiles/bin/repo-bash",
   "extensions": [
-    "-extensions/pi-prompt/index.ts",
-    "-extensions/pi-coordination/index.ts"
+    "-extensions/pi-prompt/index.ts"
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.99.1",
+  "lastChangelogVersion": "0.84.2",
+  "subagents": {
+    "maxParallel": 4,
+    "defaultTools": [
+      "read",
+      "grep",
+      "find",
+      "ls",
+      "bash"
+    ]
+  },
   "packages": [
+    "./packages/pi-mcp-adapter",
     "./packages/pi-web-access"
   ],
   "powerline": {
@@ -31,18 +45,9 @@
     "greeting": "hey twin :)"
   },
   "quietStartup": true,
-  "theme": "Tokyo Night Day/Tokyo Night",
-  "tuiMode": "fullscreen",
-  "enabledModels": [
-    "openai-codex/gpt-6.1-sol",
-    "anthropic/claude-fable-5-1",
-    "anthropic/claude-opus-5-5",
-    "openai-codex/gpt-6-astra",
-    "openrouter/**"
+  "skills": [
+    "~/.claude/skills"
   ],
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6.1-sol",
-  "modelThinkingLevels": {
-    "openai-codex/gpt-6.1-sol": "xhigh"
-  }
+  "theme": "Tokyo Night Day/Tokyo Night",
+  "tuiMode": "fullscreen"
 }

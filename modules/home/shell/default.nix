@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.liveConfig;
@@ -22,6 +27,12 @@ in
           env = goEnv;
         };
         home.sessionVariables = goEnv;
+        home.packages = [
+          (pkgs.runCommandLocal "repo-exec" { } ''
+            mkdir -p "$out/bin"
+            ln -s ${lib.escapeShellArg "${cfg.repoRoot}/bin/repo-exec"} "$out/bin/repo-exec"
+          '')
+        ];
         programs.zsh = {
           enable = true;
           enableCompletion = true;
