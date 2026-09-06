@@ -22,7 +22,9 @@ Invoked at the end of every other playbook.
 
 After these sections, attach videos or screenshots when they prove a claim. UI changes always have a claim to prove: attach the decisive before/after frames. When the host cannot inline images into the body through its API, upload the frames to the Linear issue with the attachment upload flow (`prepare_attachment_upload`, PUT, `create_attachment_from_upload`) and link them from the body. Do not use `## Summary` or `## Test plan` boilerplate. A commit body does not restate its subject.
 
-**Size and stacks.** Prefer five narrow PRs to one large PR. Stack follow-ups with Graphite (`gt`), and keep the ordered stack visible to reviewers. Branch from main only for independent work. Rebase on `main` before substantial stack work.
+**Size and stacks.** Prefer five narrow PRs to one large PR. Stack follow-ups only when they depend on each other, and keep the order visible to reviewers. Branch from main only for independent work. Rebase on `main` before substantial stack work.
+
+**Submission host.** Graphite is optional. Use `gt` only when the CLI is available, authenticated, and the repository is synced. Otherwise push with Git and open or update the PR through the hosting provider, such as `gh pr create` and `gh pr edit` on GitHub. Do not block delivery or ask the human to configure Graphite merely to open a PR. For dependent changes without Graphite, ship the verified root first, then rebase and open the next change rather than pretending an unmanaged branch chain is a safe queue.
 
 **Readiness.** Open every PR ready, never as a draft. Cloud-agent PR tools default to draft, so set `draft: false` on every PR creation call. If a PR still opens as a draft, run the host's ready command, such as `gh pr ready <number>`. Run `gh pr view <number>` before you refer to PR status.
 
