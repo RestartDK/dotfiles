@@ -71,6 +71,7 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 - **Prove It Works** (**principle-prove-it-works**). After a task, before declaring done. Verify against the real artifact, not a proxy or "it compiles".
 - **Fix Root Causes** (**principle-fix-root-causes**). Debugging. Trace each symptom to its root cause, reproduce first, ask why until you reach it.
+- **Verify the Vantage Point** (**principle-verify-the-vantage-point**). Debugging with host or network diagnostics (`ps`, `ss`, `lsof`, curl, psql against localhost) on machines with network namespaces, containers, VMs, or SSH hops. Process listings are host-global while loopback is namespace-local, so a query can silently succeed against another stack's service and return plausible data from the wrong place. Confirm observer and target share a namespace (`readlink /proc/self/ns/net` versus the target's) before interpreting output, and when fresh evidence contradicts established state, suspect the observer's vantage point before declaring data loss or inventing a cause.
 - **Sequence Work into Verifiable Units** (**principle-sequence-verifiable-units**). Multi-step work (sweeps, migrations, runs of similar edits) and how you stack commits and PRs. Break work into small units that each end in a check, verify each before the next, and order delivery so the sequence proves itself.
 
 **Delegation**
