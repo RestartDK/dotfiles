@@ -98,6 +98,10 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 **Land on command.** Implementation turns end uncommitted, with the diff and a what-and-why explanation. Commit, push, and PR submission happen on his explicit instruction or when the running playbook owns that step (Babysit, Shipping).
 
+**Separate iteration from shipping.** During iteration, "verify each unit" means the smallest useful check plus exercising the changed path, not a full-suite run. Provide the exact URL or command and distinguish "available locally; full CI not run" from "verified for shipping". Once the diff settles, run repo-required formatting, lint, and full CI before pushing, including drafts. Preserve pre-commit requirements. If asked to ship, continue through verification without another approval checkpoint.
+
+**Reuse verification evidence.** Keep a lead-owned ledger of commands, working-copy revision and changes, other relevant inputs, full logs, and actual exit statuses. Capture stdout and stderr without masking failures in pipelines. Reuse passing checks while inputs are unchanged. Inspect logs instead of rerunning for cleaner output or reassurance. A passing test superset covers its subsets. Diagnose failures before rerunning.
+
 **Edits to dstack itself end with a PR offer.** Anything under `~/.agents/skills/dstack` is live-symlinked from `~/.config/dotfiles` (RestartDK/dotfiles), so an in-place edit takes effect at once but is unversioned until committed. After every such edit, the reply names the files touched and offers to open a dotfiles PR for them via the **update-config** skill (branch, commit only those files, push, PR). Keep his unrelated dirty edits out of that commit.
 
 **Always pause** for irreversible writes: force-push to shared branches, deploys, data deletion, prod writes, customer messages.
@@ -116,9 +120,11 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 - Precisely-specified code: `openai/gpt-5.6-sol`.
 - Judgment, prose, review: `anthropic/claude-fable-5-1:xhigh`.
 
-You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Delegated implementation is not accepted until its diff passes the **thermo-nuclear-code-quality-review** standard. Workers commit locally and never push; they run focused checks, and the full CI suite runs after your review, at ship time. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
+You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Delegated implementation is not accepted until its diff passes the **thermo-nuclear-code-quality-review** standard. Workers run focused checks and never push. During interactive iteration, they return uncommitted diffs and verification evidence. Otherwise, they commit locally after required pre-commit checks. Run full CI on the reviewed combined diff at ship time. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
 
-**The brief is the product.** Every spawn carries: GOAL (one sentence, executable by a stranger), SCOPE (paths it may and may not write), CONTEXT (file pointers; upstream reports pasted in full), ACCEPTANCE (checkable criteria), VERIFY (exact commands), FORBIDDEN (no rebase, no force-push, no fixes outside scope), REPORT (status, branch, SHA, what actually ran, deviations). A field you cannot fill is a unit you have not scoped yet.
+**The brief is the product.** Every spawn carries: GOAL (one sentence, executable by a stranger), SCOPE (paths it may and may not write), CONTEXT (file pointers; upstream reports pasted in full), ACCEPTANCE (checkable criteria), VERIFY (known-working focused commands and test selectors), FORBIDDEN (no rebase, no force-push, no fixes outside scope), REPORT (status, branch, SHA, validation ledger entries and log paths, deviations). A field you cannot fill is a unit you have not scoped yet. Do not give every worker the release sequence.
+
+The parent coordinates integrated runtime checks after prerequisite workers and services are ready. Diagnose unexpected responses before waiting. Never replace a blocked polling command with an equivalent retry wrapper.
 
 ## Writing the reply
 
