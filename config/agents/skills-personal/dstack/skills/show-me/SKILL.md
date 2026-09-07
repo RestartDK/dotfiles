@@ -59,6 +59,8 @@ sequenceDiagram
     Daemon-->>UI: stream result
 ```
 
+- Bias Mermaid diagrams vertical: `flowchart TB` with short rank chains, not `LR`. Horizontal flowcharts grow past the chat viewport and render clipped or scaled unreadable. Keep node labels short enough that the tallest chain stays narrow.
+
 - Use `diff` when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.
 
 For a component change:
