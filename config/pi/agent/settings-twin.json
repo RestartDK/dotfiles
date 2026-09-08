@@ -7,7 +7,7 @@
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.84.2",
+  "lastChangelogVersion": "0.85.1",
   "subagents": {
     "maxParallel": 4,
     "defaultTools": [

@@ -7,11 +7,11 @@
 
 buildNpmPackage (finalAttrs: {
   pname = "pi-web-access";
-  version = "0.27.0";
+  version = "0.28.0";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/pi-web-access/-/pi-web-access-${finalAttrs.version}.tgz";
-    hash = "sha256-QC/qKY5uOOXamzAjB1mevF3tMKFOamN8FBAWGt0XMVo=";
+    hash = "sha256-jSe9FEDF0eKIXpe0Tvr+YPPYGiqeVsGKyLhNYIBxjrU=";
   };
 
   postPatch = ''
@@ -23,7 +23,7 @@ buildNpmPackage (finalAttrs: {
   npmFlags = [ "--legacy-peer-deps" ];
   npmPackFlags = [ "--ignore-scripts" ];
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-2b4vnXOj4kx3iiVClsuBdm4VjBKAra0d1qBusV/gmgM=";
+  npmDepsHash = "sha256-jzSlePeODkhQxcpHltPLNHN1dvq3JUilarPnvPLWWcI=";
 
   dontNpmBuild = true;
 })
