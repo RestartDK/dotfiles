@@ -105,6 +105,17 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "sh '/Users/danielkumlin/skills/tldraw-offline/inject-server-context.sh' SubagentStart",
+            "type": "command"
+          }
+        ],
+        "matcher": "tldraw-offline"
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -129,17 +140,6 @@
             "command": "bash $HOME/.codex/herdr-agent-state.sh working",
             "timeout": 10,
             "type": "command"
-          }
-        ]
-      }
-    ],
-    "SubagentStart": [
-      {
-        "matcher": "tldraw-offline",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh '/Users/danielkumlin/skills/tldraw-offline/inject-server-context.sh' SubagentStart"
           }
         ]
       }
