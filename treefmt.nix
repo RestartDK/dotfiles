@@ -16,6 +16,13 @@ let
     "config/opencode/package.json"
     "config/pi/agent/extensions/*/package.json"
   ];
+  generatedExcludes = [ "**/generated/**" ];
+  upstreamManagedFormatExcludes = generatedExcludes ++ [
+    "config/claude/hooks/herdr-agent-state.sh"
+    "config/codex/herdr-agent-state.sh"
+    "config/opencode/plugins/herdr-agent-state.js"
+    "config/pi/agent/extensions/herdr-agent-state.ts"
+  ];
   statixCheck = pkgs.writeShellScriptBin "statix-check" ''
     for file in "$@"; do
       ${lib.getExe pkgs.statix} check --config statix.toml "$file"
@@ -31,7 +38,7 @@ in
     nixfmt.enable = true;
     oxfmt = {
       enable = true;
-      excludes = [ "**/generated/**" ];
+      excludes = upstreamManagedFormatExcludes;
       includes = oxfmtIncludes;
     };
     shellcheck = {
@@ -43,6 +50,7 @@ in
     };
     shfmt = {
       enable = true;
+      excludes = upstreamManagedFormatExcludes;
       includes = [
         "*.sh"
         "bin/traitor"
@@ -68,7 +76,7 @@ in
     oxfmt.priority = 1;
     oxlint = {
       command = lib.getExe pkgs.oxlint;
-      excludes = [ "**/generated/**" ];
+      excludes = generatedExcludes;
       includes = oxlintIncludes;
       priority = 2;
     };
