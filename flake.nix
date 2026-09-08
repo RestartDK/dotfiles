@@ -10,9 +10,6 @@
 
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
 
-    herdr.url = "github:ogulcancelik/herdr";
-    herdr.inputs.nixpkgs.follows = "nixpkgs";
-
     llm-agents.url = "github:numtide/llm-agents.nix";
 
     treefmt-nix.url = "github:numtide/treefmt-nix";
