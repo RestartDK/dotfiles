@@ -9,7 +9,7 @@
 let
   cfg = config.my.liveConfig;
   hasScattererInput = dotfilesInputs ? scatterer;
-  herdrPackage = dotfilesInputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  herdrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.herdr;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
   # Upstream's packages.plugin is a ready-to-link Herdr plugin root: the
   # store manifest invokes the built binary directly (no bash launcher, no
