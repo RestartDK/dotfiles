@@ -27,7 +27,6 @@ in
   my.liveConfig = {
     enable = isCobbDevHost;
     repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
-    piSettingsFile = "config/pi/agent/settings-twin.json";
     piSkillsPath = "config/pi/agent/skills-twin";
     groups = {
       # Cobb's Daniel profile disables its generated shell and Neovim config

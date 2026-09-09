@@ -1,6 +1,6 @@
 {
-  "defaultModel": "accounts/fireworks/routers/kimi-k3-fast",
-  "defaultProvider": "fireworks",
+  "defaultModel": "claude-fable-5-1",
+  "defaultProvider": "anthropic",
   "defaultThinkingLevel": "xhigh",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
