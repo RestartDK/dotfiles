@@ -10,30 +10,6 @@ in
   ];
 
   home = {
-    file.".zshenv".text = ''
-        agent_dir="$HOME/.ssh/agent"
-      agent_link="$agent_dir/current"
-
-      if [ -n "''${SSH_AUTH_SOCK:-}" ] &&
-         [ "$SSH_AUTH_SOCK" != "$agent_link" ] &&
-         [ -S "$SSH_AUTH_SOCK" ]; then
-        mkdir -p "$agent_dir"
-        ln -sfnT "$SSH_AUTH_SOCK" "$agent_link"
-      fi
-
-      if [ ! -S "$agent_link" ]; then
-        newest_agent_socket="$(find "$agent_dir" -maxdepth 1 -type s -name 's.*' -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)"
-        if [ -n "$newest_agent_socket" ]; then
-          mkdir -p "$agent_dir"
-          ln -sfnT "$newest_agent_socket" "$agent_link"
-        fi
-      fi
-
-      if [ -S "$agent_link" ]; then
-        export SSH_AUTH_SOCK="$agent_link"
-      fi
-    '';
-
     username = settings.userName;
     inherit (settings) homeDirectory;
     stateVersion = settings.homeStateVersion;
