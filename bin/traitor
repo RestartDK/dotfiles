@@ -11,6 +11,7 @@ Commands:
   rollback               Roll back current host generation
   check                  Run flake checks
   deploy <node> [--dry-run]  Deploy exactly srv-nana or commissioned srv-hatchi
+  verify srv-hatchi <install-vm|services-vm|closures|policy>  Verify without live access
   update [inputs...]     Update all pins or selected flake inputs
   upgrade                Update everything, then rebuild
   show                   Show flake outputs
@@ -218,6 +219,37 @@ run_deploy() {
   nix run --inputs-from "$flake_dir" deploy-rs -- "$flake_dir#$node" "${flags[@]}"
 }
 
+run_verify() {
+  if (($# != 2)) || [[ $1 != srv-hatchi ]]; then
+    echo "traitor: verify requires srv-hatchi and one verification kind" >&2
+    return 2
+  fi
+  case "$2" in
+  install-vm | services-vm | closures | policy) ;;
+  *)
+    echo "traitor: unsupported verification kind" >&2
+    return 2
+    ;;
+  esac
+  local flake_dir
+  flake_dir="$(resolve_flake_dir)"
+  preflight "$flake_dir"
+  case "$2" in
+  install-vm)
+    nix run "$flake_dir#srv-hatchi-install-vm"
+    ;;
+  services-vm)
+    nix build --no-link --print-build-logs "$flake_dir#checks.x86_64-linux.srv-hatchi-services"
+    ;;
+  closures)
+    nix build --no-link --print-build-logs "$flake_dir#nixosConfigurations.srv-hatchi-bootstrap.config.system.build.toplevel" "$flake_dir#nixosConfigurations.srv-hatchi.config.system.build.toplevel"
+    ;;
+  policy)
+    nix build --no-link --print-build-logs "$flake_dir#checks.$(nix eval --impure --raw --expr builtins.currentSystem).srv-hatchi-policy"
+    ;;
+  esac
+}
+
 cmd="${1:-help}"
 shift || true
 
@@ -244,6 +276,9 @@ check)
   ;;
 deploy)
   run_deploy "$@"
+  ;;
+verify)
+  run_verify "$@"
   ;;
 update)
   run_update "$@"

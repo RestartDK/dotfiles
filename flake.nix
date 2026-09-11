@@ -156,6 +156,11 @@
             rm -rf "$backup_dir"
           '';
         };
+      hatchiInstall = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        specialArgs = { inherit inputs; };
+        modules = [ ./tests/srv-hatchi/install.nix ];
+      };
       twinPkgs = import inputs.nixpkgs-unstable {
         system = linuxSystem;
         config.allowUnfree = true;
@@ -193,14 +198,52 @@
           type = "app";
           program = "${self.packages.${system}.pi-package-updater}/bin/update-pi-packages";
         };
+        srv-hatchi-install-vm = {
+          type = "app";
+          program = nixpkgs.lib.getExe (
+            import ./tests/srv-hatchi/install-vm.nix {
+              pkgs = pkgsFor system;
+              flake = self;
+              anywhere = inputs.nixos-anywhere.packages.${system}.default;
+            }
+          );
+        };
         default = self.apps.${system}.traitor;
       });
 
       formatter = forAllSystems (system: treefmtEval.${system}.config.build.wrapper);
 
-      checks = forAllSystems (system: {
-        quality = treefmtEval.${system}.config.build.check self;
-      });
+      checks = forAllSystems (
+        system:
+        {
+          quality = treefmtEval.${system}.config.build.check self;
+          srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
+            pkgs = pkgsFor system;
+            inherit self;
+          };
+        }
+        // nixpkgs.lib.optionalAttrs (system == linuxSystem) (
+          inputs.deploy-rs.lib.${linuxSystem}.deployChecks self.deploy
+          // {
+            srv-hatchi-deploy-rejection = (pkgsFor system).runCommand "srv-hatchi-deploy-rejection" { } ''
+              for mode in normal DRY_ACTIVATE BOOT TEST; do
+                if env "$mode=1" ${self.deploy.nodes.srv-hatchi.profiles.system.path}/deploy-rs-activate > refusal 2>&1; then
+                  echo "Uncommissioned activation succeeded in $mode mode" >&2
+                  exit 1
+                fi
+                grep -F "srv-hatchi is uncommissioned; activation denied" refusal
+              done
+              touch $out
+            '';
+            srv-hatchi-production = self.nixosConfigurations.srv-hatchi.config.system.build.toplevel;
+            srv-hatchi-bootstrap = self.nixosConfigurations.srv-hatchi-bootstrap.config.system.build.toplevel;
+            srv-hatchi-services = import ./tests/srv-hatchi/services.nix {
+              pkgs = pkgsFor system;
+              inherit self inputs;
+            };
+          }
+        )
+      );
 
       homeManagerModules =
         let
@@ -286,6 +329,7 @@
         modules = [
           self.nixosModules.srv-hatchi-bootstrap
           ./tests/srv-hatchi/fixtures/reference-platform.nix
+          { system.build.installTest = hatchiInstall.config.system.build.installTest; }
         ];
       };
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {

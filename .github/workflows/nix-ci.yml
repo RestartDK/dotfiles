@@ -43,12 +43,100 @@ jobs:
         uses: DeterminateSystems/flakehub-cache-action@v3.21.9
 
       - name: Check Linux outputs, formatting, and linting
-        run: ./bin/traitor check --print-build-logs
+        run: ./bin/traitor check --no-build --print-build-logs
 
-      - name: Evaluate NixOS host derivation (srv-nana)
-        # Evaluate the complete system derivation without materializing Nana's
-        # large NVIDIA/CUDA closure on the hosted runner.
-        run: nix eval --raw .#nixosConfigurations.srv-nana.config.system.build.toplevel.drvPath
+      - name: Build quality, policy, both Hachi closures, and both deploy profiles
+        run: |
+          nix build --no-link --print-build-logs --max-jobs 2 \
+            .#checks.x86_64-linux.quality \
+            .#checks.x86_64-linux.srv-hatchi-policy \
+            .#checks.x86_64-linux.srv-hatchi-bootstrap \
+            .#checks.x86_64-linux.srv-hatchi-production \
+            .#checks.x86_64-linux.srv-hatchi-deploy-rejection \
+            .#checks.x86_64-linux.deploy-schema \
+            .#checks.x86_64-linux.deploy-activate
+
+      - name: Evaluate the existing Home Manager profile
+        run: nix eval --raw .#homeConfigurations.twin.activationPackage.drvPath
+
+  hatchi-vm:
+    name: Hachi / ${{ matrix.kind }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [install-vm, services-vm]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /opt/ghc /opt/hostedtoolcache /usr/local/.ghcup /usr/local/lib/android /usr/local/share/boost /usr/share/dotnet
+          df -h
+
+      - name: Install Determinate Nix
+        uses: DeterminateSystems/determinate-nix-action@v3.21.9
+        with:
+          extra-conf: |
+            extra-system-features = kvm nixos-test big-parallel
+            max-jobs = 2
+            cores = 2
+            keep-failed = true
+
+      - name: Enable FlakeHub Cache
+        uses: DeterminateSystems/flakehub-cache-action@v3.21.9
+
+      - name: Require x86 Linux and KVM
+        run: |
+          test "$(uname -sm)" = "Linux x86_64"
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          mkdir -p verification
+          git rev-parse HEAD > verification/revision
+          sha256sum flake.lock > verification/lock-sha256
+          nix config show > verification/nix-config
+          ls -l /dev/kvm > verification/kvm
+          nix eval --raw .#nixosConfigurations.srv-hatchi-bootstrap.config.system.build.installTest.drvPath > verification/install-derivation
+          nix eval --raw .#checks.x86_64-linux.srv-hatchi-services.drvPath > verification/services-derivation
+
+      - name: Run the required VM command
+        env:
+          VERIFY_KIND: ${{ matrix.kind }}
+        run: |
+          set +e
+          ./bin/traitor verify srv-hatchi "$VERIFY_KIND" 2>&1 | tee verification/command.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > verification/exit-status
+          exit "$status"
+
+      - name: Retain VM failure logs
+        if: failure()
+        run: |
+          mkdir -p verification/derivation-logs
+          for evidence in verification/*-derivation; do
+            test -f "$evidence" || continue
+            drv=$(<"$evidence")
+            nix log "$drv" > "verification/derivation-logs/$(basename "$evidence").log" 2>&1 || true
+            nix derivation show --recursive "$drv" > "verification/derivation-logs/$(basename "$evidence").json" || true
+          done
+          if test -f verification/command.log; then
+            grep -oE '/nix/store/[a-z0-9]+-[^[:space:]]+\.drv' verification/command.log | sort -u > verification/failed-derivations || true
+            while IFS= read -r drv; do
+              nix log "$drv" > "verification/derivation-logs/$(basename "$drv").log" 2>&1 || true
+            done < verification/failed-derivations
+          fi
+          sudo find /tmp /nix/var/nix/builds -maxdepth 4 -name '*.log' -exec cp --parents '{}' verification/ \; 2>/dev/null || true
+          sudo journalctl -u nix-daemon --no-pager | tee verification/nix-daemon.log >/dev/null || true
+          sudo chown -R "$(id -u):$(id -g)" verification
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hatchi-${{ matrix.kind }}
+          path: verification
 
   darwin:
     name: Darwin / nix-darwin
