@@ -8,6 +8,16 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
+    disko.url = "github:nix-community/disko/ff8702b4de27f72b4c78573dfb89ec74e36abdf1";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
+    nixos-anywhere.url = "github:nix-community/nixos-anywhere/9df41112343713520ba071674cf8e45e91c25845";
+    nixos-anywhere.inputs.nixpkgs.follows = "nixpkgs";
+    nixos-anywhere.inputs.disko.follows = "disko";
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+    deploy-rs.url = "github:serokell/deploy-rs/414ac5f35d79aabe5a0bf52451d8cf61eadf6c88";
+    deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
+
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
 
     llm-agents.url = "github:numtide/llm-agents.nix";
@@ -205,6 +215,27 @@
           live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix [ ];
           cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
         };
+
+      nixosModules = {
+        srv-hatchi = import ./hosts/srv-hatchi;
+        srv-hatchi-bootstrap = import ./hosts/srv-hatchi/bootstrap.nix;
+      };
+      nixosConfigurations.srv-hatchi-bootstrap = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        specialArgs = { inherit inputs; };
+        modules = [
+          self.nixosModules.srv-hatchi-bootstrap
+          ./tests/srv-hatchi/fixtures/reference-platform.nix
+        ];
+      };
+      nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        specialArgs = { inherit inputs; };
+        modules = [
+          self.nixosModules.srv-hatchi
+          ./tests/srv-hatchi/fixtures/reference-platform.nix
+        ];
+      };
 
       nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
