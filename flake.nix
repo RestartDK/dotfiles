@@ -216,6 +216,66 @@
           cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
         };
 
+      hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
+      deploy = {
+        autoRollback = true;
+        magicRollback = true;
+        sshOpts = [
+          "-o"
+          "StrictHostKeyChecking=yes"
+        ];
+        nodes = {
+          srv-nana = {
+            hostname = self.nixosConfigurations.srv-nana.config.networking.hostName;
+            sshUser = self.nixosConfigurations.srv-nana.config.my.host.userName;
+            interactiveSudo = true;
+            profiles.system = {
+              user = "root";
+              path =
+                let
+                  native = inputs.deploy-rs.lib.${linuxSystem}.activate.nixos self.nixosConfigurations.srv-nana;
+                  activate = ''
+                    if [[ "$(< /etc/hostname)" != srv-nana ]]; then
+                      echo "srv-nana hostname mismatch; activation denied" >&2
+                      exit 1
+                    fi
+                    exec ${native}/deploy-rs-activate
+                  '';
+                in
+                (
+                  inputs.deploy-rs.lib.${linuxSystem}.activate.custom
+                  // {
+                    dryActivate = activate;
+                    boot = activate;
+                    test = activate;
+                  }
+                )
+                  self.nixosConfigurations.srv-nana.config.system.build.toplevel
+                  activate;
+            };
+          };
+          srv-hatchi = {
+            hostname = "uncommissioned.invalid";
+            profiles.system = {
+              user = "root";
+              path =
+                let
+                  refuse = ''echo "srv-hatchi is uncommissioned; activation denied" >&2; exit 1'';
+                in
+                (
+                  inputs.deploy-rs.lib.${linuxSystem}.activate.custom
+                  // {
+                    dryActivate = refuse;
+                    boot = refuse;
+                    test = refuse;
+                  }
+                )
+                  self.nixosConfigurations.srv-hatchi.config.system.build.toplevel
+                  refuse;
+            };
+          };
+        };
+      };
       nixosModules = {
         srv-hatchi = import ./hosts/srv-hatchi;
         srv-hatchi-bootstrap = import ./hosts/srv-hatchi/bootstrap.nix;

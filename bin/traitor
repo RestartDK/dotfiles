@@ -10,6 +10,7 @@ Commands:
   test                   Rebuild current host with action=test
   rollback               Roll back current host generation
   check                  Run flake checks
+  deploy <node> [--dry-run]  Deploy exactly srv-nana or commissioned srv-hatchi
   update [inputs...]     Update all pins or selected flake inputs
   upgrade                Update everything, then rebuild
   show                   Show flake outputs
@@ -190,6 +191,33 @@ run_update() {
   fi
 }
 
+run_deploy() {
+  if (($# < 1 || $# > 2)) || [[ ${2:-} != "" && ${2:-} != --dry-run ]]; then
+    echo "traitor: deploy requires one exact node and optional --dry-run" >&2
+    return 2
+  fi
+  case "$1" in
+  srv-nana | srv-hatchi) ;;
+  *)
+    echo "traitor: unsupported deployment node" >&2
+    return 2
+    ;;
+  esac
+  local node="$1" flake_dir state
+  flake_dir="$(resolve_flake_dir)"
+  preflight "$flake_dir"
+  if [[ $node == srv-hatchi ]]; then
+    state="$(nix eval --raw "$flake_dir#hatchiCommissioning.state")"
+    if [[ $state != physical ]]; then
+      echo "traitor: srv-hatchi is uncommissioned; deployment denied" >&2
+      return 1
+    fi
+  fi
+  local flags=()
+  [[ ${2:-} == --dry-run ]] && flags+=(--dry-activate)
+  nix run --inputs-from "$flake_dir" deploy-rs -- "$flake_dir#$node" "${flags[@]}"
+}
+
 cmd="${1:-help}"
 shift || true
 
@@ -213,6 +241,9 @@ check)
   flake_dir="$(resolve_flake_dir)"
   cd "$flake_dir"
   nix flake check "$@"
+  ;;
+deploy)
+  run_deploy "$@"
   ;;
 update)
   run_update "$@"
