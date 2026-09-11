@@ -46,6 +46,7 @@ in
       includes = [
         "*.sh"
         "bin/traitor"
+        "bin/repo-*"
       ];
     };
     shfmt = {
@@ -54,6 +55,7 @@ in
       includes = [
         "*.sh"
         "bin/traitor"
+        "bin/repo-*"
       ];
       useEditorConfig = true;
     };

@@ -2,6 +2,7 @@
   "defaultModel": "gpt-6-astra",
   "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "xhigh",
+  "shellPath": "~/.config/dotfiles/bin/repo-bash",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
   ],
