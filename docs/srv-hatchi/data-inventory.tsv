@@ -1,0 +1,18 @@
+source_service	source_declaration	native_destination	restore_plan	observation_status
+adguardhome	adguard_config; tracked adguard configuration	/var/lib/AdGuardHome	Regenerate configuration and credentials; inspect optional history	live backing paths, versions, sizes, checksums, and backups unverified
+caddy	caddy_data; caddy_config	/var/lib/caddy; /var/lib/acme	Do not restore; issue new certificates	live backing paths, versions, sizes, checksums, and backups unverified
+glance	GLANCE_PATH/config; ASSETS_PATH	/var/lib/glance	Generated dashboard; runtime auth credentials	live backing paths, versions, sizes, checksums, and backups unverified
+komga	komga_config; media_manga	/var/lib/komga; /srv/media/manga	Version and ownership rehearsal	live backing paths, versions, sizes, checksums, and backups unverified
+suwayomi	suwayomi_config; media_manga	/var/lib/suwayomi-server; /srv/media/manga	Separate state from downloads	live backing paths, versions, sizes, checksums, and backups unverified
+jellyfin	jellyfin_config; jellyfin_cache; media_movies; media_tvshows	/var/lib/jellyfin; /var/cache/jellyfin; /srv/media/movies; /srv/media/tvshows	Rehearse state upgrade; discard cache; GPU deferred	live backing paths, versions, sizes, checksums, and backups unverified
+radarr	radarr_config; media_movies; media_downloads	/var/lib/radarr; /srv/media/movies; /srv/media/downloads	Rehearse schema and path conversion	live backing paths, versions, sizes, checksums, and backups unverified
+sonarr	sonarr_config; media_tvshows; media_downloads	/var/lib/sonarr; /srv/media/tvshows; /srv/media/downloads	Rehearse schema and path conversion	live backing paths, versions, sizes, checksums, and backups unverified
+prowlarr	prowlarr_config	/var/lib/prowlarr	Rehearse database restore	live backing paths, versions, sizes, checksums, and backups unverified
+qbittorrent	qbittorrent_config; media_downloads	/var/lib/qBittorrent; /srv/media/downloads	Rehearse resume data; discover peer port	live backing paths, versions, sizes, checksums, and backups unverified
+jellyseerr	jellyseerr_config	/var/lib/seerr	Rehearse supported Seerr migration; no hostname alias	live backing paths, versions, sizes, checksums, and backups unverified
+portainer	portainer_data	none	Deliberately removed	live backing paths, versions, sizes, checksums, and backups unverified
+nextcloud	nextcloud_aio_mastercontainer; undiscovered AIO child volumes	/var/lib/nextcloud; native PostgreSQL and Redis	Master volume insufficient; logical export and supported version path required	live backing paths, versions, sizes, checksums, and backups unverified
+couchdb	couchdb_data; couchdb_config	/var/lib/couchdb	Prefer verified logical restore or replication; declare LiveSync settings in Nix; do not restore local.ini	live backing paths, versions, sizes, checksums, and backups unverified
+grafana	grafana_storage	/var/lib/grafana	Rehearse database and plugins	live backing paths, versions, sizes, checksums, and backups unverified
+node-exporter	host proc; sys; root mounts	none	Native host metrics; no restore	live backing paths, versions, sizes, checksums, and backups unverified
+prometheus	prometheus_data	/var/lib/prometheus2	Fresh history acceptable after explicit decision	live backing paths, versions, sizes, checksums, and backups unverified
