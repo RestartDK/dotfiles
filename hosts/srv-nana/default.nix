@@ -22,6 +22,10 @@
     homeDirectory = "/home/dkumlin";
   };
 
+  users.users.dkumlin.openssh.authorizedKeys.keyFiles = [
+    ../../config/ssh/public-keys/nana.pub
+  ];
+
   boot.loader.grub = {
     enable = true;
     devices = [ "/dev/nvme0n1" ];
