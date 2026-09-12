@@ -1,133 +1,77 @@
 # Migration validation ledger
 
-The migration starts at `c6de1f6ee713be8bc2b73b047e245ca2a7d08e16` on `daniel/nixos-srv-hatchi`. GPT-6 Astra with xhigh reasoning owns this completion pass without subagents. The canonical checkout and live hosts remain untouched.
+Base `c6de1f6ee713be8bc2b73b047e245ca2a7d08e16`. Branch `daniel/nixos-srv-hatchi`. GPT-6 Astra with xhigh reasoning owns this pass without subagents. The canonical checkout and both live hosts remain untouched.
 
-## Current result
+## Verified results
 
-The review corrections pass local policy tests, the real VM-only CLI rejection, formatting, actionlint, Darwin `traitor check`, and all-system evaluation. Both evaluated inline test-driver strings parse. The pinned deploy-rs schema accepts both node definitions. All existing root input pins and existing host/module files remain unchanged.
-
-The pinned installed VM test passed on hosted x86 Linux/KVM at `bf9663b`. It booted the disposable installed disk, verified the hostname, exchanged SSH host keys from a separate network namespace through the firewall, and confirmed Nextcloud was absent.
-
-Both Hachi closures, deploy-rs schema and activation-script checks for both hosts, and Hachi refusal in all four activation modes passed on hosted x86 Linux at `ebadb22`. The existing Home Manager output also evaluated successfully.
-
-The production service VM remains NOT VERIFIED. The second run mounted the media fixture, passed receipt checks, and initialized native Nextcloud and PostgreSQL. Glance then rejected the malformed synthetic authentication key. The key was regenerated with its pinned native CLI, and a policy check now enforces the decoded 64-byte length. Later service and rotation assertions still require a passing run.
-
-The controller is ARM Darwin. Nix reports `builders = @/etc/nix/machines`, but that file does not exist. No local configured x86 Linux/KVM executor is available. The authorized GitHub-hosted executor is working. OrbStack's known amd64 emulation failure was not repeated. Hosted VM commands ran only against disposable guests. No live-host access occurred.
-
-## Command evidence
-
-[commands.tsv](commands.tsv) records exact command strings, exits, and log pointers. `astra-` rows are reruns by the current owner. Every local check in the table below was rerun successfully except the standalone schema validator, whose integrated Linux build is still pending. `fixes-` and earlier rows are inherited historical records. Their temporary paths are not durable review proof. Earlier Python checks do not verify the replacement code.
-
-| Check | Exit | Meaning |
+| Proof | Revision and evidence | Result |
 | --- | --- | --- |
-| `./bin/traitor verify srv-hatchi policy` | 0 | Exact-node parsing, zero-argument VM wrapper, receipt shape, strict credential parsing, atomic merge retention and rotation, pinned source inventory, generated ACME dependencies, and static safety assertions pass. |
-| `nix run .#srv-hatchi-install-vm -- --store-paths /nix/store/refused /nix/store/refused` | 2 | Expected rejection by the real packaged entrypoint. The ledger wrapper exits 0 after checking this result. |
-| `./bin/traitor deploy srv-hatchi --dry-run` | 1 | Expected uncommissioned rejection before deploy-rs. |
-| `traitor check --print-build-logs` | 0 | Darwin formatting and policy checks pass. Linux builds are omitted by platform. |
-| `traitor check --all-systems --no-build --print-build-logs` | 0 | All named host, app, package, formatter, and check outputs evaluate. No Linux build or activation ran. |
-| Pinned `check-jsonschema` against `.deploy` | 0 | Both deploy node definitions match the upstream schema. |
-| Evaluated `config.testScriptString` syntax checks | 0 | Both complete inline drivers parse. This is not runtime proof. |
-| Pinned `actionlint` | 0 | CI syntax and shell checks pass. |
-| Existing root input pin and host/module comparison | 0 | No unrelated host or existing pin changes. |
-| Python-file check | 0 | No `.py` path in the task diff or either Hachi directory. Repository-wide `find` reports only pre-existing, unchanged Python elsewhere. |
+| Both Hachi closures, both deploy-rs profile checks, schema, all four Hachi activation refusals, existing Home Manager evaluation | `ebadb22`, [hosted Linux](https://github.com/RestartDK/dotfiles/actions/runs/34660883503/job/103462953179) | Passed, exit 0. No host activation or SSH connection. |
+| Pinned `nixos-anywhere --vm-test` | `bf9663b`, [installed VM](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681432); repeated at `ebadb22` | Passed. Disposable Disko install, installed-disk boot, hostname, root mount, SSH host-key exchange through the firewall from a separate network namespace, and no Nextcloud. First driver completed in 60.30 seconds. |
+| Complete production service VM | `a2de8073a2c19036d3b7e2db9be4513a0bb5c6c4`, [hosted KVM](https://github.com/RestartDK/dotfiles/actions/runs/34667334950/job/103481810331) | Passed, exit 0. Driver completed in 447.92 seconds and stopped all five guests. |
+| Local policy, actual CLI rejection, formatting, actionlint, Darwin checks, all-system evaluation, driver syntax, immutable existing pins and host files, zero new Python paths | [commands.tsv](commands.tsv), through `wave9` | Passed. Evaluation is not Linux runtime proof. |
 
-Raw Nix was used for targeted output evaluation, formatting, the real app rejection, and upstream schema and lint tools. `traitor` has no equivalent diagnostic. New CLI paths use `./bin/traitor` because the PATH binary belongs to the untouched canonical checkout. `traitor check` resolves this worktree from the current directory.
+The successful service dispatch used diagnostic scope. Linux and Darwin were intentionally skipped there. A full PR run at the delivery head is still required; this table does not present separate historical passes as one full green run.
 
-The inherited code manifest digest was `ba2cd55350cd04f3c4a606b2c4bf31dfad98bc437a1a6aaaa4dbe2c3ebebc7c5`. Hosted evidence will record the checked commit SHA and lock digest. Audit documents are not treated as proof of an unchanged code revision.
+The controller is ARM Darwin with no configured Linux builder. All runtime VM evidence came from authorized GitHub-hosted x86 Linux/KVM. No live-host access occurred.
 
-## Failures retained in the ledger
+## Observed production VM behavior
 
-- `fixes-policy-first` caught non-idempotent INI line placement. The merger now preserves owned keys in place and emits missing sections without repeated blank lines.
-- `fixes-policy-second` caught a failed first operand in a shell `&&` expression that did not abort. Credential lengths now have an explicit rejecting branch.
-- `fixes-format-first` caught two `inherit` style issues and missing shell metadata. These were corrected without suppressions.
-- `fixes-actionlint` caught an ambiguous sudo redirection. Journal capture now uses a pipe to the runner-owned evidence file.
-- `fixes-inline-drivers` tried to coerce Disko's function-valued `testScript` into a string. The corrected diagnostic uses upstream `testScriptString` and passes.
+The test imports production modules and replaces only disposable network, credential, storage, and certificate facts. It proved:
 
-No failed command is counted as a pass. See [accepted findings](review.md) for the complete correction mapping.
+- Missing admission blocks application and database initialization. Receipts with unsafe permissions or a missing media mount reject. The valid receipt admits native services.
+- All 16 retained native service units load. All inventory-derived DNS rewrites work over UDP and TCP. Forwarding, removed-name negatives, HTTP redirects, application identities, and distinct remote proxy markers pass.
+- Client and admin CIDRs remain separate. IPv4 and IPv6 client/admin/outsider probes enforce the intended access. Every binding on each private application port is loopback, including Java's IPv4-mapped IPv6 sockets. Removed container and administration units and the Docker socket are absent.
+- Prometheus scrapes three targets. Node metrics identify Hachi and fixture Nana separately. Grafana requires authentication and queries its provisioned Prometheus datasource.
+- Native Nextcloud passes HTTP and CLI health, WebDAV upload/download, and cron. Its file survives an actual guest reboot. Post-boot HTTP and CLI health and DNS pass.
+- Media writers can write their directories. Jellyfin and Komga cannot write through their service mount namespaces. Unrelated users cannot read protected secrets or private application configuration.
+- AdGuard and qBittorrent accept rotated credentials and reject the previous credentials. qBittorrent retains restored and UI settings across restarts and rotation. CouchDB rejects the old credential after rotation and after another restart.
+- Caddy validates both production certificate-file configuration and the fixture configuration. Prometheus validates its generated configuration.
 
-## Required Linux commands
+No cloud certificate was issued. Fixture Nana returns synthetic identities, not evidence about live Nana. Offline update probes failed as expected. Komga also warned that libarchive could not load; real archive-format and library-data compatibility remain unverified.
 
-Run these on x86 Linux with KVM. They do not contact either live host.
+## Rerunnable commands
+
+Run the Linux commands on x86 Linux with KVM. None contacts either live host.
 
 ```sh
 ./bin/traitor check --all-systems --no-build --print-build-logs
+./bin/traitor verify srv-hatchi policy
 ./bin/traitor verify srv-hatchi closures
 nix build --no-link --print-build-logs .#checks.x86_64-linux.deploy-schema .#checks.x86_64-linux.deploy-activate .#checks.x86_64-linux.srv-hatchi-deploy-rejection
 ./bin/traitor verify srv-hatchi install-vm
 ./bin/traitor verify srv-hatchi services-vm
 ```
 
-CI separates the two KVM tests and builds both deployment profiles without activating them. `deploy-activate` includes Nana's real closure and may need substantial disk space. Failure artifacts include command exits, runner facts, derivations, `nix log`, build logs, and the Nix daemon journal. The user authorized branch pushes and hosted execution. The existing workflow supports a branch `workflow_dispatch` trigger.
+Local `traitor check --print-build-logs` passes Darwin quality and policy checks. `traitor check --all-systems --no-build --print-build-logs` evaluates all named outputs without Linux builds. Both complete inline driver strings parse.
 
-## Hosted run 34657739803
+The real packaged `nix run .#srv-hatchi-install-vm -- --store-paths /nix/store/refused /nix/store/refused` rejects with exit 2. `./bin/traitor deploy srv-hatchi --dry-run` rejects with exit 1. Ledger wrappers exit 0 only after checking these expected rejection codes.
 
-[Workflow dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34657739803) used branch head `bf9663beee2d0a65da09e34e2688b4b7edd68504`. Both Hachi jobs passed the explicit x86 Linux and KVM prerequisite.
+Raw Nix is limited to diagnostics that `traitor` does not expose. New CLI paths use `./bin/traitor` because the PATH binary belongs to the untouched canonical checkout. `traitor check` resolves this worktree from its current directory.
 
-| Job | Result | Observed behavior |
+CI separates the two KVM tests and builds both deployment profiles without activating them. `deploy-activate` includes Nana's real closure and needs substantial disk space. Evidence artifacts record command exits, runner facts, commit and lock digests. Failures also retain derivations, `nix log`, build logs, and the Nix daemon journal. Non-dispatch runs execute every required job.
+
+## Hosted failures and corrections
+
+All listed service failures exited 1. None counts as a complete pass. The code and test corrections preserve the required behaviors.
+
+| Run and head | Failure | Correction |
 | --- | --- | --- |
-| [Install VM](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681432) | VERIFIED, exit 0 | The pinned VM-only entrypoint installed the disposable Disko configuration, booted it, and exchanged SSH host keys through the firewall. The driver finished in 60.30 seconds. |
-| [Darwin](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681126) | VERIFIED | Quality, policy, and both Darwin configuration evaluations passed. |
-| [Services VM](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681331) | Failed, exit 1 | Admission blocked setup as intended. The test's ordinary `fileSystems` declaration was replaced by the QEMU module, so `/srv/media` was absent. |
-| [Linux](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681329) | Failed, exit 1 | A shell stub required `/usr/bin/env`, which is absent in the Linux build sandbox. Other requested builds were cancelled, not passed. |
+| [34657739803](https://github.com/RestartDK/dotfiles/actions/runs/34657739803), `bf9663b` | QEMU discarded the ordinary media filesystem declaration. Linux policy also required absent `/usr/bin/env`; dependent builds were cancelled. | Use native `virtualisation.fileSystems`, assert the mount at evaluation and runtime, and package the stub with `writeShellScriptBin`. Separate policy, closure, and deploy steps. |
+| [34660883503](https://github.com/RestartDK/dotfiles/actions/runs/34660883503), `ebadb22` | Glance rejected the malformed synthetic key. Linux, Darwin, and installed VM passed. | Generate the key with pinned `glance secret:make`; enforce its decoded 64-byte length in policy. |
+| [34661892039](https://github.com/RestartDK/dotfiles/actions/runs/34661892039), `cce7d92` | Production firewall blocked loopback despite listeners. | Require exactly `[ "lo" ]` as trusted interfaces. External and Tailscale interfaces remain CIDR-restricted. |
+| [34663545232](https://github.com/RestartDK/dotfiles/actions/runs/34663545232), `21a51a2` | AdGuard ignored declarative rewrites. | Set each entry's required `enabled = true`. |
+| [34664193750](https://github.com/RestartDK/dotfiles/actions/runs/34664193750), `55ec780` | Public AdGuard login markup did not contain the product name. | Assert exact public and authenticated page titles from the pinned templates, plus API identity. |
+| [34664884702](https://github.com/RestartDK/dotfiles/actions/runs/34664884702), `64c9f89` | qBittorrent's successful empty response did not equal obsolete `Ok.`. | Require current HTTP 204/401 semantics and the authenticated packaged version. PBKDF2 and native Qt decoding passed separate diagnostics. |
+| [34665763616](https://github.com/RestartDK/dotfiles/actions/runs/34665763616), `315edfa` | Text matching rejected Java's mapped loopback notation. | Parse addresses and require every private binding to be loopback. Captured sockets pass; wildcard and external addresses reject. |
+| [34666487510](https://github.com/RestartDK/dotfiles/actions/runs/34666487510), `244ec02` | Every pre-reboot assertion passed, but default `-no-reboot` made QEMU exit. | Start Hachi with the driver's supported `allow_reboot=True`. The next run passed reboot and persistence. |
 
-The media fixture now uses `virtualisation.fileSystems`, with an evaluation assertion and an explicit mounted-source check. Local before/after evaluation proves that `/srv/media` was absent before the fix and present with the intended device and filesystem afterward. The policy stub now uses `pkgs.writeShellScriptBin`, which supplies the pinned interpreter. No assertion was removed or relaxed.
+## Audit boundaries
 
-CI now runs quality and policy before either Hachi closure or deploy profile builds. Its Linux daemon uses the same Numtide cache and public key already declared by the repository's NixOS cache module, rather than compiling cached agent packages unnecessarily.
+[commands.tsv](commands.tsv) records exact commands, exits, and evidence pointers. [decisions.tsv](decisions.tsv) records the decisions. `astra-` and `wave` rows belong to this completion pass. Earlier rows are inherited history, not substitutes for current verification. Temporary paths are diagnostic pointers, not durable hosted proof.
 
-## Hosted run 34660883503
+Inherited failures included INI idempotence, a non-rejecting shell expression, formatting, sudo redirection, and incorrect driver-string coercion. Their corrections remain in the ledger and [accepted review mapping](review.md). The old generic installer and OrbStack attempts did not produce VM proof. This pass did not repeat the known emulation failure or start OrbStack.
 
-[The second full dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34660883503) used `ebadb22`. [Linux verification](https://github.com/RestartDK/dotfiles/actions/runs/34660883503/job/103462953179) passed quality, policy, both Hachi closure builds, both deploy-rs checks, all four Hachi activation refusals, and the existing Home Manager evaluation. The install VM and Darwin jobs also passed.
+The owner reviewed all 43 staged files and pinned lifecycle implementations directly. Independent and cross-model workers were skipped because the user forbids subagents. Session metadata records only GPT-6 Astra and xhigh reasoning, with zero subagent calls.
 
-[The service VM](https://github.com/RestartDK/dotfiles/actions/runs/34660883503/job/103462953225) passed the media mount and receipt checks. Its logs record successful Nextcloud installation and PostgreSQL startup. Glance exited because the synthetic key was not base64, so the service test failed with exit 1. Startup logs are not counted as proof of the remaining HTTP, firewall, persistence, or rotation assertions.
-
-## Hosted run 34661892039
-
-The [services-only dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34661892039/job/103465927617) at `cce7d92` started every requested service but timed out connecting to DNS on loopback. AdGuard logged its TCP listener. The production `trustedInterfaces = lib.mkForce []` had removed NixOS's loopback allow rule, blocking local clients and reverse proxies. The configuration and policy now require exactly `[ "lo" ]`; external CIDR restrictions remain unchanged.
-
-This diagnostic scope does not count as a full CI pass. Pull requests and pushes always run every job.
-
-## Hosted run 34663545232
-
-The [fourth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34663545232/job/103470794430) at `21a51a2` reached all expected loopback listeners and loaded every retained unit. The first client DNS rewrite assertion then failed. Pinned AdGuard 0.107.78 skips rewrite entries unless their `enabled` field is true. Declarative entries now set that field explicitly. The test still requires every inventory-derived name over both UDP and TCP and reports the received answer on failure.
-
-## Hosted run 34664193750
-
-The [fifth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34664193750/job/103472685663) at `55ec780` passed every retained DNS rewrite over UDP and TCP, forwarding, removed-name negatives, all HTTP redirects, and Jellyfin health. It failed a test expectation that AdGuard's public login HTML contained its product name. The pinned template's title is `Login`; the authenticated index is titled `AdGuard Home`. Both pages now have explicit title assertions, with authenticated API identity still required.
-
-## Hosted run 34664884702
-
-The [sixth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34664884702) at `64c9f89` passed AdGuard pages and API, Glance, Komga, Suwayomi authentication, and direct/proxied identities for Radarr, Sonarr, and Prowlarr. It rejected qBittorrent's successful empty login response because the test expected the old `Ok.` body.
-
-Pinned qBittorrent sets HTTP 204 for a successful login with no body and HTTP 401 for invalid credentials. Readiness and rotation assertions now require those statuses. The initial login also must yield a cookie that can fetch the exact packaged version. Local diagnostics independently confirmed the fixture PBKDF2 hash and Qt's decoding of the rendered username and credential. No production credential code changed.
-
-## Hosted run 34665763616
-
-The [seventh service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34665763616) at `315edfa` passed the service HTTP checks through Grafana, including qBittorrent's authenticated packaged version and the distinct remote proxy markers. Client, admin, and outsider IPv4/IPv6 probes passed. The listener assertion then rejected Komga's `[::ffff:127.0.0.1]:25600` textual representation.
-
-Listener assertions now parse IP addresses, normalize IPv4-mapped IPv6, and require every binding on each private port to be loopback. This also rejects an extra wildcard listener that the old substring check could miss. No service binding or firewall rule changed.
-
-## Hosted run 34666487510
-
-The [eighth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34666487510) at `244ec02` passed metrics and identities, Nextcloud HTTP and CLI status, WebDAV upload/download, cron, media permissions, secret isolation, both Caddy configurations, Prometheus configuration, qBittorrent settings persistence, and AdGuard/qBittorrent/CouchDB credential rotations. Each old credential was rejected; CouchDB retained the rotated credential across another restart.
-
-The test then requested a guest reboot. The driver had started QEMU with its default `-no-reboot`, so QEMU exited and the shell disconnected before persistence assertions. Hachi now starts with the driver's supported `allow_reboot=True`. The actual guest reboot and post-boot checks remain mandatory.
-
-## Runtime assertions awaiting execution
-
-The installed bootstrap must exchange SSH host keys through its firewall from an isolated network namespace. The production VM must prove all retained units, inventory-bound DNS and routes, service-specific upstream identities, separate client/admin CIDRs, IPv4 and IPv6 isolation, and removed services.
-
-The VM also checks receipt refusal, Sonarr ownership, media permissions, node metrics, Grafana's datasource, native Nextcloud health and WebDAV persistence, AdGuard and qBittorrent rotation, retained qBittorrent restored/UI settings, CouchDB old-password rejection, and reboot. Caddy and promtool validate their generated configurations inside the VM.
-
-## Historical runner evidence
-
-The earlier generic `nixos-anywhere --vm-test` attempt exited 1 due to the x86 Linux platform requirement on this ARM Darwin controller. It did not install a VM. That generic app no longer exists.
-
-The earlier OrbStack command rejected emulated amd64 NixOS on Apple Silicon. No machine was created, and the prior task stopped the OrbStack service it had started. This correction pass did not start OrbStack.
-
-Hardware, physical disks, NICs, GPU acceleration, Cloudflare issuance, tailnet ACLs, live Nana connectivity, source data versions, backups, and restoration remain outside this run. See [commissioning](commissioning.md).
-
-## Attention
-
-The current owner read all 43 staged files and the inherited review findings. Pinned upstream implementations confirm bootstrap firewall ownership, native state-directory handling, qBittorrent configuration ownership, ACME dependencies, CouchDB configuration precedence, and the VM-only installer path. Local policy and rejection checks were rerun, not inferred from prior claims.
-
-Independent and cross-model reviews are skipped under the user's no-subagent instruction. A dedicated Herdr verification tab is active during execution and must be removed before handoff. Hosted VM behavior remains NOT VERIFIED until the required jobs complete.
+Hardware, physical disks, NICs, boot mode, GPU acceleration, Cloudflare issuance, tailnet ACLs, live Nana connectivity, source data versions, backups, archive-format compatibility, and restoration remain outside this run. See [commissioning](commissioning.md) and [restore](restore.md). Hachi remains uncommissioned; no physical install or activation authority was added.

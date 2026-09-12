@@ -13,13 +13,13 @@ No todo tool is available. This file retains the playbook phases and execution c
 - [x] Read the Principles section of dstack-mode in full.
 - [x] Phase A: Frame
 - [x] Phase B: Design the workflow
-- [ ] Phase C: Run the loop
+- [x] Phase C: Run the loop
 - [x] Read every staged file and the inherited review findings.
 - [x] Review native lifecycle, secrets, installation authority, test coverage, and existing outputs.
 - [x] Run policy, static checks, CLI rejection, and `traitor check` in a dedicated Herdr tab.
 - [x] Commit coherent units and push the branch.
 - [x] Dispatch the branch workflow and confirm its head SHA and Hachi jobs.
-- [ ] Fix each hosted failure at its cause and rerun the affected checks.
+- [x] Fix each hosted failure at its cause and rerun the affected checks.
 - [ ] Phase D: Keep the audit trail
 - [ ] Phase E: Verify and hand back
 - [ ] Opening a PR. Worktree, Ticket, Commits, PRs, Titles, Descriptions, Submission host, Readiness, Babysit.

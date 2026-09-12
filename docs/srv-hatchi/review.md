@@ -1,6 +1,6 @@
 # Accepted review corrections
 
-All inherited findings are accepted and reproduced below as durable review context. None are rejected. Linux runtime verification remains required before approval.
+All inherited findings are accepted and reproduced below as durable review context. None are rejected. Hosted Linux builds, activation refusal, the installed VM, and the complete production VM have passed. [The validation ledger](validation.md) binds each proof to its revision; full delivery-head CI remains required.
 
 ## Correctness findings
 
@@ -53,6 +53,6 @@ No new narrating code comments were added. The current owner applied the no-comm
 
 GPT-6 Astra with xhigh reasoning read every staged file, the source Compose file at the recorded revision, and the pinned lifecycle code for qBittorrent, AdGuard, CouchDB, Caddy, deploy-rs, and nixos-anywhere. The source inventory still contains 17 active services, not Open WebUI. The generic installer app is absent. Upstream `--vm-test` exits after building only `system.build.installTest`, before SSH or disk mutation.
 
-The safety fact is that no uncommissioned Hachi output grants physical disk or activation authority. Local tests rerun the actual packaged argument rejection, exact-node CLI rejection, receipt checks, credential merge tests, and generated dependency assertions. Hosted activation refusal and the installed bootstrap VM have passed. The production service VM remains required. Its first runs exposed an absent fixture mount, malformed Glance fixture key, and production loopback firewall rejection. Each was corrected at its cause without bypassing admission, disabling the firewall, or dropping a service assertion.
+The safety fact is that no uncommissioned Hachi output grants physical disk or activation authority. Local tests rerun the actual packaged argument rejection, exact-node CLI rejection, receipt checks, credential merge tests, and generated dependency assertions. Hosted activation refusal and both VMs have passed. Runtime failures exposed an absent fixture mount, malformed Glance fixture key, production loopback rejection, disabled DNS rewrites, and stale test expectations. Corrections use the pinned native interfaces. The final service run includes authenticated identities, every firewall probe, credentials, permissions, and post-reboot Nextcloud persistence.
 
 All prior review findings have code-level corrections. Their runtime claims remain separate from evaluation. Cross-model review and delegation are explicitly skipped because the user forbids subagents.
