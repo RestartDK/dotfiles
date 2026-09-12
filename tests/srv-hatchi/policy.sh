@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p "$TMPDIR/credentials"
 export HOME="$TMPDIR/home" FLAKE_DIR="$ROOT"
 export NIX_CALLS="$TMPDIR/nix-calls" UPSTREAM_CALLS="$TMPDIR/upstream-calls"
 mkdir -p "$HOME"
@@ -102,59 +101,73 @@ for change in '.services["nextcloud-setup"].sourceVersion=""' '.services["nextcl
   fi
 done
 
-export CREDENTIALS_DIRECTORY="$TMPDIR/credentials"
+export XDG_RUNTIME_DIR="$TMPDIR"
+mkdir -p "$TMPDIR/secrets.d"
+touch "$TMPDIR/secrets.d/sops-nix-secretfs"
+fixture="$TMPDIR/synthetic-secrets.sops.yaml"
+install -m600 "$ROOT/tests/srv-hatchi/fixtures/synthetic-secrets.sops.yaml" "$fixture"
+jq --arg tmp "$TMPDIR" --arg fixture "$fixture" --arg key "$SOPS_AGE_KEY_FILE" '
+  .userMode = true | .ageKeyFile = $key | .keepGenerations = 2 |
+  .secretsMountPoint = ($tmp + "/secrets.d") | .symlinkPath = ($tmp + "/secrets") |
+  .secrets |= map(.sopsFile = $fixture | .path = ($tmp + "/secrets/" + .name)) |
+  .templates |= map(.path = ($tmp + "/secrets/rendered/" + .name))
+' "$SOPS_MANIFEST" >"$TMPDIR/manifest.json"
+sops-install-secrets -ignore-passwd "$TMPDIR/manifest.json"
+rendered="$TMPDIR/secrets/rendered"
 config="$TMPDIR/qBittorrent.conf"
-printf '[Preferences]\nWebUI\\Username=restored\nWebUI\\LocalHostAuth=false\nGeneral\\Locale=sv\n[BitTorrent]\nSession\\GlobalMaxSeedingMinutes=37\n' >"$config"
-salt=$(printf '%016d' 0 | base64 -w0)
-key=$(printf '%064d' 0 | base64 -w0)
-printf '@ByteArray(%s:%s)\n' "$salt" "$key" >"$CREDENTIALS_DIRECTORY/password"
 for iteration in first second; do
-  "$QBITTORRENT_RENDERER" "$config"
-  grep -Fx 'General\Locale=sv' "$config"
-  grep -Fx 'Session\GlobalMaxSeedingMinutes=37' "$config"
+  printf '[MigrationFixture]\nRetained=restored-setting\n' >"$config"
+  install -m600 "$rendered/qBittorrent.conf" "$config"
+  if grep -q 'restored-setting' "$config"; then
+    echo 'Restored settings survived declarative replacement' >&2
+    exit 1
+  fi
   grep -Fx 'WebUI\LocalHostAuth=true' "$config"
   grep -Fx 'WebUI\Username=daniel' "$config"
+  grep -Fx 'WebUI\Address=127.0.0.1' "$config"
+  grep -Fx 'Accepted=true' "$config"
+  grep -Fx "WebUI\Password_PBKDF2=$(sops decrypt --extract '["qbittorrent-password"]' "$fixture")" "$config" >/dev/null
   test "$(grep -c 'WebUI\\Password_PBKDF2=' "$config")" = 1
   test "$(stat -c %a "$config")" = 600
   cp "$config" "$TMPDIR/$iteration.conf"
 done
 diff -u "$TMPDIR/first.conf" "$TMPDIR/second.conf"
+install -m600 "$rendered/AdGuardHome.yaml" "$TMPDIR/AdGuardHome.yaml"
+test "$(stat -c %a "$TMPDIR/AdGuardHome.yaml")" = 600
+yq -o=json '.' "$TMPDIR/AdGuardHome.yaml" | jq -e --rawfile password "$TMPDIR/secrets/adguard-password" '
+  .dns.port == 53 and .http.address == "127.0.0.1:3000" and
+  .users == [{name:"daniel",password:$password}]
+' >/dev/null
+for name in AdGuardHome.yaml qBittorrent.conf; do
+  test "$(stat -Lc %a "$rendered/$name")" = 400
+  if grep -Eq '<SOPS:|fixture-password' "$rendered/$name"; then
+    echo 'Unrendered placeholder or plaintext password in configuration' >&2
+    exit 1
+  fi
+  printf 'application-edited\n' >"$TMPDIR/$name"
+  if grep -q application-edited "$rendered/$name"; then
+    echo 'Application overwrote the SOPS template' >&2
+    exit 1
+  fi
+done
+salt=$(printf '%016d' 0 | base64 -w0)
 key=$(printf '%064d' 1 | base64 -w0)
-printf '@ByteArray(%s:%s)\n' "$salt" "$key" >"$CREDENTIALS_DIRECTORY/password"
-"$QBITTORRENT_RENDERER" "$config"
-grep -Fx "WebUI\Password_PBKDF2=@ByteArray($salt:$key)" "$config" >/dev/null
-cp "$config" "$TMPDIR/rotated.conf"
-for password in invalid '@ByteArray(YQ==:Yg==)' '@ByteArray(bad!:bad!)'; do
-  printf %s "$password" >"$CREDENTIALS_DIRECTORY/password"
-  if "$QBITTORRENT_RENDERER" "$config"; then
-    echo "Invalid password accepted" >&2
-    exit 1
-  fi
-  diff -u "$TMPDIR/rotated.conf" "$config"
-done
-printf '@ByteArray(%s:%s)\n' "$salt" "$key" >"$CREDENTIALS_DIRECTORY/password"
-"$QBITTORRENT_RENDERER" "$TMPDIR/fresh.conf"
-grep -Fx 'Accepted=true' "$TMPDIR/fresh.conf"
-grep -Fx 'WebUI\Address=127.0.0.1' "$TMPDIR/fresh.conf"
-
-config="$TMPDIR/AdGuardHome.yaml"
-printf '{"users":[],"dns":{"port":53}}' >"$config"
-jq -n '{users:[{name:"fixture",password:("$2b$10$" + ("a" * 53))}]}' >"$CREDENTIALS_DIRECTORY/users"
-"$ADGUARD_RENDERER" "$config"
-test "$(stat -c %a "$config")" = 600
-yq -o=json '.' "$config" | jq -e '.dns.port == 53 and .users[0].name == "fixture"' >/dev/null
-cp "$config" "$TMPDIR/adguard-valid.yaml"
-for users in '[]' '[{"name":"fixture","password":"plaintext"}]'; do
-  jq -n --argjson users "$users" '{users:$users}' >"$CREDENTIALS_DIRECTORY/users"
-  if "$ADGUARD_RENDERER" "$config"; then
-    echo "Invalid users accepted" >&2
-    exit 1
-  fi
-  diff -u "$TMPDIR/adguard-valid.yaml" "$config"
-done
+password="@ByteArray($salt:$key)"
+sops set "$fixture" '["qbittorrent-password"]' "$(jq -cn --arg password "$password" '$password')"
+sops set "$fixture" '["adguard-password"]' "\"\$2b\$10\$bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\""
+sops-install-secrets -ignore-passwd "$TMPDIR/manifest.json"
+grep -Fx "WebUI\Password_PBKDF2=$password" "$rendered/qBittorrent.conf" >/dev/null
+jq -e --rawfile password "$TMPDIR/secrets/adguard-password" '.users[0].password == $password' "$rendered/AdGuardHome.yaml" >/dev/null
+cp "$rendered/qBittorrent.conf" "$TMPDIR/rotated.conf"
+printf 'invalid ciphertext\n' >"$fixture"
+if sops-install-secrets -ignore-passwd "$TMPDIR/manifest.json"; then
+  echo 'Invalid ciphertext accepted' >&2
+  exit 1
+fi
+diff -u "$TMPDIR/rotated.conf" "$rendered/qBittorrent.conf"
 
 yq -o=json '.services | to_entries | map({"name": .key, "image": .value.image}) | sort_by(.name)' "$SOURCE_COMPOSE" >"$TMPDIR/observed-source.json"
 jq '.services' "$ROOT/tests/srv-hatchi/source-manifest.json" >"$TMPDIR/expected-source.json"
 diff -u "$TMPDIR/expected-source.json" "$TMPDIR/observed-source.json"
 test -z "$(find "$ROOT/hosts/srv-hatchi" "$ROOT/tests/srv-hatchi" -name '*.py' -print)"
-printf 'Exact-node CLI, VM-only entrypoint, admission, credential merge, and pinned inventory checks passed\n'
+printf 'Exact-node CLI, VM-only entrypoint, admission, runtime templates, and pinned inventory checks passed\n'

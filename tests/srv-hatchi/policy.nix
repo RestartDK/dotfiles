@@ -109,7 +109,47 @@ assert cfg.networking.firewall.allowedTCPPorts == [ ];
 assert cfg.networking.firewall.allowedUDPPorts == [ ];
 assert cfg.networking.firewall.trustedInterfaces == [ "lo" ];
 assert cfg.systemd.services.sonarr.serviceConfig.StateDirectory == "sonarr";
-assert cfg.services.qbittorrent.serverConfig == { };
+assert cfg.services.qbittorrent.serverConfig != { };
+assert cfg.sops.templates ? "AdGuardHome.yaml";
+assert cfg.sops.templates ? "qBittorrent.conf";
+assert !cfg.services.adguardhome.mutableSettings;
+assert
+  cfg.services.adguardhome.settings.users == [
+    {
+      name = "daniel";
+      password = cfg.sops.placeholder.adguard-password;
+    }
+  ];
+assert
+  cfg.services.qbittorrent.serverConfig.Preferences."WebUI\\Password_PBKDF2"
+  == cfg.sops.placeholder.qbittorrent-password;
+assert builtins.all
+  (
+    entry:
+    let
+      template = cfg.sops.templates.${entry.name};
+    in
+    template.mode == "0400"
+    && template.uid == 0
+    && template.gid == 0
+    && template.restartUnits == [ "${entry.unit}.service" ]
+    && cfg.systemd.services.${entry.unit}.serviceConfig.LoadCredential == [ "config:${template.path}" ]
+  )
+  [
+    {
+      name = "AdGuardHome.yaml";
+      unit = "adguardhome";
+    }
+    {
+      name = "qBittorrent.conf";
+      unit = "qbittorrent";
+    }
+  ];
+assert cfg.systemd.services.adguardhome.serviceConfig.DynamicUser;
+assert lib.hasInfix "install -m600" cfg.systemd.services.adguardhome.preStart;
+assert lib.hasInfix "install -Dm600 %d/config" (
+  builtins.head cfg.systemd.services.qbittorrent.serviceConfig.ExecStartPre
+);
 assert cfg.services.grafana.settings.security.cookie_secure;
 assert cfg.services.couchdb.configFile == "/run/couchdb/local.ini";
 assert lib.hasSuffix cfg.services.couchdb.configFile
@@ -224,7 +264,9 @@ pkgs.runCommand "srv-hatchi-policy"
       pkgs.diffutils
       pkgs.gnugrep
       pkgs.findutils
+      pkgs.getconf
       self.packages.${pkgs.stdenv.hostPlatform.system}.opnix
+      self.inputs.sops-nix.packages.${pkgs.stdenv.hostPlatform.system}.sops-install-secrets
     ];
     ROOT = self;
     NIX_STUB = nixStub;
@@ -236,14 +278,18 @@ pkgs.runCommand "srv-hatchi-policy"
         anywhere = anywhereStub;
       }
     );
-    QBITTORRENT_RENDERER = lib.getExe (
-      import ../../hosts/srv-hatchi/services/qbittorrent-config.nix {
-        inherit pkgs;
-        domain = cfg.my.hatchi.domain;
+    SOPS_MANIFEST = pkgs.writeText "hatchi-template-manifest.json" (
+      builtins.toJSON {
+        secrets = lib.mapAttrsToList (name: secret: {
+          inherit name;
+          inherit (secret) key mode format;
+        }) cfg.sops.secrets;
+        templates = lib.mapAttrsToList (name: template: {
+          inherit name;
+          inherit (template) content mode;
+        }) cfg.sops.templates;
+        placeholderBySecretName = cfg.sops.placeholder;
       }
-    );
-    ADGUARD_RENDERER = lib.getExe (
-      import ../../hosts/srv-hatchi/adguard-credentials.nix { inherit pkgs; }
     );
   }
   ''

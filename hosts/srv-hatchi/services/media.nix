@@ -4,12 +4,6 @@
   pkgs,
   ...
 }:
-let
-  qbittorrentConfig = import ./qbittorrent-config.nix {
-    inherit pkgs;
-    domain = config.my.hatchi.domain;
-  };
-in
 {
   services = {
     jellyfin = {
@@ -42,6 +36,20 @@ in
       group = "media";
       webuiPort = 8080;
       openFirewall = false;
+      serverConfig = {
+        LegalNotice.Accepted = true;
+        Preferences = {
+          "WebUI\\Address" = "127.0.0.1";
+          "WebUI\\Username" = "daniel";
+          "WebUI\\Password_PBKDF2" = config.sops.placeholder.qbittorrent-password;
+          "WebUI\\ServerDomains" = "qbittorrent.${config.my.hatchi.domain}";
+          "WebUI\\LocalHostAuth" = true;
+          "WebUI\\AuthSubnetWhitelistEnabled" = false;
+          "WebUI\\CSRFProtection" = true;
+          "WebUI\\HostHeaderValidation" = true;
+        };
+        BitTorrent."Session\\DefaultSavePath" = "/srv/media/downloads";
+      };
     };
     caddy.virtualHosts = {
       "jellyfin.${config.my.hatchi.domain}".extraConfig = "reverse_proxy 127.0.0.1:8096";
@@ -57,7 +65,11 @@ in
         "reverse_proxy 127.0.0.1:${toString config.services.qbittorrent.webuiPort}";
     };
   };
-  sops.secrets.qbittorrent-password.restartUnits = [ "qbittorrent.service" ];
+  sops.secrets.qbittorrent-password = { };
+  sops.templates."qBittorrent.conf" = {
+    content = lib.generators.toINI { } config.services.qbittorrent.serverConfig;
+    restartUnits = [ "qbittorrent.service" ];
+  };
   my.hatchi = {
     stateUnits = [
       "jellyfin"
@@ -107,9 +119,9 @@ in
       UMask = "0002";
       ReadOnlyPaths = [ "/srv/media" ];
       ReadWritePaths = [ "/srv/media/downloads" ];
-      LoadCredential = [ "password:${config.sops.secrets.qbittorrent-password.path}" ];
-      ExecStartPre = [
-        "${lib.getExe qbittorrentConfig} ${config.services.qbittorrent.profileDir}/qBittorrent/config/qBittorrent.conf"
+      LoadCredential = [ "config:${config.sops.templates."qBittorrent.conf".path}" ];
+      ExecStartPre = lib.mkForce [
+        "${pkgs.coreutils}/bin/install -Dm600 %d/config ${config.services.qbittorrent.profileDir}/qBittorrent/config/qBittorrent.conf"
       ];
     };
   };

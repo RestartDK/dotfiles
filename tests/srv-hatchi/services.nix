@@ -82,11 +82,15 @@ pkgs.testers.runNixOSTest {
         };
       };
       sops = {
-        defaultSopsFile = lib.mkForce ./fixtures/synthetic-secrets.sops.yaml;
-        validateSopsFiles = lib.mkForce true;
+        defaultSopsFile = lib.mkForce "/run/hatchi-test-secrets.yaml";
+        validateSopsFiles = lib.mkForce false;
         age.keyFile = lib.mkForce "/run/hatchi-test-age-key";
       };
-      system.activationScripts.hatchi-test-key.text = "install -m600 ${./fixtures/age-key.txt} /run/hatchi-test-age-key";
+      system.activationScripts.hatchi-test-key.text = ''
+        install -m600 ${./fixtures/age-key.txt} /run/hatchi-test-age-key
+        install -m600 ${./fixtures/synthetic-secrets.sops.yaml} /run/hatchi-test-secrets.yaml
+      '';
+      environment.etc."hatchi-test-sops-manifest.json".source = config.system.build.sops-nix-manifest;
       security.acme.certs = lib.mkForce { };
       services.caddy.virtualHosts =
         lib.genAttrs
@@ -105,6 +109,8 @@ pkgs.testers.runNixOSTest {
         pkgs.util-linux
         pkgs.prometheus.cli
         pkgs.caddy
+        pkgs.sops
+        config.sops.package
       ];
     };
     client = { lib, ... }: {
@@ -416,8 +422,10 @@ pkgs.testers.runNixOSTest {
         pid = hatchi.succeed(f"systemctl show {unit} -p MainPID --value").strip()
         hatchi.fail(f"nsenter -t {pid} -m -- touch /srv/media/{path}/forbidden")
     hatchi.fail("runuser -u nobody -- cat /run/secrets/nextcloud-admin")
-    for state in ["/run/couchdb/local.ini", "/var/lib/qBittorrent/qBittorrent/config/qBittorrent.conf"]:
+    for state in ["/run/couchdb/local.ini", "/var/lib/qBittorrent/qBittorrent/config/qBittorrent.conf", "/var/lib/AdGuardHome/AdGuardHome.yaml", "/run/secrets/rendered/AdGuardHome.yaml", "/run/secrets/rendered/qBittorrent.conf"]:
         hatchi.fail(f"runuser -u radarr -- cat {state}")
+    for name in ["AdGuardHome.yaml", "qBittorrent.conf"]:
+        hatchi.succeed(f"test $(stat -Lc %U:%G:%a /run/secrets/rendered/{name}) = root:root:400")
     hatchi.succeed("install -d -m700 /var/lib/acme/chateauducipieres.com")
     hatchi.succeed("openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=*.chateauducipieres.com' -keyout /var/lib/acme/chateauducipieres.com/key.pem -out /var/lib/acme/chateauducipieres.com/cert.pem 2>/dev/null")
     hatchi.succeed("caddy validate --config /etc/hatchi-production.Caddyfile --adapter caddyfile")
@@ -425,36 +433,65 @@ pkgs.testers.runNixOSTest {
     hatchi.succeed("promtool check config /etc/prometheus/prometheus.yaml")
 
     qb_config = "/var/lib/qBittorrent/qBittorrent/config/qBittorrent.conf"
+    declared_ratio = json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"]
+    torrent_info = b"d6:lengthi7e4:name12:fixture.data12:piece lengthi16384e6:pieces20:" + hashlib.sha1(b"fixture").digest() + b"e"
+    torrent_hash = hashlib.sha1(torrent_info).hexdigest()
+    torrent_data = base64.b64encode(b"d4:info" + torrent_info + b"e").decode()
+    client.succeed(f"printf %s {torrent_data} | base64 --decode > /tmp/fixture.torrent")
+    response("qbittorrent", "/api/v2/torrents/add", "-f -b /tmp/qb-cookies -F torrents=@/tmp/fixture.torrent -F stopped=true")
+
+
+    def assert_torrent_present():
+        path = f"/api/v2/torrents/info?hashes={torrent_hash}"
+        client.wait_until_succeeds(curl("qbittorrent", path, "-f -b /tmp/qb-cookies") + f" | grep -F {torrent_hash}")
+        assert len(json.loads(response("qbittorrent", path, "-f -b /tmp/qb-cookies"))) == 1
+
+
+    assert_torrent_present()
     hatchi.succeed("systemctl stop qbittorrent")
     hatchi.succeed(f"printf '\\n[MigrationFixture]\\nRetained=restored-setting\\n' >> {qb_config}")
     hatchi.succeed("systemctl start qbittorrent")
     client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'") + " | grep -Fx 204")
     response("qbittorrent", "/api/v2/auth/login", "-c /tmp/qb-cookies --data 'username=daniel&password=fixture-password'")
-    client.succeed(curl("qbittorrent", "/api/v2/app/setPreferences", "-f -b /tmp/qb-cookies --data-urlencode 'json={\"max_ratio\":3.25}'"))
     for iteration in range(2):
+        client.succeed(curl("qbittorrent", "/api/v2/app/setPreferences", "-f -b /tmp/qb-cookies --data-urlencode 'json={\"max_ratio\":3.25}'"))
+        assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == 3.25
+        response("adguard", "/control/filtering/config", "-f -u daniel:fixture-password -H 'Content-Type: application/json' --data '{\"enabled\":false,\"interval\":24}'")
+        assert not json.loads(response("adguard", "/control/filtering/status", "-f -u daniel:fixture-password"))["enabled"]
         hatchi.succeed("systemctl restart adguardhome qbittorrent")
         client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -c /tmp/qb-cookies -o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'") + " | grep -Fx 204")
         client.wait_until_succeeds(curl("adguard", "/control/status", "-f -u daniel:fixture-password"))
-        assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == 3.25
-        hatchi.succeed(f"grep -Fx 'Retained=restored-setting' {qb_config}")
+        assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == declared_ratio
+        assert json.loads(response("adguard", "/control/filtering/status", "-f -u daniel:fixture-password"))["enabled"]
+        assert_torrent_present()
+        hatchi.fail(f"grep -Fx 'Retained=restored-setting' {qb_config}")
+        hatchi.succeed("test -f /srv/media/downloads/permission-proof")
         assert client.succeed(f"dig @192.168.1.10 dashboard.{domain} +short").strip() == "192.168.1.10"
-    hatchi.succeed("jq --arg hash \"$(caddy hash-password --plaintext rotated-fixture)\" '.users[0].password = $hash' /run/secrets/adguard-users > /run/adguard-users-rotated; cat /run/adguard-users-rotated > /run/secrets/adguard-users")
-    hatchi.succeed("systemctl restart adguardhome")
+
+
+    def rotate_secret(name, value, unit):
+        invocation = hatchi.succeed(f"systemctl show {unit} -p InvocationID --value").strip()
+        hatchi.succeed("SOPS_AGE_KEY_FILE=/run/hatchi-test-age-key sops set /run/hatchi-test-secrets.yaml " + shlex.quote(json.dumps([name])) + " " + shlex.quote(json.dumps(value)))
+        hatchi.succeed("SOPS_RESTART_UNITS_VIA_SYSTEMCTL=1 sops-install-secrets /etc/hatchi-test-sops-manifest.json")
+        hatchi.wait_until_succeeds(f"test -n \"$(systemctl show {unit} -p InvocationID --value)\" && test \"$(systemctl show {unit} -p InvocationID --value)\" != {shlex.quote(invocation)}")
+
+
+    adguard_password = hatchi.succeed("caddy hash-password --plaintext rotated-fixture").strip()
+    rotate_secret("adguard-password", adguard_password, "adguardhome")
     client.wait_until_succeeds(curl("adguard", "/control/status", "-f -u daniel:rotated-fixture"))
     assert response("adguard", "/control/status", "-u daniel:fixture-password -o /dev/null -w '%{http_code}'").strip() == "401"
     assert "dns_addresses" in json.loads(response("adguard", "/control/status", "-f -u daniel:rotated-fixture"))
     salt = b"fixture-rotated-salt"
     key = hashlib.pbkdf2_hmac("sha512", b"rotated-fixture", salt, 100000)
     password = "@ByteArray(" + base64.b64encode(salt).decode() + ":" + base64.b64encode(key).decode() + ")"
-    hatchi.succeed("printf %s " + shlex.quote(password) + " > /run/secrets/qbittorrent-password")
-    hatchi.succeed("systemctl restart qbittorrent")
+    rotate_secret("qbittorrent-password", password, "qbittorrent")
     client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -c /tmp/qb-cookies -o /dev/null -w '%{http_code}' --data 'username=daniel&password=rotated-fixture'") + " | grep -Fx 204")
     assert response("qbittorrent", "/api/v2/auth/login", "-o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'").strip() == "401"
-    assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == 3.25
-    hatchi.succeed(f"grep -Fx 'Retained=restored-setting' {qb_config}")
+    assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == declared_ratio
+    assert_torrent_present()
+    hatchi.fail(f"grep -Fx 'Retained=restored-setting' {qb_config}")
     hatchi.wait_until_succeeds("grep -Eq 'daniel\\s*=\\s*-pbkdf2' /run/couchdb/local.ini")
-    hatchi.succeed("printf '[admins]\\ndaniel = rotated-fixture\\n' > /run/secrets/couchdb-admin")
-    hatchi.succeed("systemctl restart couchdb")
+    rotate_secret("couchdb-admin", "[admins]\ndaniel = rotated-fixture\n", "couchdb")
     client.wait_until_succeeds(curl("couchdb", "/_session", "-f -u daniel:rotated-fixture"))
     assert response("couchdb", "/_session", "-u daniel:fixture-password -o /dev/null -w '%{http_code}'").strip() == "401"
     assert json.loads(response("couchdb", "/_session", "-f -u daniel:rotated-fixture"))["userCtx"]["name"] == "daniel"
@@ -468,6 +505,8 @@ pkgs.testers.runNixOSTest {
     hatchi.wait_for_unit("caddy.service", timeout=600)
     client.wait_until_succeeds(curl("nextcloud", "/status.php", "-f"), timeout=600)
     client.wait_until_succeeds(curl("adguard", "/control/status", "-f -u daniel:fixture-password"))
+    client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -c /tmp/qb-cookies -o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'") + " | grep -Fx 204")
+    assert_torrent_present()
     nextcloud_health()
     assert response("nextcloud", "/remote.php/dav/files/daniel/proof.txt", "-f -u daniel:fixture-password") == "native-nextcloud-persistence"
     assert client.succeed(f"dig @192.168.1.10 dashboard.{domain} +tcp +short").strip() == "192.168.1.10"

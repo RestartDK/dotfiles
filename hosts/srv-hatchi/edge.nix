@@ -17,7 +17,6 @@ let
     && builtins.all (label: builtins.match "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?" label != null) (
       lib.splitString "." name
     );
-  adguardCredentials = import ./adguard-credentials.nix { inherit pkgs; };
   networks =
     if cfg.network == null then
       {
@@ -73,14 +72,28 @@ in
       };
     };
     sops.secrets.cloudflare.restartUnits = [ "acme-${domain}.service" ];
-    sops.secrets.adguard-users.restartUnits = [ "adguardhome.service" ];
+    sops.secrets.adguard-password = { };
+    sops.templates."AdGuardHome.yaml" = {
+      content = builtins.toJSON (
+        config.services.adguardhome.settings
+        // {
+          http.address = "${config.services.adguardhome.host}:${toString config.services.adguardhome.port}";
+        }
+      );
+      restartUnits = [ "adguardhome.service" ];
+    };
     services.adguardhome = {
       enable = true;
       host = "127.0.0.1";
       port = 3000;
       mutableSettings = false;
       settings = {
-        users = [ ];
+        users = [
+          {
+            name = "daniel";
+            password = config.sops.placeholder.adguard-password;
+          }
+        ];
         dns = {
           bind_hosts = [
             "0.0.0.0"
@@ -125,9 +138,11 @@ in
         })
       // {
         adguardhome = {
-          serviceConfig.LoadCredential = [ "users:${config.sops.secrets.adguard-users.path}" ];
-          preStart = lib.mkAfter ''
-            ${lib.getExe adguardCredentials} "$STATE_DIRECTORY/AdGuardHome.yaml"
+          serviceConfig.LoadCredential = [
+            "config:${config.sops.templates."AdGuardHome.yaml".path}"
+          ];
+          preStart = lib.mkForce ''
+            ${pkgs.coreutils}/bin/install -m600 "$CREDENTIALS_DIRECTORY/config" "$STATE_DIRECTORY/AdGuardHome.yaml"
             ${lib.getExe config.services.adguardhome.package} --check-config -c "$STATE_DIRECTORY/AdGuardHome.yaml"
           '';
         };
