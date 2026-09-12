@@ -106,6 +106,12 @@ The [seventh service dispatch](https://github.com/RestartDK/dotfiles/actions/run
 
 Listener assertions now parse IP addresses, normalize IPv4-mapped IPv6, and require every binding on each private port to be loopback. This also rejects an extra wildcard listener that the old substring check could miss. No service binding or firewall rule changed.
 
+## Hosted run 34666487510
+
+The [eighth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34666487510) at `244ec02` passed metrics and identities, Nextcloud HTTP and CLI status, WebDAV upload/download, cron, media permissions, secret isolation, both Caddy configurations, Prometheus configuration, qBittorrent settings persistence, and AdGuard/qBittorrent/CouchDB credential rotations. Each old credential was rejected; CouchDB retained the rotated credential across another restart.
+
+The test then requested a guest reboot. The driver had started QEMU with its default `-no-reboot`, so QEMU exited and the shell disconnected before persistence assertions. Hachi now starts with the driver's supported `allow_reboot=True`. The actual guest reboot and post-boot checks remain mandatory.
+
 ## Runtime assertions awaiting execution
 
 The installed bootstrap must exchange SSH host keys through its firewall from an isolated network namespace. The production VM must prove all retained units, inventory-bound DNS and routes, service-specific upstream identities, separate client/admin CIDRs, IPv4 and IPv6 isolation, and removed services.

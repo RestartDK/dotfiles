@@ -249,6 +249,7 @@ pkgs.testers.runNixOSTest {
     import json
     import shlex
 
+    hatchi.start(allow_reboot=True)
     start_all()
     for machine in [hatchi, client, admin, outsider, nana]:
         machine.wait_for_unit("multi-user.target")
