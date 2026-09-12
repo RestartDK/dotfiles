@@ -100,6 +100,12 @@ The [sixth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/
 
 Pinned qBittorrent sets HTTP 204 for a successful login with no body and HTTP 401 for invalid credentials. Readiness and rotation assertions now require those statuses. The initial login also must yield a cookie that can fetch the exact packaged version. Local diagnostics independently confirmed the fixture PBKDF2 hash and Qt's decoding of the rendered username and credential. No production credential code changed.
 
+## Hosted run 34665763616
+
+The [seventh service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34665763616) at `315edfa` passed the service HTTP checks through Grafana, including qBittorrent's authenticated packaged version and the distinct remote proxy markers. Client, admin, and outsider IPv4/IPv6 probes passed. The listener assertion then rejected Komga's `[::ffff:127.0.0.1]:25600` textual representation.
+
+Listener assertions now parse IP addresses, normalize IPv4-mapped IPv6, and require every binding on each private port to be loopback. This also rejects an extra wildcard listener that the old substring check could miss. No service binding or firewall rule changed.
+
 ## Runtime assertions awaiting execution
 
 The installed bootstrap must exchange SSH host keys through its firewall from an isolated network namespace. The production VM must prove all retained units, inventory-bound DNS and routes, service-specific upstream identities, separate client/admin CIDRs, IPv4 and IPv6 isolation, and removed services.

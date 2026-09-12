@@ -245,6 +245,7 @@ pkgs.testers.runNixOSTest {
   testScript = ''
     import base64
     import hashlib
+    import ipaddress
     import json
     import shlex
 
@@ -369,9 +370,15 @@ pkgs.testers.runNixOSTest {
             outsider.fail(f"nc -z -w 1 {address} {port}")
         outsider.fail(f"dig @{address} dashboard.{domain} +time=1 +tries=1")
     client.succeed(f"dig @fd00:1::10 dashboard.{domain} +short | grep -Fx 192.168.1.10")
-    listeners = hatchi.succeed("ss -ltn")
+    listeners = [line.split()[3].rsplit(":", 1) for line in hatchi.succeed("ss -H -ltn").splitlines()]
     for port in [3000, 8081, 25600, 4567, 7878, 8989, 9696, 8080, 11000, 5984, 3001, 9090, 9100]:
-        assert f"127.0.0.1:{port} " in listeners, (port, listeners)
+        addresses = [host.strip("[]") for host, number in listeners if number == str(port)]
+        assert addresses, (port, listeners)
+        for host in addresses:
+            address = ipaddress.ip_address(host)
+            if isinstance(address, ipaddress.IPv6Address):
+                address = address.ipv4_mapped or address
+            assert address.is_loopback, (port, host)
     assert "tailscale0" not in hatchi.succeed("nft list ruleset")
 
     for unit in ["docker.service", "docker.socket", "podman.service", "podman.socket", "portainer.service", "cockpit.service", "cockpit.socket", "nextcloud-aio-mastercontainer.service", "jellyseerr.service", "open-webui.service"]:
