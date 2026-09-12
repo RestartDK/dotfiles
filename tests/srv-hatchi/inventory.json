@@ -1,0 +1,87 @@
+[
+  {
+    "source": "adguardhome",
+    "unit": "adguardhome",
+    "route": "adguard"
+  },
+  {
+    "source": "caddy",
+    "unit": "caddy",
+    "route": null
+  },
+  {
+    "source": "glance",
+    "unit": "glance",
+    "route": "dashboard"
+  },
+  {
+    "source": "komga",
+    "unit": "komga",
+    "route": "komga"
+  },
+  {
+    "source": "suwayomi",
+    "unit": "suwayomi-server",
+    "route": "suwayomi"
+  },
+  {
+    "source": "jellyfin",
+    "unit": "jellyfin",
+    "route": "jellyfin"
+  },
+  {
+    "source": "radarr",
+    "unit": "radarr",
+    "route": "radarr"
+  },
+  {
+    "source": "sonarr",
+    "unit": "sonarr",
+    "route": "sonarr"
+  },
+  {
+    "source": "prowlarr",
+    "unit": "prowlarr",
+    "route": "prowlarr"
+  },
+  {
+    "source": "qbittorrent",
+    "unit": "qbittorrent",
+    "route": "qbittorrent"
+  },
+  {
+    "source": "jellyseerr",
+    "unit": "seerr",
+    "route": "seerr"
+  },
+  {
+    "source": "portainer",
+    "unit": null,
+    "route": null
+  },
+  {
+    "source": "nextcloud",
+    "unit": "nextcloud-setup",
+    "route": "nextcloud"
+  },
+  {
+    "source": "couchdb",
+    "unit": "couchdb",
+    "route": "couchdb"
+  },
+  {
+    "source": "grafana",
+    "unit": "grafana",
+    "route": "grafana"
+  },
+  {
+    "source": "node-exporter",
+    "unit": "prometheus-node-exporter",
+    "route": null
+  },
+  {
+    "source": "prometheus",
+    "unit": "prometheus",
+    "route": null
+  }
+]

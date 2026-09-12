@@ -1,0 +1,74 @@
+{
+  "url": "https://raw.githubusercontent.com/RestartDK/homelab/2c70dbecd6f421ba03038b0cc203592149d05a9c/docker-compose.yml",
+  "sha256": "25052617242b2fb1e3b163358961a34d176c0304e6f63ff4695b5442ff00656b",
+  "services": [
+    {
+      "name": "adguardhome",
+      "image": "adguard/adguardhome"
+    },
+    {
+      "name": "caddy",
+      "image": "restartdk/caddy-cloudflare:latest"
+    },
+    {
+      "name": "couchdb",
+      "image": "couchdb:latest"
+    },
+    {
+      "name": "glance",
+      "image": "glanceapp/glance"
+    },
+    {
+      "name": "grafana",
+      "image": "grafana/grafana-enterprise"
+    },
+    {
+      "name": "jellyfin",
+      "image": "jellyfin/jellyfin"
+    },
+    {
+      "name": "jellyseerr",
+      "image": "fallenbagel/jellyseerr"
+    },
+    {
+      "name": "komga",
+      "image": "gotson/komga"
+    },
+    {
+      "name": "nextcloud",
+      "image": "ghcr.io/nextcloud-releases/all-in-one:latest"
+    },
+    {
+      "name": "node-exporter",
+      "image": "prom/node-exporter:latest"
+    },
+    {
+      "name": "portainer",
+      "image": "portainer/portainer-ce:lts"
+    },
+    {
+      "name": "prometheus",
+      "image": "prom/prometheus:latest"
+    },
+    {
+      "name": "prowlarr",
+      "image": "lscr.io/linuxserver/prowlarr:latest"
+    },
+    {
+      "name": "qbittorrent",
+      "image": "lscr.io/linuxserver/qbittorrent:latest"
+    },
+    {
+      "name": "radarr",
+      "image": "lscr.io/linuxserver/radarr:latest"
+    },
+    {
+      "name": "sonarr",
+      "image": "lscr.io/linuxserver/sonarr:latest"
+    },
+    {
+      "name": "suwayomi",
+      "image": "ghcr.io/suwayomi/suwayomi-server:stable"
+    }
+  ]
+}

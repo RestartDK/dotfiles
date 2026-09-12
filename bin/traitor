@@ -10,6 +10,8 @@ Commands:
   test                   Rebuild current host with action=test
   rollback               Roll back current host generation
   check                  Run flake checks
+  deploy <node> [--dry-run]  Deploy exactly srv-nana or commissioned srv-hatchi
+  verify srv-hatchi <install-vm|services-vm|closures|policy>  Verify without live access
   update [inputs...]     Update all pins or selected flake inputs
   upgrade                Update everything, then rebuild
   show                   Show flake outputs
@@ -190,6 +192,64 @@ run_update() {
   fi
 }
 
+run_deploy() {
+  if (($# < 1 || $# > 2)) || [[ ${2:-} != "" && ${2:-} != --dry-run ]]; then
+    echo "traitor: deploy requires one exact node and optional --dry-run" >&2
+    return 2
+  fi
+  case "$1" in
+  srv-nana | srv-hatchi) ;;
+  *)
+    echo "traitor: unsupported deployment node" >&2
+    return 2
+    ;;
+  esac
+  local node="$1" flake_dir state
+  flake_dir="$(resolve_flake_dir)"
+  preflight "$flake_dir"
+  if [[ $node == srv-hatchi ]]; then
+    state="$(nix eval --raw "$flake_dir#hatchiCommissioning.state")"
+    if [[ $state != physical ]]; then
+      echo "traitor: srv-hatchi is uncommissioned; deployment denied" >&2
+      return 1
+    fi
+  fi
+  local flags=()
+  [[ ${2:-} == --dry-run ]] && flags+=(--dry-activate)
+  nix run --inputs-from "$flake_dir" deploy-rs -- "$flake_dir#$node" "${flags[@]}"
+}
+
+run_verify() {
+  if (($# != 2)) || [[ $1 != srv-hatchi ]]; then
+    echo "traitor: verify requires srv-hatchi and one verification kind" >&2
+    return 2
+  fi
+  case "$2" in
+  install-vm | services-vm | closures | policy) ;;
+  *)
+    echo "traitor: unsupported verification kind" >&2
+    return 2
+    ;;
+  esac
+  local flake_dir
+  flake_dir="$(resolve_flake_dir)"
+  preflight "$flake_dir"
+  case "$2" in
+  install-vm)
+    nix run "$flake_dir#srv-hatchi-install-vm"
+    ;;
+  services-vm)
+    nix build --no-link --print-build-logs "$flake_dir#checks.x86_64-linux.srv-hatchi-services"
+    ;;
+  closures)
+    nix build --no-link --print-build-logs "$flake_dir#nixosConfigurations.srv-hatchi-bootstrap.config.system.build.toplevel" "$flake_dir#nixosConfigurations.srv-hatchi.config.system.build.toplevel"
+    ;;
+  policy)
+    nix build --no-link --print-build-logs "$flake_dir#checks.$(nix eval --impure --raw --expr builtins.currentSystem).srv-hatchi-policy"
+    ;;
+  esac
+}
+
 cmd="${1:-help}"
 shift || true
 
@@ -213,6 +273,12 @@ check)
   flake_dir="$(resolve_flake_dir)"
   cd "$flake_dir"
   nix flake check "$@"
+  ;;
+deploy)
+  run_deploy "$@"
+  ;;
+verify)
+  run_verify "$@"
   ;;
 update)
   run_update "$@"

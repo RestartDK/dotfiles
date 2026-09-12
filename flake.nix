@@ -8,6 +8,18 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
+    disko.url = "github:nix-community/disko/ff8702b4de27f72b4c78573dfb89ec74e36abdf1";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
+    nixos-anywhere.url = "github:nix-community/nixos-anywhere/9df41112343713520ba071674cf8e45e91c25845";
+    nixos-anywhere.inputs.nixpkgs.follows = "nixpkgs";
+    nixos-anywhere.inputs.disko.follows = "disko";
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+    opnix.url = "github:brizzbuzz/opnix/0ea3a9e6a94fdd0c444aa7729b98e568a0588222";
+    opnix.inputs.nixpkgs.follows = "nixpkgs";
+    deploy-rs.url = "github:serokell/deploy-rs/414ac5f35d79aabe5a0bf52451d8cf61eadf6c88";
+    deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
+
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
 
     llm-agents.url = "github:numtide/llm-agents.nix";
@@ -146,6 +158,11 @@
             rm -rf "$backup_dir"
           '';
         };
+      hatchiInstall = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        specialArgs = { inherit inputs; };
+        modules = [ ./tests/srv-hatchi/install.nix ];
+      };
       twinPkgs = import inputs.nixpkgs-unstable {
         system = linuxSystem;
         config.allowUnfree = true;
@@ -169,6 +186,7 @@
         piPackages
         // {
           inherit traitor;
+          opnix = inputs.opnix.packages.${system}.default;
           pi-package-updater = piPackageUpdater;
           default = traitor;
         }
@@ -183,14 +201,52 @@
           type = "app";
           program = "${self.packages.${system}.pi-package-updater}/bin/update-pi-packages";
         };
+        srv-hatchi-install-vm = {
+          type = "app";
+          program = nixpkgs.lib.getExe (
+            import ./tests/srv-hatchi/install-vm.nix {
+              pkgs = pkgsFor system;
+              flake = self;
+              anywhere = inputs.nixos-anywhere.packages.${system}.default;
+            }
+          );
+        };
         default = self.apps.${system}.traitor;
       });
 
       formatter = forAllSystems (system: treefmtEval.${system}.config.build.wrapper);
 
-      checks = forAllSystems (system: {
-        quality = treefmtEval.${system}.config.build.check self;
-      });
+      checks = forAllSystems (
+        system:
+        {
+          quality = treefmtEval.${system}.config.build.check self;
+          srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
+            pkgs = pkgsFor system;
+            inherit self;
+          };
+        }
+        // nixpkgs.lib.optionalAttrs (system == linuxSystem) (
+          inputs.deploy-rs.lib.${linuxSystem}.deployChecks self.deploy
+          // {
+            srv-hatchi-deploy-rejection = (pkgsFor system).runCommand "srv-hatchi-deploy-rejection" { } ''
+              for mode in normal DRY_ACTIVATE BOOT TEST; do
+                if env "$mode=1" ${self.deploy.nodes.srv-hatchi.profiles.system.path}/deploy-rs-activate > refusal 2>&1; then
+                  echo "Uncommissioned activation succeeded in $mode mode" >&2
+                  exit 1
+                fi
+                grep -F "srv-hatchi is uncommissioned; activation denied" refusal
+              done
+              touch $out
+            '';
+            srv-hatchi-production = self.nixosConfigurations.srv-hatchi.config.system.build.toplevel;
+            srv-hatchi-bootstrap = self.nixosConfigurations.srv-hatchi-bootstrap.config.system.build.toplevel;
+            srv-hatchi-services = import ./tests/srv-hatchi/services.nix {
+              pkgs = pkgsFor system;
+              inherit self inputs;
+            };
+          }
+        )
+      );
 
       homeManagerModules =
         let
@@ -205,6 +261,104 @@
           live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix [ ];
           cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
         };
+
+      hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
+      deploy = {
+        autoRollback = true;
+        magicRollback = true;
+        sshOpts = [
+          "-o"
+          "StrictHostKeyChecking=yes"
+        ];
+        nodes = {
+          srv-nana = {
+            hostname = self.nixosConfigurations.srv-nana.config.networking.hostName;
+            sshUser = self.nixosConfigurations.srv-nana.config.my.host.userName;
+            interactiveSudo = true;
+            profiles.system = {
+              user = "root";
+              path =
+                let
+                  native = inputs.deploy-rs.lib.${linuxSystem}.activate.nixos self.nixosConfigurations.srv-nana;
+                  activate = ''
+                    if [[ "$(< /etc/hostname)" != srv-nana ]]; then
+                      echo "srv-nana hostname mismatch; activation denied" >&2
+                      exit 1
+                    fi
+                    exec ${native}/deploy-rs-activate
+                  '';
+                in
+                (
+                  inputs.deploy-rs.lib.${linuxSystem}.activate.custom
+                  // {
+                    dryActivate = activate;
+                    boot = activate;
+                    test = activate;
+                  }
+                )
+                  self.nixosConfigurations.srv-nana.config.system.build.toplevel
+                  activate;
+            };
+          };
+          srv-hatchi = {
+            hostname = "uncommissioned.invalid";
+            profiles.system = {
+              user = "root";
+              path =
+                let
+                  refuse = ''echo "srv-hatchi is uncommissioned; activation denied" >&2; exit 1'';
+                in
+                (
+                  inputs.deploy-rs.lib.${linuxSystem}.activate.custom
+                  // {
+                    dryActivate = refuse;
+                    boot = refuse;
+                    test = refuse;
+                  }
+                )
+                  self.nixosConfigurations.srv-hatchi.config.system.build.toplevel
+                  refuse;
+            };
+          };
+        };
+      };
+      nixosModules = {
+        srv-hatchi = import ./hosts/srv-hatchi;
+        srv-hatchi-bootstrap = import ./hosts/srv-hatchi/bootstrap.nix;
+      };
+      nixosConfigurations.srv-hatchi-bootstrap = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        specialArgs = { inherit inputs; };
+        modules = [
+          self.nixosModules.srv-hatchi-bootstrap
+          ./tests/srv-hatchi/fixtures/reference-platform.nix
+          { system.build.installTest = hatchiInstall.config.system.build.installTest; }
+        ];
+      };
+      nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        specialArgs = { inherit inputs; };
+        modules = [
+          self.nixosModules.srv-hatchi
+          ./tests/srv-hatchi/fixtures/reference-platform.nix
+          home-manager.nixosModules.home-manager
+          ({ config, pkgs, ... }: {
+            nixpkgs.config.allowUnfree = true;
+            programs.zsh.enable = true;
+            users.users.${config.my.host.userName} = {
+              home = config.my.host.homeDirectory;
+              shell = pkgs.zsh;
+            };
+            home-manager = {
+              useGlobalPkgs = true;
+              useUserPackages = true;
+              backupFileExtension = "hm-backup";
+              extraSpecialArgs = homeSpecialArgs;
+              users.${config.my.host.userName} = import ./hosts/srv-hatchi/home.nix;
+            };
+          })
+        ];
+      };
 
       nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
