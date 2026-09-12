@@ -78,29 +78,6 @@ done
 printf '%s\n' --flake "$ROOT#srv-hatchi-bootstrap" --vm-test >"$TMPDIR/expected"
 diff -u "$TMPDIR/expected" "$UPSTREAM_CALLS"
 
-receipt="$TMPDIR/receipt.json"
-jq -n '{version:1, machineId:"fixture", mediaIdentity:{source:"fixture", fsType:"tmpfs", root:"/"}, services:{"nextcloud-setup":{state:"fresh", reviewDigest:("a" * 64)}}}' >"$receipt"
-admit() {
-  jq -es --arg machineId fixture --argjson mediaIdentity '{"source":"fixture","fsType":"tmpfs","root":"/"}' --argjson units '["nextcloud-setup"]' -f "$ROOT/hosts/srv-hatchi/admission.jq" "$1" >/dev/null
-}
-admit "$receipt"
-jq '.services["nextcloud-setup"] += {state:"restored",backupDigest:("b" * 64),sourceVersion:"1",procedureVersion:"1"}' "$receipt" >"$TMPDIR/restored.json"
-admit "$TMPDIR/restored.json"
-for change in '.machineId="wrong"' '.services={}' '.mediaIdentity={}' '.version=0' '.services["nextcloud-setup"].state="restored"' '.services["nextcloud-setup"].reviewDigest=7' '.services["nextcloud-setup"].reviewDigest += "\n"' '.services["nextcloud-setup"].unexpected=true' '.services["nextcloud-setup"]=null' '.extra=true'; do
-  jq "$change" "$receipt" >"$TMPDIR/invalid.json"
-  if admit "$TMPDIR/invalid.json"; then
-    echo "Invalid receipt accepted" >&2
-    exit 1
-  fi
-done
-for change in '.services["nextcloud-setup"].sourceVersion=""' '.services["nextcloud-setup"].backupDigest="bad"' '.services["nextcloud-setup"].procedureVersion=2'; do
-  jq "$change" "$TMPDIR/restored.json" >"$TMPDIR/invalid.json"
-  if admit "$TMPDIR/invalid.json"; then
-    echo "Invalid restore accepted" >&2
-    exit 1
-  fi
-done
-
 export XDG_RUNTIME_DIR="$TMPDIR"
 mkdir -p "$TMPDIR/secrets.d"
 touch "$TMPDIR/secrets.d/sops-nix-secretfs"
@@ -170,4 +147,4 @@ yq -o=json '.services | to_entries | map({"name": .key, "image": .value.image}) 
 jq '.services' "$ROOT/tests/srv-hatchi/source-manifest.json" >"$TMPDIR/expected-source.json"
 diff -u "$TMPDIR/expected-source.json" "$TMPDIR/observed-source.json"
 test -z "$(find "$ROOT/hosts/srv-hatchi" "$ROOT/tests/srv-hatchi" -name '*.py' -print)"
-printf 'Exact-node CLI, VM-only entrypoint, admission, runtime templates, and pinned inventory checks passed\n'
+printf 'Exact-node CLI, VM-only entrypoint, runtime templates, and pinned inventory checks passed\n'

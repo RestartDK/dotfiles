@@ -3,19 +3,11 @@ let
   inherit (pkgs) lib;
   source = builtins.fromJSON (builtins.readFile ./source-manifest.json);
   sorted = lib.sort builtins.lessThan;
-  guarded =
+  secretsBefore =
     unit:
-    builtins.all
-      (
-        dependency:
-        builtins.elem dependency cfg.systemd.services.${unit}.requires
-        && builtins.elem dependency cfg.systemd.services.${unit}.after
-        && lib.hasInfix dependency cfg.systemd.units."${unit}.service".text
-      )
-      [
-        "hatchi-admission.service"
-        "sops-install-secrets.service"
-      ];
+    builtins.elem "sops-install-secrets.service" cfg.systemd.services.${unit}.requires
+    && builtins.elem "sops-install-secrets.service" cfg.systemd.services.${unit}.after
+    && lib.hasInfix "sops-install-secrets.service" cfg.systemd.units."${unit}.service".text;
   nixStub = pkgs.writeShellScriptBin "nix" ''
     printf '%s\n' "$@" >> "$NIX_CALLS"
     if [[ $1 == eval ]]; then printf 'uncommissioned\n'; fi
@@ -156,9 +148,20 @@ assert lib.hasSuffix cfg.services.couchdb.configFile
   cfg.systemd.services.couchdb.environment.ERL_FLAGS;
 assert cfg.services.couchdb.extraConfigFiles == [ ];
 assert cfg.services.couchdb.adminPass == null;
-assert builtins.all guarded cfg.my.hatchi.stateUnits;
-assert guarded "acme-${cfg.my.hatchi.domain}";
-assert guarded "acme-order-renew-${cfg.my.hatchi.domain}";
+assert !(cfg.systemd.services ? hatchi-admission);
+assert builtins.all (
+  unit:
+  builtins.elem "/srv/media" (cfg.systemd.services.${unit}.unitConfig.RequiresMountsFor or [ ])
+  && cfg.systemd.services.${unit}.unitConfig.AssertPathIsMountPoint == "/srv/media"
+) (cfg.my.hatchi.stateUnits ++ cfg.my.hatchi.mediaUnits ++ [ "hatchi-media-directories" ]);
+assert builtins.all (unit: !(builtins.hasAttr unit bootstrap.systemd.services)) (
+  cfg.my.hatchi.stateUnits
+  ++ map (entry: entry.unit) (builtins.filter (entry: entry.unit != null) inventory)
+);
+assert builtins.all secretsBefore cfg.my.hatchi.stateUnits;
+assert secretsBefore "hatchi-media-directories";
+assert secretsBefore "acme-${cfg.my.hatchi.domain}";
+assert secretsBefore "acme-order-renew-${cfg.my.hatchi.domain}";
 assert builtins.length (builtins.filter (entry: entry.unit != null) inventory) == 16;
 assert builtins.attrNames cfg.services.caddy.virtualHosts == routes;
 assert builtins.all (

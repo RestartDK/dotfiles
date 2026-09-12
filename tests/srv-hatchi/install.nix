@@ -1,4 +1,8 @@
 { inputs, ... }:
+let
+  inventory = builtins.fromJSON (builtins.readFile ./inventory.json);
+  applicationUnits = map (entry: entry.unit) (builtins.filter (entry: entry.unit != null) inventory);
+in
 {
   imports = [
     inputs.disko.nixosModules.disko
@@ -30,6 +34,8 @@
     extraChecks = ''
       machine.succeed("test $(hostname) = srv-hatchi")
       machine.wait_for_unit("sshd.service")
+      for unit in ${builtins.toJSON applicationUnits}:
+          assert machine.succeed(f"systemctl show {unit}.service -p LoadState --value").strip() == "not-found"
       machine.succeed("ip netns add bootstrap-client")
       try:
           machine.succeed("ip link add bootstrap-host type veth peer name bootstrap-peer")

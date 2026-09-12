@@ -127,14 +127,8 @@ in
           "acme-order-renew-${domain}"
         ])
         (_: {
-          requires = [
-            "hatchi-admission.service"
-            "sops-install-secrets.service"
-          ];
-          after = [
-            "hatchi-admission.service"
-            "sops-install-secrets.service"
-          ];
+          requires = [ "sops-install-secrets.service" ];
+          after = [ "sops-install-secrets.service" ];
         })
       // {
         adguardhome = {
