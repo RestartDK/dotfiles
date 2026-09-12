@@ -204,6 +204,7 @@
   my.liveConfig = {
     enable = true;
     repoRoot = "/home/dkumlin/.config/dotfiles";
+    sync.enable = true;
     groups = {
       shell = true;
       git = true;

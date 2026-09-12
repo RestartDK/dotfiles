@@ -33,7 +33,7 @@ jobs:
 
   nana:
     needs: changes
-    if: false && needs.changes.outputs.nana == 'true'
+    if: false && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: srv-nana
@@ -67,7 +67,22 @@ jobs:
         run: |
           mkdir -p "$HOME/.ssh"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-      - run: ./bin/traitor deploy "$TARGET"
+      - name: Synchronize Nana's live dotfiles
+        if: env.TARGET == 'srv-nana'
+        env:
+          EXPECTED_REVISION: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          remote_traitor="/tmp/traitor-$EXPECTED_REVISION"
+          cleanup() {
+            ssh "dkumlin@$TARGET" rm -f "$remote_traitor" || true
+          }
+          trap cleanup EXIT
+          scp ./bin/traitor "dkumlin@$TARGET:$remote_traitor"
+          ssh "dkumlin@$TARGET" env \
+            FLAKE_DIR=/home/dkumlin/.config/dotfiles \
+            bash "$remote_traitor" sync --expect "$EXPECTED_REVISION"
+      - if: env.TARGET != 'srv-nana' || needs.changes.outputs.nana == 'true'
+        run: ./bin/traitor deploy "$TARGET"
 
   hatchi:
     needs: changes

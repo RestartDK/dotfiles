@@ -257,6 +257,22 @@
                 FLEET_BIN=${./bin/fleet} FLEET_TEST_BASH=${(pkgsFor system).bash}/bin/bash bash ${./tests/fleet.sh}
                 touch $out
               '';
+          traitor-sync =
+            (pkgsFor system).runCommand "traitor-sync-tests"
+              {
+                nativeBuildInputs = [
+                  (pkgsFor system).bash
+                  (pkgsFor system).coreutils
+                  (pkgsFor system).git
+                ]
+                ++ nixpkgs.lib.optionals (pkgsFor system).stdenv.hostPlatform.isLinux [
+                  (pkgsFor system).util-linux
+                ];
+              }
+              ''
+                TRAITOR=${./bin/traitor} bash ${./tests/traitor-sync.sh}
+                touch $out
+              '';
           quality = treefmtEval.${system}.config.build.check self;
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
             pkgs = pkgsFor system;

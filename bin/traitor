@@ -11,6 +11,7 @@ Commands:
   rollback               Roll back current host generation
   check                  Run flake checks
   deploy <node> [--dry-run]  Deploy exactly srv-nana or commissioned srv-hatchi
+  sync [--expect REV]    Rebase the checkout onto its upstream
   verify srv-hatchi <install-vm|services-vm|closures|policy>  Verify without live access
   update [inputs...]     Update all pins or selected flake inputs
   upgrade                Update everything, then rebuild
@@ -219,6 +220,153 @@ run_deploy() {
   nix run --inputs-from "$flake_dir" deploy-rs -- "$flake_dir#$node" "${flags[@]}"
 }
 
+run_sync() (
+  local -a sync_args=("$@")
+  local expected="" traitor_source="${BASH_SOURCE[0]}" traitor_path
+  [[ $traitor_source == /* ]] || traitor_source="$PWD/$traitor_source"
+  traitor_path="$(cd "$(dirname "$traitor_source")" && pwd -P)/$(basename "$traitor_source")"
+  if (($#)); then
+    if (($# != 2)) || [[ $1 != --expect ]]; then
+      echo "traitor: sync accepts only optional --expect REV" >&2
+      return 2
+    fi
+    expected=$2
+  fi
+
+  local repo branch upstream remote old_head target common_dir lock_path lock_status
+  repo="$(resolve_flake_dir)"
+  cd "$repo"
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    echo "traitor: sync requires a Git checkout" >&2
+    return 1
+  }
+  branch="$(git symbolic-ref --quiet --short HEAD)" || {
+    echo "traitor: sync refuses a detached HEAD" >&2
+    return 1
+  }
+  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || {
+    echo "traitor: branch '$branch' has no upstream" >&2
+    return 1
+  }
+  remote=${upstream%%/*}
+  if [[ $remote == "$upstream" ]]; then
+    echo "traitor: upstream '$upstream' is not a remote branch" >&2
+    return 1
+  fi
+
+  common_dir="$(git rev-parse --git-common-dir)"
+  [[ $common_dir == /* ]] || common_dir="$repo/$common_dir"
+  lock_path="$common_dir/traitor-sync.lock"
+  if [[ ${TRAITOR_SYNC_LOCKED:-} != "$lock_path" ]]; then
+    if [[ -x /usr/bin/lockf ]]; then
+      if /usr/bin/lockf -t 0 "$lock_path" env TRAITOR_SYNC_LOCKED="$lock_path" bash "$traitor_path" sync "${sync_args[@]}"; then
+        return 0
+      else
+        lock_status=$?
+      fi
+    elif command -v flock >/dev/null 2>&1; then
+      if flock --conflict-exit-code 75 --nonblock "$lock_path" env TRAITOR_SYNC_LOCKED="$lock_path" bash "$traitor_path" sync "${sync_args[@]}"; then
+        return 0
+      else
+        lock_status=$?
+      fi
+    else
+      echo "traitor: sync requires flock or lockf" >&2
+      return 1
+    fi
+    if ((lock_status == 75)); then
+      echo "traitor: another sync is already running" >&2
+      return 1
+    fi
+    return "$lock_status"
+  fi
+
+  local candidate_dir="" stash_ref="" stash_oid="" stash_pending=false
+  restore_stash() {
+    [[ $stash_pending == true ]] || return 0
+    stash_pending=false
+    local stash_target=${stash_oid:-$stash_ref}
+    if ! git stash apply --index "$stash_target" >/dev/null; then
+      echo "traitor: local changes remain in stash $stash_target" >&2
+      return 1
+    fi
+    if [[ -n $stash_oid && $(git rev-parse "$stash_ref" 2>/dev/null || true) == "$stash_oid" ]]; then
+      git stash drop "$stash_ref" >/dev/null
+    else
+      echo "traitor: restored local changes; retained stash $stash_target" >&2
+    fi
+  }
+  cleanup_sync() {
+    restore_stash || true
+    if [[ -n $candidate_dir ]]; then
+      git worktree remove --force "$candidate_dir" >/dev/null 2>&1 || true
+    fi
+  }
+  trap cleanup_sync EXIT
+
+  if [[ -n $(git diff --name-only --diff-filter=U) ]]; then
+    echo "traitor: resolve the existing Git conflict before syncing" >&2
+    return 1
+  fi
+  if ! git fetch --prune "$remote"; then
+    echo "traitor: could not fetch '$remote'; checkout unchanged" >&2
+    return 1
+  fi
+
+  old_head="$(git rev-parse HEAD)"
+  target="$(git rev-parse "$upstream^{commit}")"
+  if [[ -n $expected ]]; then
+    local expected_commit
+    expected_commit="$(git rev-parse --verify "$expected^{commit}" 2>/dev/null)" || {
+      echo "traitor: expected revision '$expected' is unavailable" >&2
+      return 1
+    }
+    if [[ $target != "$expected_commit" ]]; then
+      echo "traitor: upstream '$upstream' is at $target, expected $expected_commit" >&2
+      return 1
+    fi
+  fi
+
+  if git merge-base --is-ancestor "$target" "$old_head"; then
+    echo "traitor: '$branch' is already up to date with '$upstream'"
+    return 0
+  fi
+
+  if [[ -n $(git status --porcelain --untracked-files=all) ]]; then
+    git stash push --include-untracked --message "traitor sync $old_head" >/dev/null
+    stash_ref='stash@{0}'
+    stash_pending=true
+    stash_oid="$(git rev-parse "$stash_ref")"
+  fi
+
+  candidate_dir="$(mktemp -d "${TMPDIR:-/tmp}/traitor-sync.XXXXXX")"
+  rmdir "$candidate_dir"
+  git worktree add --quiet --detach "$candidate_dir" "$old_head"
+  if ! git -C "$candidate_dir" rebase "$target" >/dev/null 2>&1; then
+    git -C "$candidate_dir" rebase --abort >/dev/null 2>&1 || true
+    restore_stash
+    echo "traitor: '$branch' conflicts with '$upstream'; checkout unchanged" >&2
+    return 1
+  fi
+  if [[ -n $stash_oid ]] && ! git -C "$candidate_dir" stash apply --index "$stash_oid" >/dev/null 2>&1; then
+    restore_stash
+    echo "traitor: local changes conflict with '$upstream'; checkout unchanged" >&2
+    return 1
+  fi
+  git worktree remove --force "$candidate_dir" >/dev/null
+  candidate_dir=""
+
+  if ! git rebase "$target"; then
+    git rebase --abort >/dev/null 2>&1 || true
+    restore_stash
+    echo "traitor: rebase failed after its conflict check; checkout restored" >&2
+    return 1
+  fi
+  restore_stash
+  cleanup_sync
+  echo "traitor: synchronized '$branch' with '$upstream'"
+)
+
 run_verify() {
   if (($# != 2)) || [[ $1 != srv-hatchi ]]; then
     echo "traitor: verify requires srv-hatchi and one verification kind" >&2
@@ -276,6 +424,9 @@ check)
   ;;
 deploy)
   run_deploy "$@"
+  ;;
+sync)
+  run_sync "$@"
   ;;
 verify)
   run_verify "$@"
