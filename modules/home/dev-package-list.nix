@@ -81,6 +81,7 @@ with pkgs;
   unzip
   stylua
 
+  inputs.self.packages.${stdenv.hostPlatform.system}.fleet
 ]
 ++ lib.optionals stdenv.hostPlatform.isLinux [
   gcc

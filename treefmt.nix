@@ -45,6 +45,7 @@ in
       enable = true;
       includes = [
         "*.sh"
+        "bin/fleet"
         "bin/traitor"
       ];
     };
@@ -53,6 +54,7 @@ in
       excludes = upstreamManagedFormatExcludes;
       includes = [
         "*.sh"
+        "bin/fleet"
         "bin/traitor"
       ];
       useEditorConfig = true;
