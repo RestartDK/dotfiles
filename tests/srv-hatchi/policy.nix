@@ -64,7 +64,7 @@ assert !(builtins.hasAttr "nixos-anywhere" self.apps.${pkgs.stdenv.hostPlatform.
 assert bootstrap.networking.firewall.allowedTCPPorts == [ 22 ];
 assert cfg.networking.firewall.allowedTCPPorts == [ ];
 assert cfg.networking.firewall.allowedUDPPorts == [ ];
-assert cfg.networking.firewall.trustedInterfaces == [ ];
+assert cfg.networking.firewall.trustedInterfaces == [ "lo" ];
 assert cfg.systemd.services.sonarr.serviceConfig.StateDirectory == "sonarr";
 assert cfg.services.qbittorrent.serverConfig == { };
 assert cfg.services.grafana.settings.security.cookie_secure;

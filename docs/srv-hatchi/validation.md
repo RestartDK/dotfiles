@@ -8,7 +8,9 @@ The review corrections pass local policy tests, the real VM-only CLI rejection, 
 
 The pinned installed VM test passed on hosted x86 Linux/KVM at `bf9663b`. It booted the disposable installed disk, verified the hostname, exchanged SSH host keys from a separate network namespace through the firewall, and confirmed Nextcloud was absent.
 
-Linux closure and deploy checks remain NOT VERIFIED because the first Linux job failed in the policy stub and cancelled the remaining builds. The production VM booted all five machines, installed synthetic SOPS credentials, and proved that missing admission prevents Nextcloud and PostgreSQL initialization. It then correctly rejected a receipt because the test media mount was absent. Later service and rotation assertions have not passed. The branch is not ready for cutover.
+Both Hachi closures, deploy-rs schema and activation-script checks for both hosts, and Hachi refusal in all four activation modes passed on hosted x86 Linux at `ebadb22`. The existing Home Manager output also evaluated successfully.
+
+The production service VM remains NOT VERIFIED. The second run mounted the media fixture, passed receipt checks, and initialized native Nextcloud and PostgreSQL. Glance then rejected the malformed synthetic authentication key. The key was regenerated with its pinned native CLI, and a policy check now enforces the decoded 64-byte length. Later service and rotation assertions still require a passing run.
 
 The controller is ARM Darwin. Nix reports `builders = @/etc/nix/machines`, but that file does not exist. No local configured x86 Linux/KVM executor is available. The authorized GitHub-hosted executor is working. OrbStack's known amd64 emulation failure was not repeated. Hosted VM commands ran only against disposable guests. No live-host access occurred.
 
@@ -71,6 +73,18 @@ CI separates the two KVM tests and builds both deployment profiles without activ
 The media fixture now uses `virtualisation.fileSystems`, with an evaluation assertion and an explicit mounted-source check. Local before/after evaluation proves that `/srv/media` was absent before the fix and present with the intended device and filesystem afterward. The policy stub now uses `pkgs.writeShellScriptBin`, which supplies the pinned interpreter. No assertion was removed or relaxed.
 
 CI now runs quality and policy before either Hachi closure or deploy profile builds. Its Linux daemon uses the same Numtide cache and public key already declared by the repository's NixOS cache module, rather than compiling cached agent packages unnecessarily.
+
+## Hosted run 34660883503
+
+[The second full dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34660883503) used `ebadb22`. [Linux verification](https://github.com/RestartDK/dotfiles/actions/runs/34660883503/job/103462953179) passed quality, policy, both Hachi closure builds, both deploy-rs checks, all four Hachi activation refusals, and the existing Home Manager evaluation. The install VM and Darwin jobs also passed.
+
+[The service VM](https://github.com/RestartDK/dotfiles/actions/runs/34660883503/job/103462953225) passed the media mount and receipt checks. Its logs record successful Nextcloud installation and PostgreSQL startup. Glance exited because the synthetic key was not base64, so the service test failed with exit 1. Startup logs are not counted as proof of the remaining HTTP, firewall, persistence, or rotation assertions.
+
+## Hosted run 34661892039
+
+The [services-only dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34661892039/job/103465927617) at `cce7d92` started every requested service but timed out connecting to DNS on loopback. AdGuard logged its TCP listener. The production `trustedInterfaces = lib.mkForce []` had removed NixOS's loopback allow rule, blocking local clients and reverse proxies. The configuration and policy now require exactly `[ "lo" ]`; external CIDR restrictions remain unchanged.
+
+This diagnostic scope does not count as a full CI pass. Pull requests and pushes always run every job.
 
 ## Runtime assertions awaiting execution
 

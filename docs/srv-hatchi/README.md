@@ -26,7 +26,7 @@ Stock Caddy consumes a wildcard certificate from `security.acme` with Cloudflare
 
 Bootstrap admits SSH on TCP 22. Production replaces that broad allowance with the CIDR rules in `edge.nix`.
 
-`my.hatchi.network = null` means no application ingress or DNS rewrites are admitted. A configured network supplies the DNS answer, client CIDRs, admin CIDRs, and upstream resolvers. IPv4 and IPv6 rules use the same CIDR policy. Tailscale's native preference unit sets `--netfilter-mode=off`. No interface is blanket-trusted.
+`my.hatchi.network = null` means no application ingress or DNS rewrites are admitted. A configured network supplies the DNS answer, client CIDRs, admin CIDRs, and upstream resolvers. IPv4 and IPv6 rules use the same CIDR policy. Tailscale's native preference unit sets `--netfilter-mode=off`. Only loopback is trusted; no external or Tailscale interface is blanket-trusted.
 
 `my.hatchi.remoteNana = null` keeps Ollama and OpenCode routes at an explicit HTTP 503. No guessed Nana address is contacted. A configured record supplies Ollama, OpenCode, node-exporter, and Glance-agent endpoints. This adds no Nana services.
 

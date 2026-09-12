@@ -138,7 +138,7 @@ in
     networking.nftables.enable = true;
     networking.firewall = {
       enable = true;
-      trustedInterfaces = lib.mkForce [ ];
+      trustedInterfaces = lib.mkForce [ "lo" ];
       allowedTCPPorts = lib.mkForce [ ];
       allowedUDPPorts = lib.mkForce [ ];
       extraInputRules = ''
