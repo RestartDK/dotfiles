@@ -115,7 +115,7 @@ Linux builds each selected host's NixOS system and deployment checks without pul
 
 `deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. CI records the Nana and Hatchi change flags for the entire push, so deployment does not guess from only the last commit. A Hatchi-only change does not select Nana, or vice versa. Shared system inputs select both.
 
-Both deployment jobs are hard-disabled by their `if: false && ...` conditions. They cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once Nana deployment is enabled, CI deploys the exact successful revision and then runs `traitor-sync --expect REVISION` on Nana. The revision guard prevents Nana from accepting a different upstream commit than CI verified.
+Both deployment jobs are hard-disabled by their `if: false && ...` conditions. They cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once Nana deployment is enabled, CI first runs `traitor-sync --expect REVISION` on Nana, then deploys that exact successful revision. A conflict or revision mismatch stops before deploy-rs can change the system.
 
 Before enabling a host, configure its GitHub environment, `srv-nana` or `srv-hatchi`, with required approval and these secrets:
 
