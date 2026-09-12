@@ -50,11 +50,11 @@ in
       {
         assertion =
           builtins.all validName names && builtins.length names == builtins.length (lib.unique names);
-        message = "Hachi Caddy routes must be unique FQDNs below the configured domain";
+        message = "Hatchi Caddy routes must be unique FQDNs below the configured domain";
       }
       {
         assertion = config.services.caddy.settings == { } && config.services.caddy.extraConfig == "";
-        message = "Hachi routes must use native Caddy virtualHosts";
+        message = "Hatchi routes must use native Caddy virtualHosts";
       }
     ];
     services.caddy = {

@@ -1,4 +1,4 @@
-name: Nix CI
+name: CI
 
 on:
   pull_request:
@@ -62,10 +62,10 @@ jobs:
             .#checks.x86_64-linux.quality \
             .#checks.x86_64-linux.srv-hatchi-policy
 
-      - name: Build both Hachi closures
+      - name: Build both Hatchi closures
         run: ./bin/traitor verify srv-hatchi closures
 
-      - name: Check both deploy profiles and Hachi activation refusal
+      - name: Check both deploy profiles and Hatchi activation refusal
         run: |
           nix build --no-link --print-build-logs --max-jobs 2 \
             .#checks.x86_64-linux.srv-hatchi-deploy-rejection \
@@ -76,7 +76,7 @@ jobs:
         run: nix eval --raw .#homeConfigurations.twin.activationPackage.drvPath
 
   hatchi-vm:
-    name: Hachi / ${{ matrix.kind }}
+    name: Hatchi / ${{ matrix.kind }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:

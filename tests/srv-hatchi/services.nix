@@ -58,7 +58,7 @@ pkgs.testers.runNixOSTest {
       assertions = [
         {
           assertion = config.fileSystems."/srv/media".device == "hatchi-media";
-          message = "The Hachi service VM must retain its disposable media mount";
+          message = "The Hatchi service VM must retain its disposable media mount";
         }
       ];
       my.hatchi = {

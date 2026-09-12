@@ -18,6 +18,6 @@
   };
   assertions = lib.mapAttrsToList (name: secret: {
     assertion = lib.hasPrefix "/run/secrets/" secret.path;
-    message = "Hachi secret ${name} must be a runtime file";
+    message = "Hatchi secret ${name} must be a runtime file";
   }) config.sops.secrets;
 }
