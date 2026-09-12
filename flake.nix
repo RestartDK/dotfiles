@@ -63,6 +63,26 @@
       treefmtEval = forAllSystems (
         system: inputs.treefmt-nix.lib.evalModule (pkgsFor system) ./treefmt.nix
       );
+      sshSettings = (import ./modules/home/ssh.nix { }).programs.ssh.settings;
+      fleetInventory = {
+        schemaVersion = 1;
+        hosts = map (name: { inherit name; }) (
+          builtins.attrNames (nixpkgs.lib.filterAttrs (_: settings: settings ? IdentityFile) sshSettings)
+        );
+      };
+      mkFleetPackage =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "fleet";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.hostname
+            pkgs.jq
+            pkgs.nix
+            pkgs.openssh
+          ];
+          text = builtins.readFile ./bin/fleet;
+        };
       mkTraitorPackage =
         pkgs:
         pkgs.stdenvNoCC.mkDerivation {
@@ -180,12 +200,13 @@
           piPackages = nixpkgs.lib.genAttrs piPackageNames (
             name: pkgs.callPackage (./packages + "/${name}/package.nix") { }
           );
+          fleet = mkFleetPackage pkgs;
           piPackageUpdater = mkPiPackageUpdater pkgs;
           traitor = mkTraitorPackage pkgs;
         in
         piPackages
         // {
-          inherit traitor;
+          inherit fleet traitor;
           opnix = inputs.opnix.packages.${system}.default;
           pi-package-updater = piPackageUpdater;
           default = traitor;
@@ -193,6 +214,10 @@
       );
 
       apps = forAllSystems (system: {
+        fleet = {
+          type = "app";
+          program = "${self.packages.${system}.fleet}/bin/fleet";
+        };
         traitor = {
           type = "app";
           program = "${self.packages.${system}.traitor}/bin/traitor";
@@ -219,6 +244,19 @@
       checks = forAllSystems (
         system:
         {
+          fleet =
+            (pkgsFor system).runCommand "fleet-tests"
+              {
+                nativeBuildInputs = [
+                  (pkgsFor system).bash
+                  (pkgsFor system).coreutils
+                  (pkgsFor system).jq
+                ];
+              }
+              ''
+                FLEET_BIN=${./bin/fleet} FLEET_TEST_BASH=${(pkgsFor system).bash}/bin/bash bash ${./tests/fleet.sh}
+                touch $out
+              '';
           quality = treefmtEval.${system}.config.build.check self;
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
             pkgs = pkgsFor system;
@@ -247,6 +285,8 @@
           }
         )
       );
+
+      inherit fleetInventory;
 
       homeManagerModules =
         let

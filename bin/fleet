@@ -1,0 +1,462 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+declared_hosts=()
+fleet_hosts=()
+local_host=""
+RESOLVED_HOSTS=()
+RESOLVED_KIND=""
+
+usage() {
+	cat <<'EOF'
+Usage:
+  fleet list [--json]
+  fleet check [HOST...] [--json] [--timeout N]
+  fleet run [--dry-run|--execute] TARGET... [--json] [--timeout N] -- COMMAND [ARG...]
+
+Targets:
+  local       The current computer
+  all         The current computer and every declared SSH alias
+  available   The current computer and reachable SSH aliases
+EOF
+}
+
+fail() {
+	printf 'fleet: %s\n' "$*" >&2
+	exit 2
+}
+
+validate_timeout() {
+	case "$1" in
+	[1-9] | [1-5][0-9] | 60) ;;
+	*) fail "timeout must be an integer from 1 to 60" ;;
+	esac
+}
+
+resolve_flake_dir() {
+	local candidate
+	local candidates=(
+		"${FLEET_FLAKE:-}"
+		"${DOTFILES:-}"
+		"$HOME/.config/dotfiles"
+	)
+
+	for candidate in "${candidates[@]}"; do
+		[[ -n $candidate ]] || continue
+		candidate=${candidate/#\~/$HOME}
+		if [[ -f $candidate/flake.nix ]]; then
+			cd "$candidate" >/dev/null 2>&1 && pwd -P
+			return 0
+		fi
+	done
+
+	fail "could not find the dotfiles flake"
+}
+
+load_inventory() {
+	local flake_dir inventory_json
+	flake_dir=$(resolve_flake_dir)
+	if ! inventory_json=$(nix eval --json --no-write-lock-file "$flake_dir#fleetInventory"); then
+		fail "could not evaluate fleet inventory"
+	fi
+
+	if ! jq -e '
+    type == "object" and
+    .schemaVersion == 1 and
+    (.hosts | type == "array") and
+    all(.hosts[];
+      type == "object" and
+      (.name | type == "string") and
+      (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
+      (.name != "local" and .name != "all" and .name != "available")
+    ) and
+    (([.hosts[].name] | unique | length) == (.hosts | length))
+  ' >/dev/null 2>&1 <<<"$inventory_json"; then
+		fail "invalid fleet inventory"
+	fi
+
+	declared_hosts=()
+	while IFS= read -r host; do
+		declared_hosts+=("$host")
+	done < <(jq -r '.hosts[].name' <<<"$inventory_json" | LC_ALL=C sort)
+
+	local_host=$(hostname -s 2>/dev/null || hostname)
+	[[ $local_host =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || fail "invalid local host name"
+	[[ $local_host != local && $local_host != all && $local_host != available ]] || fail "invalid local host name"
+	is_declared "$local_host" && fail "local host name collides with an SSH alias: $local_host"
+
+	fleet_hosts=()
+	while IFS= read -r host; do
+		fleet_hosts+=("$host")
+	done < <(
+		{
+			if ((${#declared_hosts[@]})); then
+				printf '%s\n' "${declared_hosts[@]}"
+			fi
+			printf '%s\n' "$local_host"
+		} | LC_ALL=C sort -u
+	)
+}
+
+is_declared() {
+	local candidate=$1 host
+	for host in "${declared_hosts[@]}"; do
+		[[ $host == "$candidate" ]] && return 0
+	done
+	return 1
+}
+
+is_fleet_host() {
+	[[ $1 == "$local_host" ]] || is_declared "$1"
+}
+
+append_unique_target() {
+	local candidate=$1 host
+	for host in "${RESOLVED_HOSTS[@]}"; do
+		[[ $host == "$candidate" ]] && return
+	done
+	RESOLVED_HOSTS+=("$candidate")
+}
+
+sort_resolved_hosts() {
+	local sorted=()
+	while IFS= read -r host; do
+		sorted+=("$host")
+	done < <(printf '%s\n' "${RESOLVED_HOSTS[@]}" | LC_ALL=C sort -u)
+	RESOLVED_HOSTS=("${sorted[@]}")
+}
+
+resolve_targets() {
+	local empty_policy=$1
+	shift
+	local targets=("$@") target special=""
+
+	if ((${#targets[@]} == 0)); then
+		[[ $empty_policy == default-all ]] || fail "at least one target is required"
+		targets=(all)
+	fi
+
+	for target in "${targets[@]}"; do
+		case "$target" in
+		all | available)
+			if [[ -n $special && $special != "$target" ]]; then
+				fail "all and available cannot be combined"
+			fi
+			special=$target
+			;;
+		local) ;;
+		*) is_fleet_host "$target" || fail "unknown target: $target" ;;
+		esac
+	done
+
+	if [[ -n $special && ${#targets[@]} -ne 1 ]]; then
+		fail "$special cannot be combined with other targets"
+	fi
+
+	RESOLVED_HOSTS=()
+	RESOLVED_KIND=explicit
+	case "$special" in
+	all | available)
+		RESOLVED_KIND=$special
+		RESOLVED_HOSTS=("${fleet_hosts[@]}")
+		;;
+	*)
+		for target in "${targets[@]}"; do
+			if [[ $target == local ]]; then
+				append_unique_target "$local_host"
+			else
+				append_unique_target "$target"
+			fi
+		done
+		sort_resolved_hosts
+		;;
+	esac
+}
+
+run_ssh() {
+	local timeout=$1 host=$2
+	shift 2
+	ssh \
+		-o BatchMode=yes \
+		-o PasswordAuthentication=no \
+		-o KbdInteractiveAuthentication=no \
+		-o NumberOfPasswordPrompts=0 \
+		-o ConnectionAttempts=1 \
+		-o ConnectTimeout="$timeout" \
+		-o StrictHostKeyChecking=yes \
+		-o RequestTTY=no \
+		"$host" "$@"
+}
+
+probe_host() {
+	local host=$1 timeout=$2
+	[[ $host == "$local_host" ]] && return 0
+	run_ssh "$timeout" "$host" true </dev/null >/dev/null 2>&1
+}
+
+quote_remote_arg() {
+	local escaped=${1//\'/\'\\\'\'}
+	printf "'%s'" "$escaped"
+}
+
+remote_command() {
+	local arg encoded command_line=""
+	for arg in "$@"; do
+		encoded=$(quote_remote_arg "$arg")
+		if [[ -n $command_line ]]; then
+			command_line+=" $encoded"
+		else
+			command_line=$encoded
+		fi
+	done
+	printf '%s\n' "$command_line"
+}
+
+dispatch_host() {
+	local host=$1 timeout=$2 json=$3 command_line=$4
+	shift 4
+	if [[ $host == "$local_host" ]]; then
+		if [[ $json == true ]]; then
+			"$@" >&2
+		else
+			"$@"
+		fi
+	elif [[ $json == true ]]; then
+		run_ssh "$timeout" "$host" "$command_line" </dev/null >&2
+	else
+		run_ssh "$timeout" "$host" "$command_line" </dev/null
+	fi
+}
+
+record() {
+	local host=$1 status=$2 transport=$3 exit_code=${4:-}
+	if [[ -n $exit_code ]]; then
+		jq -cn \
+			--arg host "$host" \
+			--arg status "$status" \
+			--arg transport "$transport" \
+			--argjson exitCode "$exit_code" \
+			'{host: $host, status: $status, transport: $transport, exitCode: $exitCode}'
+	else
+		jq -cn \
+			--arg host "$host" \
+			--arg status "$status" \
+			--arg transport "$transport" \
+			'{host: $host, status: $status, transport: $transport}'
+	fi
+}
+
+transport_for() {
+	if [[ $1 == "$local_host" ]]; then
+		printf 'local\n'
+	else
+		printf 'ssh\n'
+	fi
+}
+
+result_json() {
+	local host=$1 status=$2 exit_code=${3:-}
+	record "$host" "$status" "$(transport_for "$host")" "$exit_code"
+}
+
+run_result_json() {
+	local host=$1 status=$2 command_json=$3 exit_code=${4:-} item
+	item=$(record "$host" "$status" "$(transport_for "$host")" "$exit_code")
+	jq -cn --argjson item "$item" --argjson command "$command_json" '$item + {command: $command}'
+}
+
+print_results() {
+	local json=$1 item
+	shift
+	if [[ $json == true ]]; then
+		printf '%s\n' "$@" | jq -s '{schemaVersion: 1, hosts: .}'
+	else
+		for item in "$@"; do
+			jq -r '
+        if has("command") then
+          [.host, .status, (.command | @sh)] | @tsv
+        else
+          [.host, .status] | @tsv
+        end
+      ' <<<"$item"
+		done
+	fi
+}
+
+list_command() {
+	local json=false arg host status
+	local results=()
+	for arg in "$@"; do
+		case "$arg" in
+		--json) json=true ;;
+		*) fail "unknown list argument: $arg" ;;
+		esac
+	done
+
+	for host in "${fleet_hosts[@]}"; do
+		if [[ $host == "$local_host" ]]; then
+			status=available
+		else
+			status=declared
+		fi
+		results+=("$(result_json "$host" "$status")")
+	done
+	print_results "$json" "${results[@]}"
+}
+
+check_command() {
+	local json=false timeout=5 arg status failed=false
+	local targets=() results=()
+
+	while (($#)); do
+		arg=$1
+		shift
+		case "$arg" in
+		--json) json=true ;;
+		--timeout)
+			(($#)) || fail "--timeout requires a value"
+			timeout=$1
+			shift
+			;;
+		--timeout=*) timeout=${arg#*=} ;;
+		--*) fail "unknown check option: $arg" ;;
+		*) targets+=("$arg") ;;
+		esac
+	done
+
+	validate_timeout "$timeout"
+	resolve_targets default-all "${targets[@]}"
+
+	for host in "${RESOLVED_HOSTS[@]}"; do
+		if probe_host "$host" "$timeout"; then
+			status=available
+		else
+			status=unavailable
+			failed=true
+		fi
+		results+=("$(result_json "$host" "$status")")
+	done
+
+	print_results "$json" "${results[@]}"
+	[[ $failed == false ]]
+}
+
+run_command() {
+	local json=false timeout=5 mode="" delimiter=false arg host exit_code failed=false command_json command_line i
+	local targets=() payload=() availability=() results=()
+
+	while (($#)); do
+		arg=$1
+		shift
+		if [[ $arg == -- ]]; then
+			delimiter=true
+			payload=("$@")
+			break
+		fi
+		case "$arg" in
+		--json) json=true ;;
+		--timeout)
+			(($#)) || fail "--timeout requires a value"
+			timeout=$1
+			shift
+			;;
+		--timeout=*) timeout=${arg#*=} ;;
+		--dry-run | --execute)
+			[[ -z $mode ]] || fail "choose either --dry-run or --execute"
+			mode=${arg#--}
+			;;
+		--*) fail "unknown run option: $arg" ;;
+		*) targets+=("$arg") ;;
+		esac
+	done
+
+	[[ $delimiter == true ]] || fail "run requires -- before the command"
+	((${#payload[@]})) || fail "run requires a command"
+	validate_timeout "$timeout"
+	resolve_targets require-target "${targets[@]}"
+	mode=${mode:-dry-run}
+	command_json=$(jq -cn --args '$ARGS.positional' -- "${payload[@]}")
+
+	if [[ $mode == dry-run && $RESOLVED_KIND != available ]]; then
+		for host in "${RESOLVED_HOSTS[@]}"; do
+			results+=("$(run_result_json "$host" planned "$command_json")")
+		done
+		print_results "$json" "${results[@]}"
+		return 0
+	fi
+
+	for host in "${RESOLVED_HOSTS[@]}"; do
+		if probe_host "$host" "$timeout"; then
+			availability+=(available)
+		else
+			availability+=(unavailable)
+			failed=true
+		fi
+	done
+
+	if [[ $mode == dry-run ]]; then
+		for ((i = 0; i < ${#RESOLVED_HOSTS[@]}; i++)); do
+			if [[ ${availability[$i]} == available ]]; then
+				results+=("$(run_result_json "${RESOLVED_HOSTS[$i]}" planned "$command_json")")
+			else
+				results+=("$(run_result_json "${RESOLVED_HOSTS[$i]}" unavailable "$command_json")")
+			fi
+		done
+		print_results "$json" "${results[@]}"
+		return 0
+	fi
+
+	if [[ $RESOLVED_KIND != available && $failed == true ]]; then
+		for ((i = 0; i < ${#RESOLVED_HOSTS[@]}; i++)); do
+			results+=("$(run_result_json "${RESOLVED_HOSTS[$i]}" "${availability[$i]}" "$command_json")")
+		done
+		print_results "$json" "${results[@]}"
+		return 1
+	fi
+
+	failed=false
+	command_line=$(remote_command "${payload[@]}")
+	for ((i = 0; i < ${#RESOLVED_HOSTS[@]}; i++)); do
+		host=${RESOLVED_HOSTS[$i]}
+		if [[ ${availability[$i]} == unavailable ]]; then
+			results+=("$(run_result_json "$host" unavailable "$command_json")")
+			continue
+		fi
+		if dispatch_host "$host" "$timeout" "$json" "$command_line" "${payload[@]}"; then
+			results+=("$(run_result_json "$host" ok "$command_json" 0)")
+		else
+			exit_code=$?
+			results+=("$(run_result_json "$host" failed "$command_json" "$exit_code")")
+			failed=true
+		fi
+	done
+
+	print_results "$json" "${results[@]}"
+	[[ $failed == false ]]
+}
+
+main() {
+	local command=${1:-}
+	case "$command" in
+	help | -h | --help)
+		usage
+		return
+		;;
+	'')
+		usage >&2
+		exit 2
+		;;
+	list | check | run) ;;
+	*) fail "unknown command: $command" ;;
+	esac
+
+	shift
+	load_inventory
+	case "$command" in
+	list) list_command "$@" ;;
+	check) check_command "$@" ;;
+	run) run_command "$@" ;;
+	esac
+}
+
+main "$@"
