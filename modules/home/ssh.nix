@@ -12,6 +12,13 @@ _:
         IdentitiesOnly = true;
       };
 
+      hatchi = {
+        HostName = "192.168.200.70";
+        User = "dkumlin";
+        IdentityFile = "~/.ssh/hatchi.pub";
+        IdentitiesOnly = true;
+      };
+
       titan = {
         HostName = "titan";
         Port = 2222;
@@ -38,6 +45,7 @@ _:
 
   home.file = {
     ".ssh/nana.pub".source = ../../config/ssh/public-keys/nana.pub;
+    ".ssh/hatchi.pub".source = ../../config/ssh/public-keys/hatchi.pub;
     ".ssh/titan.pub".source = ../../config/ssh/public-keys/titan.pub;
   };
 
