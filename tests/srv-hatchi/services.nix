@@ -329,6 +329,7 @@ pkgs.testers.runNixOSTest {
     assert "AdGuard" in response("adguard", "/login.html")
     assert "dns_addresses" in json.loads(response("adguard", "/control/status", "-f -u daniel:fixture-password"))
     assert "Glance" in response("dashboard", "/", "-L")
+    assert "Komga" in response("komga", "/", "-f -L")
     assert response("komga", "/api/v1/libraries", "-o /dev/null -w '%{http_code}'").strip() == "401"
     assert response("suwayomi", "/api/v1/category", "-o /dev/null -w '%{http_code}'").strip() == "401"
     client.succeed(curl("suwayomi", "/api/v1/category", "-f -u daniel:fixture-password"))
@@ -376,7 +377,8 @@ pkgs.testers.runNixOSTest {
 
     hatchi.wait_until_succeeds("curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up' | jq -e '.data.result | length == 3 and all(.[]; .value[1] == \"1\")'", timeout=120)
     metrics = json.loads(hatchi.succeed("curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=node_uname_info'"))["data"]["result"]
-    assert {metric["metric"]["job"] for metric in metrics} == {"hatchi-node", "srv-nana-node"}
+    assert {metric["metric"]["job"]: metric["metric"]["nodename"] for metric in metrics} == {"hatchi-node": "srv-hatchi", "srv-nana-node": "nana"}
+    assert json.loads(hatchi.succeed("curl -fsS http://192.168.1.40:8002/"))["marker"] == "fixture-glance-agent"
     query = json.loads(response("grafana", f"/api/datasources/proxy/uid/{datasources[0]['uid']}/api/v1/query?query=up", "-f -u daniel:fixture-password"))
     assert len(query["data"]["result"]) == 3
 

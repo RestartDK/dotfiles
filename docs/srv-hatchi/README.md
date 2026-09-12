@@ -40,6 +40,8 @@ The first-pass closure builds without secret contents. Missing ciphertext or ide
 
 AdGuard accepts only nonempty bcrypt-authenticated users. qBittorrent accepts only a correctly encoded PBKDF2 credential. AdGuard merges users into its native public configuration. qBittorrent leaves native `serverConfig` empty. One atomic merge preserves existing settings while replacing the public baseline and credential. Both helpers are shell applications built with pinned packages. No task Python files remain.
 
+Glance requires a base64-encoded 64-byte authentication key from its native `glance secret:make` command. Arbitrary text is not a valid key. The policy check decrypts only the public fixture bundle and checks this format without printing its value.
+
 CouchDB loads a private `/run/couchdb/local.ini` last. Systemd loads the admin credential and copies it into this writable runtime file before each start. CouchDB can hash the password there without overriding the next secret rotation. Its public configuration belongs in `services.couchdb.extraConfig`. Runtime API configuration changes are not persistent. Glance, Grafana, Suwayomi, and Nextcloud retain their native runtime-file interfaces.
 
 See [commissioning prerequisites](commissioning.md), [restore admission](restore.md), and [actual verification results](validation.md).

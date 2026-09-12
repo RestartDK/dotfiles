@@ -5,17 +5,24 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Verification scope for manual diagnosis
+        type: choice
+        default: all
+        options: [all, services-vm]
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.scope || 'all' }}
   cancel-in-progress: true
 
 jobs:
   linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'services-vm'
     name: Linux / NixOS
     runs-on: ubuntu-latest
     steps:
@@ -75,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        kind: [install-vm, services-vm]
+        kind: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'services-vm' && '["services-vm"]' || '["install-vm", "services-vm"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -148,6 +155,7 @@ jobs:
           path: verification
 
   darwin:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'services-vm'
     name: Darwin / nix-darwin
     # The flake's Darwin systems are aarch64-darwin.
     runs-on: macos-15

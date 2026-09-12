@@ -103,6 +103,7 @@ pkgs.runCommand "srv-hatchi-policy"
       pkgs.git
       pkgs.jq
       pkgs.yq-go
+      pkgs.sops
       pkgs.coreutils
       pkgs.diffutils
       pkgs.gnugrep
