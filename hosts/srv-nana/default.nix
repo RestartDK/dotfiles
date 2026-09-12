@@ -22,9 +22,12 @@
     homeDirectory = "/home/dkumlin";
   };
 
-  users.users.dkumlin.openssh.authorizedKeys.keyFiles = [
-    ../../config/ssh/public-keys/nana.pub
-  ];
+  users.users.dkumlin = {
+    linger = true;
+    openssh.authorizedKeys.keyFiles = [
+      ../../config/ssh/public-keys/nana.pub
+    ];
+  };
 
   boot.loader.grub = {
     enable = true;
