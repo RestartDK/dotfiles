@@ -37,6 +37,7 @@ Convenience commands:
 ```bash
 traitor re          # rebuild current host
 traitor check       # run flake checks
+traitor sync        # rebase the checkout onto its upstream
 traitor update      # update flake inputs
 traitor upgrade     # update, then rebuild
 traitor rollback    # roll back current host generation
@@ -100,6 +101,10 @@ config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
 
 That keeps those files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `config/` can take effect immediately for live-symlinked apps; rebuilding is needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
 
+`traitor sync` fetches the current branch's configured remote and rebases local commits onto its upstream. It temporarily stores tracked and untracked edits, then restores them after the rebase. A preflight worktree checks both the rebase and the edit restoration before the live checkout moves. Conflicts leave the original branch and dirty files unchanged.
+
+Nana and both managed Macs run the same command at login or boot and every 15 minutes. An offline machine keeps its checkout unchanged and retries later without a notification. A Mac shows a notification when a Git conflict blocks synchronization. The systemd and launchd jobs only synchronize Git; they never rebuild a machine, commit files, push branches, or switch branches.
+
 ## CI and deployment
 
 `.github/filters.yml` selects CI jobs by changed paths. Skills-only Markdown edits skip machine builds. Host-specific changes select that host. Shared Nix inputs, packages, and modules select their consumers. Executable live config still gets formatting and lint checks without triggering deployment.
@@ -110,7 +115,7 @@ Linux builds each selected host's NixOS system and deployment checks without pul
 
 `deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. CI records the Nana and Hatchi change flags for the entire push, so deployment does not guess from only the last commit. A Hatchi-only change does not select Nana, or vice versa. Shared system inputs select both.
 
-Both deployment jobs are hard-disabled by their `if: false && ...` conditions. They cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. No host is activated by this PR.
+Both deployment jobs are hard-disabled by their `if: false && ...` conditions. They cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once Nana deployment is enabled, CI deploys the exact successful revision and then runs `traitor-sync --expect REVISION` on Nana. The revision guard prevents Nana from accepting a different upstream commit than CI verified.
 
 Before enabling a host, configure its GitHub environment, `srv-nana` or `srv-hatchi`, with required approval and these secrets:
 

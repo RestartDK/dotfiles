@@ -22,6 +22,7 @@
     enable = true;
     repoRoot = "/Users/danielkumlin/.config/dotfiles";
     piSettingsFile = "config/pi/agent/settings-twin.json";
+    sync.enable = true;
     groups = {
       shell = true;
       git = true;

@@ -21,6 +21,16 @@
       description = "Repo-relative Pi-specific skills directory to link as ~/.pi/agent/skills when shared agent skills are disabled.";
     };
 
+    sync = {
+      enable = lib.mkEnableOption "automatic synchronization of the editable dotfiles checkout";
+
+      intervalSeconds = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 900;
+        description = "Seconds between attempts to rebase the checkout onto its configured upstream.";
+      };
+    };
+
     groups = {
       shell = lib.mkEnableOption "shell/starship config";
       git = lib.mkEnableOption "Git config";

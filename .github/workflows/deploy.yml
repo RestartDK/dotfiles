@@ -68,6 +68,14 @@ jobs:
           mkdir -p "$HOME/.ssh"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
       - run: ./bin/traitor deploy "$TARGET"
+      - name: Synchronize Nana's live dotfiles
+        if: env.TARGET == 'srv-nana'
+        env:
+          EXPECTED_REVISION: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          ssh dkumlin@"$TARGET"
+          /etc/profiles/per-user/dkumlin/bin/traitor-sync
+          --expect "$EXPECTED_REVISION"
 
   hatchi:
     needs: changes

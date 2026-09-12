@@ -14,6 +14,7 @@
   my.liveConfig = {
     enable = true;
     repoRoot = "/Users/danielkumlin/.config/dotfiles";
+    sync.enable = true;
     groups = {
       shell = true;
       git = true;
