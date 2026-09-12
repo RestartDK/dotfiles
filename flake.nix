@@ -264,7 +264,12 @@
           };
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) (
-          inputs.deploy-rs.lib.${linuxSystem}.deployChecks self.deploy
+          nixpkgs.lib.concatMapAttrs (
+            nodeName: node:
+            nixpkgs.lib.mapAttrs' (
+              checkName: check: nixpkgs.lib.nameValuePair "${nodeName}-${checkName}" check
+            ) (inputs.deploy-rs.lib.${linuxSystem}.deployChecks (self.deploy // { nodes.${nodeName} = node; }))
+          ) self.deploy.nodes
           // {
             srv-hatchi-deploy-rejection = (pkgsFor system).runCommand "srv-hatchi-deploy-rejection" { } ''
               for mode in normal DRY_ACTIVATE BOOT TEST; do

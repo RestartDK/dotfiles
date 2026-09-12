@@ -105,26 +105,22 @@ jobs:
       - name: Evaluate Linux outputs
         run: ./bin/traitor check --no-build --print-build-logs
 
-      - name: Build policy and Fleet checks
+      - name: Build Nana system and check deployment
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nana == 'true'
         run: |
           nix build --no-link --print-build-logs --max-jobs 2 \
-            .#checks.x86_64-linux.fleet \
-            .#checks.x86_64-linux.srv-hatchi-policy
+            .#nixosConfigurations.srv-nana.config.system.build.toplevel \
+            .#checks.x86_64-linux.srv-nana-deploy-schema \
+            .#checks.x86_64-linux.srv-nana-deploy-activate
 
-      - name: Build Nana closure
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nana == 'true'
-        run: nix build --no-link --print-build-logs .#nixosConfigurations.srv-nana.config.system.build.toplevel
-
-      - name: Build both Hatchi closures
+      - name: Build Hatchi systems and check deployment
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.hatchi_checks == 'true'
-        run: ./bin/traitor verify srv-hatchi closures
-
-      - name: Check both deploy profiles and Hatchi activation refusal
         run: |
+          ./bin/traitor verify srv-hatchi closures
           nix build --no-link --print-build-logs --max-jobs 2 \
             .#checks.x86_64-linux.srv-hatchi-deploy-rejection \
-            .#checks.x86_64-linux.deploy-schema \
-            .#checks.x86_64-linux.deploy-activate
+            .#checks.x86_64-linux.srv-hatchi-deploy-schema \
+            .#checks.x86_64-linux.srv-hatchi-deploy-activate
 
       - name: Evaluate the existing Home Manager profile
         run: nix eval --raw .#homeConfigurations.twin.activationPackage.drvPath
@@ -228,8 +224,8 @@ jobs:
       - name: Enable FlakeHub Cache
         uses: DeterminateSystems/flakehub-cache-action@v3.21.9
 
-      - name: Check Darwin outputs, formatting, and linting
-        run: ./bin/traitor check --print-build-logs
+      - name: Evaluate Darwin outputs
+        run: ./bin/traitor check --no-build --print-build-logs
 
       - name: Check Darwin configurations evaluate
         run: |

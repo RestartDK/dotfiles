@@ -104,6 +104,8 @@ That keeps those files editable in the Git checkout and avoids copying them into
 
 `.github/filters.yml` selects CI jobs by changed paths. Skills-only Markdown edits skip machine builds. Host-specific changes select that host. Shared Nix inputs, packages, and modules select their consumers. Executable live config still gets formatting and lint checks without triggering deployment.
 
+Linux builds each selected host's NixOS system and deployment checks without pulling in the other host's system. Hatchi also builds its bootstrap system and runs the installation and services VM tests. The `fleet` and `srv-hatchi-policy` tests remain available through local `traitor check`, but CI does not run them.
+
 `CI result` is the aggregate check to require in branch protection. It fails if a selected job fails or is cancelled, while allowing unrelated jobs to skip.
 
 `deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. CI records the Nana and Hatchi change flags for the entire push, so deployment does not guess from only the last commit. A Hatchi-only change does not select Nana, or vice versa. Shared system inputs select both.
