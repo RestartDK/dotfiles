@@ -8,7 +8,7 @@ pkgs.testers.runNixOSTest {
   globalTimeout = 1800;
   node.specialArgs = { inherit inputs; };
   nodes = {
-    hatchi = { lib, ... }: {
+    hatchi = { config, lib, ... }: {
       imports = [ self.nixosModules.srv-hatchi ];
       networking.hostName = "srv-hatchi";
       virtualisation = {
@@ -50,11 +50,17 @@ pkgs.testers.runNixOSTest {
           ];
         };
       };
-      fileSystems."/srv/media" = {
+      virtualisation.fileSystems."/srv/media" = {
         device = "hatchi-media";
         fsType = "tmpfs";
         options = [ "mode=0755" ];
       };
+      assertions = [
+        {
+          assertion = config.fileSystems."/srv/media".device == "hatchi-media";
+          message = "The Hachi service VM must retain its disposable media mount";
+        }
+      ];
       my.hatchi = {
         network = {
           dnsAnswer = "192.168.1.10";
@@ -249,6 +255,8 @@ pkgs.testers.runNixOSTest {
     for port in [8000, 8001, 8002, 9100]:
         nana.wait_for_open_port(port)
     hatchi.wait_for_unit("sops-install-secrets.service")
+    hatchi.wait_for_unit("srv-media.mount")
+    assert hatchi.succeed("findmnt -n -o SOURCE,FSTYPE --mountpoint /srv/media").split() == ["hatchi-media", "tmpfs"]
     hatchi.fail("hatchi-check-admission")
     hatchi.fail("systemctl start nextcloud-setup.service")
     hatchi.fail("test -s /var/lib/nextcloud/config/config.php")

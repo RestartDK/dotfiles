@@ -6,9 +6,11 @@ The migration starts at `c6de1f6ee713be8bc2b73b047e245ca2a7d08e16` on `daniel/ni
 
 The review corrections pass local policy tests, the real VM-only CLI rejection, formatting, actionlint, Darwin `traitor check`, and all-system evaluation. Both evaluated inline test-driver strings parse. The pinned deploy-rs schema accepts both node definitions. All existing root input pins and existing host/module files remain unchanged.
 
-Linux closures, deploy-activate, the activation refusal executable, installed VM boot, and the production service VM remain NOT VERIFIED. The new restart, network, and credential-rotation assertions have not run on Linux. The branch is not ready for cutover.
+The pinned installed VM test passed on hosted x86 Linux/KVM at `bf9663b`. It booted the disposable installed disk, verified the hostname, exchanged SSH host keys from a separate network namespace through the firewall, and confirmed Nextcloud was absent.
 
-The controller is ARM Darwin. Nix reports `builders = @/etc/nix/machines`, but that file does not exist. No safe configured x86 Linux/KVM executor is available. OrbStack's known amd64 emulation failure was not repeated. No Linux VM command or live-host access was attempted in this correction pass.
+Linux closure and deploy checks remain NOT VERIFIED because the first Linux job failed in the policy stub and cancelled the remaining builds. The production VM booted all five machines, installed synthetic SOPS credentials, and proved that missing admission prevents Nextcloud and PostgreSQL initialization. It then correctly rejected a receipt because the test media mount was absent. Later service and rotation assertions have not passed. The branch is not ready for cutover.
+
+The controller is ARM Darwin. Nix reports `builders = @/etc/nix/machines`, but that file does not exist. No local configured x86 Linux/KVM executor is available. The authorized GitHub-hosted executor is working. OrbStack's known amd64 emulation failure was not repeated. Hosted VM commands ran only against disposable guests. No live-host access occurred.
 
 ## Command evidence
 
@@ -54,6 +56,21 @@ nix build --no-link --print-build-logs .#checks.x86_64-linux.deploy-schema .#che
 ```
 
 CI separates the two KVM tests and builds both deployment profiles without activating them. `deploy-activate` includes Nana's real closure and may need substantial disk space. Failure artifacts include command exits, runner facts, derivations, `nix log`, build logs, and the Nix daemon journal. The user authorized branch pushes and hosted execution. The existing workflow supports a branch `workflow_dispatch` trigger.
+
+## Hosted run 34657739803
+
+[Workflow dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34657739803) used branch head `bf9663beee2d0a65da09e34e2688b4b7edd68504`. Both Hachi jobs passed the explicit x86 Linux and KVM prerequisite.
+
+| Job | Result | Observed behavior |
+| --- | --- | --- |
+| [Install VM](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681432) | VERIFIED, exit 0 | The pinned VM-only entrypoint installed the disposable Disko configuration, booted it, and exchanged SSH host keys through the firewall. The driver finished in 60.30 seconds. |
+| [Darwin](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681126) | VERIFIED | Quality, policy, and both Darwin configuration evaluations passed. |
+| [Services VM](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681331) | Failed, exit 1 | Admission blocked setup as intended. The test's ordinary `fileSystems` declaration was replaced by the QEMU module, so `/srv/media` was absent. |
+| [Linux](https://github.com/RestartDK/dotfiles/actions/runs/34657739803/job/103453681329) | Failed, exit 1 | A shell stub required `/usr/bin/env`, which is absent in the Linux build sandbox. Other requested builds were cancelled, not passed. |
+
+The media fixture now uses `virtualisation.fileSystems`, with an evaluation assertion and an explicit mounted-source check. Local before/after evaluation proves that `/srv/media` was absent before the fix and present with the intended device and filesystem afterward. The policy stub now uses `pkgs.writeShellScriptBin`, which supplies the pinned interpreter. No assertion was removed or relaxed.
+
+CI now runs quality and policy before either Hachi closure or deploy profile builds. Its Linux daemon uses the same Numtide cache and public key already declared by the repository's NixOS cache module, rather than compiling cached agent packages unnecessarily.
 
 ## Runtime assertions awaiting execution
 

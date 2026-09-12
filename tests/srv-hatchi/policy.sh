@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p "$TMPDIR/stubs" "$TMPDIR/credentials"
+mkdir -p "$TMPDIR/credentials"
 export HOME="$TMPDIR/home" FLAKE_DIR="$ROOT"
 export NIX_CALLS="$TMPDIR/nix-calls" UPSTREAM_CALLS="$TMPDIR/upstream-calls"
 mkdir -p "$HOME"
-cat >"$TMPDIR/stubs/nix" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$@" >> "$NIX_CALLS"
-if [[ $1 == eval ]]; then printf 'uncommissioned\n'; fi
-SH
-chmod +x "$TMPDIR/stubs/nix"
-export PATH="$TMPDIR/stubs:$PATH"
+export PATH="$NIX_STUB/bin:$PATH"
 
 invoke() {
   local expected=$1 status=0

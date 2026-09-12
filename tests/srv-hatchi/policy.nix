@@ -16,6 +16,10 @@ let
         "hatchi-admission.service"
         "sops-install-secrets.service"
       ];
+  nixStub = pkgs.writeShellScriptBin "nix" ''
+    printf '%s\n' "$@" >> "$NIX_CALLS"
+    if [[ $1 == eval ]]; then printf 'uncommissioned\n'; fi
+  '';
   anywhereStub = pkgs.writeShellScriptBin "nixos-anywhere" ''
     printf '%s\n' "$@" >> "$UPSTREAM_CALLS"
   '';
@@ -105,6 +109,7 @@ pkgs.runCommand "srv-hatchi-policy"
       pkgs.findutils
     ];
     ROOT = self;
+    NIX_STUB = nixStub;
     SOURCE_COMPOSE = pkgs.fetchurl { inherit (source) url sha256; };
     INSTALL_VERIFIER = lib.getExe (
       import ./install-vm.nix {

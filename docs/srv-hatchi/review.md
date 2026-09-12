@@ -47,7 +47,7 @@ No task `.py` file remains in Git or in either Hachi directory. Admission uses a
 
 Candidate 2 remains the base. Service-owned native modules, typed configuration boundaries, independent inventory, stock Caddy, and `security.acme` remain. There is no topology DSL, Jellyseerr alias, Open WebUI service, physical install output, or broad Hachi deployment path.
 
-No new narrating code comments were added. The current owner applied the no-comments rubric directly. Zero comments were deleted or restored, and no scoped suppression needs removal. Existing dependency explanations in unchanged code remain outside the migration diff.
+No new narrating code comments were added. The current owner applied the no-comments rubric directly. Two redundant metadata comments were removed from the public test age identity. No comments were restored, and no scoped suppression needs removal. Existing dependency explanations in unchanged code remain outside the migration diff.
 
 ## Direct completion review
 

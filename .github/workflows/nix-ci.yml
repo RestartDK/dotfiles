@@ -38,6 +38,10 @@ jobs:
 
       - name: Install Determinate Nix
         uses: DeterminateSystems/determinate-nix-action@v3.21.9
+        with:
+          extra-conf: |
+            extra-substituters = https://cache.numtide.com
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
       - name: Enable FlakeHub Cache
         uses: DeterminateSystems/flakehub-cache-action@v3.21.9
@@ -45,13 +49,18 @@ jobs:
       - name: Check Linux outputs, formatting, and linting
         run: ./bin/traitor check --no-build --print-build-logs
 
-      - name: Build quality, policy, both Hachi closures, and both deploy profiles
+      - name: Build quality and policy checks
         run: |
           nix build --no-link --print-build-logs --max-jobs 2 \
             .#checks.x86_64-linux.quality \
-            .#checks.x86_64-linux.srv-hatchi-policy \
-            .#checks.x86_64-linux.srv-hatchi-bootstrap \
-            .#checks.x86_64-linux.srv-hatchi-production \
+            .#checks.x86_64-linux.srv-hatchi-policy
+
+      - name: Build both Hachi closures
+        run: ./bin/traitor verify srv-hatchi closures
+
+      - name: Check both deploy profiles and Hachi activation refusal
+        run: |
+          nix build --no-link --print-build-logs --max-jobs 2 \
             .#checks.x86_64-linux.srv-hatchi-deploy-rejection \
             .#checks.x86_64-linux.deploy-schema \
             .#checks.x86_64-linux.deploy-activate
