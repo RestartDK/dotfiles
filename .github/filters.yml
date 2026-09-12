@@ -1,0 +1,51 @@
+shared: &shared
+  - 'flake.nix'
+  - 'flake.lock'
+  - 'modules/home/**'
+  - 'profiles/home/**'
+  - 'overlays/**'
+  - 'packages/**'
+  - 'config/ssh/**'
+
+nixos: &nixos
+  - 'modules/nixos/**'
+
+workflow: &workflow
+  - '.github/**'
+  - 'bin/traitor'
+
+nana: &nana
+  - *shared
+  - *nixos
+  - 'hosts/srv-nana/**'
+
+hatchi: &hatchi
+  - *shared
+  - *nixos
+  - 'hosts/srv-hatchi/**'
+
+linux:
+  - *nana
+  - *hatchi
+  - *workflow
+  - 'hosts/twin/**'
+  - 'tests/**'
+  - 'bin/**'
+
+darwin:
+  - *shared
+  - *workflow
+  - 'modules/darwin/**'
+  - 'hosts/dkumlin-*/**'
+  - 'tests/fleet/**'
+
+hatchi_checks:
+  - *hatchi
+  - *workflow
+  - 'tests/srv-hatchi/**'
+
+quality:
+  - '**/*.{nix,sh,lua,toml,ts,tsx,js,mjs,json,jsonc,yaml,yml}'
+  - 'bin/**'
+  - '.editorconfig'
+  - '.shellcheckrc'

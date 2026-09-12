@@ -21,8 +21,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Select checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      quality: ${{ steps.filter.outputs.quality }}
+      linux: ${{ steps.filter.outputs.linux }}
+      darwin: ${{ steps.filter.outputs.darwin }}
+      hatchi_checks: ${{ steps.filter.outputs.hatchi_checks }}
+      nana: ${{ steps.filter.outputs.nana }}
+      hatchi: ${{ steps.filter.outputs.hatchi }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
+        id: filter
+        with:
+          base: ${{ github.ref }}
+          filters: .github/filters.yml
+      - name: Record the verified change scope
+        if: github.event_name == 'push'
+        env:
+          SCOPE: |
+            nana=${{ steps.filter.outputs.nana }}
+            hatchi=${{ steps.filter.outputs.hatchi }}
+        run: printf '%s\n' "$SCOPE" > scope.txt
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
+        with:
+          name: change-scope
+          path: scope.txt
+          retention-days: 7
+
+  quality:
+    name: Formatting / lint
+    needs: changes
+    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'all') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.quality == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: DeterminateSystems/determinate-nix-action@v3.21.9
+      - uses: DeterminateSystems/flakehub-cache-action@v3.21.9
+      - run: nix build --no-link --print-build-logs .#checks.x86_64-linux.quality
+
   linux:
-    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'services-vm'
+    needs: changes
+    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'all') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.linux == 'true')
     name: Linux / NixOS
     runs-on: ubuntu-latest
     steps:
@@ -53,16 +102,21 @@ jobs:
       - name: Enable FlakeHub Cache
         uses: DeterminateSystems/flakehub-cache-action@v3.21.9
 
-      - name: Check Linux outputs, formatting, and linting
+      - name: Evaluate Linux outputs
         run: ./bin/traitor check --no-build --print-build-logs
 
-      - name: Build quality and policy checks
+      - name: Build policy and Fleet checks
         run: |
           nix build --no-link --print-build-logs --max-jobs 2 \
-            .#checks.x86_64-linux.quality \
+            .#checks.x86_64-linux.fleet \
             .#checks.x86_64-linux.srv-hatchi-policy
 
+      - name: Build Nana closure
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nana == 'true'
+        run: nix build --no-link --print-build-logs .#nixosConfigurations.srv-nana.config.system.build.toplevel
+
       - name: Build both Hatchi closures
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.hatchi_checks == 'true'
         run: ./bin/traitor verify srv-hatchi closures
 
       - name: Check both deploy profiles and Hatchi activation refusal
@@ -76,6 +130,8 @@ jobs:
         run: nix eval --raw .#homeConfigurations.twin.activationPackage.drvPath
 
   hatchi-vm:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.hatchi_checks == 'true'
     name: Hatchi / ${{ matrix.kind }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -155,7 +211,8 @@ jobs:
           path: verification
 
   darwin:
-    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'services-vm'
+    needs: changes
+    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'all') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.darwin == 'true')
     name: Darwin / nix-darwin
     # The flake's Darwin systems are aarch64-darwin.
     runs-on: macos-15
@@ -178,3 +235,16 @@ jobs:
         run: |
           time nix eval .#darwinConfigurations.dkumlin-macbook-pro.system --apply 'x: "OK"'
           time nix eval .#darwinConfigurations.dkumlin-twin-macbook-pro.system --apply 'x: "OK"'
+
+  result:
+    name: CI result
+    if: always()
+    needs: [changes, quality, linux, hatchi-vm, darwin]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every selected check to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -e '.changes.result == "success" and all(.[]; .result == "success" or .result == "skipped")' <<< "$RESULTS"
