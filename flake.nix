@@ -264,6 +264,9 @@
                   (pkgsFor system).bash
                   (pkgsFor system).coreutils
                   (pkgsFor system).git
+                ]
+                ++ nixpkgs.lib.optionals (pkgsFor system).stdenv.hostPlatform.isLinux [
+                  (pkgsFor system).util-linux
                 ];
               }
               ''

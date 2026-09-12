@@ -16,7 +16,8 @@ let
       pkgs.coreutils
       pkgs.git
       pkgs.openssh
-    ];
+    ]
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.util-linux ];
     text = ''
       output="$(DOTFILES=${lib.escapeShellArg cfg.repoRoot} ${traitorExe} sync "$@" 2>&1)" || {
         printf '%s\n' "$output" >&2

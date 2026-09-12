@@ -221,7 +221,10 @@ run_deploy() {
 }
 
 run_sync() (
-  local expected=""
+  local -a sync_args=("$@")
+  local expected="" traitor_source="${BASH_SOURCE[0]}" traitor_path
+  [[ $traitor_source == /* ]] || traitor_source="$PWD/$traitor_source"
+  traitor_path="$(cd "$(dirname "$traitor_source")" && pwd -P)/$(basename "$traitor_source")"
   if (($#)); then
     if (($# != 2)) || [[ $1 != --expect ]]; then
       echo "traitor: sync accepts only optional --expect REV" >&2
@@ -230,7 +233,7 @@ run_sync() (
     expected=$2
   fi
 
-  local repo branch upstream remote old_head target common_dir lock_path lock_owner
+  local repo branch upstream remote old_head target common_dir lock_path lock_status
   repo="$(resolve_flake_dir)"
   cd "$repo"
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
@@ -254,17 +257,28 @@ run_sync() (
   common_dir="$(git rev-parse --git-common-dir)"
   [[ $common_dir == /* ]] || common_dir="$repo/$common_dir"
   lock_path="$common_dir/traitor-sync.lock"
-  if ! ln -s "$$" "$lock_path" 2>/dev/null; then
-    lock_owner="$(readlink "$lock_path" 2>/dev/null || true)"
-    if [[ $lock_owner =~ ^[0-9]+$ ]] && kill -0 "$lock_owner" 2>/dev/null; then
+  if [[ ${TRAITOR_SYNC_LOCKED:-} != "$lock_path" ]]; then
+    if [[ -x /usr/bin/lockf ]]; then
+      if /usr/bin/lockf -t 0 "$lock_path" env TRAITOR_SYNC_LOCKED="$lock_path" bash "$traitor_path" sync "${sync_args[@]}"; then
+        return 0
+      else
+        lock_status=$?
+      fi
+    elif command -v flock >/dev/null 2>&1; then
+      if flock --conflict-exit-code 75 --nonblock "$lock_path" env TRAITOR_SYNC_LOCKED="$lock_path" bash "$traitor_path" sync "${sync_args[@]}"; then
+        return 0
+      else
+        lock_status=$?
+      fi
+    else
+      echo "traitor: sync requires flock or lockf" >&2
+      return 1
+    fi
+    if ((lock_status == 75)); then
       echo "traitor: another sync is already running" >&2
       return 1
     fi
-    rm -f "$lock_path"
-    if ! ln -s "$$" "$lock_path" 2>/dev/null; then
-      echo "traitor: another sync acquired the lock" >&2
-      return 1
-    fi
+    return "$lock_status"
   fi
 
   local candidate_dir="" stash_ref="" stash_oid="" stash_pending=false
@@ -286,9 +300,6 @@ run_sync() (
     restore_stash || true
     if [[ -n $candidate_dir ]]; then
       git worktree remove --force "$candidate_dir" >/dev/null 2>&1 || true
-    fi
-    if [[ $(readlink "$lock_path" 2>/dev/null || true) == "$$" ]]; then
-      rm -f "$lock_path"
     fi
   }
   trap cleanup_sync EXIT

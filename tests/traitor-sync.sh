@@ -169,17 +169,26 @@ assert_offline_preserves_checkout() {
 assert_sync_locking() {
   local root
   root=$(create_fixture locking)
-  local lock_path="$root/machine/.git/traitor-sync.lock" output status=0
-  ln -s "$$" "$lock_path"
+  local lock_path="$root/machine/.git/traitor-sync.lock" ready="$root/lock-ready"
+  local holder output status=0
+  if [[ -x /usr/bin/lockf ]]; then
+    /usr/bin/lockf -t 0 "$lock_path" bash -c "touch \"\$1\"; sleep 1" _ "$ready" &
+  else
+    flock "$lock_path" bash -c "touch \"\$1\"; sleep 1" _ "$ready" &
+  fi
+  holder=$!
+  for _ in {1..100}; do
+    [[ -e $ready ]] && break
+    sleep 0.01
+  done
+  test -e "$ready"
+
   output=$(run_sync "$root" 2>&1) || status=$?
   test "$status" = 1
-  test "$(readlink "$lock_path")" = "$$"
   grep -F 'another sync is already running' <<<"$output"
-  rm "$lock_path"
 
-  ln -s 99999999 "$lock_path"
+  wait "$holder"
   run_sync "$root" >/dev/null
-  test ! -L "$lock_path"
 }
 
 assert_invalid_args_fail() {
@@ -199,7 +208,17 @@ assert_invalid_args_fail() {
 assert_no_upstream_fails() {
   local root
   root=$(create_fixture no-upstream)
-  git -C "$root/machine" switch --detach >/dev/null 2>&1
+  git_quiet -C "$root/machine" switch -c local-only
+  local output status=0
+  output=$(run_sync "$root" 2>&1) || status=$?
+  test "$status" = 1
+  grep -F "branch 'local-only' has no upstream" <<<"$output"
+}
+
+assert_detached_head_fails() {
+  local root
+  root=$(create_fixture detached)
+  git_quiet -C "$root/machine" switch --detach
   local output status=0
   output=$(run_sync "$root" 2>&1) || status=$?
   test "$status" = 1
@@ -217,3 +236,4 @@ assert_offline_preserves_checkout
 assert_sync_locking
 assert_invalid_args_fail
 assert_no_upstream_fails
+assert_detached_head_fails
