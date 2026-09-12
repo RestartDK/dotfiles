@@ -1,0 +1,86 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_sha == github.sha
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      nana: ${{ steps.scope.outputs.nana }}
+      hatchi: ${{ steps.scope.outputs.hatchi }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: change-scope
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - id: scope
+        run: grep -Ex '(nana|hatchi)=(true|false)' scope.txt >> "$GITHUB_OUTPUT"
+
+  nana:
+    needs: changes
+    if: false && needs.changes.outputs.nana == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: srv-nana
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-srv-nana
+      cancel-in-progress: false
+    env:
+      TARGET: srv-nana
+    steps: &deploy_steps
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@v3.21.9
+      - uses: DeterminateSystems/flakehub-cache-action@v3.21.9
+      - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci-deploy
+          ping: ${{ env.TARGET }}
+      - uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Pin the server SSH host key
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+      - run: ./bin/traitor deploy "$TARGET"
+
+  hatchi:
+    needs: changes
+    if: false && needs.changes.outputs.hatchi == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: srv-hatchi
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-srv-hatchi
+      cancel-in-progress: false
+    env:
+      TARGET: srv-hatchi
+    steps: *deploy_steps

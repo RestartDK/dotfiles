@@ -100,6 +100,28 @@ config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
 
 That keeps those files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `config/` can take effect immediately for live-symlinked apps; rebuilding is needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
 
+## CI and deployment
+
+`.github/filters.yml` selects CI jobs by changed paths. Skills-only Markdown edits skip machine builds. Host-specific changes select that host. Shared Nix inputs, packages, and modules select their consumers. Executable live config still gets formatting and lint checks without triggering deployment.
+
+Linux builds each selected host's NixOS system and deployment checks without pulling in the other host's system. Hatchi also builds its bootstrap system and runs the installation and services VM tests. The `fleet` and `srv-hatchi-policy` tests remain available through local `traitor check`, but CI does not run them.
+
+`CI result` is the aggregate check to require in branch protection. It fails if a selected job fails or is cancelled, while allowing unrelated jobs to skip.
+
+`deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. CI records the Nana and Hatchi change flags for the entire push, so deployment does not guess from only the last commit. A Hatchi-only change does not select Nana, or vice versa. Shared system inputs select both.
+
+Both deployment jobs are hard-disabled by their `if: false && ...` conditions. They cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. No host is activated by this PR.
+
+Before enabling a host, configure its GitHub environment, `srv-nana` or `srv-hatchi`, with required approval and these secrets:
+
+- `TS_OAUTH_CLIENT_ID` and `TS_AUDIENCE` for a Tailscale federated identity restricted to this repository, environment, and `tag:ci-deploy`.
+- `SSH_PRIVATE_KEY` for the configured deployment user.
+- `SSH_KNOWN_HOSTS` with the independently verified host key for `srv-nana` or `srv-hatchi`. Host-key checking remains strict.
+
+The tailnet policy must permit that tag to reach the selected host on SSH. The host must resolve by its deployment name, authorize the SSH key, and permit unattended sudo. The workflow uses OpenSSH over Tailscale, not Tailscale SSH authentication. The Tailscale action removes its ephemeral runner when the job ends.
+
+Hatchi also needs its real disk, network, deployment target, and commissioning configuration. Its existing activation refusal remains intact. Deployment runs `traitor deploy` for the exact tested revision. It does not install NixOS or populate the editable dotfiles checkout.
+
 ## Cobb bridge profile
 
 This flake exports a reusable Home Manager module for Cobb:

@@ -14,16 +14,10 @@
     settings.server = {
       ip = "127.0.0.1";
       port = 4567;
-      basicAuthEnabled = true;
-      basicAuthUsername = "daniel";
-      basicAuthPasswordFile = config.sops.secrets.suwayomi-password.path;
+      basicAuthEnabled = false;
       downloadsPath = "/srv/media/manga";
       localSourcePath = "/srv/media/manga";
     };
-  };
-  sops.secrets.suwayomi-password = {
-    owner = "suwayomi";
-    restartUnits = [ "suwayomi-server.service" ];
   };
   services.caddy.virtualHosts = {
     "komga.${config.my.hatchi.domain}".extraConfig =
