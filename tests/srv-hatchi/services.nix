@@ -327,7 +327,8 @@ pkgs.testers.runNixOSTest {
         assert client.succeed(f"curl --noproxy '*' -sS -o /dev/null -w '%{{http_code}}' --resolve {name}.{domain}:80:192.168.1.10 http://{name}.{domain}/").strip() == "308"
     client.wait_until_succeeds(curl("jellyfin", "/health", "-f") + " | grep -q Healthy", timeout=600)
     assert response("jellyfin", "/health", "-f").strip() == "Healthy"
-    assert "AdGuard" in response("adguard", "/login.html")
+    assert "<title>Login</title>" in response("adguard", "/login.html", "-f")
+    assert "<title>AdGuard Home</title>" in response("adguard", "/", "-f -u daniel:fixture-password")
     assert "dns_addresses" in json.loads(response("adguard", "/control/status", "-f -u daniel:fixture-password"))
     assert "Glance" in response("dashboard", "/", "-L")
     assert "Komga" in response("komga", "/", "-f -L")
