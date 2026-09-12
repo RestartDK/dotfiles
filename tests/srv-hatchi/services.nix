@@ -334,8 +334,8 @@ pkgs.testers.runNixOSTest {
     assert "Glance" in response("dashboard", "/", "-L")
     assert "Komga" in response("komga", "/", "-f -L")
     assert response("komga", "/api/v1/libraries", "-o /dev/null -w '%{http_code}'").strip() == "401"
-    assert response("suwayomi", "/api/v1/category", "-o /dev/null -w '%{http_code}'").strip() == "401"
-    client.succeed(curl("suwayomi", "/api/v1/category", "-f -u daniel:fixture-password"))
+    assert response("suwayomi", "/api/v1/category", "-o /dev/null -w '%{http_code}'").strip() == "200"
+    assert isinstance(json.loads(response("suwayomi", "/api/v1/category", "-f")), list)
     for name, port, state in [("radarr", 7878, "/var/lib/radarr"), ("sonarr", 8989, "/var/lib/sonarr"), ("prowlarr", 9696, "/var/lib/prowlarr")]:
         api_key = hatchi.succeed(f"xmllint --xpath 'string(/Config/ApiKey)' {state}/config.xml").strip()
         api = "/api/v1/system/status" if name == "prowlarr" else "/api/v3/system/status"
