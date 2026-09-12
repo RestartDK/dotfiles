@@ -71,10 +71,16 @@ jobs:
         if: env.TARGET == 'srv-nana'
         env:
           EXPECTED_REVISION: ${{ github.event.workflow_run.head_sha }}
-        run: >-
-          ssh dkumlin@"$TARGET"
-          /etc/profiles/per-user/dkumlin/bin/traitor-sync
-          --expect "$EXPECTED_REVISION"
+        run: |
+          remote_traitor="/tmp/traitor-$EXPECTED_REVISION"
+          cleanup() {
+            ssh "dkumlin@$TARGET" rm -f "$remote_traitor" || true
+          }
+          trap cleanup EXIT
+          scp ./bin/traitor "dkumlin@$TARGET:$remote_traitor"
+          ssh "dkumlin@$TARGET" env \
+            FLAKE_DIR=/home/dkumlin/.config/dotfiles \
+            bash "$remote_traitor" sync --expect "$EXPECTED_REVISION"
       - if: env.TARGET != 'srv-nana' || needs.changes.outputs.nana == 'true'
         run: ./bin/traitor deploy "$TARGET"
 
