@@ -343,7 +343,8 @@ pkgs.testers.runNixOSTest {
         assert direct["appName"].lower() == name, direct
         assert proxied["appName"] == direct["appName"], proxied
         assert proxied["instanceName"] == direct["instanceName"], proxied
-    assert response("qbittorrent", "/api/v2/auth/login", "-f --data 'username=daniel&password=fixture-password'").strip() == "Ok."
+    assert response("qbittorrent", "/api/v2/auth/login", "-f -c /tmp/qb-cookies -o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'").strip() == "204"
+    assert response("qbittorrent", "/api/v2/app/version", "-f -b /tmp/qb-cookies").strip() == "v${self.nixosConfigurations.srv-hatchi.config.services.qbittorrent.package.version}"
     assert "version" in json.loads(response("seerr", "/api/v1/status"))
     assert json.loads(response("couchdb", "/_up", "-f -u daniel:fixture-password"))["status"] == "ok"
     for name in ["ollama", "opencode"]:
@@ -419,12 +420,12 @@ pkgs.testers.runNixOSTest {
     hatchi.succeed("systemctl stop qbittorrent")
     hatchi.succeed(f"printf '\\n[MigrationFixture]\\nRetained=restored-setting\\n' >> {qb_config}")
     hatchi.succeed("systemctl start qbittorrent")
-    client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "--data 'username=daniel&password=fixture-password'") + " | grep -Fx 'Ok.'")
+    client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'") + " | grep -Fx 204")
     response("qbittorrent", "/api/v2/auth/login", "-c /tmp/qb-cookies --data 'username=daniel&password=fixture-password'")
     client.succeed(curl("qbittorrent", "/api/v2/app/setPreferences", "-f -b /tmp/qb-cookies --data-urlencode 'json={\"max_ratio\":3.25}'"))
     for iteration in range(2):
         hatchi.succeed("systemctl restart adguardhome qbittorrent")
-        client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-c /tmp/qb-cookies --data 'username=daniel&password=fixture-password'") + " | grep -Fx 'Ok.'")
+        client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -c /tmp/qb-cookies -o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'") + " | grep -Fx 204")
         client.wait_until_succeeds(curl("adguard", "/control/status", "-f -u daniel:fixture-password"))
         assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == 3.25
         hatchi.succeed(f"grep -Fx 'Retained=restored-setting' {qb_config}")
@@ -439,8 +440,8 @@ pkgs.testers.runNixOSTest {
     password = "@ByteArray(" + base64.b64encode(salt).decode() + ":" + base64.b64encode(key).decode() + ")"
     hatchi.succeed("printf %s " + shlex.quote(password) + " > /run/secrets/qbittorrent-password")
     hatchi.succeed("systemctl restart qbittorrent")
-    client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-c /tmp/qb-cookies --data 'username=daniel&password=rotated-fixture'") + " | grep -Fx 'Ok.'")
-    assert response("qbittorrent", "/api/v2/auth/login", "--data 'username=daniel&password=fixture-password'").strip() == "Fails."
+    client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -c /tmp/qb-cookies -o /dev/null -w '%{http_code}' --data 'username=daniel&password=rotated-fixture'") + " | grep -Fx 204")
+    assert response("qbittorrent", "/api/v2/auth/login", "-o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'").strip() == "401"
     assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == 3.25
     hatchi.succeed(f"grep -Fx 'Retained=restored-setting' {qb_config}")
     hatchi.wait_until_succeeds("grep -Eq 'daniel\\s*=\\s*-pbkdf2' /run/couchdb/local.ini")

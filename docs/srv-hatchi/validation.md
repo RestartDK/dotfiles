@@ -94,6 +94,12 @@ The [fourth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs
 
 The [fifth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34664193750/job/103472685663) at `55ec780` passed every retained DNS rewrite over UDP and TCP, forwarding, removed-name negatives, all HTTP redirects, and Jellyfin health. It failed a test expectation that AdGuard's public login HTML contained its product name. The pinned template's title is `Login`; the authenticated index is titled `AdGuard Home`. Both pages now have explicit title assertions, with authenticated API identity still required.
 
+## Hosted run 34664884702
+
+The [sixth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34664884702) at `64c9f89` passed AdGuard pages and API, Glance, Komga, Suwayomi authentication, and direct/proxied identities for Radarr, Sonarr, and Prowlarr. It rejected qBittorrent's successful empty login response because the test expected the old `Ok.` body.
+
+Pinned qBittorrent sets HTTP 204 for a successful login with no body and HTTP 401 for invalid credentials. Readiness and rotation assertions now require those statuses. The initial login also must yield a cookie that can fetch the exact packaged version. Local diagnostics independently confirmed the fixture PBKDF2 hash and Qt's decoding of the rendered username and credential. No production credential code changed.
+
 ## Runtime assertions awaiting execution
 
 The installed bootstrap must exchange SSH host keys through its firewall from an isolated network namespace. The production VM must prove all retained units, inventory-bound DNS and routes, service-specific upstream identities, separate client/admin CIDRs, IPv4 and IPv6 isolation, and removed services.
