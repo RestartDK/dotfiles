@@ -5,6 +5,7 @@ mkdir -p "$TMPDIR/credentials"
 export HOME="$TMPDIR/home" FLAKE_DIR="$ROOT"
 export NIX_CALLS="$TMPDIR/nix-calls" UPSTREAM_CALLS="$TMPDIR/upstream-calls"
 mkdir -p "$HOME"
+opnix secret -h >/dev/null 2>&1
 export PATH="$NIX_STUB/bin:$PATH"
 export SOPS_AGE_KEY_FILE="$ROOT/tests/srv-hatchi/fixtures/age-key.txt"
 test "$(sops decrypt --extract '["glance-key"]' "$ROOT/tests/srv-hatchi/fixtures/synthetic-secrets.sops.yaml" | base64 --decode | wc -c)" -eq 64

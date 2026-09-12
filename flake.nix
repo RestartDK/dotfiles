@@ -15,6 +15,8 @@
     nixos-anywhere.inputs.disko.follows = "disko";
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+    opnix.url = "github:brizzbuzz/opnix/0ea3a9e6a94fdd0c444aa7729b98e568a0588222";
+    opnix.inputs.nixpkgs.follows = "nixpkgs";
     deploy-rs.url = "github:serokell/deploy-rs/414ac5f35d79aabe5a0bf52451d8cf61eadf6c88";
     deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -184,6 +186,7 @@
         piPackages
         // {
           inherit traitor;
+          opnix = inputs.opnix.packages.${system}.default;
           pi-package-updater = piPackageUpdater;
           default = traitor;
         }
@@ -338,6 +341,22 @@
         modules = [
           self.nixosModules.srv-hatchi
           ./tests/srv-hatchi/fixtures/reference-platform.nix
+          home-manager.nixosModules.home-manager
+          ({ config, pkgs, ... }: {
+            nixpkgs.config.allowUnfree = true;
+            programs.zsh.enable = true;
+            users.users.${config.my.host.userName} = {
+              home = config.my.host.homeDirectory;
+              shell = pkgs.zsh;
+            };
+            home-manager = {
+              useGlobalPkgs = true;
+              useUserPackages = true;
+              backupFileExtension = "hm-backup";
+              extraSpecialArgs = homeSpecialArgs;
+              users.${config.my.host.userName} = import ./hosts/srv-hatchi/home.nix;
+            };
+          })
         ];
       };
 

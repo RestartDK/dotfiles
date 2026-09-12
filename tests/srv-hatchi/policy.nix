@@ -25,6 +25,49 @@ let
   '';
   cfg = self.nixosConfigurations.srv-hatchi.config;
   bootstrap = self.nixosConfigurations.srv-hatchi-bootstrap.config;
+  home = cfg.home-manager.users.${cfg.my.host.userName};
+  configured =
+    module:
+    (self.nixosConfigurations.srv-hatchi.extendModules {
+      modules = [ module ];
+    }).config;
+  onePasswordFixture.services.onepassword-secrets.secrets.integrationProbe = {
+    reference = "op://fixture/integration/password";
+    services = [ "radarr" ];
+  };
+  withOnePassword = configured onePasswordFixture;
+  disabledOnePassword = configured {
+    imports = [ onePasswordFixture ];
+    services.onepassword-secrets.enable = false;
+  };
+  withPolling = configured {
+    imports = [ onePasswordFixture ];
+    services.onepassword-secrets.systemdIntegration.polling.enable = true;
+  };
+  withoutIntegration = configured {
+    imports = [ onePasswordFixture ];
+    services.onepassword-secrets.systemdIntegration.enable = false;
+  };
+  withConfigFile = configured {
+    services.onepassword-secrets.configFiles = [
+      (pkgs.writeText "opnix-fixture.json" (
+        builtins.toJSON {
+          secrets = [
+            {
+              path = "integrationProbe";
+              reference = "op://fixture/integration/password";
+            }
+          ];
+        }
+      ))
+    ];
+  };
+  renamedUser = configured {
+    my.host = {
+      userName = "hatchi-fixture";
+      homeDirectory = "/srv/home/hatchi-fixture";
+    };
+  };
   inventory = builtins.fromJSON (builtins.readFile ./inventory.json);
   routes = lib.sort builtins.lessThan (
     (map (entry: "${entry.route}.${cfg.my.hatchi.domain}") (
@@ -96,6 +139,79 @@ assert
 assert self.deploy.autoRollback && self.deploy.magicRollback;
 assert self.deploy.nodes.srv-hatchi.hostname == "uncommissioned.invalid";
 assert self.nixosConfigurations.srv-nana.config.virtualisation.docker.enable;
+assert home.home.username == cfg.my.host.userName;
+assert home.home.homeDirectory == cfg.my.host.homeDirectory;
+assert cfg.users.users.${cfg.my.host.userName}.home == home.home.homeDirectory;
+assert home.my.liveConfig.repoRoot == "${cfg.my.host.homeDirectory}/.config/dotfiles";
+assert builtins.all (group: home.my.liveConfig.groups.${group}) [
+  "shell"
+  "git"
+  "editors"
+  "terminalTools"
+  "multiplexer"
+  "agents"
+];
+assert !home.my.liveConfig.groups.ghostty && !home.my.liveConfig.groups.wayland;
+assert builtins.all (name: builtins.elem name (map lib.getName home.home.packages)) [
+  "codex"
+  "claude-code"
+  "opencode"
+  "pi"
+  "herdr"
+  "neovim"
+];
+assert cfg.programs.zsh.enable;
+assert lib.getName cfg.users.users.${cfg.my.host.userName}.shell == "zsh";
+assert lib.hasInfix "home-manager" home.home.activationPackage.drvPath;
+assert
+  renamedUser.home-manager.users.hatchi-fixture.home.homeDirectory == "/srv/home/hatchi-fixture";
+assert renamedUser.users.users.hatchi-fixture.home == "/srv/home/hatchi-fixture";
+assert
+  renamedUser.home-manager.users.hatchi-fixture.my.liveConfig.repoRoot
+  == "/srv/home/hatchi-fixture/.config/dotfiles";
+assert !(bootstrap ? home-manager);
+assert cfg.sops.useSystemdActivation;
+assert !cfg.services.onepassword-secrets.enable && !(cfg.sops.secrets ? opnix-token);
+assert !(cfg.systemd.services ? opnix-secrets);
+assert !disabledOnePassword.services.onepassword-secrets.enable;
+assert !(disabledOnePassword.sops.secrets ? opnix-token);
+assert !(disabledOnePassword.systemd.services ? opnix-secrets);
+assert withConfigFile.services.onepassword-secrets.enable;
+assert withOnePassword.services.onepassword-secrets.enable;
+assert withOnePassword.services.onepassword-secrets.users == [ ];
+assert withOnePassword.services.onepassword-secrets.secrets.integrationProbe.mode == "0600";
+assert withOnePassword.services.onepassword-secrets.secrets.integrationProbe.owner == "root";
+assert
+  withOnePassword.services.onepassword-secrets.tokenFile
+  == withOnePassword.sops.secrets.opnix-token.path;
+assert withOnePassword.sops.secrets.opnix-token.path == "/run/secrets/opnix-token";
+assert withOnePassword.sops.secrets.opnix-token.mode == "0640";
+assert withOnePassword.sops.secrets.opnix-token.group == "onepassword-secrets";
+assert withOnePassword.sops.secrets.opnix-token.restartUnits == [ "opnix-secrets.service" ];
+assert builtins.all
+  (
+    unit:
+    builtins.elem "sops-install-secrets.service" withPolling.systemd.services.${unit}.after
+    && builtins.elem "sops-install-secrets.service" withPolling.systemd.services.${unit}.requires
+    &&
+      lib.hasInfix "Requires=sops-install-secrets.service"
+        withPolling.systemd.units."${unit}.service".text
+  )
+  [
+    "opnix-secrets"
+    "opnix-secrets-restart"
+    "opnix-secrets-poll"
+  ];
+assert !(withOnePassword.systemd.services ? opnix-secrets-poll);
+assert !(withoutIntegration.systemd.services ? opnix-secrets-restart);
+assert !(withoutIntegration.systemd.services ? opnix-secrets-poll);
+assert builtins.elem "opnix-secrets.service" withOnePassword.systemd.services.radarr.after;
+assert builtins.elem "opnix-secrets.service" withOnePassword.systemd.services.radarr.wants;
+assert
+  withOnePassword.services.onepassword-secrets.secretPaths.integrationProbe
+  == "/var/lib/opnix/secrets/integrationProbe";
+assert cfg.sops.defaultSopsFile == withOnePassword.sops.defaultSopsFile;
+assert cfg.sops.secrets.nextcloud-admin.path == withOnePassword.sops.secrets.nextcloud-admin.path;
 pkgs.runCommand "srv-hatchi-policy"
   {
     nativeBuildInputs = [
@@ -108,6 +224,7 @@ pkgs.runCommand "srv-hatchi-policy"
       pkgs.diffutils
       pkgs.gnugrep
       pkgs.findutils
+      self.packages.${pkgs.stdenv.hostPlatform.system}.opnix
     ];
     ROOT = self;
     NIX_STUB = nixStub;
