@@ -22,7 +22,7 @@ Paths without a prefix in this table are under `hosts/srv-hatchi`.
 | --- | --- |
 | S1. Raw nixos-anywhere allowed destructive overrides | Accepted and removed. The replacement rejects every argument before upstream invocation. Tests cover target, store paths, phases, extra files, flake replacement, and multiple arguments. |
 | S2. ACME renewal bypass | Accepted. Same fix as C4. |
-| S3. Keep Hachi activation refusal in normal, dry, boot, and test modes | Preserved. Exact-node CLI refusal passes locally. The Linux refusal executable remains NOT VERIFIED. |
+| S3. Keep Hachi activation refusal in normal, dry, boot, and test modes | Preserved. Exact-node CLI refusal passes locally. The Linux executable rejected all four activation modes in [run 34660883503](https://github.com/RestartDK/dotfiles/actions/runs/34660883503/job/103462953179). |
 | S4. Keep deploy checks non-activating and CI free of deployment | Preserved. CI builds profiles but invokes no deploy command. |
 | S5. Keep production secrets outside the store and fixture overrides test-only | Preserved. Runtime paths remain under `/run/secrets`. Synthetic fixture paths occur only in tests. |
 
@@ -53,6 +53,6 @@ No new narrating code comments were added. The current owner applied the no-comm
 
 GPT-6 Astra with xhigh reasoning read every staged file, the source Compose file at the recorded revision, and the pinned lifecycle code for qBittorrent, AdGuard, CouchDB, Caddy, deploy-rs, and nixos-anywhere. The source inventory still contains 17 active services, not Open WebUI. The generic installer app is absent. Upstream `--vm-test` exits after building only `system.build.installTest`, before SSH or disk mutation.
 
-The safety fact is that no uncommissioned Hachi output grants physical disk or activation authority. Local tests rerun the actual packaged argument rejection, exact-node CLI rejection, receipt checks, credential merge tests, and generated dependency assertions. The hosted activation refusal and VMs are still required. No test assertion was relaxed during this review.
+The safety fact is that no uncommissioned Hachi output grants physical disk or activation authority. Local tests rerun the actual packaged argument rejection, exact-node CLI rejection, receipt checks, credential merge tests, and generated dependency assertions. Hosted activation refusal and the installed bootstrap VM have passed. The production service VM remains required. Its first runs exposed an absent fixture mount, malformed Glance fixture key, and production loopback firewall rejection. Each was corrected at its cause without bypassing admission, disabling the firewall, or dropping a service assertion.
 
 All prior review findings have code-level corrections. Their runtime claims remain separate from evaluation. Cross-model review and delegation are explicitly skipped because the user forbids subagents.

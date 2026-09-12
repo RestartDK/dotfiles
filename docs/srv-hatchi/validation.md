@@ -86,6 +86,10 @@ The [services-only dispatch](https://github.com/RestartDK/dotfiles/actions/runs/
 
 This diagnostic scope does not count as a full CI pass. Pull requests and pushes always run every job.
 
+## Hosted run 34663545232
+
+The [fourth service dispatch](https://github.com/RestartDK/dotfiles/actions/runs/34663545232/job/103470794430) at `21a51a2` reached all expected loopback listeners and loaded every retained unit. The first client DNS rewrite assertion then failed. Pinned AdGuard 0.107.78 skips rewrite entries unless their `enabled` field is true. Declarative entries now set that field explicitly. The test still requires every inventory-derived name over both UDP and TCP and reports the received answer on failure.
+
 ## Runtime assertions awaiting execution
 
 The installed bootstrap must exchange SSH host keys through its firewall from an isolated network namespace. The production VM must prove all retained units, inventory-bound DNS and routes, service-specific upstream identities, separate client/admin CIDRs, IPv4 and IPv6 isolation, and removed services.

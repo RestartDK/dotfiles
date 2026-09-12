@@ -98,6 +98,7 @@ in
             map (name: {
               domain = name;
               answer = cfg.network.dnsAnswer;
+              enabled = true;
             }) names
           );
         };

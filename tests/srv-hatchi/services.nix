@@ -305,7 +305,8 @@ pkgs.testers.runNixOSTest {
     domain = "chateauducipieres.com"
     for name in names:
         for protocol in ["", "+tcp"]:
-            assert client.succeed(f"dig @192.168.1.10 {name}.{domain} A +short {protocol}").strip() == "192.168.1.10"
+            answer = client.succeed(f"dig @192.168.1.10 {name}.{domain} A +short {protocol}").strip()
+            assert answer == "192.168.1.10", (name, protocol, answer)
     assert client.succeed("dig @192.168.1.10 fixture-upstream.test A +short").strip() == "192.0.2.99"
     for name in ["portainer", "admin", "jellyseerr", "open-webui"]:
         for protocol in ["", "+tcp"]:

@@ -15,10 +15,10 @@ No todo tool is available. This file retains the playbook phases and execution c
 - [x] Phase B: Design the workflow
 - [ ] Phase C: Run the loop
 - [x] Read every staged file and the inherited review findings.
-- [ ] Review native lifecycle, secrets, installation authority, test coverage, and existing outputs.
-- [ ] Run policy, static checks, CLI rejection, and `traitor check` in a dedicated Herdr tab.
-- [ ] Commit coherent units and push the branch.
-- [ ] Dispatch the branch workflow and confirm its head SHA and Hachi jobs.
+- [x] Review native lifecycle, secrets, installation authority, test coverage, and existing outputs.
+- [x] Run policy, static checks, CLI rejection, and `traitor check` in a dedicated Herdr tab.
+- [x] Commit coherent units and push the branch.
+- [x] Dispatch the branch workflow and confirm its head SHA and Hachi jobs.
 - [ ] Fix each hosted failure at its cause and rerun the affected checks.
 - [ ] Phase D: Keep the audit trail
 - [ ] Phase E: Verify and hand back
