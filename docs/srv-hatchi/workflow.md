@@ -20,11 +20,13 @@ No todo tool is available. This file retains the playbook phases and execution c
 - [x] Commit coherent units and push the branch.
 - [x] Dispatch the branch workflow and confirm its head SHA and Hachi jobs.
 - [x] Fix each hosted failure at its cause and rerun the affected checks.
-- [ ] Phase D: Keep the audit trail
-- [ ] Phase E: Verify and hand back
-- [ ] Opening a PR. Worktree, Ticket, Commits, PRs, Titles, Descriptions, Submission host, Readiness, Babysit.
-- [ ] Babysit. Declare `drive`, check for another watcher, inspect conflicts, clear review threads, diagnose CI, and rearm `watch-pr` after each push until `READY`.
-- [ ] Audit the evidence against actual command exits and remove transient processes and tabs.
+- [x] Phase D: Keep the audit trail
+- [x] Phase E: Verify and hand back
+- [x] Opening a PR. Worktree, Ticket, Commits, PRs, Titles, Descriptions, Submission host, Readiness, Babysit.
+- [x] Babysit. Declare `drive`, check for another watcher, inspect conflicts, clear review threads, diagnose CI, and rearm `watch-pr` after each push until `READY`.
+- [x] Audit the evidence against actual command exits.
+
+This checklist records the first complete delivery snapshot at `f6f0855`: [PR #147](https://github.com/RestartDK/dotfiles/pull/147), all four required jobs passed, and repository Babysit `READY`. The audit-only commit must rearm the watcher. Local processes and the verification tab are removed after its final verdict, with teardown recorded in the delivery report. No future cleanup is claimed here.
 
 Delegated architecture, Comment Sicko, cross-model review, and audit workers are skipped because the user forbids subagents. GPT-6 Astra with xhigh reasoning owns implementation, self-review, verification, delivery, and Babysit. The settled native-module architecture does not need another design exploration. Linear is disconnected, so the ticket step is skipped and the PR states that Linear was unavailable.
 

@@ -11,7 +11,18 @@ Base `c6de1f6ee713be8bc2b73b047e245ca2a7d08e16`. Branch `daniel/nixos-srv-hatchi
 | Complete production service VM | `a2de8073a2c19036d3b7e2db9be4513a0bb5c6c4`, [hosted KVM](https://github.com/RestartDK/dotfiles/actions/runs/34667334950/job/103481810331) | Passed, exit 0. Driver completed in 447.92 seconds and stopped all five guests. |
 | Local policy, actual CLI rejection, formatting, actionlint, Darwin checks, all-system evaluation, driver syntax, immutable existing pins and host files, zero new Python paths | [commands.tsv](commands.tsv), through `wave9` | Passed. Evaluation is not Linux runtime proof. |
 
-The successful service dispatch used diagnostic scope. Linux and Darwin were intentionally skipped there. A full PR run at the delivery head is still required; this table does not present separate historical passes as one full green run.
+## Full PR verification
+
+[PR #147](https://github.com/RestartDK/dotfiles/pull/147) opened non-draft with a 237-word description and the required Linear-unavailable note. [Run 34668163263](https://github.com/RestartDK/dotfiles/actions/runs/34668163263) verified head `f6f08551bf3a9708a52c991d6fdc9c7ccb1c14f0`. All four jobs passed, with none skipped:
+
+- [Linux](https://github.com/RestartDK/dotfiles/actions/runs/34668163263/job/103484241892) passed policy, quality, both closures, both deploy checks, all four refusal executions, and existing Home Manager evaluation.
+- [Darwin](https://github.com/RestartDK/dotfiles/actions/runs/34668163263/job/103484242022) passed its checks and configuration evaluations.
+- [Installed VM](https://github.com/RestartDK/dotfiles/actions/runs/34668163263/job/103484242029) passed the fixed VM-only command.
+- [Production service VM](https://github.com/RestartDK/dotfiles/actions/runs/34668163263/job/103484242032) passed every assertion again. The driver completed in 533.09 seconds and stopped all five guests.
+
+The repository `watch-pr` ran in Babysit `drive` mode and exited 0 with `READY`, GitHub merge state `CLEAN`, zero review threads, zero pending checks, and zero failures. [babysit.json](babysit.json) preserves that snapshot and its checked revision. No review finding required a fix or dismissal. The PR was not merged.
+
+This audit-only commit requires another full PR run and watcher rearm. Its final result and local tab teardown belong in the delivery report, not a claim about a future command. The earlier services-only dispatch remains diagnostic evidence, not a full CI pass.
 
 The controller is ARM Darwin with no configured Linux builder. All runtime VM evidence came from authorized GitHub-hosted x86 Linux/KVM. No live-host access occurred.
 

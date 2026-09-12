@@ -1,6 +1,6 @@
 # Accepted review corrections
 
-All inherited findings are accepted and reproduced below as durable review context. None are rejected. Hosted Linux builds, activation refusal, the installed VM, and the complete production VM have passed. [The validation ledger](validation.md) binds each proof to its revision; full delivery-head CI remains required.
+All inherited findings are accepted and reproduced below as durable review context. None are rejected. Hosted Linux builds, activation refusal, the installed VM, and the complete production VM have passed. [The validation ledger](validation.md) binds each proof to its revision. The full PR run at `f6f0855` passed all four jobs and reached Babysit `READY`; subsequent audit-only changes require the same checks.
 
 ## Correctness findings
 
