@@ -33,7 +33,7 @@ jobs:
 
   nana:
     needs: changes
-    if: false && needs.changes.outputs.nana == 'true'
+    if: false && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: srv-nana
@@ -75,7 +75,8 @@ jobs:
           ssh dkumlin@"$TARGET"
           /etc/profiles/per-user/dkumlin/bin/traitor-sync
           --expect "$EXPECTED_REVISION"
-      - run: ./bin/traitor deploy "$TARGET"
+      - if: env.TARGET != 'srv-nana' || needs.changes.outputs.nana == 'true'
+        run: ./bin/traitor deploy "$TARGET"
 
   hatchi:
     needs: changes
