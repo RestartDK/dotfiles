@@ -13,7 +13,7 @@ _:
       };
 
       hatchi = {
-        HostName = "192.168.200.70";
+        HostName = "100.85.39.42";
         User = "dkumlin";
         IdentityFile = "~/.ssh/hatchi.pub";
         IdentitiesOnly = true;
