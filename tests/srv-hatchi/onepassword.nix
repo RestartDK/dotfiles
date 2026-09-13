@@ -53,7 +53,7 @@ pkgs.testers.runNixOSTest {
         set -eu
         umask 077
         export SOPS_AGE_KEY_FILE=${./fixtures/age-key.txt}
-        mkdir -p /run/hatchi-onepassword
+        install -d -m751 /run/hatchi-onepassword
         ${lib.concatStringsSep "\n" (
           lib.mapAttrsToList (name: field: ''
             ${pkgs.sops}/bin/sops decrypt --extract '${builtins.toJSON [ field ]}' ${./fixtures/synthetic-secrets.sops.yaml} > ${
@@ -97,7 +97,8 @@ pkgs.testers.runNixOSTest {
 
     hatchi.wait_for_unit("srv-media.mount")
     hatchi.succeed("mountpoint -q /srv/media")
-    check_logins()
+    hatchi.wait_for_unit("hatchi-secret-files.service")
+    hatchi.succeed("test $(stat -c %U:%G:%a /run/hatchi-onepassword) = root:root:751")
     for name in ${builtins.toJSON (builtins.attrNames fields)}:
         owner = "grafana:grafana" if name.startswith("grafana") else "root:root"
         hatchi.succeed(f"test $(stat -c %U:%G:%a /run/hatchi-onepassword/{name}) = {owner}:400")
@@ -106,6 +107,9 @@ pkgs.testers.runNixOSTest {
         hatchi.succeed(f"test $(stat -c %U:%G:%a /run/hatchi-secrets/{name}) = root:root:400")
         hatchi.fail(f"grep -q '@hatchi-' /run/hatchi-secrets/{name}")
         hatchi.fail(f"runuser -u nobody -- cat /run/hatchi-secrets/{name}")
+    for name in ["grafanaKey", "grafanaPassword"]:
+        hatchi.succeed(f"runuser -u grafana -- test -r /run/hatchi-onepassword/{name}")
+    check_logins()
     invocations = {unit: hatchi.succeed(f"systemctl show {unit} -p InvocationID --value").strip() for unit in units}
     hatchi.succeed("systemctl restart opnix-secrets.service")
     check_logins()
