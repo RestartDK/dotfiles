@@ -192,14 +192,23 @@
         dotfilesInputs = inputs;
       };
       hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
-      hatchiPlatformModules =
-        if hatchiCommissioning.state == "physical" then
-          [
-            (import ./hosts/srv-hatchi/physical-platform.nix {
-              inherit inputs;
-              storage = hatchiCommissioning.storage;
-            })
+      hatchiPhysicalPlatform = import ./hosts/srv-hatchi/physical-platform.nix {
+        inherit inputs;
+        storage = hatchiCommissioning.storage;
+      };
+      hatchiInstallPlatformModules =
+        if
+          builtins.elem hatchiCommissioning.state [
+            "install-ready"
+            "physical"
           ]
+        then
+          [ hatchiPhysicalPlatform ]
+        else
+          [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];
+      hatchiProductionPlatformModules =
+        if hatchiCommissioning.state == "physical" then
+          [ hatchiPhysicalPlatform ]
         else
           [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];
     in
@@ -220,6 +229,7 @@
           inherit fleet traitor;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
+          nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
           pi-package-updater = piPackageUpdater;
           default = traitor;
@@ -431,7 +441,7 @@
         modules = [
           self.nixosModules.srv-hatchi-bootstrap
         ]
-        ++ hatchiPlatformModules
+        ++ hatchiInstallPlatformModules
         ++ [ { system.build.installTest = hatchiInstall.config.system.build.installTest; } ];
       };
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
@@ -440,7 +450,7 @@
         modules = [
           self.nixosModules.srv-hatchi
         ]
-        ++ hatchiPlatformModules
+        ++ hatchiProductionPlatformModules
         ++ [
           home-manager.nixosModules.home-manager
           ({ config, pkgs, ... }: {

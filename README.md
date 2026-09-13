@@ -127,7 +127,7 @@ The tailnet policy must permit that tag to reach the selected host on SSH. The h
 
 Hatchi's physical profile puts EFI, NixOS, service state, and databases on the system SSD. The data HDD mounts at `/srv` for media and Nextcloud files. A missing data disk does not block NixOS or SSH, but it prevents the application stack from starting.
 
-Before setting `commissioning.state` to `physical`, set both `commissioning.storage` paths to distinct `/dev/disk/by-id` values. Hatchi still needs its network, deployment target, and generated hardware facts. The activation refusal remains intact while the host is uncommissioned. Deployment runs `traitor deploy` for the exact tested revision. It does not install NixOS or populate the editable dotfiles checkout.
+Hatchi is `install-ready`: its stable disk IDs, SMART result, and generated hardware facts are committed. Follow [the Hatchi installation procedure](hosts/srv-hatchi/INSTALL.md) to run the guarded `nixos-anywhere` installation from a clean `main` checkout. Normal deployment remains blocked until the host has its production network and deployment target and `commissioning.state` changes to `physical`.
 
 Hatchi's optional runtime 1Password provider and private NixOS verification procedure are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md). Missing restoration keys still block production enablement.
 

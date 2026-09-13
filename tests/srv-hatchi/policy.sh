@@ -32,6 +32,11 @@ reject deploy '*'
 reject deploy srv-nana srv-hatchi
 reject deploy srv-hatchi-bootstrap
 reject deploy srv-nana --dry-run extra
+reject install
+reject install srv-hatchi
+reject install srv-hatchi root@example.invalid
+reject install srv-hatchi admin@example.invalid --confirm-destroy
+reject install srv-hatchi root@example.invalid --confirm-destroy extra
 reject verify
 reject verify srv-nana install-vm
 reject verify srv-hatchi --vm-test
@@ -50,6 +55,46 @@ for flag in '' --dry-run; do
   printf '%s\n' eval --raw "$ROOT#hatchiCommissioning.state" >"$TMPDIR/expected"
   diff -u "$TMPDIR/expected" "$NIX_CALLS"
 done
+invoke 1 install srv-hatchi root@example.invalid --confirm-destroy
+printf '%s\n' eval --raw "$ROOT#hatchiCommissioning.state" >"$TMPDIR/expected"
+diff -u "$TMPDIR/expected" "$NIX_CALLS"
+
+install_origin="$TMPDIR/install-origin.git"
+install_repo="$TMPDIR/install-repo"
+git init --quiet --bare --initial-branch=main "$install_origin"
+git init --quiet --initial-branch=main "$install_repo"
+mkdir -p "$install_repo/hosts/srv-hatchi"
+printf '{ }\n' >"$install_repo/flake.nix"
+printf '{ ... }: { }\n' >"$install_repo/hosts/srv-hatchi/hardware-configuration.nix"
+git -C "$install_repo" add .
+git -C "$install_repo" -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+git -C "$install_repo" remote add origin "$install_origin"
+git -C "$install_repo" push --quiet --set-upstream origin main
+install_revision="$(git -C "$install_repo" rev-parse HEAD)"
+: >"$NIX_CALLS"
+NIX_EVAL_STATE=install-ready \
+  NIX_SMART_HEALTH=passed \
+  NIX_STUB_INSPECT_EXTRA_FILES="$TMPDIR/staged-revision" \
+  FLAKE_DIR="$install_repo" \
+  bash "$ROOT/bin/traitor" install srv-hatchi root@example.invalid --confirm-destroy >"$TMPDIR/response"
+test "$(cat "$TMPDIR/staged-revision")" = "$install_revision"
+test "$(grep -Fxc run "$NIX_CALLS")" -eq 1
+grep -Fx "$install_repo#nixos-anywhere" "$NIX_CALLS"
+grep -Eq '/home/dkumlin/\.config/dotfiles#srv-hatchi-bootstrap$' "$NIX_CALLS"
+grep -Fx -- --target-host "$NIX_CALLS"
+grep -Fx root@example.invalid "$NIX_CALLS"
+grep -Fx -- --extra-files "$NIX_CALLS"
+grep -Fx -- --chown "$NIX_CALLS"
+grep -Fx /home/dkumlin/.config/dotfiles "$NIX_CALLS"
+grep -Fx 1000:100 "$NIX_CALLS"
+if grep -Fx -- --confirm-destroy "$NIX_CALLS" || grep -Fx -- --generate-hardware-config "$NIX_CALLS"; then
+  echo "traitor forwarded an internal installation option" >&2
+  exit 1
+fi
+grep -F "Installing revision $install_revision on root@example.invalid" "$TMPDIR/response"
+grep -F "System disk: /dev/disk/by-id/fixture-system" "$TMPDIR/response"
+grep -F "Data disk: /dev/disk/by-id/fixture-data" "$TMPDIR/response"
+
 invoke 0 deploy srv-nana --dry-run
 printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#srv-nana" --dry-activate >"$TMPDIR/expected"
 diff -u "$TMPDIR/expected" "$NIX_CALLS"

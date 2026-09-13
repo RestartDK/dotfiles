@@ -18,5 +18,6 @@ assert lib.assertMsg (lib.hasPrefix "/dev/disk/by-id/" storage.dataDisk)
   imports = [
     inputs.disko.nixosModules.disko
     (import ./disk-layout.nix storage)
+    ./hardware-configuration.nix
   ];
 }

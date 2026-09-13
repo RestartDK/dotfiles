@@ -14,7 +14,30 @@ let
     && lib.hasInfix "sops-install-secrets.service" cfg.systemd.units."${unit}.service".text;
   nixStub = pkgs.writeShellScriptBin "nix" ''
     printf '%s\n' "$@" >> "$NIX_CALLS"
-    if [[ $1 == eval ]]; then printf 'uncommissioned\n'; fi
+    if [[ $1 == eval ]]; then
+      if [[ $* == *hatchiCommissioning.smartHealth ]]; then
+        printf '%s\n' "''${NIX_SMART_HEALTH:-pending}"
+      elif [[ $* == *hatchiCommissioning.storage.systemDisk ]]; then
+        printf '%s\n' /dev/disk/by-id/fixture-system
+      elif [[ $* == *hatchiCommissioning.storage.dataDisk ]]; then
+        printf '%s\n' /dev/disk/by-id/fixture-data
+      else
+        printf '%s\n' "''${NIX_EVAL_STATE:-uncommissioned}"
+      fi
+    elif [[ $1 == run && -n "''${NIX_STUB_INSPECT_EXTRA_FILES:-}" ]]; then
+      shift
+      while (($#)); do
+        if [[ $1 == --extra-files ]]; then
+          staging_root="$2"
+          break
+        fi
+        shift
+      done
+      checkout="$staging_root/home/dkumlin/.config/dotfiles"
+      test -d "$checkout/.git"
+      test -f "$checkout/hosts/srv-hatchi/hardware-configuration.nix"
+      git -C "$checkout" rev-parse HEAD > "$NIX_STUB_INSPECT_EXTRA_FILES"
+    fi
   '';
   anywhereStub = pkgs.writeShellScriptBin "nixos-anywhere" ''
     printf '%s\n' "$@" >> "$UPSTREAM_CALLS"
@@ -164,7 +187,13 @@ assert
 assert !(builtins.elem "open-webui" (map (entry: entry.source) inventory));
 assert builtins.length (lib.unique (map (entry: entry.source) inventory)) == 17;
 assert !(builtins.hasAttr "nixos-anywhere" self.apps.${pkgs.stdenv.hostPlatform.system});
+assert builtins.hasAttr "nixos-anywhere" self.packages.${pkgs.stdenv.hostPlatform.system};
 assert bootstrap.networking.firewall.allowedTCPPorts == [ 22 ];
+assert
+  bootstrap.disko.devices.disk.system.device
+  == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3UL0H008BC01G0";
+assert
+  bootstrap.disko.devices.disk.data.device == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2RB67";
 assert storage.disko.devices.disk.system.device == "/dev/disk/by-id/fixture-system";
 assert storage.disko.devices.disk.data.device == "/dev/disk/by-id/fixture-data";
 assert storage.fileSystems."/".fsType == "ext4";
@@ -247,9 +276,8 @@ assert secretsBefore "acme-${cfg.my.hatchi.domain}";
 assert secretsBefore "acme-order-renew-${cfg.my.hatchi.domain}";
 assert builtins.length (builtins.filter (entry: entry.unit != null) inventory) == 16;
 assert builtins.attrNames cfg.services.caddy.virtualHosts == routes;
-assert builtins.all (
-  name: !(builtins.hasAttr name cfg.system.build) && !(builtins.hasAttr name bootstrap.system.build)
-) destructive;
+assert builtins.all (name: !(builtins.hasAttr name cfg.system.build)) destructive;
+assert builtins.all (name: builtins.hasAttr name bootstrap.system.build) destructive;
 assert
   cfg.virtualisation.docker.enable == false
   && cfg.virtualisation.podman.enable == false
@@ -266,8 +294,13 @@ assert cfg.nix.settings.auto-optimise-store;
 assert cfg.nix.gc.automatic;
 assert cfg.nix.gc.dates == [ "weekly" ];
 assert cfg.nix.gc.options == "--delete-older-than 14d";
-assert self.hatchiCommissioning.state == "uncommissioned";
-assert self.hatchiCommissioning.storage == null;
+assert self.hatchiCommissioning.state == "install-ready";
+assert self.hatchiCommissioning.smartHealth == "passed";
+assert
+  self.hatchiCommissioning.storage.systemDisk
+  == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3UL0H008BC01G0";
+assert
+  self.hatchiCommissioning.storage.dataDisk == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2RB67";
 assert
   builtins.attrNames self.deploy.nodes == [
     "srv-hatchi"
