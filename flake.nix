@@ -195,8 +195,10 @@
       hatchiPlatformModules =
         if hatchiCommissioning.state == "physical" then
           [
-            inputs.disko.nixosModules.disko
-            (import ./hosts/srv-hatchi/disk-layout.nix hatchiCommissioning.storage)
+            (import ./hosts/srv-hatchi/physical-platform.nix {
+              inherit inputs;
+              storage = hatchiCommissioning.storage;
+            })
           ]
         else
           [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];

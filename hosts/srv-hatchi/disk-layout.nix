@@ -2,7 +2,10 @@
   dataDisk,
   systemDisk,
 }:
-{ ... }:
+{ lib, ... }:
+assert lib.assertMsg (
+  systemDisk != dataDisk
+) "Hatchi systemDisk and dataDisk must identify different disks";
 {
   boot.loader = {
     efi.canTouchEfiVariables = true;

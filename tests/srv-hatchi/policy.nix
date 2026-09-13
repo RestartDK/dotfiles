@@ -33,6 +33,30 @@ let
         { system.stateVersion = "26.05"; }
       ];
     }).config;
+  evaluatePhysicalPlatform =
+    physicalStorage:
+    builtins.tryEval (
+      builtins.deepSeq (
+        (import ../../hosts/srv-hatchi/physical-platform.nix {
+          inherit inputs;
+          storage = physicalStorage;
+        })
+        { inherit lib; }
+      ) true
+    );
+  validPhysicalPlatform = evaluatePhysicalPlatform {
+    systemDisk = "/dev/disk/by-id/fixture-system";
+    dataDisk = "/dev/disk/by-id/fixture-data";
+  };
+  unstablePhysicalPlatform = evaluatePhysicalPlatform {
+    systemDisk = "/dev/sda";
+    dataDisk = "/dev/sdb";
+  };
+  duplicatePhysicalPlatform = evaluatePhysicalPlatform {
+    systemDisk = "/dev/disk/by-id/fixture-system";
+    dataDisk = "/dev/disk/by-id/fixture-system";
+  };
+  missingPhysicalPlatform = evaluatePhysicalPlatform null;
   home = cfg.home-manager.users.${cfg.my.host.userName};
   configured =
     module:
@@ -146,6 +170,10 @@ assert storage.disko.devices.disk.data.device == "/dev/disk/by-id/fixture-data";
 assert storage.fileSystems."/".fsType == "ext4";
 assert storage.fileSystems."/boot".fsType == "vfat";
 assert storage.fileSystems."/srv".fsType == "ext4";
+assert validPhysicalPlatform.success;
+assert !unstablePhysicalPlatform.success;
+assert !duplicatePhysicalPlatform.success;
+assert !missingPhysicalPlatform.success;
 assert builtins.elem "nofail" storage.fileSystems."/srv".options;
 assert storage.boot.loader.systemd-boot.enable;
 assert !storage.boot.loader.grub.enable;
