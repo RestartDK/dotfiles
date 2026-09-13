@@ -125,7 +125,9 @@ Before enabling a host, configure its GitHub environment, `srv-nana` or `srv-hat
 
 The tailnet policy must permit that tag to reach the selected host on SSH. The host must resolve by its deployment name, authorize the SSH key, and permit unattended sudo. The workflow uses OpenSSH over Tailscale, not Tailscale SSH authentication. The Tailscale action removes its ephemeral runner when the job ends.
 
-Hatchi also needs its real disk, network, deployment target, and commissioning configuration. Its existing activation refusal remains intact. Deployment runs `traitor deploy` for the exact tested revision. It does not install NixOS or populate the editable dotfiles checkout.
+Hatchi's physical profile puts EFI, NixOS, service state, and databases on the system SSD. The data HDD mounts at `/srv` for media and Nextcloud files. A missing data disk does not block NixOS or SSH, but it prevents the application stack from starting.
+
+Before setting `commissioning.state` to `physical`, set both `commissioning.storage` paths to distinct `/dev/disk/by-id` values. Hatchi still needs its network, deployment target, and generated hardware facts. The activation refusal remains intact while the host is uncommissioned. Deployment runs `traitor deploy` for the exact tested revision. It does not install NixOS or populate the editable dotfiles checkout.
 
 Hatchi's optional runtime 1Password provider and private NixOS verification procedure are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md). Missing restoration keys still block production enablement.
 
