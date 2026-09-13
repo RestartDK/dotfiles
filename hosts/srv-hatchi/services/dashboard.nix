@@ -12,8 +12,8 @@ in
         proxied = true;
       };
       auth = {
-        secret-key._secret = config.sops.secrets.glance-key.path;
-        users.daniel.password._secret = config.sops.secrets.glance-password.path;
+        secret-key._secret = config.my.hatchi.secretFiles.glanceKey;
+        users.daniel.password._secret = config.my.hatchi.secretFiles.glancePassword;
       };
       pages = [
         {
@@ -57,8 +57,10 @@ in
       ];
     };
   };
-  sops.secrets.glance-key.restartUnits = [ "glance.service" ];
-  sops.secrets.glance-password.restartUnits = [ "glance.service" ];
+  sops.secrets = lib.mkIf (!config.my.hatchi.onepassword.enable) {
+    glance-key.restartUnits = [ "glance.service" ];
+    glance-password.restartUnits = [ "glance.service" ];
+  };
   services.caddy.virtualHosts."dashboard.${config.my.hatchi.domain}".extraConfig =
     "reverse_proxy 127.0.0.1:${toString config.services.glance.settings.server.port}";
   my.hatchi.stateUnits = [ "glance" ];

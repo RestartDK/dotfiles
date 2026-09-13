@@ -28,6 +28,35 @@ let
     services = [ "radarr" ];
   };
   withOnePassword = configured onePasswordFixture;
+  withAppSecrets = configured {
+    my.hatchi.onepassword = {
+      enable = true;
+      tokenFile = "/run/test-opnix-token";
+      references = {
+        glanceKey = "op://fixture/keys/glance";
+        grafanaKey = "op://fixture/keys/grafana";
+      };
+    };
+  };
+  privateMachine = configured (
+    { lib, pkgs, ... }:
+    import ./onepassword-machine.nix { inherit lib pkgs self; }
+  );
+  missingAppKeys = configured {
+    my.hatchi.onepassword = {
+      enable = true;
+      references = {
+        glanceKey = null;
+        grafanaKey = null;
+      };
+    };
+  };
+  storeToken = configured {
+    my.hatchi.onepassword = {
+      enable = true;
+      tokenFile = "${builtins.storeDir}/must-not-be-a-token";
+    };
+  };
   disabledOnePassword = configured {
     imports = [ onePasswordFixture ];
     services.onepassword-secrets.enable = false;
@@ -216,6 +245,62 @@ assert
   renamedUser.home-manager.users.hatchi-fixture.my.liveConfig.repoRoot
   == "/srv/home/hatchi-fixture/.config/dotfiles";
 assert !(bootstrap ? home-manager);
+assert cfg.my.hatchi.onepassword.references.glanceKey != null;
+assert privateMachine.my.hatchi.onepassword.references.glanceKey == null;
+assert privateMachine.my.hatchi.onepassword.references.grafanaKey == null;
+assert
+  cfg.my.hatchi.onepassword.references.glancePassword == "op://Homelab/Chateau glance/password";
+assert
+  withAppSecrets.services.glance.settings.auth.users.daniel.password._secret
+  == "/run/hatchi-secrets/glance-password";
+assert withAppSecrets.sops.secrets == { };
+assert withAppSecrets.sops.templates == { };
+assert withAppSecrets.my.hatchi.secretService == "hatchi-secret-files.service";
+assert cfg.services.nextcloud.config.adminpassFile == null;
+assert cfg.services.nextcloud.config.adminuser == null;
+assert builtins.elem "nextcloud-admin.service" cfg.systemd.services.nginx.requires;
+assert builtins.elem "adminpass:/run/secrets/nextcloud-admin"
+  cfg.systemd.services.nextcloud-admin.serviceConfig.LoadCredential;
+assert builtins.elem "adminpass:/run/hatchi-secrets/nextcloud-admin"
+  withAppSecrets.systemd.services.nextcloud-admin.serviceConfig.LoadCredential;
+assert lib.hasInfix "--password-from-env" cfg.systemd.services.nextcloud-admin.script;
+assert withAppSecrets.services.onepassword-secrets.tokenFile == "/run/test-opnix-token";
+assert !withAppSecrets.services.onepassword-secrets.systemdIntegration.enable;
+assert
+  builtins.length (builtins.attrNames withAppSecrets.services.onepassword-secrets.secrets) == 10;
+assert builtins.all (secret: secret.mode == "0400" && secret.owner == "root") (
+  builtins.attrValues withAppSecrets.services.onepassword-secrets.secrets
+);
+assert withAppSecrets.systemd.services.hatchi-secret-files.requires == [ "opnix-secrets.service" ];
+assert withAppSecrets.systemd.services.hatchi-secret-files.partOf == [ "opnix-secrets.service" ];
+assert
+  !(builtins.elem "sops-install-secrets.service" withAppSecrets.systemd.services.opnix-secrets.requires);
+assert builtins.all (
+  unit:
+  builtins.elem "hatchi-secret-files.service" withAppSecrets.systemd.services.${unit}.requires
+  && builtins.elem "hatchi-secret-files.service" withAppSecrets.systemd.services.${unit}.after
+  && builtins.elem "hatchi-secret-files.service" withAppSecrets.systemd.services.${unit}.partOf
+) withAppSecrets.my.hatchi.stateUnits;
+assert builtins.all
+  (
+    name:
+    builtins.any (
+      check:
+      !check.assertion
+      &&
+        check.message
+        == "Hatchi 1Password reference ${name} must be provisioned before enabling this provider"
+    ) missingAppKeys.assertions
+  )
+  [
+    "glanceKey"
+    "grafanaKey"
+  ];
+assert builtins.any (
+  check:
+  check.message == "Hatchi's 1Password token must be provisioned outside the Nix store"
+  && !check.assertion
+) storeToken.assertions;
 assert cfg.sops.useSystemdActivation;
 assert !cfg.services.onepassword-secrets.enable && !(cfg.sops.secrets ? opnix-token);
 assert !(cfg.systemd.services ? opnix-secrets);

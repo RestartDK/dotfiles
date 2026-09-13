@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, lib, ... }:
 {
   services.prometheus = {
     enable = true;
@@ -34,8 +34,8 @@
       security = {
         cookie_secure = true;
         admin_user = "daniel";
-        admin_password = "$__file{${config.sops.secrets.grafana-password.path}}";
-        secret_key = "$__file{${config.sops.secrets.grafana-key.path}}";
+        admin_password = "$__file{${config.my.hatchi.secretFiles.grafanaPassword}}";
+        secret_key = "$__file{${config.my.hatchi.secretFiles.grafanaKey}}";
       };
       "auth.anonymous".enabled = false;
       analytics = {
@@ -56,11 +56,11 @@
       ];
     };
   };
-  sops.secrets.grafana-password = {
+  sops.secrets.grafana-password = lib.mkIf (!config.my.hatchi.onepassword.enable) {
     owner = "grafana";
     restartUnits = [ "grafana.service" ];
   };
-  sops.secrets.grafana-key = {
+  sops.secrets.grafana-key = lib.mkIf (!config.my.hatchi.onepassword.enable) {
     owner = "grafana";
     restartUnits = [ "grafana.service" ];
   };

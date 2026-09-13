@@ -41,7 +41,8 @@
         Preferences = {
           "WebUI\\Address" = "127.0.0.1";
           "WebUI\\Username" = "daniel";
-          "WebUI\\Password_PBKDF2" = config.sops.placeholder.qbittorrent-password;
+          "WebUI\\Password_PBKDF2" =
+            if config.my.hatchi.onepassword.enable then "" else config.sops.placeholder.qbittorrent-password;
           "WebUI\\ServerDomains" = "qbittorrent.${config.my.hatchi.domain}";
           "WebUI\\LocalHostAuth" = true;
           "WebUI\\AuthSubnetWhitelistEnabled" = false;
@@ -65,8 +66,8 @@
         "reverse_proxy 127.0.0.1:${toString config.services.qbittorrent.webuiPort}";
     };
   };
-  sops.secrets.qbittorrent-password = { };
-  sops.templates."qBittorrent.conf" = {
+  sops.secrets.qbittorrent-password = lib.mkIf (!config.my.hatchi.onepassword.enable) { };
+  sops.templates."qBittorrent.conf" = lib.mkIf (!config.my.hatchi.onepassword.enable) {
     content = lib.generators.toINI { } config.services.qbittorrent.serverConfig;
     restartUnits = [ "qbittorrent.service" ];
   };
@@ -119,7 +120,7 @@
       UMask = "0002";
       ReadOnlyPaths = [ "/srv/media" ];
       ReadWritePaths = [ "/srv/media/downloads" ];
-      LoadCredential = [ "config:${config.sops.templates."qBittorrent.conf".path}" ];
+      LoadCredential = [ "config:${config.my.hatchi.secretFiles.qbittorrentConfig}" ];
       ExecStartPre = lib.mkForce [
         "${pkgs.coreutils}/bin/install -Dm600 %d/config ${config.services.qbittorrent.profileDir}/qBittorrent/config/qBittorrent.conf"
       ];

@@ -67,13 +67,15 @@ in
       certs.${domain} = {
         extraDomainNames = [ "*.${domain}" ];
         dnsProvider = "cloudflare";
-        environmentFile = config.sops.secrets.cloudflare.path;
+        environmentFile = config.my.hatchi.secretFiles.cloudflare;
         group = "caddy";
       };
     };
-    sops.secrets.cloudflare.restartUnits = [ "acme-${domain}.service" ];
-    sops.secrets.adguard-password = { };
-    sops.templates."AdGuardHome.yaml" = {
+    sops.secrets = lib.mkIf (!config.my.hatchi.onepassword.enable) {
+      cloudflare.restartUnits = [ "acme-${domain}.service" ];
+      adguard-password = { };
+    };
+    sops.templates."AdGuardHome.yaml" = lib.mkIf (!config.my.hatchi.onepassword.enable) {
       content = builtins.toJSON (
         config.services.adguardhome.settings
         // {
@@ -91,7 +93,8 @@ in
         users = [
           {
             name = "daniel";
-            password = config.sops.placeholder.adguard-password;
+            password =
+              if config.my.hatchi.onepassword.enable then "" else config.sops.placeholder.adguard-password;
           }
         ];
         dns = {
@@ -127,13 +130,14 @@ in
           "acme-order-renew-${domain}"
         ])
         (_: {
-          requires = [ "sops-install-secrets.service" ];
-          after = [ "sops-install-secrets.service" ];
+          requires = [ config.my.hatchi.secretService ];
+          after = [ config.my.hatchi.secretService ];
+          partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
         })
       // {
         adguardhome = {
           serviceConfig.LoadCredential = [
-            "config:${config.sops.templates."AdGuardHome.yaml".path}"
+            "config:${config.my.hatchi.secretFiles.adguardConfig}"
           ];
           preStart = lib.mkForce ''
             ${pkgs.coreutils}/bin/install -m600 "$CREDENTIALS_DIRECTORY/config" "$STATE_DIRECTORY/AdGuardHome.yaml"

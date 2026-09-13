@@ -153,5 +153,4 @@ diff -u "$TMPDIR/rotated.conf" "$rendered/qBittorrent.conf"
 yq -o=json '.services | to_entries | map({"name": .key, "image": .value.image}) | sort_by(.name)' "$SOURCE_COMPOSE" >"$TMPDIR/observed-source.json"
 jq '.services' "$ROOT/tests/srv-hatchi/source-manifest.json" >"$TMPDIR/expected-source.json"
 diff -u "$TMPDIR/expected-source.json" "$TMPDIR/observed-source.json"
-test -z "$(find "$ROOT/hosts/srv-hatchi" "$ROOT/tests/srv-hatchi" -name '*.py' -print)"
 printf 'Exact-node CLI, VM-only entrypoint, runtime templates, and pinned inventory checks passed\n'
