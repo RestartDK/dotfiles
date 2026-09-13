@@ -40,6 +40,11 @@ let
       git -C "$checkout" rev-parse HEAD > "$NIX_STUB_INSPECT_EXTRA_FILES"
     fi
   '';
+  sshStub = pkgs.writeShellScriptBin "ssh" ''
+    printf '%s\n' "$@" >> "$SSH_CALLS"
+    cat >/dev/null
+    exit "''${SSH_STUB_STATUS:-0}"
+  '';
   anywhereStub = pkgs.writeShellScriptBin "nixos-anywhere" ''
     printf '%s\n' "$@" >> "$UPSTREAM_CALLS"
   '';
@@ -192,9 +197,9 @@ assert builtins.hasAttr "nixos-anywhere" self.packages.${pkgs.stdenv.hostPlatfor
 assert bootstrap.networking.firewall.allowedTCPPorts == [ 22 ];
 assert
   bootstrap.disko.devices.disk.system.device
-  == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3UL0H008BC01G0";
+  == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3VLOH008BC01G0";
 assert
-  bootstrap.disko.devices.disk.data.device == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2RB67";
+  bootstrap.disko.devices.disk.data.device == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2R867";
 assert storage.disko.devices.disk.system.device == "/dev/disk/by-id/fixture-system";
 assert storage.disko.devices.disk.data.device == "/dev/disk/by-id/fixture-data";
 assert storage.fileSystems."/".fsType == "ext4";
@@ -303,9 +308,9 @@ assert self.hatchiCommissioning.state == "install-ready";
 assert self.hatchiCommissioning.smartHealth == "passed";
 assert
   self.hatchiCommissioning.storage.systemDisk
-  == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3UL0H008BC01G0";
+  == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3VLOH008BC01G0";
 assert
-  self.hatchiCommissioning.storage.dataDisk == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2RB67";
+  self.hatchiCommissioning.storage.dataDisk == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2R867";
 assert
   builtins.attrNames self.deploy.nodes == [
     "srv-hatchi"
@@ -509,6 +514,7 @@ pkgs.runCommand "srv-hatchi-policy"
     ];
     ROOT = self;
     NIX_STUB = nixStub;
+    SSH_STUB = sshStub;
     SOURCE_COMPOSE = pkgs.fetchurl { inherit (source) url sha256; };
     INSTALL_VERIFIER = lib.getExe (
       import ./install-vm.nix {
