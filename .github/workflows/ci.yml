@@ -105,6 +105,9 @@ jobs:
       - name: Evaluate Linux outputs
         run: ./bin/traitor check --no-build --print-build-logs
 
+      - name: Build traitor's external tools
+        run: nix build --no-link --print-build-logs .#checks.x86_64-linux.traitor-flake-tools
+
       - name: Build Nana system and check deployment
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nana == 'true'
         run: |
@@ -231,6 +234,9 @@ jobs:
         run: |
           time nix eval .#darwinConfigurations.dkumlin-macbook-pro.system --apply 'x: "OK"'
           time nix eval .#darwinConfigurations.dkumlin-twin-macbook-pro.system --apply 'x: "OK"'
+
+      - name: Build traitor's external tools
+        run: nix build --no-link --print-build-logs .#checks.aarch64-darwin.traitor-flake-tools
 
   result:
     name: CI result

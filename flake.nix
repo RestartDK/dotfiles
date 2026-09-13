@@ -207,6 +207,8 @@
         piPackages
         // {
           inherit fleet traitor;
+          deploy-rs = inputs.deploy-rs.packages.${system}.default;
+          home-manager = inputs.home-manager.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
           pi-package-updater = piPackageUpdater;
           default = traitor;
@@ -221,6 +223,14 @@
         traitor = {
           type = "app";
           program = "${self.packages.${system}.traitor}/bin/traitor";
+        };
+        deploy-rs = {
+          type = "app";
+          program = nixpkgs.lib.getExe self.packages.${system}.deploy-rs;
+        };
+        home-manager = {
+          type = "app";
+          program = nixpkgs.lib.getExe self.packages.${system}.home-manager;
         };
         update-pi-packages = {
           type = "app";
@@ -255,6 +265,19 @@
               }
               ''
                 FLEET_BIN=${./bin/fleet} FLEET_TEST_BASH=${(pkgsFor system).bash}/bin/bash bash ${./tests/fleet.sh}
+                touch $out
+              '';
+          traitor-flake-tools =
+            (pkgsFor system).runCommand "traitor-flake-tools"
+              {
+                nativeBuildInputs = [
+                  self.packages.${system}.deploy-rs
+                  self.packages.${system}.home-manager
+                ];
+              }
+              ''
+                deploy --version
+                home-manager --version
                 touch $out
               '';
           traitor-sync =

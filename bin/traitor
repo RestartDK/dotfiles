@@ -217,7 +217,7 @@ run_deploy() {
   fi
   local flags=()
   [[ ${2:-} == --dry-run ]] && flags+=(--dry-activate)
-  nix run --inputs-from "$flake_dir" deploy-rs -- "$flake_dir#$node" "${flags[@]}"
+  nix run "$flake_dir#deploy-rs" -- "$flake_dir#$node" "${flags[@]}"
 }
 
 run_sync() (
@@ -446,7 +446,7 @@ show)
 twin)
   flake_dir="$(resolve_flake_dir)"
   cd "$flake_dir"
-  nix run github:nix-community/home-manager/release-26.05 -- switch --flake "$flake_dir#twin" -b hm-backup "$@"
+  nix run "$flake_dir#home-manager" -- switch --flake "$flake_dir#twin" -b hm-backup "$@"
   ;;
 nana)
   FLAKE_HOST=srv-nana run_rebuild switch "$@"
