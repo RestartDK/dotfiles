@@ -1,0 +1,36 @@
+name: Repo environment
+
+on:
+  pull_request:
+    paths:
+      - "bin/repo-*"
+      - "config/shell/**"
+      - "config/pi/agent/extensions/pi-herdr/**"
+      - "tests/**"
+      - ".github/workflows/repo-env.yml"
+  push:
+    branches: [main]
+    paths:
+      - "bin/repo-*"
+      - "config/shell/**"
+      - "config/pi/agent/extensions/pi-herdr/**"
+      - "tests/**"
+      - ".github/workflows/repo-env.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: sudo apt-get update && sudo apt-get install -y zsh direnv
+      - run: python3 -m unittest discover -s tests -p 'test_repo_env.py'
+      - run: npm ci --ignore-scripts
+        working-directory: config/pi/agent/extensions/pi-herdr
+      - run: npm test && npm run typecheck
+        working-directory: config/pi/agent/extensions/pi-herdr

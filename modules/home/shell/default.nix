@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.liveConfig;
@@ -12,6 +17,12 @@ in
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       (lib.mkIf cfg.groups.shell {
+        home.packages = [
+          (pkgs.runCommandLocal "repo-exec" { } ''
+            mkdir -p "$out/bin"
+            ln -s ${lib.escapeShellArg "${cfg.repoRoot}/bin/repo-exec"} "$out/bin/repo-exec"
+          '')
+        ];
         programs.zsh = {
           enable = true;
           enableCompletion = true;

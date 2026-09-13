@@ -2,6 +2,7 @@
   "defaultModel": "claude-fable-5-1",
   "defaultProvider": "anthropic",
   "defaultThinkingLevel": "xhigh",
+  "shellPath": "~/.config/dotfiles/bin/repo-bash",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
   ],

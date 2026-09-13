@@ -47,6 +47,7 @@ in
         "*.sh"
         "bin/fleet"
         "bin/traitor"
+        "bin/repo-*"
       ];
     };
     shfmt = {
@@ -56,6 +57,7 @@ in
         "*.sh"
         "bin/fleet"
         "bin/traitor"
+        "bin/repo-*"
       ];
       useEditorConfig = true;
     };

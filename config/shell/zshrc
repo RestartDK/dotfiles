@@ -1,5 +1,16 @@
 # Portable shell setup for macOS/Linux. Keep secrets out of this file.
 
+if [[ -n "${PI_HERDR_ENTER_NETNS:-}" ]]; then
+  namespace="$PI_HERDR_ENTER_NETNS"
+  unset PI_HERDR_ENTER_NETNS
+  /run/wrappers/bin/sudo -n -E "${PI_NETNS_RUN_DEV_NETNS:-/run/current-system/sw/bin/run-dev-netns}" "$namespace" "${SHELL:-/bin/zsh}" -l
+  result=$?
+  if (( result != 0 )) && [[ -n "${PI_HERDR_READY_FILE:-}" && -d "${PI_HERDR_READY_FILE:h}" && ! -e "$PI_HERDR_READY_FILE" ]]; then
+    print -r -- "$result" > "$PI_HERDR_READY_FILE"
+  fi
+  exit "$result"
+fi
+
 # Cobb generates this fragment on development hosts so Cursor/VS Code terminals
 # enter the user's base development namespace before the rest of the shell loads.
 [[ -r "$HOME/.config/shell/cobb-vscode-netns.zsh" ]] && source "$HOME/.config/shell/cobb-vscode-netns.zsh"
@@ -176,8 +187,15 @@ command -v eza >/dev/null 2>&1 && alias ls="eza --icons=always"
 export POWERLINE_NERD_FONTS="${POWERLINE_NERD_FONTS:-1}"
 
 # Tool initializers
-command -v direnv >/dev/null 2>&1 && eval "$(direnv hook zsh)"
-command -v fnm >/dev/null 2>&1 && eval "$(fnm env --use-on-cd --shell zsh)"
+source "${DOTFILES}/config/shell/repo-env.zsh"
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd _repo_env_prompt
+add-zsh-hook chpwd repo_env_prepare
+if command -v fnm >/dev/null 2>&1; then
+  eval "$(fnm env --use-on-cd --shell zsh)"
+  add-zsh-hook -d chpwd _fnm_autoload_hook
+  repo_env_hooks+=(_fnm_autoload_hook)
+fi
 command -v rbenv >/dev/null 2>&1 && eval "$(rbenv init -)"
 command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"
 command -v thefuck >/dev/null 2>&1 && eval "$(thefuck --alias)"
@@ -210,10 +228,10 @@ __pi_revive_run() {
   while true; do
     case "$cmd" in
       pi)
-        command env -u PI_CODING_AGENT_DIR pi "$@"
+        command repo-exec env -u PI_CODING_AGENT_DIR pi "$@"
         ;;
       *)
-        command "$cmd" "$@"
+        command repo-exec "$cmd" "$@"
         ;;
     esac
 
