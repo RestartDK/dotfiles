@@ -26,7 +26,21 @@ pkgs.testers.runNixOSTest {
       memorySize = 4608;
       cores = 4;
       diskSize = 16384;
+      fileSystems."/srv/media" = {
+        device = "tmpfs";
+        fsType = "tmpfs";
+        options = [
+          "size=64M"
+          "mode=0755"
+        ];
+      };
     };
+    assertions = [
+      {
+        assertion = config.fileSystems."/srv/media".fsType == "tmpfs";
+        message = "The credential-file VM must mount disposable media";
+      }
+    ];
     my.hatchi.onepassword = {
       tokenFile = "/run/test-opnix-token";
       references = lib.mapAttrs (name: _: "op://fixture/credentials/${name}") fields;
@@ -81,6 +95,8 @@ pkgs.testers.runNixOSTest {
         assert hatchi.succeed("curl -fsS -o /dev/null -w '%{http_code}' -u daniel:fixture-password -H 'Host: nextcloud.chateauducipieres.com' -H 'X-Forwarded-Proto: https' -H 'Depth: 0' -X PROPFIND http://127.0.0.1:11000/remote.php/dav/files/daniel/").strip() == "207"
         assert "admin" in json.loads(hatchi.succeed("nextcloud-occ user:info daniel --output=json"))["groups"]
 
+    hatchi.wait_for_unit("srv-media.mount")
+    hatchi.succeed("mountpoint -q /srv/media")
     check_logins()
     for name in ${builtins.toJSON (builtins.attrNames fields)}:
         owner = "grafana:grafana" if name.startswith("grafana") else "root:root"
