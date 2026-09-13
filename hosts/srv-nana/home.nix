@@ -16,7 +16,10 @@
       package = pkgs.papirus-icon-theme;
       name = "Papirus";
     };
+    colorScheme = "dark";
   };
+
+  services.udiskie.enable = true;
 
   home.pointerCursor = {
     enable = true;
@@ -26,13 +29,6 @@
     gtk.enable = true;
     x11.enable = true;
     dotIcons.enable = true;
-  };
-
-  dconf.settings."org/gnome/desktop/interface" = {
-    color-scheme = "prefer-dark";
-    cursor-theme = "Adwaita";
-    cursor-size = 24;
-    icon-theme = "Papirus";
   };
 
   xdg.mimeApps = {
@@ -143,8 +139,6 @@
     };
   };
 
-  # Keep the launcher clean: use the simple settings entries above, and hide
-  # GNOME Control Center panels that do not work correctly under Hyprland.
   xdg.dataFile = builtins.listToAttrs (
     map
       (desktopFile: {
@@ -153,7 +147,7 @@
           force = true;
           text = ''
             [Desktop Entry]
-            Name=Hidden GNOME Settings
+            Name=Hidden Duplicate Settings
             Exec=false
             Type=Application
             NoDisplay=true
@@ -170,34 +164,6 @@
         "nwg-displays.desktop"
         "nwg-look.desktop"
         "org.pulseaudio.pavucontrol.desktop"
-        "org.gnome.Settings.desktop"
-        "gnome-about-panel.desktop"
-        "gnome-applications-panel.desktop"
-        "gnome-background-panel.desktop"
-        "gnome-bluetooth-panel.desktop"
-        "gnome-color-panel.desktop"
-        "gnome-datetime-panel.desktop"
-        "gnome-display-panel.desktop"
-        "gnome-keyboard-panel.desktop"
-        "gnome-mouse-panel.desktop"
-        "gnome-multitasking-panel.desktop"
-        "gnome-network-panel.desktop"
-        "gnome-notifications-panel.desktop"
-        "gnome-online-accounts-panel.desktop"
-        "gnome-power-panel.desktop"
-        "gnome-printers-panel.desktop"
-        "gnome-privacy-panel.desktop"
-        "gnome-region-panel.desktop"
-        "gnome-search-panel.desktop"
-        "gnome-sharing-panel.desktop"
-        "gnome-sound-panel.desktop"
-        "gnome-system-panel.desktop"
-        "gnome-universal-access-panel.desktop"
-        "gnome-users-panel.desktop"
-        "gnome-wacom-panel.desktop"
-        "gnome-wellbeing-panel.desktop"
-        "gnome-wifi-panel.desktop"
-        "gnome-wwan-panel.desktop"
       ]
   );
 
