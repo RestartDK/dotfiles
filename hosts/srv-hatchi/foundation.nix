@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
@@ -9,6 +10,7 @@ let
 in
 {
   imports = [
+    inputs.home-manager.nixosModules.home-manager
     ../../modules/nixos/host-options.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/numtide-cache.nix
@@ -18,13 +20,31 @@ in
     uid = 1000;
     extraGroups = [ "wheel" ];
   };
+  nixpkgs.config.allowUnfree = true;
+  programs.zsh.enable = true;
   users.users.${config.my.host.userName} = {
     isNormalUser = true;
     inherit (config.my.host) extraGroups uid;
+    home = config.my.host.homeDirectory;
+    shell = pkgs.zsh;
     openssh.authorizedKeys.keys = config.my.host.authorizedKeys ++ [ hatchiPublicKey ];
+  };
+  home-manager = {
+    useGlobalPkgs = true;
+    useUserPackages = true;
+    backupFileExtension = "hm-backup";
+    extraSpecialArgs = {
+      inherit inputs;
+      dotfilesInputs = inputs;
+    };
+    users.${config.my.host.userName} = import ./home.nix;
   };
   users.users.root.openssh.authorizedKeys.keys = config.my.host.rootAuthorizedKeys ++ [
     hatchiPublicKey
+  ];
+  networking.nameservers = [
+    "1.1.1.1"
+    "9.9.9.9"
   ];
   services.openssh.openFirewall = false;
   services.tailscale = {
@@ -56,6 +76,17 @@ in
   services = {
     fstrim.enable = true;
     journald.extraConfig = "SystemMaxUse=2G";
+    logind.settings.Login = {
+      HandleLidSwitch = "ignore";
+      HandleLidSwitchDocked = "ignore";
+      HandleLidSwitchExternalPower = "ignore";
+    };
+  };
+  systemd.sleep.settings.Sleep = {
+    AllowSuspend = "no";
+    AllowHibernation = "no";
+    AllowHybridSleep = "no";
+    AllowSuspendThenHibernate = "no";
   };
   zramSwap.enable = true;
   system.stateVersion = "26.05";
