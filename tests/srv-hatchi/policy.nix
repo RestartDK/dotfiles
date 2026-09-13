@@ -87,6 +87,7 @@ let
   };
   missingPhysicalPlatform = evaluatePhysicalPlatform null;
   home = cfg.home-manager.users.${cfg.my.host.userName};
+  bootstrapHome = bootstrap.home-manager.users.${bootstrap.my.host.userName};
   configured =
     module:
     (self.nixosConfigurations.srv-hatchi.extendModules {
@@ -340,16 +341,55 @@ assert builtins.all (name: builtins.elem name (map lib.getName home.home.package
   "herdr"
   "neovim"
 ];
+assert builtins.all (name: builtins.elem name (map lib.getName bootstrapHome.home.packages)) [
+  "codex"
+  "claude-code"
+  "opencode"
+  "pi"
+  "herdr"
+  "neovim"
+];
 assert cfg.programs.zsh.enable;
 assert lib.getName cfg.users.users.${cfg.my.host.userName}.shell == "zsh";
 assert lib.hasInfix "home-manager" home.home.activationPackage.drvPath;
+assert bootstrap.programs.zsh.enable;
+assert lib.getName bootstrap.users.users.${bootstrap.my.host.userName}.shell == "zsh";
+assert lib.hasInfix "home-manager" bootstrapHome.home.activationPackage.drvPath;
+assert bootstrapHome.my.liveConfig.repoRoot == "/home/dkumlin/.config/dotfiles";
+assert builtins.all (group: bootstrapHome.my.liveConfig.groups.${group}) [
+  "shell"
+  "git"
+  "editors"
+  "terminalTools"
+  "multiplexer"
+  "agents"
+];
+assert !bootstrapHome.my.liveConfig.groups.ghostty && !bootstrapHome.my.liveConfig.groups.wayland;
+assert
+  bootstrap.networking.nameservers == [
+    "1.1.1.1"
+    "9.9.9.9"
+  ];
+assert
+  bootstrap.services.logind.settings.Login == {
+    HandleLidSwitch = "ignore";
+    HandleLidSwitchDocked = "ignore";
+    HandleLidSwitchExternalPower = "ignore";
+    KillUserProcesses = false;
+  };
+assert
+  bootstrap.systemd.sleep.settings.Sleep == {
+    AllowSuspend = "no";
+    AllowHibernation = "no";
+    AllowHybridSleep = "no";
+    AllowSuspendThenHibernate = "no";
+  };
 assert
   renamedUser.home-manager.users.hatchi-fixture.home.homeDirectory == "/srv/home/hatchi-fixture";
 assert renamedUser.users.users.hatchi-fixture.home == "/srv/home/hatchi-fixture";
 assert
   renamedUser.home-manager.users.hatchi-fixture.my.liveConfig.repoRoot
   == "/srv/home/hatchi-fixture/.config/dotfiles";
-assert !(bootstrap ? home-manager);
 assert cfg.my.hatchi.onepassword.references.glanceKey != null;
 assert privateMachine.my.hatchi.onepassword.references.glanceKey == null;
 assert privateMachine.my.hatchi.onepassword.references.grafanaKey == null;

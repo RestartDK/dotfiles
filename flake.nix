@@ -454,25 +454,7 @@
         modules = [
           self.nixosModules.srv-hatchi
         ]
-        ++ hatchiProductionPlatformModules
-        ++ [
-          home-manager.nixosModules.home-manager
-          ({ config, pkgs, ... }: {
-            nixpkgs.config.allowUnfree = true;
-            programs.zsh.enable = true;
-            users.users.${config.my.host.userName} = {
-              home = config.my.host.homeDirectory;
-              shell = pkgs.zsh;
-            };
-            home-manager = {
-              useGlobalPkgs = true;
-              useUserPackages = true;
-              backupFileExtension = "hm-backup";
-              extraSpecialArgs = homeSpecialArgs;
-              users.${config.my.host.userName} = import ./hosts/srv-hatchi/home.nix;
-            };
-          })
-        ];
+        ++ hatchiProductionPlatformModules;
       };
 
       nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
