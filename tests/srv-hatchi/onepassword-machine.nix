@@ -35,7 +35,6 @@
     };
   };
   environment.systemPackages = [
-    pkgs.python3
     pkgs.sops
     pkgs.age
   ];

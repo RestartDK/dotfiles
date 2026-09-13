@@ -6,27 +6,28 @@
 }:
 let
   cfg = config.my.hatchi.onepassword;
+  paths = config.services.onepassword-secrets.secretPaths;
   references = {
-    cloudflare = "op://Homelab/Cloudflare api token chateau/credential";
-    adguardPassword = "op://Homelab/Chateau adguard/password";
-    couchdbUsername = "op://Homelab/Obsidian live sync/username";
-    couchdbPassword = "op://Homelab/Obsidian live sync/password";
+    cloudflare = null;
+    adguardPasswordHash = null;
+    couchdbAdmin = null;
     glanceKey = "op://Homelab/Chateau glance/add more/secret password";
     glancePassword = "op://Homelab/Chateau glance/password";
     grafanaKey = null;
     grafanaPassword = "op://Homelab/Chateau grafana/password";
     nextcloudPassword = "op://Homelab/Chateau nextcloud admin/password";
-    qbittorrentPassword = "op://Homelab/Chateau qbittorent/password";
+    qbittorrentPasswordHash = null;
   };
-  python = pkgs.python3.withPackages (ps: [ ps.bcrypt ]);
-  manifest = pkgs.writeText "hatchi-secret-formats.json" (
-    builtins.toJSON {
-      rawDirectory = config.services.onepassword-secrets.outputDir;
-      adguard = config.services.adguardhome.settings // {
+  adguardConfig = pkgs.writeText "AdGuardHome.yaml" (
+    builtins.toJSON (
+      config.services.adguardhome.settings
+      // {
         http.address = "${config.services.adguardhome.host}:${toString config.services.adguardhome.port}";
-      };
-      qbittorrent = config.services.qbittorrent.serverConfig;
-    }
+      }
+    )
+  );
+  qbittorrentConfig = pkgs.writeText "qBittorrent.conf" (
+    lib.generators.toINI { } config.services.qbittorrent.serverConfig
   );
 in
 {
@@ -42,7 +43,7 @@ in
       lib.mkOption {
         type = lib.types.nullOr (lib.types.strMatching "op://.+/.+/.+");
         default = reference;
-        description = "1Password field reference, never its value.";
+        description = "1Password reference to the service-ready credential described in tests/srv-hatchi/onepassword.md.";
       }
     ) references;
   };
@@ -63,16 +64,23 @@ in
       enable = true;
       outputDir = "/run/hatchi-onepassword";
       systemdIntegration.enable = false;
-      secrets = lib.mapAttrs (_: reference: {
+      secrets = lib.mapAttrs (name: reference: {
         inherit reference;
         mode = "0400";
+        owner = if lib.hasPrefix "grafana" name then "grafana" else "root";
+        group = if lib.hasPrefix "grafana" name then "grafana" else "root";
       }) (lib.filterAttrs (_: reference: reference != null) cfg.references);
     };
-    systemd.services.opnix-secrets.preStart = ''
-      test -s ${lib.escapeShellArg config.services.onepassword-secrets.tokenFile}
-    '';
+    systemd.services.opnix-secrets = {
+      preStart = ''
+        test -s ${lib.escapeShellArg config.services.onepassword-secrets.tokenFile}
+      '';
+      postStart = lib.concatMapStringsSep "\n" (path: "test -s ${lib.escapeShellArg path}") (
+        builtins.attrValues paths
+      );
+    };
     systemd.services.hatchi-secret-files = {
-      description = "Render Hatchi application credentials";
+      description = "Substitute Hatchi password hashes into declared configuration";
       wantedBy = [ "multi-user.target" ];
       requires = [ "opnix-secrets.service" ];
       after = [ "opnix-secrets.service" ];
@@ -81,7 +89,7 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         RuntimeDirectory = "hatchi-secrets";
-        RuntimeDirectoryMode = "0711";
+        RuntimeDirectoryMode = "0700";
         UMask = "0077";
         PrivateTmp = true;
         ProtectSystem = "strict";
@@ -90,7 +98,10 @@ in
         NoNewPrivileges = true;
       };
       script = ''
-        ${python}/bin/python ${./render-secrets.py} ${manifest} /run/hatchi-secrets
+        ${pkgs.coreutils}/bin/install -m400 ${adguardConfig} /run/hatchi-secrets/AdGuardHome.yaml
+        ${pkgs.replace-secret}/bin/replace-secret '@hatchi-adguard-hash@' ${paths.adguardPasswordHash} /run/hatchi-secrets/AdGuardHome.yaml
+        ${pkgs.coreutils}/bin/install -m400 ${qbittorrentConfig} /run/hatchi-secrets/qBittorrent.conf
+        ${pkgs.replace-secret}/bin/replace-secret '@hatchi-qbittorrent-hash@' ${paths.qbittorrentPasswordHash} /run/hatchi-secrets/qBittorrent.conf
       '';
     };
   };

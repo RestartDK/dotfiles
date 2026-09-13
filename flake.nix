@@ -297,15 +297,6 @@
                 touch $out
               '';
           quality = treefmtEval.${system}.config.build.check self;
-          srv-hatchi-onepassword-formats =
-            (pkgsFor system).runCommand "hatchi-onepassword-formats"
-              {
-                nativeBuildInputs = [ ((pkgsFor system).python3.withPackages (ps: [ ps.bcrypt ])) ];
-              }
-              ''
-                python ${./tests/srv-hatchi/onepassword-render.py} ${./hosts/srv-hatchi/render-secrets.py}
-                touch $out
-              '';
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
             pkgs = pkgsFor system;
             inherit self;
@@ -332,6 +323,10 @@
             srv-hatchi-production = self.nixosConfigurations.srv-hatchi.config.system.build.toplevel;
             srv-hatchi-bootstrap = self.nixosConfigurations.srv-hatchi-bootstrap.config.system.build.toplevel;
             srv-hatchi-services = import ./tests/srv-hatchi/services.nix {
+              pkgs = pkgsFor system;
+              inherit self inputs;
+            };
+            srv-hatchi-onepassword = import ./tests/srv-hatchi/onepassword.nix {
               pkgs = pkgsFor system;
               inherit self inputs;
             };

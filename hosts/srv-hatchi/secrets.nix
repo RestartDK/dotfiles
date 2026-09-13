@@ -48,7 +48,8 @@ in
     my.hatchi = {
       secretFiles =
         if cfg.enable then
-          lib.mapAttrs (_: name: "/run/hatchi-secrets/${name}") (secretNames // templateNames)
+          lib.genAttrs (builtins.attrNames secretNames) (name: onePassword.secretPaths.${name})
+          // lib.mapAttrs (_: name: "/run/hatchi-secrets/${name}") templateNames
         else
           lib.mapAttrs (_: name: config.sops.secrets.${name}.path) secretNames
           // lib.mapAttrs (_: name: config.sops.templates.${name}.path) templateNames;
