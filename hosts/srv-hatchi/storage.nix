@@ -12,8 +12,8 @@
       after = [ config.my.hatchi.secretService ];
       partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
       unitConfig = {
-        RequiresMountsFor = [ "/srv/media" ];
-        AssertPathIsMountPoint = "/srv/media";
+        RequiresMountsFor = [ "/srv" ];
+        AssertPathIsMountPoint = "/srv";
       };
     }))
     (lib.genAttrs config.my.hatchi.mediaUnits (_: {
@@ -26,12 +26,12 @@
         after = [ config.my.hatchi.secretService ];
         partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
         unitConfig = {
-          RequiresMountsFor = [ "/srv/media" ];
-          AssertPathIsMountPoint = "/srv/media";
+          RequiresMountsFor = [ "/srv" ];
+          AssertPathIsMountPoint = "/srv";
         };
         serviceConfig.Type = "oneshot";
         script = ''
-          ${pkgs.coreutils}/bin/install -d -m 2770 -o root -g media /srv/media/{movies,tvshows,manga,downloads}
+          ${pkgs.coreutils}/bin/install -d -m 2770 -o root -g media /srv/media/{movies,tvshows,books,downloads}
         '';
       };
     }

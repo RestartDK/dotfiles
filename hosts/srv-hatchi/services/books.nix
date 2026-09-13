@@ -15,8 +15,8 @@
       ip = "127.0.0.1";
       port = 4567;
       basicAuthEnabled = false;
-      downloadsPath = "/srv/media/manga";
-      localSourcePath = "/srv/media/manga";
+      downloadsPath = "/srv/media/books";
+      localSourcePath = "/srv/media/books";
     };
   };
   services.caddy.virtualHosts = {
@@ -46,7 +46,7 @@
     StateDirectoryMode = "0700";
     UMask = "0002";
     ReadOnlyPaths = [ "/srv/media" ];
-    ReadWritePaths = [ "/srv/media/manga" ];
+    ReadWritePaths = [ "/srv/media/books" ];
     Environment = "JAVA_TOOL_OPTIONS=-Xmx512m";
   };
 }

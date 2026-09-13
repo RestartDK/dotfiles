@@ -6,30 +6,12 @@ in
 {
   imports = [
     inputs.disko.nixosModules.disko
+    (import ../../hosts/srv-hatchi/disk-layout.nix {
+      systemDisk = "/dev/vda";
+      dataDisk = "/dev/vdb";
+    })
     ../../hosts/srv-hatchi/bootstrap.nix
   ];
-  boot.loader.grub.enable = true;
-  disko.devices.disk.vm = {
-    type = "disk";
-    device = "/dev/vda";
-    content = {
-      type = "gpt";
-      partitions = {
-        boot = {
-          size = "1M";
-          type = "EF02";
-        };
-        root = {
-          size = "100%";
-          content = {
-            type = "filesystem";
-            format = "ext4";
-            mountpoint = "/";
-          };
-        };
-      };
-    };
-  };
   disko.tests = {
     extraChecks = ''
       machine.succeed("test $(hostname) = srv-hatchi")
@@ -45,7 +27,9 @@ in
           machine.wait_until_succeeds("ip netns exec bootstrap-client ssh-keyscan -T 3 192.0.2.1 2>/dev/null | grep -q ssh-ed25519")
       finally:
           machine.succeed("ip netns delete bootstrap-client")
-      machine.succeed("findmnt -n /")
+      machine.succeed("findmnt -n -t ext4 /")
+      machine.succeed("findmnt -n -t ext4 /srv")
+      machine.succeed("findmnt -n -t vfat /boot")
       machine.fail("test -e /var/lib/nextcloud/config/config.php")
     '';
   };

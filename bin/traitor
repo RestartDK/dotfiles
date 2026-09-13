@@ -11,6 +11,7 @@ Commands:
   rollback               Roll back current host generation
   check                  Run flake checks
   deploy <node> [--dry-run]  Deploy exactly srv-nana or commissioned srv-hatchi
+  install srv-hatchi root@HOST --confirm-destroy  Install Hatchi with nixos-anywhere
   sync [--expect REV]    Rebase the checkout onto its upstream
   verify srv-hatchi <install-vm|services-vm|closures|policy>  Verify without live access
   update [inputs...]     Update all pins or selected flake inputs
@@ -192,6 +193,77 @@ run_update() {
     nix run .#update-pi-packages
   fi
 }
+
+run_install() (
+  if (($# != 3)) || [[ $1 != srv-hatchi || $3 != --confirm-destroy ]]; then
+    echo "traitor: install requires 'srv-hatchi root@HOST --confirm-destroy'" >&2
+    return 2
+  fi
+  local target="$2" flake_dir state smart_health branch revision upstream remote_url staging_root checkout
+  if [[ ! $target =~ ^root@[A-Za-z0-9._:-]+$ ]]; then
+    echo "traitor: Hatchi installer target must have the form root@HOST" >&2
+    return 2
+  fi
+
+  flake_dir="$(resolve_flake_dir)"
+  preflight "$flake_dir"
+  state="$(nix eval --raw "$flake_dir#hatchiCommissioning.state")"
+  if [[ $state != install-ready ]]; then
+    echo "traitor: srv-hatchi state '$state' does not permit installation" >&2
+    return 1
+  fi
+  smart_health="$(nix eval --raw "$flake_dir#hatchiCommissioning.smartHealth")"
+  if [[ $smart_health != passed ]]; then
+    echo "traitor: srv-hatchi SMART health is '$smart_health'; installation denied" >&2
+    return 1
+  fi
+  if [[ -n $(git -C "$flake_dir" status --porcelain --untracked-files=all) ]]; then
+    echo "traitor: Hatchi installation requires a clean checkout" >&2
+    return 1
+  fi
+  branch="$(git -C "$flake_dir" symbolic-ref --quiet --short HEAD)" || {
+    echo "traitor: Hatchi installation requires a branch checkout" >&2
+    return 1
+  }
+  if [[ $branch != main ]]; then
+    echo "traitor: Hatchi installation requires the main branch" >&2
+    return 1
+  fi
+  revision="$(git -C "$flake_dir" rev-parse HEAD)"
+  upstream="$(git -C "$flake_dir" rev-parse --verify '@{upstream}')" || {
+    echo "traitor: Hatchi installation requires a configured upstream branch" >&2
+    return 1
+  }
+  if [[ $revision != "$upstream" ]]; then
+    echo "traitor: Hatchi installation requires HEAD to match its pushed upstream" >&2
+    return 1
+  fi
+  if [[ ! -f $flake_dir/hosts/srv-hatchi/hardware-configuration.nix ]]; then
+    echo "traitor: Hatchi hardware configuration is missing" >&2
+    return 1
+  fi
+  remote_url="$(git -C "$flake_dir" remote get-url origin)"
+
+  staging_root="$(mktemp -d)"
+  trap 'rm -rf "$staging_root"' EXIT
+  checkout="$staging_root/home/dkumlin/.config/dotfiles"
+  mkdir -p "$(dirname "$checkout")"
+  git clone --quiet --no-local --branch main "$flake_dir" "$checkout"
+  git -C "$checkout" remote set-url origin "$remote_url"
+  if [[ $(git -C "$checkout" rev-parse HEAD) != "$revision" ]]; then
+    echo "traitor: staged checkout revision mismatch" >&2
+    return 1
+  fi
+
+  printf 'Installing revision %s on %s\n' "$revision" "$target"
+  printf 'System disk: %s\n' "$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.systemDisk")"
+  printf 'Data disk: %s\n' "$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.dataDisk")"
+  nix run "$flake_dir#nixos-anywhere" -- \
+    --flake "$checkout#srv-hatchi-bootstrap" \
+    --target-host "$target" \
+    --extra-files "$staging_root" \
+    --chown /home/dkumlin/.config/dotfiles 1000:100
+)
 
 run_deploy() {
   if (($# < 1 || $# > 2)) || [[ ${2:-} != "" && ${2:-} != --dry-run ]]; then
@@ -424,6 +496,9 @@ check)
   ;;
 deploy)
   run_deploy "$@"
+  ;;
+install)
+  run_install "$@"
   ;;
 sync)
   run_sync "$@"

@@ -13,6 +13,7 @@ in
     package = pkgs.nextcloud33;
     hostName = name;
     https = true;
+    datadir = "/srv/nextcloud";
     database.createLocally = true;
     configureRedis = true;
     config = {

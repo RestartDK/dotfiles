@@ -191,6 +191,26 @@
         inherit inputs;
         dotfilesInputs = inputs;
       };
+      hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
+      hatchiPhysicalPlatform = import ./hosts/srv-hatchi/physical-platform.nix {
+        inherit inputs;
+        storage = hatchiCommissioning.storage;
+      };
+      hatchiInstallPlatformModules =
+        if
+          builtins.elem hatchiCommissioning.state [
+            "install-ready"
+            "physical"
+          ]
+        then
+          [ hatchiPhysicalPlatform ]
+        else
+          [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];
+      hatchiProductionPlatformModules =
+        if hatchiCommissioning.state == "physical" then
+          [ hatchiPhysicalPlatform ]
+        else
+          [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];
     in
     {
       packages = forAllSystems (
@@ -209,6 +229,7 @@
           inherit fleet traitor;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
+          nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
           pi-package-updater = piPackageUpdater;
           default = traitor;
@@ -299,7 +320,7 @@
           quality = treefmtEval.${system}.config.build.check self;
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
             pkgs = pkgsFor system;
-            inherit self;
+            inherit self inputs;
           };
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) (
@@ -350,7 +371,7 @@
           cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
         };
 
-      hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
+      inherit hatchiCommissioning;
       deploy = {
         autoRollback = true;
         magicRollback = true;
@@ -419,8 +440,12 @@
         specialArgs = { inherit inputs; };
         modules = [
           self.nixosModules.srv-hatchi-bootstrap
-          ./tests/srv-hatchi/fixtures/reference-platform.nix
-          { system.build.installTest = hatchiInstall.config.system.build.installTest; }
+        ]
+        ++ hatchiInstallPlatformModules
+        ++ [
+          ({ lib, ... }: {
+            system.build.installTest = lib.mkForce hatchiInstall.config.system.build.installTest;
+          })
         ];
       };
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
@@ -428,7 +453,9 @@
         specialArgs = { inherit inputs; };
         modules = [
           self.nixosModules.srv-hatchi
-          ./tests/srv-hatchi/fixtures/reference-platform.nix
+        ]
+        ++ hatchiProductionPlatformModules
+        ++ [
           home-manager.nixosModules.home-manager
           ({ config, pkgs, ... }: {
             nixpkgs.config.allowUnfree = true;
