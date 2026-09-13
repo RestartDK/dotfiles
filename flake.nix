@@ -181,7 +181,10 @@
       hatchiInstall = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
         specialArgs = { inherit inputs; };
-        modules = [ ./tests/srv-hatchi/install.nix ];
+        modules = [
+          hatchiPkgsModule
+          ./tests/srv-hatchi/install.nix
+        ];
       };
       twinPkgs = import inputs.nixpkgs-unstable {
         system = linuxSystem;
@@ -190,6 +193,9 @@
       homeSpecialArgs = {
         inherit inputs;
         dotfilesInputs = inputs;
+      };
+      hatchiPkgsModule = {
+        nixpkgs.pkgs = pkgsFor linuxSystem;
       };
       hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
       hatchiPhysicalPlatform = import ./hosts/srv-hatchi/physical-platform.nix {
@@ -439,6 +445,7 @@
         system = linuxSystem;
         specialArgs = { inherit inputs; };
         modules = [
+          hatchiPkgsModule
           self.nixosModules.srv-hatchi-bootstrap
         ]
         ++ hatchiInstallPlatformModules
@@ -452,6 +459,7 @@
         system = linuxSystem;
         specialArgs = { inherit inputs; };
         modules = [
+          hatchiPkgsModule
           self.nixosModules.srv-hatchi
         ]
         ++ hatchiProductionPlatformModules;

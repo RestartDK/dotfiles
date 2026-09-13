@@ -20,7 +20,6 @@ in
     uid = 1000;
     extraGroups = [ "wheel" ];
   };
-  nixpkgs.config.allowUnfree = true;
   programs.zsh.enable = true;
   users.users.${config.my.host.userName} = {
     isNormalUser = true;
