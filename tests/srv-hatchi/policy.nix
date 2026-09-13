@@ -287,6 +287,7 @@ assert lib.versions.major cfg.services.nextcloud.package.version == "33";
 assert cfg.services.nextcloud.datadir == "/srv/nextcloud";
 assert cfg.my.host.uid == 1000;
 assert cfg.users.users.${cfg.my.host.userName}.uid == 1000;
+assert cfg.users.groups.users.gid == 100;
 assert cfg.zramSwap.enable;
 assert cfg.services.fstrim.enable;
 assert cfg.services.journald.extraConfig == "SystemMaxUse=2G";
