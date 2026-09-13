@@ -4,6 +4,7 @@ set -euo pipefail
 export HOME="$TMPDIR/home" FLAKE_DIR="$ROOT"
 export NIX_CALLS="$TMPDIR/nix-calls" UPSTREAM_CALLS="$TMPDIR/upstream-calls"
 mkdir -p "$HOME"
+test -z "$(find "$ROOT/hosts/srv-hatchi" "$ROOT/tests/srv-hatchi" -name '*.py' -print)"
 opnix secret -h >/dev/null 2>&1
 export PATH="$NIX_STUB/bin:$PATH"
 export SOPS_AGE_KEY_FILE="$ROOT/tests/srv-hatchi/fixtures/age-key.txt"

@@ -121,7 +121,6 @@ jobs:
         run: |
           ./bin/traitor verify srv-hatchi closures
           nix build --no-link --print-build-logs --max-jobs 2 \
-            .#checks.x86_64-linux.srv-hatchi-onepassword-formats \
             .#checks.x86_64-linux.srv-hatchi-deploy-rejection \
             .#checks.x86_64-linux.srv-hatchi-deploy-schema \
             .#checks.x86_64-linux.srv-hatchi-deploy-activate
@@ -181,6 +180,16 @@ jobs:
           ./bin/traitor verify srv-hatchi "$VERIFY_KIND" 2>&1 | tee verification/command.log
           status=${PIPESTATUS[0]}
           printf '%s\n' "$status" > verification/exit-status
+          exit "$status"
+
+      - name: Verify service-ready 1Password credentials
+        if: matrix.kind == 'services-vm'
+        run: |
+          nix eval --raw .#checks.x86_64-linux.srv-hatchi-onepassword.drvPath > verification/onepassword-derivation
+          set +e
+          nix build --no-link --print-build-logs .#checks.x86_64-linux.srv-hatchi-onepassword 2>&1 | tee verification/onepassword-command.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > verification/onepassword-exit-status
           exit "$status"
 
       - name: Retain VM failure logs

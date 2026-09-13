@@ -32,10 +32,9 @@ let
     my.hatchi.onepassword = {
       enable = true;
       tokenFile = "/run/test-opnix-token";
-      references = {
-        glanceKey = "op://fixture/keys/glance";
-        grafanaKey = "op://fixture/keys/grafana";
-      };
+      references = lib.genAttrs (builtins.attrNames cfg.my.hatchi.onepassword.references) (
+        name: "op://fixture/credentials/${name}"
+      );
     };
   };
   privateMachine = configured (
@@ -252,7 +251,7 @@ assert
   cfg.my.hatchi.onepassword.references.glancePassword == "op://Homelab/Chateau glance/password";
 assert
   withAppSecrets.services.glance.settings.auth.users.daniel.password._secret
-  == "/run/hatchi-secrets/glance-password";
+  == "/run/hatchi-onepassword/glancePassword";
 assert withAppSecrets.sops.secrets == { };
 assert withAppSecrets.sops.templates == { };
 assert withAppSecrets.my.hatchi.secretService == "hatchi-secret-files.service";
@@ -261,16 +260,60 @@ assert cfg.services.nextcloud.config.adminuser == null;
 assert builtins.elem "nextcloud-admin.service" cfg.systemd.services.nginx.requires;
 assert builtins.elem "adminpass:/run/secrets/nextcloud-admin"
   cfg.systemd.services.nextcloud-admin.serviceConfig.LoadCredential;
-assert builtins.elem "adminpass:/run/hatchi-secrets/nextcloud-admin"
+assert builtins.elem "adminpass:/run/hatchi-onepassword/nextcloudPassword"
   withAppSecrets.systemd.services.nextcloud-admin.serviceConfig.LoadCredential;
 assert lib.hasInfix "--password-from-env" cfg.systemd.services.nextcloud-admin.script;
 assert withAppSecrets.services.onepassword-secrets.tokenFile == "/run/test-opnix-token";
 assert !withAppSecrets.services.onepassword-secrets.systemdIntegration.enable;
 assert
-  builtins.length (builtins.attrNames withAppSecrets.services.onepassword-secrets.secrets) == 10;
-assert builtins.all (secret: secret.mode == "0400" && secret.owner == "root") (
+  builtins.length (builtins.attrNames withAppSecrets.services.onepassword-secrets.secrets) == 9;
+assert builtins.all (secret: secret.mode == "0400") (
   builtins.attrValues withAppSecrets.services.onepassword-secrets.secrets
 );
+assert builtins.all
+  (
+    name:
+    let
+      secret = withAppSecrets.services.onepassword-secrets.secrets.${name};
+    in
+    secret.owner == "grafana" && secret.group == "grafana"
+  )
+  [
+    "grafanaKey"
+    "grafanaPassword"
+  ];
+assert builtins.all
+  (name: withAppSecrets.services.onepassword-secrets.secrets.${name}.owner == "root")
+  [
+    "cloudflare"
+    "couchdbAdmin"
+    "adguardPasswordHash"
+    "qbittorrentPasswordHash"
+    "glanceKey"
+    "glancePassword"
+    "nextcloudPassword"
+  ];
+assert builtins.all (name: cfg.my.hatchi.onepassword.references.${name} == null) [
+  "cloudflare"
+  "couchdbAdmin"
+  "adguardPasswordHash"
+  "qbittorrentPasswordHash"
+  "grafanaKey"
+];
+assert !(withAppSecrets.services.onepassword-secrets.secrets ? adguardPassword);
+assert !(withAppSecrets.services.onepassword-secrets.secrets ? qbittorrentPassword);
+assert
+  withAppSecrets.services.adguardhome.settings.users == [
+    {
+      name = "daniel";
+      password = "@hatchi-adguard-hash@";
+    }
+  ];
+assert
+  withAppSecrets.services.qbittorrent.serverConfig.Preferences."WebUI\\Password_PBKDF2"
+  == "@hatchi-qbittorrent-hash@";
+assert lib.hasInfix "replace-secret" withAppSecrets.systemd.services.hatchi-secret-files.script;
+assert !(lib.hasInfix "render-secrets" withAppSecrets.systemd.services.hatchi-secret-files.script);
 assert withAppSecrets.systemd.services.hatchi-secret-files.requires == [ "opnix-secrets.service" ];
 assert withAppSecrets.systemd.services.hatchi-secret-files.partOf == [ "opnix-secrets.service" ];
 assert
@@ -295,6 +338,10 @@ assert builtins.all
   [
     "glanceKey"
     "grafanaKey"
+    "cloudflare"
+    "couchdbAdmin"
+    "adguardPasswordHash"
+    "qbittorrentPasswordHash"
   ];
 assert builtins.any (
   check:

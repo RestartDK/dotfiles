@@ -42,7 +42,10 @@
           "WebUI\\Address" = "127.0.0.1";
           "WebUI\\Username" = "daniel";
           "WebUI\\Password_PBKDF2" =
-            if config.my.hatchi.onepassword.enable then "" else config.sops.placeholder.qbittorrent-password;
+            if config.my.hatchi.onepassword.enable then
+              "@hatchi-qbittorrent-hash@"
+            else
+              config.sops.placeholder.qbittorrent-password;
           "WebUI\\ServerDomains" = "qbittorrent.${config.my.hatchi.domain}";
           "WebUI\\LocalHostAuth" = true;
           "WebUI\\AuthSubnetWhitelistEnabled" = false;

@@ -94,7 +94,10 @@ in
           {
             name = "daniel";
             password =
-              if config.my.hatchi.onepassword.enable then "" else config.sops.placeholder.adguard-password;
+              if config.my.hatchi.onepassword.enable then
+                "@hatchi-adguard-hash@"
+              else
+                config.sops.placeholder.adguard-password;
           }
         ];
         dns = {
