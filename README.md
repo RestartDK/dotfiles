@@ -127,6 +127,8 @@ The tailnet policy must permit that tag to reach the selected host on SSH. The h
 
 Hatchi also needs its real disk, network, deployment target, and commissioning configuration. Its existing activation refusal remains intact. Deployment runs `traitor deploy` for the exact tested revision. It does not install NixOS or populate the editable dotfiles checkout.
 
+Hatchi's optional runtime 1Password provider and private NixOS verification procedure are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md). Missing restoration keys still block production enablement.
+
 ## Cobb bridge profile
 
 This flake exports a reusable Home Manager module for Cobb:

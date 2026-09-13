@@ -279,7 +279,7 @@ pkgs.testers.runNixOSTest {
     hatchi.succeed("systemctl reset-failed; systemctl start srv-media.mount")
     hatchi.wait_for_unit("srv-media.mount")
     assert hatchi.succeed("findmnt -n -o LABEL,FSTYPE --mountpoint /srv/media").split() == ["hatchi-media", "ext4"]
-    units = ["adguardhome", "caddy", "glance", "komga", "suwayomi-server", "jellyfin", "seerr", "radarr", "sonarr", "prowlarr", "qbittorrent", "nextcloud-setup", "nextcloud-cron", "nextcloud-update-db", "phpfpm-nextcloud", "nginx", "postgresql", "postgresql-setup", "redis-nextcloud", "couchdb", "prometheus", "grafana"]
+    units = ["adguardhome", "caddy", "glance", "komga", "suwayomi-server", "jellyfin", "seerr", "radarr", "sonarr", "prowlarr", "qbittorrent", "nextcloud-admin", "nextcloud-setup", "nextcloud-cron", "nextcloud-update-db", "phpfpm-nextcloud", "nginx", "postgresql", "postgresql-setup", "redis-nextcloud", "couchdb", "prometheus", "grafana"]
     hatchi.succeed("systemctl reset-failed; systemctl start " + " ".join(unit + ".service" for unit in units if unit not in ["nextcloud-cron", "nextcloud-update-db"]))
     for unit in units:
         if unit in ["nextcloud-setup", "postgresql-setup", "nextcloud-update-db", "nextcloud-cron"]:

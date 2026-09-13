@@ -8,8 +8,9 @@
   users.groups.media.gid = 1600;
   systemd.services = lib.mkMerge [
     (lib.genAttrs config.my.hatchi.stateUnits (_: {
-      requires = [ "sops-install-secrets.service" ];
-      after = [ "sops-install-secrets.service" ];
+      requires = [ config.my.hatchi.secretService ];
+      after = [ config.my.hatchi.secretService ];
+      partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
       unitConfig = {
         RequiresMountsFor = [ "/srv/media" ];
         AssertPathIsMountPoint = "/srv/media";
@@ -21,8 +22,9 @@
     }))
     {
       hatchi-media-directories = {
-        requires = [ "sops-install-secrets.service" ];
-        after = [ "sops-install-secrets.service" ];
+        requires = [ config.my.hatchi.secretService ];
+        after = [ config.my.hatchi.secretService ];
+        partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
         unitConfig = {
           RequiresMountsFor = [ "/srv/media" ];
           AssertPathIsMountPoint = "/srv/media";

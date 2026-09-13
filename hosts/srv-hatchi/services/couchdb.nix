@@ -25,7 +25,7 @@
       };
     };
   };
-  sops.secrets.couchdb-admin = {
+  sops.secrets.couchdb-admin = lib.mkIf (!config.my.hatchi.onepassword.enable) {
     restartUnits = [ "couchdb.service" ];
   };
   services.caddy.virtualHosts."couchdb.${config.my.hatchi.domain}".extraConfig =
@@ -36,7 +36,7 @@
   systemd.services.couchdb.serviceConfig = {
     RuntimeDirectory = "couchdb";
     RuntimeDirectoryMode = "0700";
-    LoadCredential = [ "admin:${config.sops.secrets.couchdb-admin.path}" ];
+    LoadCredential = [ "admin:${config.my.hatchi.secretFiles.couchdbAdmin}" ];
     StateDirectory = "couchdb";
     StateDirectoryMode = "0700";
     UMask = "0077";
