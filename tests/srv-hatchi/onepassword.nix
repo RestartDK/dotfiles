@@ -59,10 +59,14 @@ pkgs.testers.runNixOSTest {
             ${pkgs.sops}/bin/sops decrypt --extract '${builtins.toJSON [ field ]}' ${./fixtures/synthetic-secrets.sops.yaml} > ${
               config.services.onepassword-secrets.secretPaths.${name}
             }
-            chmod 400 ${config.services.onepassword-secrets.secretPaths.${name}}
+            chmod ${config.services.onepassword-secrets.secrets.${name}.mode} ${
+              config.services.onepassword-secrets.secretPaths.${name}
+            }
+            chown ${config.services.onepassword-secrets.secrets.${name}.owner}:${
+              config.services.onepassword-secrets.secrets.${name}.group
+            } ${config.services.onepassword-secrets.secretPaths.${name}}
           '') fields
         )}
-        chown grafana:grafana /run/hatchi-onepassword/grafanaKey /run/hatchi-onepassword/grafanaPassword
         if test -e /run/empty-adguard-hash; then
           truncate -s0 /run/hatchi-onepassword/adguardPasswordHash
         fi
@@ -89,7 +93,7 @@ pkgs.testers.runNixOSTest {
         hatchi.succeed("curl -fsS -u daniel:fixture-password http://127.0.0.1:3000/control/status | jq -e '.dns_addresses'")
         hatchi.succeed("curl -fsS -u daniel:fixture-password http://127.0.0.1:3001/api/user | jq -e '.login == \"daniel\"'")
         hatchi.succeed("curl -fsS -u daniel:fixture-password http://127.0.0.1:5984/_session | jq -e '.userCtx.roles | index(\"_admin\")'")
-        hatchi.succeed("curl -fsS -D /tmp/glance-headers -o /dev/null -H 'Content-Type: application/json' --data '{\"username\":\"daniel\",\"password\":\"fixture-password\"}' http://127.0.0.1:8081/api/authenticate; grep -qi '^set-cookie:' /tmp/glance-headers")
+        hatchi.succeed("curl -fsS -D /tmp/glance-headers -o /dev/null -H 'Content-Type: application/json' --data '{\"username\":\"daniel\",\"password\":\"fixture-password\"}' http://127.0.0.1:8081/api/authenticate && grep -qi '^set-cookie:' /tmp/glance-headers")
         hatchi.succeed("curl -fsS -c /tmp/qb-cookies -H 'Host: qbittorrent.chateauducipieres.com' -H 'Origin: http://qbittorrent.chateauducipieres.com' --data 'username=daniel&password=fixture-password' http://127.0.0.1:8080/api/v2/auth/login")
         hatchi.succeed("curl -fsS -b /tmp/qb-cookies -H 'Host: qbittorrent.chateauducipieres.com' http://127.0.0.1:8080/api/v2/app/version | grep '^v'")
         assert hatchi.succeed("curl -fsS -o /dev/null -w '%{http_code}' -u daniel:fixture-password -H 'Host: nextcloud.chateauducipieres.com' -H 'X-Forwarded-Proto: https' -H 'Depth: 0' -X PROPFIND http://127.0.0.1:11000/remote.php/dav/files/daniel/").strip() == "207"
@@ -98,10 +102,12 @@ pkgs.testers.runNixOSTest {
     hatchi.wait_for_unit("srv-media.mount")
     hatchi.succeed("mountpoint -q /srv/media")
     hatchi.wait_for_unit("hatchi-secret-files.service")
-    hatchi.succeed("test $(stat -c %U:%G:%a /run/hatchi-onepassword) = root:root:751")
+    directory_mode = hatchi.succeed("stat -c %U:%G:%a /run/hatchi-onepassword").strip()
+    assert directory_mode == "root:onepassword-secrets:751", directory_mode
     for name in ${builtins.toJSON (builtins.attrNames fields)}:
         owner = "grafana:grafana" if name.startswith("grafana") else "root:root"
-        hatchi.succeed(f"test $(stat -c %U:%G:%a /run/hatchi-onepassword/{name}) = {owner}:400")
+        file_mode = hatchi.succeed(f"stat -c %U:%G:%a /run/hatchi-onepassword/{name}").strip()
+        assert file_mode == f"{owner}:400", (name, file_mode)
         hatchi.fail(f"runuser -u nobody -- cat /run/hatchi-onepassword/{name}")
     for name in ["AdGuardHome.yaml", "qBittorrent.conf"]:
         hatchi.succeed(f"test $(stat -c %U:%G:%a /run/hatchi-secrets/{name}) = root:root:400")
