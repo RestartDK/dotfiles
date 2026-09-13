@@ -7,6 +7,7 @@ let
   inherit (pkgs) lib;
   source = builtins.fromJSON (builtins.readFile ./source-manifest.json);
   sorted = lib.sort builtins.lessThan;
+  hatchiPublicKey = lib.strings.trim (builtins.readFile ../../config/ssh/public-keys/hatchi.pub);
   secretsBefore =
     unit:
     builtins.elem "sops-install-secrets.service" cfg.systemd.services.${unit}.requires
@@ -287,6 +288,9 @@ assert lib.versions.major cfg.services.nextcloud.package.version == "33";
 assert cfg.services.nextcloud.datadir == "/srv/nextcloud";
 assert cfg.my.host.uid == 1000;
 assert cfg.users.users.${cfg.my.host.userName}.uid == 1000;
+assert builtins.elem hatchiPublicKey
+  cfg.users.users.${cfg.my.host.userName}.openssh.authorizedKeys.keys;
+assert builtins.elem hatchiPublicKey cfg.users.users.root.openssh.authorizedKeys.keys;
 assert cfg.users.groups.users.gid == 100;
 assert cfg.zramSwap.enable;
 assert cfg.services.fstrim.enable;

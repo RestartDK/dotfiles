@@ -1,8 +1,12 @@
 {
   config,
+  lib,
   pkgs,
   ...
 }:
+let
+  hatchiPublicKey = lib.strings.trim (builtins.readFile ../../config/ssh/public-keys/hatchi.pub);
+in
 {
   imports = [
     ../../modules/nixos/host-options.nix
@@ -17,9 +21,11 @@
   users.users.${config.my.host.userName} = {
     isNormalUser = true;
     inherit (config.my.host) extraGroups uid;
-    openssh.authorizedKeys.keys = config.my.host.authorizedKeys;
+    openssh.authorizedKeys.keys = config.my.host.authorizedKeys ++ [ hatchiPublicKey ];
   };
-  users.users.root.openssh.authorizedKeys.keys = config.my.host.rootAuthorizedKeys;
+  users.users.root.openssh.authorizedKeys.keys = config.my.host.rootAuthorizedKeys ++ [
+    hatchiPublicKey
+  ];
   services.openssh.openFirewall = false;
   services.tailscale = {
     enable = true;
