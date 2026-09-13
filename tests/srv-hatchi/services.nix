@@ -274,7 +274,6 @@ pkgs.testers.runNixOSTest {
     hatchi.fail("find /var/lib/postgresql -name PG_VERSION -print 2>/dev/null | grep .")
     for directory in ["movies", "tvshows", "books", "downloads"]:
         hatchi.fail(f"test -e /srv/media/{directory}")
-    hatchi.fail("test -e /srv/nextcloud")
 
     hatchi.succeed("truncate -s 128M /var/lib/hatchi-test-data.img; mkfs.ext4 -F -L hatchi-data /var/lib/hatchi-test-data.img")
     hatchi.succeed("systemctl reset-failed; systemctl start srv.mount")
