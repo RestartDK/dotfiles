@@ -7,11 +7,22 @@ let
     source = link path;
     force = true;
   };
+  goEnv = {
+    GOPATH = "${config.xdg.dataHome}/go";
+    GOBIN = config.xdg.binHome;
+    GOCACHE = "${config.xdg.cacheHome}/go-build";
+  };
 in
 {
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       (lib.mkIf cfg.groups.shell {
+        programs.go = {
+          enable = true;
+          package = null;
+          env = goEnv;
+        };
+        home.sessionVariables = goEnv;
         programs.zsh = {
           enable = true;
           enableCompletion = true;
@@ -29,7 +40,10 @@ in
             '')
           ];
         };
-        xdg.configFile."starship.toml" = file "config/shell/starship.toml";
+        xdg = {
+          localBinInPath = true;
+          configFile."starship.toml" = file "config/shell/starship.toml";
+        };
       })
 
       (lib.mkIf cfg.groups.git {

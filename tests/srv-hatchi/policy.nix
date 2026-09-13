@@ -88,6 +88,11 @@ let
   missingPhysicalPlatform = evaluatePhysicalPlatform null;
   home = cfg.home-manager.users.${cfg.my.host.userName};
   bootstrapHome = bootstrap.home-manager.users.${bootstrap.my.host.userName};
+  expectedGoEnv = {
+    GOPATH = "${home.home.homeDirectory}/.local/share/go";
+    GOBIN = "${home.home.homeDirectory}/.local/bin";
+    GOCACHE = "${home.home.homeDirectory}/.cache/go-build";
+  };
   configured =
     module:
     (self.nixosConfigurations.srv-hatchi.extendModules {
@@ -350,6 +355,19 @@ assert builtins.all (name: builtins.elem name (map lib.getName bootstrapHome.hom
   "neovim"
 ];
 assert cfg.programs.zsh.enable;
+assert home.programs.go.enable;
+assert home.programs.go.package == null;
+assert
+  {
+    inherit (home.programs.go.env) GOPATH GOBIN GOCACHE;
+  } == expectedGoEnv;
+assert
+  {
+    inherit (home.home.sessionVariables) GOPATH GOBIN GOCACHE;
+  } == expectedGoEnv;
+assert !(home.programs.go.env ? GOMODCACHE);
+assert !(home.home.sessionVariables ? GOMODCACHE);
+assert home.xdg.localBinInPath;
 assert lib.getName cfg.users.users.${cfg.my.host.userName}.shell == "zsh";
 assert lib.hasInfix "home-manager" home.home.activationPackage.drvPath;
 assert bootstrap.programs.zsh.enable;
