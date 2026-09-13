@@ -50,8 +50,15 @@ for flag in '' --dry-run; do
   diff -u "$TMPDIR/expected" "$NIX_CALLS"
 done
 invoke 0 deploy srv-nana --dry-run
-printf '%s\n' run --inputs-from "$ROOT" deploy-rs -- "$ROOT#srv-nana" --dry-activate >"$TMPDIR/expected"
+printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#srv-nana" --dry-activate >"$TMPDIR/expected"
 diff -u "$TMPDIR/expected" "$NIX_CALLS"
+invoke 0 twin
+printf '%s\n' run "$ROOT#home-manager" -- switch --flake "$ROOT#twin" -b hm-backup >"$TMPDIR/expected"
+diff -u "$TMPDIR/expected" "$NIX_CALLS"
+if grep 'nix run' "$ROOT/bin/traitor" | grep -Ev 'nix run (\.#|"[$]flake_dir#)' >/dev/null; then
+  echo "traitor must run external tools through root flake outputs" >&2
+  exit 1
+fi
 invoke 0 verify srv-hatchi install-vm
 printf '%s\n' run "$ROOT#srv-hatchi-install-vm" >"$TMPDIR/expected"
 diff -u "$TMPDIR/expected" "$NIX_CALLS"
