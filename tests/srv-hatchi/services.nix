@@ -50,8 +50,8 @@ pkgs.testers.runNixOSTest {
           ];
         };
       };
-      virtualisation.fileSystems."/srv/media" = {
-        device = "/var/lib/hatchi-test-media.img";
+      virtualisation.fileSystems."/srv" = {
+        device = "/var/lib/hatchi-test-data.img";
         fsType = "ext4";
         options = [
           "loop"
@@ -60,8 +60,8 @@ pkgs.testers.runNixOSTest {
       };
       assertions = [
         {
-          assertion = config.fileSystems."/srv/media".device == "/var/lib/hatchi-test-media.img";
-          message = "The Hatchi service VM must use its disposable media image";
+          assertion = config.fileSystems."/srv".device == "/var/lib/hatchi-test-data.img";
+          message = "The Hatchi service VM must use its disposable data image";
         }
       ];
       my.hatchi = {
@@ -267,18 +267,19 @@ pkgs.testers.runNixOSTest {
     for port in [8000, 8001, 8002, 9100]:
         nana.wait_for_open_port(port)
     hatchi.wait_for_unit("sops-install-secrets.service")
-    hatchi.fail("mountpoint -q /srv/media")
+    hatchi.fail("mountpoint -q /srv")
     hatchi.fail("systemctl start nextcloud-setup.service")
     hatchi.fail("systemctl start hatchi-media-directories.service")
     hatchi.fail("test -s /var/lib/nextcloud/config/config.php")
     hatchi.fail("find /var/lib/postgresql -name PG_VERSION -print 2>/dev/null | grep .")
-    for directory in ["movies", "tvshows", "manga", "downloads"]:
+    for directory in ["movies", "tvshows", "books", "downloads"]:
         hatchi.fail(f"test -e /srv/media/{directory}")
+    hatchi.fail("test -e /srv/nextcloud")
 
-    hatchi.succeed("truncate -s 128M /var/lib/hatchi-test-media.img; mkfs.ext4 -F -L hatchi-media /var/lib/hatchi-test-media.img")
-    hatchi.succeed("systemctl reset-failed; systemctl start srv-media.mount")
-    hatchi.wait_for_unit("srv-media.mount")
-    assert hatchi.succeed("findmnt -n -o LABEL,FSTYPE --mountpoint /srv/media").split() == ["hatchi-media", "ext4"]
+    hatchi.succeed("truncate -s 128M /var/lib/hatchi-test-data.img; mkfs.ext4 -F -L hatchi-data /var/lib/hatchi-test-data.img")
+    hatchi.succeed("systemctl reset-failed; systemctl start srv.mount")
+    hatchi.wait_for_unit("srv.mount")
+    assert hatchi.succeed("findmnt -n -o LABEL,FSTYPE --mountpoint /srv").split() == ["hatchi-data", "ext4"]
     units = ["adguardhome", "caddy", "glance", "komga", "suwayomi-server", "jellyfin", "seerr", "radarr", "sonarr", "prowlarr", "qbittorrent", "nextcloud-admin", "nextcloud-setup", "nextcloud-cron", "nextcloud-update-db", "phpfpm-nextcloud", "nginx", "postgresql", "postgresql-setup", "redis-nextcloud", "couchdb", "prometheus", "grafana"]
     hatchi.succeed("systemctl reset-failed; systemctl start " + " ".join(unit + ".service" for unit in units if unit not in ["nextcloud-cron", "nextcloud-update-db"]))
     for unit in units:
@@ -405,13 +406,14 @@ pkgs.testers.runNixOSTest {
     client.succeed("printf 'native-nextcloud-persistence' > /tmp/proof.txt")
     client.succeed(curl("nextcloud", "/remote.php/dav/files/daniel/proof.txt", "-f -u daniel:fixture-password -T /tmp/proof.txt"))
     assert response("nextcloud", "/remote.php/dav/files/daniel/proof.txt", "-f -u daniel:fixture-password") == "native-nextcloud-persistence"
+    hatchi.succeed("test -f /srv/nextcloud/daniel/files/proof.txt")
     hatchi.succeed("systemctl start nextcloud-cron.service")
     hatchi.wait_until_succeeds("test $(systemctl show nextcloud-cron.service -p ActiveState --value) = inactive")
     hatchi.succeed("test $(systemctl show nextcloud-cron.service -p ExecMainStatus --value) = 0")
 
-    for user, path in [("radarr", "movies"), ("sonarr", "tvshows"), ("qbittorrent", "downloads"), ("suwayomi", "manga")]:
+    for user, path in [("radarr", "movies"), ("sonarr", "tvshows"), ("qbittorrent", "downloads"), ("suwayomi", "books")]:
         hatchi.succeed(f"runuser -u {user} -- touch /srv/media/{path}/permission-proof")
-    for unit, path in [("jellyfin", "movies"), ("komga", "manga")]:
+    for unit, path in [("jellyfin", "movies"), ("komga", "books")]:
         pid = hatchi.succeed(f"systemctl show {unit} -p MainPID --value").strip()
         hatchi.fail(f"nsenter -t {pid} -m -- touch /srv/media/{path}/forbidden")
     hatchi.fail("runuser -u nobody -- cat /run/secrets/nextcloud-admin")

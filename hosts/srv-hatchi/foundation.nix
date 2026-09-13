@@ -11,11 +11,12 @@
   ];
   my.host = {
     hostName = "srv-hatchi";
+    uid = 1000;
     extraGroups = [ "wheel" ];
   };
   users.users.${config.my.host.userName} = {
     isNormalUser = true;
-    inherit (config.my.host) extraGroups;
+    inherit (config.my.host) extraGroups uid;
     openssh.authorizedKeys.keys = config.my.host.authorizedKeys;
   };
   users.users.root.openssh.authorizedKeys.keys = config.my.host.rootAuthorizedKeys;
@@ -32,9 +33,24 @@
     pkgs.curl
     pkgs.jq
   ];
-  nix.settings.experimental-features = [
-    "nix-command"
-    "flakes"
-  ];
+  nix = {
+    settings = {
+      auto-optimise-store = true;
+      experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
+    };
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 14d";
+    };
+  };
+  services = {
+    fstrim.enable = true;
+    journald.extraConfig = "SystemMaxUse=2G";
+  };
+  zramSwap.enable = true;
   system.stateVersion = "26.05";
 }

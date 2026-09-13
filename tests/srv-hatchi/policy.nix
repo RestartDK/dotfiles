@@ -1,4 +1,8 @@
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  inputs,
+}:
 let
   inherit (pkgs) lib;
   source = builtins.fromJSON (builtins.readFile ./source-manifest.json);
@@ -17,6 +21,18 @@ let
   '';
   cfg = self.nixosConfigurations.srv-hatchi.config;
   bootstrap = self.nixosConfigurations.srv-hatchi-bootstrap.config;
+  storage =
+    (inputs.nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        inputs.disko.nixosModules.disko
+        (import ../../hosts/srv-hatchi/disk-layout.nix {
+          systemDisk = "/dev/disk/by-id/fixture-system";
+          dataDisk = "/dev/disk/by-id/fixture-data";
+        })
+        { system.stateVersion = "26.05"; }
+      ];
+    }).config;
   home = cfg.home-manager.users.${cfg.my.host.userName};
   configured =
     module:
@@ -125,6 +141,14 @@ assert !(builtins.elem "open-webui" (map (entry: entry.source) inventory));
 assert builtins.length (lib.unique (map (entry: entry.source) inventory)) == 17;
 assert !(builtins.hasAttr "nixos-anywhere" self.apps.${pkgs.stdenv.hostPlatform.system});
 assert bootstrap.networking.firewall.allowedTCPPorts == [ 22 ];
+assert storage.disko.devices.disk.system.device == "/dev/disk/by-id/fixture-system";
+assert storage.disko.devices.disk.data.device == "/dev/disk/by-id/fixture-data";
+assert storage.fileSystems."/".fsType == "ext4";
+assert storage.fileSystems."/boot".fsType == "vfat";
+assert storage.fileSystems."/srv".fsType == "ext4";
+assert builtins.elem "nofail" storage.fileSystems."/srv".options;
+assert storage.boot.loader.systemd-boot.enable;
+assert !storage.boot.loader.grub.enable;
 assert cfg.networking.firewall.allowedTCPPorts == [ ];
 assert cfg.networking.firewall.allowedUDPPorts == [ ];
 assert cfg.networking.firewall.trustedInterfaces == [ "lo" ];
@@ -182,8 +206,8 @@ assert cfg.services.couchdb.adminPass == null;
 assert !(cfg.systemd.services ? hatchi-admission);
 assert builtins.all (
   unit:
-  builtins.elem "/srv/media" (cfg.systemd.services.${unit}.unitConfig.RequiresMountsFor or [ ])
-  && cfg.systemd.services.${unit}.unitConfig.AssertPathIsMountPoint == "/srv/media"
+  builtins.elem "/srv" (cfg.systemd.services.${unit}.unitConfig.RequiresMountsFor or [ ])
+  && cfg.systemd.services.${unit}.unitConfig.AssertPathIsMountPoint == "/srv"
 ) (cfg.my.hatchi.stateUnits ++ cfg.my.hatchi.mediaUnits ++ [ "hatchi-media-directories" ]);
 assert builtins.all (unit: !(builtins.hasAttr unit bootstrap.systemd.services)) (
   cfg.my.hatchi.stateUnits
@@ -204,7 +228,18 @@ assert
   && cfg.services.cockpit.enable == false;
 assert cfg.my.hatchi.network == null && cfg.my.hatchi.remoteNana == null;
 assert lib.versions.major cfg.services.nextcloud.package.version == "33";
+assert cfg.services.nextcloud.datadir == "/srv/nextcloud";
+assert cfg.my.host.uid == 1000;
+assert cfg.users.users.${cfg.my.host.userName}.uid == 1000;
+assert cfg.zramSwap.enable;
+assert cfg.services.fstrim.enable;
+assert cfg.services.journald.extraConfig == "SystemMaxUse=2G";
+assert cfg.nix.settings.auto-optimise-store;
+assert cfg.nix.gc.automatic;
+assert cfg.nix.gc.dates == [ "weekly" ];
+assert cfg.nix.gc.options == "--delete-older-than 14d";
 assert self.hatchiCommissioning.state == "uncommissioned";
+assert self.hatchiCommissioning.storage == null;
 assert
   builtins.attrNames self.deploy.nodes == [
     "srv-hatchi"

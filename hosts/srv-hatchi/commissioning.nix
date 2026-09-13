@@ -1,1 +1,4 @@
-{ state = "uncommissioned"; }
+{
+  state = "uncommissioned";
+  storage = null;
+}

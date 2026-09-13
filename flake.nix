@@ -191,6 +191,15 @@
         inherit inputs;
         dotfilesInputs = inputs;
       };
+      hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
+      hatchiPlatformModules =
+        if hatchiCommissioning.state == "physical" then
+          [
+            inputs.disko.nixosModules.disko
+            (import ./hosts/srv-hatchi/disk-layout.nix hatchiCommissioning.storage)
+          ]
+        else
+          [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];
     in
     {
       packages = forAllSystems (
@@ -299,7 +308,7 @@
           quality = treefmtEval.${system}.config.build.check self;
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
             pkgs = pkgsFor system;
-            inherit self;
+            inherit self inputs;
           };
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) (
@@ -350,7 +359,7 @@
           cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
         };
 
-      hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
+      inherit hatchiCommissioning;
       deploy = {
         autoRollback = true;
         magicRollback = true;
@@ -419,16 +428,18 @@
         specialArgs = { inherit inputs; };
         modules = [
           self.nixosModules.srv-hatchi-bootstrap
-          ./tests/srv-hatchi/fixtures/reference-platform.nix
-          { system.build.installTest = hatchiInstall.config.system.build.installTest; }
-        ];
+        ]
+        ++ hatchiPlatformModules
+        ++ [ { system.build.installTest = hatchiInstall.config.system.build.installTest; } ];
       };
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
         specialArgs = { inherit inputs; };
         modules = [
           self.nixosModules.srv-hatchi
-          ./tests/srv-hatchi/fixtures/reference-platform.nix
+        ]
+        ++ hatchiPlatformModules
+        ++ [
           home-manager.nixosModules.home-manager
           ({ config, pkgs, ... }: {
             nixpkgs.config.allowUnfree = true;
