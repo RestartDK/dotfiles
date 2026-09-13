@@ -36,7 +36,7 @@ From the clean `main` checkout on the Mac, run:
 traitor install srv-hatchi root@<HATCHI_IP> --confirm-destroy
 ```
 
-`traitor install` accepts no additional installer options. It checks the commissioning state, the recorded SMART result, the branch, the upstream revision, and the working tree. It then creates a temporary clone at `/home/dkumlin/.config/dotfiles`, invokes the pinned `nixos-anywhere`, copies that clone with `--extra-files`, and sets its ownership to UID 1000 and GID 100.
+`traitor install` accepts no additional installer options. It checks the commissioning state, the recorded SMART result, the branch, the upstream revision, and the working tree. It then creates a temporary clone at `/home/dkumlin/.config/dotfiles`, invokes the pinned `nixos-anywhere`, copies that clone with `--extra-files`, and sets the `.config` tree ownership to UID 1000 and GID 100.
 
 Disko creates a 1 GiB EFI partition and an ext4 root filesystem on the SSD. It formats the HDD as ext4 and mounts it at `/srv`.
 

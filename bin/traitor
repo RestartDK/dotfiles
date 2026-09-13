@@ -287,7 +287,7 @@ REMOTE_CHECK
     --flake "$checkout#srv-hatchi-bootstrap" \
     --target-host "$target" \
     --extra-files "$staging_root" \
-    --chown /home/dkumlin/.config/dotfiles 1000:100
+    --chown /home/dkumlin/.config 1000:100
 )
 
 run_deploy() {

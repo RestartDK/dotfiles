@@ -87,7 +87,7 @@ grep -Fx -- --target-host "$NIX_CALLS"
 grep -Fx root@example.invalid "$NIX_CALLS"
 grep -Fx -- --extra-files "$NIX_CALLS"
 grep -Fx -- --chown "$NIX_CALLS"
-grep -Fx /home/dkumlin/.config/dotfiles "$NIX_CALLS"
+grep -Fx /home/dkumlin/.config "$NIX_CALLS"
 grep -Fx 1000:100 "$NIX_CALLS"
 if grep -Fx -- --confirm-destroy "$NIX_CALLS" || grep -Fx -- --generate-hardware-config "$NIX_CALLS"; then
   echo "traitor forwarded an internal installation option" >&2
