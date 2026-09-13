@@ -200,6 +200,7 @@ run_install() (
     return 2
   fi
   local target="$2" flake_dir state smart_health branch revision upstream remote_url staging_root checkout
+  local system_disk data_disk remote_command
   if [[ ! $target =~ ^root@[A-Za-z0-9._:-]+$ ]]; then
     echo "traitor: Hatchi installer target must have the form root@HOST" >&2
     return 2
@@ -243,6 +244,33 @@ run_install() (
     return 1
   fi
   remote_url="$(git -C "$flake_dir" remote get-url origin)"
+  system_disk="$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.systemDisk")"
+  data_disk="$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.dataDisk")"
+
+  printf 'Installing revision %s on %s\n' "$revision" "$target"
+  printf 'System disk: %s\n' "$system_disk"
+  printf 'Data disk: %s\n' "$data_disk"
+  printf -v remote_command '%q ' bash -s -- "$system_disk" "$data_disk"
+  if ! ssh -o BatchMode=yes "$target" "$remote_command" <<'REMOTE_CHECK'; then
+set -euo pipefail
+for disk in "$@"; do
+  if ! test -b "$disk"; then
+    printf 'Missing block device: %s\n' "$disk" >&2
+    exit 1
+  fi
+done
+system_device="$(readlink -f "$1")"
+data_device="$(readlink -f "$2")"
+if [[ $system_device == "$data_device" ]]; then
+  printf 'Both disk identifiers resolve to %s\n' "$system_device" >&2
+  exit 1
+fi
+printf 'Verified system disk: %s -> %s\n' "$1" "$system_device"
+printf 'Verified data disk: %s -> %s\n' "$2" "$data_device"
+REMOTE_CHECK
+    echo "traitor: Hatchi disk preflight failed; installation denied" >&2
+    return 1
+  fi
 
   staging_root="$(mktemp -d)"
   trap 'rm -rf "$staging_root"' EXIT
@@ -255,9 +283,6 @@ run_install() (
     return 1
   fi
 
-  printf 'Installing revision %s on %s\n' "$revision" "$target"
-  printf 'System disk: %s\n' "$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.systemDisk")"
-  printf 'Data disk: %s\n' "$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.dataDisk")"
   nix run "$flake_dir#nixos-anywhere" -- \
     --flake "$checkout#srv-hatchi-bootstrap" \
     --target-host "$target" \

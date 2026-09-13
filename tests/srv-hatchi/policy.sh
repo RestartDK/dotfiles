@@ -2,11 +2,11 @@
 set -euo pipefail
 
 export HOME="$TMPDIR/home" FLAKE_DIR="$ROOT"
-export NIX_CALLS="$TMPDIR/nix-calls" UPSTREAM_CALLS="$TMPDIR/upstream-calls"
+export NIX_CALLS="$TMPDIR/nix-calls" SSH_CALLS="$TMPDIR/ssh-calls" UPSTREAM_CALLS="$TMPDIR/upstream-calls"
 mkdir -p "$HOME"
 test -z "$(find "$ROOT/hosts/srv-hatchi" "$ROOT/tests/srv-hatchi" -name '*.py' -print)"
 opnix secret -h >/dev/null 2>&1
-export PATH="$NIX_STUB/bin:$PATH"
+export PATH="$NIX_STUB/bin:$SSH_STUB/bin:$PATH"
 export SOPS_AGE_KEY_FILE="$ROOT/tests/srv-hatchi/fixtures/age-key.txt"
 test "$(sops decrypt --extract '["glance-key"]' "$ROOT/tests/srv-hatchi/fixtures/synthetic-secrets.sops.yaml" | base64 --decode | wc -c)" -eq 64
 
@@ -14,6 +14,7 @@ invoke() {
   local expected=$1 status=0
   shift
   : >"$NIX_CALLS"
+  : >"$SSH_CALLS"
   bash "$ROOT/bin/traitor" "$@" >"$TMPDIR/response" 2>&1 || status=$?
   if [[ $status != "$expected" ]]; then
     printf 'Unexpected exit %s for %s\n' "$status" "$*" >&2
@@ -72,6 +73,7 @@ git -C "$install_repo" remote add origin "$install_origin"
 git -C "$install_repo" push --quiet --set-upstream origin main
 install_revision="$(git -C "$install_repo" rev-parse HEAD)"
 : >"$NIX_CALLS"
+: >"$SSH_CALLS"
 NIX_EVAL_STATE=install-ready \
   NIX_SMART_HEALTH=passed \
   NIX_STUB_INSPECT_EXTRA_FILES="$TMPDIR/staged-revision" \
@@ -94,6 +96,28 @@ fi
 grep -F "Installing revision $install_revision on root@example.invalid" "$TMPDIR/response"
 grep -F "System disk: /dev/disk/by-id/fixture-system" "$TMPDIR/response"
 grep -F "Data disk: /dev/disk/by-id/fixture-data" "$TMPDIR/response"
+printf '%s\n' \
+  -o \
+  BatchMode=yes \
+  root@example.invalid \
+  'bash -s -- /dev/disk/by-id/fixture-system /dev/disk/by-id/fixture-data ' \
+  >"$TMPDIR/expected"
+diff -u "$TMPDIR/expected" "$SSH_CALLS"
+
+: >"$NIX_CALLS"
+: >"$SSH_CALLS"
+status=0
+SSH_STUB_STATUS=1 \
+  NIX_EVAL_STATE=install-ready \
+  NIX_SMART_HEALTH=passed \
+  FLAKE_DIR="$install_repo" \
+  bash "$ROOT/bin/traitor" install srv-hatchi root@example.invalid --confirm-destroy >"$TMPDIR/response" 2>&1 || status=$?
+test "$status" -eq 1
+if grep -Fx run "$NIX_CALLS"; then
+  echo "traitor ran nixos-anywhere after the remote disk preflight failed" >&2
+  exit 1
+fi
+grep -F "Hatchi disk preflight failed; installation denied" "$TMPDIR/response"
 
 invoke 0 deploy srv-nana --dry-run
 printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#srv-nana" --dry-activate >"$TMPDIR/expected"

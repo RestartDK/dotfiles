@@ -4,8 +4,8 @@ This procedure erases both configured internal disks. It does not select the ins
 
 The committed commissioning data identifies these disks:
 
-- System SSD: `/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3UL0H008BC01G0`
-- Data HDD: `/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2RB67`
+- System SSD: `/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3VLOH008BC01G0`
+- Data HDD: `/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2R867`
 
 Both disks passed SMART health checks before installation was enabled.
 
