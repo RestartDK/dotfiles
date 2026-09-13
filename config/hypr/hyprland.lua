@@ -28,20 +28,9 @@ local mainMod = "SUPER"
 -------------------
 
 hl.on("hyprland.start", function()
-  -- Ensure DBus/systemd-launched desktop portals inherit the Hyprland
-  -- Wayland environment. Without this, GTK file choosers can silently fail
-  -- and Chrome downloads with "Ask where to save" may be cancelled.
-  hl.exec_cmd(
-    "sh -lc 'export XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-Hyprland}; export XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-hyprland}; export XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-wayland}; export DESKTOP_SESSION=${DESKTOP_SESSION:-hyprland}; dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP DESKTOP_SESSION; systemctl --user restart xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service xdg-desktop-portal.service'"
-  )
-
   hl.exec_cmd("pidof hyprpaper >/dev/null || hyprpaper")
-  hl.exec_cmd("pidof hypridle >/dev/null || hypridle")
   hl.exec_cmd("waybar")
   hl.exec_cmd("hyprlauncher -d")
-  hl.exec_cmd("nm-applet --indicator")
-  hl.exec_cmd("pidof blueman-applet >/dev/null || blueman-applet")
-  hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
   hl.exec_cmd("hyprctl setcursor Adwaita 24")
 end)
 
@@ -124,7 +113,7 @@ hl.bind(mainMod .. " + T", hl.dsp.layout("togglesplit"))
 hl.bind(mainMod .. " + Escape", hl.dsp.exec_cmd("hyprlock"))
 hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + SHIFT + Q", hl.dsp.exec_cmd(powerMenu))
-hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd("hyprshutdown"))
+hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd("uwsm stop"))
 
 -- Move focus with Super + vim keys or arrow keys.
 -- Raw Ctrl+h/j/k/l is intentionally left to terminals/editors.

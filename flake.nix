@@ -337,6 +337,10 @@
             ) (inputs.deploy-rs.lib.${linuxSystem}.deployChecks (self.deploy // { nodes.${nodeName} = node; }))
           ) self.deploy.nodes
           // {
+            srv-nana-policy = import ./tests/srv-nana/policy.nix {
+              pkgs = pkgsFor system;
+              inherit self;
+            };
             srv-hatchi-deploy-rejection = (pkgsFor system).runCommand "srv-hatchi-deploy-rejection" { } ''
               for mode in normal DRY_ACTIVATE BOOT TEST; do
                 if env "$mode=1" ${self.deploy.nodes.srv-hatchi.profiles.system.path}/deploy-rs-activate > refusal 2>&1; then
