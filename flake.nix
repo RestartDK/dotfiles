@@ -442,7 +442,11 @@
           self.nixosModules.srv-hatchi-bootstrap
         ]
         ++ hatchiInstallPlatformModules
-        ++ [ { system.build.installTest = hatchiInstall.config.system.build.installTest; } ];
+        ++ [
+          ({ lib, ... }: {
+            system.build.installTest = lib.mkForce hatchiInstall.config.system.build.installTest;
+          })
+        ];
       };
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
