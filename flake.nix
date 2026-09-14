@@ -294,6 +294,29 @@
                 FLEET_BIN=${./bin/fleet} FLEET_TEST_BASH=${(pkgsFor system).bash}/bin/bash bash ${./tests/fleet.sh}
                 touch $out
               '';
+          watch-pr =
+            (pkgsFor system).runCommand "watch-pr-tests"
+              {
+                nativeBuildInputs = [
+                  (pkgsFor system).bash
+                  (pkgsFor system).coreutils
+                  (pkgsFor system).jq
+                ];
+              }
+              ''
+                WATCH_PR_BIN=${./config/agents/skills-personal/dstack/dstack-mode/scripts/watch-pr} bash ${./tests/watch-pr.sh}
+                touch $out
+              '';
+          pi-no-offers =
+            (pkgsFor system).runCommand "pi-no-offers-tests"
+              {
+                nativeBuildInputs = [ (pkgsFor system).bun ];
+              }
+              ''
+                export HOME=$TMPDIR
+                bun test ${./config/pi/agent/extensions/pi-no-offers}
+                touch $out
+              '';
           traitor-flake-tools =
             (pkgsFor system).runCommand "traitor-flake-tools"
               {
