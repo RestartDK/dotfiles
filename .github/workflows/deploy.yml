@@ -10,30 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  changes:
+  nana:
     if: >-
+      false &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.head_sha == github.sha
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-    outputs:
-      nana: ${{ steps.scope.outputs.nana }}
-      hatchi: ${{ steps.scope.outputs.hatchi }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: change-scope
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
-      - id: scope
-        run: grep -Ex '(nana|hatchi)=(true|false)' scope.txt >> "$GITHUB_OUTPUT"
-
-  nana:
-    needs: changes
-    if: false && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: srv-nana
@@ -81,12 +64,15 @@ jobs:
           ssh "dkumlin@$TARGET" env \
             FLAKE_DIR=/home/dkumlin/.config/dotfiles \
             bash "$remote_traitor" sync --expect "$EXPECTED_REVISION"
-      - if: env.TARGET != 'srv-nana' || needs.changes.outputs.nana == 'true'
-        run: ./bin/traitor deploy "$TARGET"
+      - run: ./bin/traitor deploy "$TARGET"
 
   hatchi:
-    needs: changes
-    if: false && needs.changes.outputs.hatchi == 'true'
+    if: >-
+      false &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_sha == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: srv-hatchi

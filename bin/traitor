@@ -10,10 +10,10 @@ Commands:
   test                   Rebuild current host with action=test
   rollback               Roll back current host generation
   check                  Run flake checks
-  deploy <node> [--dry-run]  Deploy exactly srv-nana or commissioned srv-hatchi
+  deploy <node> [--dry-run]  Deploy exactly srv-nana or srv-hatchi
   install srv-hatchi root@HOST --confirm-destroy  Install Hatchi with nixos-anywhere
   sync [--expect REV]    Rebase the checkout onto its upstream
-  verify srv-hatchi <install-vm|services-vm|closures|policy>  Verify without live access
+  verify srv-hatchi <services-vm|closures|policy>  Verify without live access
   update [inputs...]     Update all pins or selected flake inputs
   upgrade                Update everything, then rebuild
   show                   Show flake outputs
@@ -199,7 +199,7 @@ run_install() (
     echo "traitor: install requires 'srv-hatchi root@HOST --confirm-destroy'" >&2
     return 2
   fi
-  local target="$2" flake_dir state smart_health branch revision upstream remote_url staging_root checkout
+  local target="$2" flake_dir branch revision upstream remote_url staging_root checkout
   local system_disk data_disk remote_command
   if [[ ! $target =~ ^root@[A-Za-z0-9._:-]+$ ]]; then
     echo "traitor: Hatchi installer target must have the form root@HOST" >&2
@@ -208,16 +208,6 @@ run_install() (
 
   flake_dir="$(resolve_flake_dir)"
   preflight "$flake_dir"
-  state="$(nix eval --raw "$flake_dir#hatchiCommissioning.state")"
-  if [[ $state != install-ready ]]; then
-    echo "traitor: srv-hatchi state '$state' does not permit installation" >&2
-    return 1
-  fi
-  smart_health="$(nix eval --raw "$flake_dir#hatchiCommissioning.smartHealth")"
-  if [[ $smart_health != passed ]]; then
-    echo "traitor: srv-hatchi SMART health is '$smart_health'; installation denied" >&2
-    return 1
-  fi
   if [[ -n $(git -C "$flake_dir" status --porcelain --untracked-files=all) ]]; then
     echo "traitor: Hatchi installation requires a clean checkout" >&2
     return 1
@@ -244,8 +234,8 @@ run_install() (
     return 1
   fi
   remote_url="$(git -C "$flake_dir" remote get-url origin)"
-  system_disk="$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.systemDisk")"
-  data_disk="$(nix eval --raw "$flake_dir#hatchiCommissioning.storage.dataDisk")"
+  system_disk="$(nix eval --raw "$flake_dir#nixosConfigurations.srv-hatchi.config.disko.devices.disk.system.device")"
+  data_disk="$(nix eval --raw "$flake_dir#nixosConfigurations.srv-hatchi.config.disko.devices.disk.data.device")"
 
   printf 'Installing revision %s on %s\n' "$revision" "$target"
   printf 'System disk: %s\n' "$system_disk"
@@ -284,7 +274,7 @@ REMOTE_CHECK
   fi
 
   nix run "$flake_dir#nixos-anywhere" -- \
-    --flake "$checkout#srv-hatchi-bootstrap" \
+    --flake "$checkout#srv-hatchi" \
     --target-host "$target" \
     --extra-files "$staging_root" \
     --chown /home/dkumlin/.config 1000:100
@@ -302,16 +292,9 @@ run_deploy() {
     return 2
     ;;
   esac
-  local node="$1" flake_dir state
+  local node="$1" flake_dir
   flake_dir="$(resolve_flake_dir)"
   preflight "$flake_dir"
-  if [[ $node == srv-hatchi ]]; then
-    state="$(nix eval --raw "$flake_dir#hatchiCommissioning.state")"
-    if [[ $state != physical ]]; then
-      echo "traitor: srv-hatchi is uncommissioned; deployment denied" >&2
-      return 1
-    fi
-  fi
   local flags=()
   [[ ${2:-} == --dry-run ]] && flags+=(--dry-activate)
   nix run "$flake_dir#deploy-rs" -- "$flake_dir#$node" "${flags[@]}"
@@ -470,7 +453,7 @@ run_verify() {
     return 2
   fi
   case "$2" in
-  install-vm | services-vm | closures | policy) ;;
+  services-vm | closures | policy) ;;
   *)
     echo "traitor: unsupported verification kind" >&2
     return 2
@@ -480,14 +463,11 @@ run_verify() {
   flake_dir="$(resolve_flake_dir)"
   preflight "$flake_dir"
   case "$2" in
-  install-vm)
-    nix run "$flake_dir#srv-hatchi-install-vm"
-    ;;
   services-vm)
     nix build --no-link --print-build-logs "$flake_dir#checks.x86_64-linux.srv-hatchi-services"
     ;;
   closures)
-    nix build --no-link --print-build-logs "$flake_dir#nixosConfigurations.srv-hatchi-bootstrap.config.system.build.toplevel" "$flake_dir#nixosConfigurations.srv-hatchi.config.system.build.toplevel"
+    nix build --no-link --print-build-logs "$flake_dir#nixosConfigurations.srv-hatchi.config.system.build.toplevel"
     ;;
   policy)
     nix build --no-link --print-build-logs "$flake_dir#checks.$(nix eval --impure --raw --expr builtins.currentSystem).srv-hatchi-policy"
