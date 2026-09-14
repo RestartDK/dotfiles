@@ -31,6 +31,8 @@ linux:
   - 'hosts/twin/**'
   - 'tests/**'
   - 'bin/**'
+  - 'config/agents/skills-personal/dstack/dstack-mode/scripts/**'
+  - 'config/pi/agent/extensions/**'
 
 darwin:
   - *shared

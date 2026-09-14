@@ -83,7 +83,6 @@ load_inventory() {
 	local_host=$(hostname -s 2>/dev/null || hostname)
 	[[ $local_host =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || fail "invalid local host name"
 	[[ $local_host != local && $local_host != all && $local_host != available ]] || fail "invalid local host name"
-	is_declared "$local_host" && fail "local host name collides with an SSH alias: $local_host"
 
 	fleet_hosts=()
 	while IFS= read -r host; do
