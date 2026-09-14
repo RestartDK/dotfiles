@@ -12,7 +12,7 @@ A thread opened by a human who is not the PR author is not triaged into a code c
 Checking with the author before changing anything: thumbs up to implement, thumbs down to leave as is, or reply with direction.
 ```
 
-Thumbs up means implement. Thumbs down means leave the code and reply to the reviewer with the reason. A comment from the author is direction the implementation follows. A thread the author opened himself is a direct instruction and skips this gate. A reviewer's question gets a direct answer with no gate, because answering changes no code.
+Thumbs up means implement. Thumbs down means leave the code and reply to the reviewer with the reason. A comment from the author is direction the implementation follows. A thread the author opened himself is a direct instruction and skips this gate. A reviewer's question gets a direct answer with no gate, because answering changes no code; resolve that thread after answering so the watcher stops reporting it as unanswered.
 
 ## Decision rubric
 
