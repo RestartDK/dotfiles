@@ -4,6 +4,16 @@ Use this reference when the Babysit playbook (`~/.agents/skills/dstack/dstack-mo
 
 Greptile findings are also available locally before the bot posts on the PR: `greptile review --agent` reviews the current branch against its base with plain output (`npx greptile@latest review --agent` when the binary is not installed; `--json` for machine-readable comments, `--instructions` to focus). Classify what it returns with the rubric below. When a finding is wrong, pair the dismissal with a re-review request carrying the same explanation. Reply `@greptile <why it is wrong>` on the thread through the fixed `gh api` call, or re-run locally with `greptile review --instructions "..."`. Dismissing the thread alone does not move the published score; only the re-review does.
 
+## Human review threads
+
+A thread opened by a human who is not the PR author is not triaged into a code change. Post one reply, then wait for the author's reaction on that thread; the watcher (`~/.agents/skills/dstack/dstack-mode/scripts/watch-pr`) reports the thread `pending` until it arrives and wakes the babysit when it does. The reply is the verdict in one or two sentences, then this exact closing line, which the watcher matches to tell the agent's reply from the author's own comments:
+
+```text
+Checking with the author before changing anything: thumbs up to implement, thumbs down to leave as is, or reply with direction.
+```
+
+Thumbs up means implement. Thumbs down means leave the code and reply to the reviewer with the reason. A comment from the author is direction the implementation follows. A thread the author opened himself is a direct instruction and skips this gate. A reviewer's question gets a direct answer with no gate, because answering changes no code.
+
 ## Decision rubric
 
 Classify each Bugbot thread before acting:
