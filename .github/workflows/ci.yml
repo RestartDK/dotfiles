@@ -108,6 +108,13 @@ jobs:
       - name: Build traitor's external tools
         run: nix build --no-link --print-build-logs .#checks.x86_64-linux.traitor-flake-tools
 
+      - name: Run script and extension test suites
+        run: |
+          nix build --no-link --print-build-logs \
+            .#checks.x86_64-linux.fleet \
+            .#checks.x86_64-linux.watch-pr \
+            .#checks.x86_64-linux.pi-no-offers
+
       - name: Build Nana system and check deployment
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nana == 'true'
         run: |
