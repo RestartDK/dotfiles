@@ -12,8 +12,16 @@ fixtures=$test_dir/fixtures
 printf '#!%s\n' "$test_bash" >"$test_dir/bin/gh"
 cat >>"$test_dir/bin/gh" <<'EOF'
 set -u
-printf 'unexpected gh call: %s\n' "$*" >&2
-exit 1
+case "$*" in
+"api user -q .login") printf 'RestartDK\n' ;;
+"repo view --json nameWithOwner -q .nameWithOwner") printf 'twin-so/cobb\n' ;;
+"pr view "*) cat "$WATCH_PR_TEST_CASE_DIR/view.json" ;;
+"api graphql "*) cat "$WATCH_PR_TEST_CASE_DIR/threads.json" ;;
+*)
+  printf 'unexpected gh call: %s\n' "$*" >&2
+  exit 1
+  ;;
+esac
 EOF
 chmod +x "$test_dir/bin/gh"
 export PATH="$test_dir/bin:$PATH"
@@ -30,7 +38,7 @@ threads() {
 fixture() {
   fixture_dir=$fixtures/$1
   mkdir -p "$fixture_dir"
-  export WATCH_PR_FIXTURE_DIR=$fixture_dir
+  export WATCH_PR_TEST_CASE_DIR=$fixture_dir
   view <<'JSON'
 {"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"APPROVED","statusCheckRollup":[],"isDraft":false}
 JSON
@@ -116,6 +124,12 @@ assert_status 0 "owner thread status"
 assert_jq THREADS '.verdict' "owner thread verdict"
 assert_jq owner '.threads[0].kind' "owner thread kind"
 assert_jq null '.threads[0].decision' "owner thread decision"
+
+invoke 42 --status-only
+assert_status 0 "default me and repo status"
+assert_jq THREADS '.verdict' "default me and repo verdict"
+assert_jq owner '.threads[0].kind' "default me from gh api user"
+assert_jq twin-so/cobb '.repo' "default repo from gh repo view"
 
 fixture unanswered
 threads <<'JSON'
@@ -209,6 +223,22 @@ assert_status 0 "direction status"
 assert_jq THREADS '.verdict' "direction verdict"
 assert_jq direction '.threads[0].decision' "direction decision"
 assert_jq 'Rename the field to x' '.threads[0].direction' "direction body"
+
+fixture fixed_in
+threads <<'JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
+  {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r3","body":"Fixed in abc123: renamed the field","createdAt":"2026-01-01T02:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
+  ]}}
+]}}}}}
+JSON
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "fixed in status"
+assert_jq HUMAN_PENDING '.verdict' "fixed in verdict"
+assert_jq pending '.threads[0].decision' "fixed in reply is not direction"
+assert_jq 1 '.human_pending' "fixed in human pending count"
 
 fixture direction_reaction
 threads <<'JSON'
@@ -308,9 +338,5 @@ JSON
 invoke 42 --me RestartDK --repo twin-so/cobb --status-only
 assert_failure "graphql error"
 assert_contains "MAX_NODE_LIMIT_EXCEEDED" "$last_output" "graphql error message"
-
-invoke 42 --repo twin-so/cobb --status-only
-assert_status 1 "me required status"
-assert_contains "--me is required with WATCH_PR_FIXTURE_DIR" "$last_output" "me required message"
 
 printf 'watch-pr tests passed\n'

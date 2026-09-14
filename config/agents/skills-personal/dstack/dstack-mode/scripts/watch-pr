@@ -44,34 +44,22 @@ done
   exit 1
 }
 
-if [ -n "${WATCH_PR_FIXTURE_DIR:-}" ]; then
-  [ -n "$ME" ] || {
-    echo "--me is required with WATCH_PR_FIXTURE_DIR" >&2
-    exit 1
-  }
-else
-  [ -n "$ME" ] || ME=$(gh api user -q .login)
-  [ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-fi
+[ -n "$ME" ] || ME=$(gh api user -q .login)
+[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 REPO_ARGS=(--repo "$REPO")
 OWNER="${REPO%%/*}" NAME="${REPO##*/}"
 
 snapshot() {
   local view threads
-  if [ -n "${WATCH_PR_FIXTURE_DIR:-}" ]; then
-    view=$(cat "$WATCH_PR_FIXTURE_DIR/view.json")
-    threads=$(cat "$WATCH_PR_FIXTURE_DIR/threads.json")
-  else
-    view=$(gh pr view "$PR" "${REPO_ARGS[@]}" --json state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,isDraft)
-    threads=$(gh api graphql -f query="
-      query(\$owner:String!,\$name:String!,\$pr:Int!){
-        repository(owner:\$owner,name:\$name){
-          pullRequest(number:\$pr){
-            reviewThreads(first:100){nodes{id isResolved isOutdated comments(first:50){nodes{url body createdAt author{login __typename} reactions(first:50){nodes{content createdAt user{login}}}}}}}
-          }
+  view=$(gh pr view "$PR" "${REPO_ARGS[@]}" --json state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,isDraft)
+  threads=$(gh api graphql -f query="
+    query(\$owner:String!,\$name:String!,\$pr:Int!){
+      repository(owner:\$owner,name:\$name){
+        pullRequest(number:\$pr){
+          reviewThreads(first:100){nodes{id isResolved isOutdated comments(first:50){nodes{url body createdAt author{login __typename} reactions(first:50){nodes{content createdAt user{login}}}}}}}
         }
-      }" -F owner="$OWNER" -F name="$NAME" -F pr="$PR")
-  fi
+      }
+    }" -F owner="$OWNER" -F name="$NAME" -F pr="$PR")
 
   jq -cn --argjson v "$view" --argjson t "$threads" --arg me "$ME" --arg marker "$MARKER" --arg pr "$PR" --arg repo "$REPO" '
     ($t.errors // []) as $errors
@@ -101,6 +89,7 @@ snapshot() {
                     | select($marked != null)
                     | select(.author.login == $me
                              and (.body | contains($marker) | not)
+                             and (.body | startswith("Fixed in ") | not)
                              and (.createdAt > $marked.createdAt))]
                    | sort_by(.createdAt) | last) as $direction_comment
                 | (if $marked == null then {decision:"unanswered"}
