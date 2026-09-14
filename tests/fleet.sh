@@ -155,10 +155,14 @@ assert_eq 'local' "$(jq -r '.hosts[] | select(.host == "controller") | .transpor
 
 reset_execution_logs
 export FLEET_TEST_HOSTNAME=beta
-invoke list
-assert_status 2 "local alias collision"
-assert_contains "local host name collides with an SSH alias: beta" "$last_output" "local alias collision message"
-assert_empty_log "$ssh_log" "local alias collision ssh"
+invoke list --json
+assert_status 0 "local host declared as alias"
+assert_eq '["alpha","beta","zeta"]' "$(jq -c '[.hosts[].host]' <<<"$last_output")" "declared local alias listed once"
+assert_eq 'local' "$(jq -r '.hosts[] | select(.host == "beta") | .transport' <<<"$last_output")" "declared local alias transport"
+invoke run --execute --json beta -- fleet-test-caller from-alias
+assert_status 0 "declared local alias execution"
+assert_eq $'local-dispatch\tfrom-alias' "$(cat "$local_log")" "declared local alias runs locally"
+assert_empty_log "$ssh_log" "declared local alias ssh"
 export FLEET_TEST_HOSTNAME=controller
 
 reset_execution_logs
