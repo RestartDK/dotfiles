@@ -2,12 +2,10 @@
 
 This procedure erases both configured internal disks. It does not select the installer USB.
 
-The committed commissioning data identifies these disks:
+The Hatchi configuration identifies these disks:
 
 - System SSD: `/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3VLOH008BC01G0`
 - Data HDD: `/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2R867`
-
-Both disks passed SMART health checks before installation was enabled.
 
 ## Prepare Hatchi
 
@@ -36,11 +34,11 @@ From the clean `main` checkout on the Mac, run:
 traitor install srv-hatchi root@<HATCHI_IP> --confirm-destroy
 ```
 
-`traitor install` accepts no additional installer options. It checks the commissioning state, the recorded SMART result, the branch, the upstream revision, and the working tree. It then creates a temporary clone at `/home/dkumlin/.config/dotfiles`, invokes the pinned `nixos-anywhere`, copies that clone with `--extra-files`, and sets the `.config` tree ownership to UID 1000 and GID 100.
+`traitor install` accepts no additional installer options. It checks the configured disk identifiers, branch, upstream revision, hardware facts, and working tree. It then creates a temporary clone at `/home/dkumlin/.config/dotfiles`, invokes the pinned `nixos-anywhere` with `#srv-hatchi`, copies that clone with `--extra-files`, and sets the `.config` tree ownership to UID 1000 and GID 100.
 
 Disko creates a 1 GiB EFI partition and an ext4 root filesystem on the SSD. It formats the HDD as ext4 and mounts it at `/srv`.
 
-## Finish commissioning
+## Verify the installation
 
 After `nixos-anywhere` reboots Hatchi:
 
@@ -53,5 +51,4 @@ After `nixos-anywhere` reboots Hatchi:
    lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS
    ```
 
-4. Configure Hatchi's production network and deployment target.
-5. Change the commissioning state to `physical` only after the production checks pass.
+4. Confirm that the host resolves as `srv-hatchi` before the first deployment.

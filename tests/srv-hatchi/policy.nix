@@ -16,14 +16,12 @@ let
   nixStub = pkgs.writeShellScriptBin "nix" ''
     printf '%s\n' "$@" >> "$NIX_CALLS"
     if [[ $1 == eval ]]; then
-      if [[ $* == *hatchiCommissioning.smartHealth ]]; then
-        printf '%s\n' "''${NIX_SMART_HEALTH:-pending}"
-      elif [[ $* == *hatchiCommissioning.storage.systemDisk ]]; then
+      if [[ $* == *disko.devices.disk.system.device ]]; then
         printf '%s\n' /dev/disk/by-id/fixture-system
-      elif [[ $* == *hatchiCommissioning.storage.dataDisk ]]; then
+      elif [[ $* == *disko.devices.disk.data.device ]]; then
         printf '%s\n' /dev/disk/by-id/fixture-data
       else
-        printf '%s\n' "''${NIX_EVAL_STATE:-uncommissioned}"
+        printf '%s\n' x86_64-linux
       fi
     elif [[ $1 == run && -n "''${NIX_STUB_INSPECT_EXTRA_FILES:-}" ]]; then
       shift
@@ -45,11 +43,7 @@ let
     cat >/dev/null
     exit "''${SSH_STUB_STATUS:-0}"
   '';
-  anywhereStub = pkgs.writeShellScriptBin "nixos-anywhere" ''
-    printf '%s\n' "$@" >> "$UPSTREAM_CALLS"
-  '';
   cfg = self.nixosConfigurations.srv-hatchi.config;
-  bootstrap = self.nixosConfigurations.srv-hatchi-bootstrap.config;
   storage =
     (inputs.nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
@@ -87,7 +81,6 @@ let
   };
   missingPhysicalPlatform = evaluatePhysicalPlatform null;
   home = cfg.home-manager.users.${cfg.my.host.userName};
-  bootstrapHome = bootstrap.home-manager.users.${bootstrap.my.host.userName};
   expectedGoEnv = {
     GOPATH = "${home.home.homeDirectory}/.local/share/go";
     GOBIN = "${home.home.homeDirectory}/.local/bin";
@@ -200,12 +193,10 @@ assert !(builtins.elem "open-webui" (map (entry: entry.source) inventory));
 assert builtins.length (lib.unique (map (entry: entry.source) inventory)) == 17;
 assert !(builtins.hasAttr "nixos-anywhere" self.apps.${pkgs.stdenv.hostPlatform.system});
 assert builtins.hasAttr "nixos-anywhere" self.packages.${pkgs.stdenv.hostPlatform.system};
-assert bootstrap.networking.firewall.allowedTCPPorts == [ 22 ];
 assert
-  bootstrap.disko.devices.disk.system.device
+  cfg.disko.devices.disk.system.device
   == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3VLOH008BC01G0";
-assert
-  bootstrap.disko.devices.disk.data.device == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2R867";
+assert cfg.disko.devices.disk.data.device == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2R867";
 assert storage.disko.devices.disk.system.device == "/dev/disk/by-id/fixture-system";
 assert storage.disko.devices.disk.data.device == "/dev/disk/by-id/fixture-data";
 assert storage.fileSystems."/".fsType == "ext4";
@@ -278,18 +269,13 @@ assert builtins.all (
   builtins.elem "/srv" (cfg.systemd.services.${unit}.unitConfig.RequiresMountsFor or [ ])
   && cfg.systemd.services.${unit}.unitConfig.AssertPathIsMountPoint == "/srv"
 ) (cfg.my.hatchi.stateUnits ++ cfg.my.hatchi.mediaUnits ++ [ "hatchi-media-directories" ]);
-assert builtins.all (unit: !(builtins.hasAttr unit bootstrap.systemd.services)) (
-  cfg.my.hatchi.stateUnits
-  ++ map (entry: entry.unit) (builtins.filter (entry: entry.unit != null) inventory)
-);
 assert builtins.all secretsBefore cfg.my.hatchi.stateUnits;
 assert secretsBefore "hatchi-media-directories";
 assert secretsBefore "acme-${cfg.my.hatchi.domain}";
 assert secretsBefore "acme-order-renew-${cfg.my.hatchi.domain}";
 assert builtins.length (builtins.filter (entry: entry.unit != null) inventory) == 16;
 assert builtins.attrNames cfg.services.caddy.virtualHosts == routes;
-assert builtins.all (name: !(builtins.hasAttr name cfg.system.build)) destructive;
-assert builtins.all (name: builtins.hasAttr name bootstrap.system.build) destructive;
+assert builtins.all (name: builtins.hasAttr name cfg.system.build) destructive;
 assert
   cfg.virtualisation.docker.enable == false
   && cfg.virtualisation.podman.enable == false
@@ -310,20 +296,14 @@ assert cfg.nix.settings.auto-optimise-store;
 assert cfg.nix.gc.automatic;
 assert cfg.nix.gc.dates == [ "weekly" ];
 assert cfg.nix.gc.options == "--delete-older-than 14d";
-assert self.hatchiCommissioning.state == "install-ready";
-assert self.hatchiCommissioning.smartHealth == "passed";
-assert
-  self.hatchiCommissioning.storage.systemDisk
-  == "/dev/disk/by-id/ata-LITEON_CV8-8E128-11_SATA_128GB_TW059X3VLOH008BC01G0";
-assert
-  self.hatchiCommissioning.storage.dataDisk == "/dev/disk/by-id/ata-ST1000LM049-2GH172_WGS2R867";
 assert
   builtins.attrNames self.deploy.nodes == [
     "srv-hatchi"
     "srv-nana"
   ];
 assert self.deploy.autoRollback && self.deploy.magicRollback;
-assert self.deploy.nodes.srv-hatchi.hostname == "uncommissioned.invalid";
+assert self.deploy.nodes.srv-hatchi.hostname == "srv-hatchi";
+assert self.deploy.nodes.srv-hatchi.sshUser == cfg.my.host.userName;
 assert self.nixosConfigurations.srv-nana.config.virtualisation.docker.enable;
 assert home.home.username == cfg.my.host.userName;
 assert home.home.homeDirectory == cfg.my.host.homeDirectory;
@@ -339,14 +319,6 @@ assert builtins.all (group: home.my.liveConfig.groups.${group}) [
 ];
 assert !home.my.liveConfig.groups.ghostty && !home.my.liveConfig.groups.wayland;
 assert builtins.all (name: builtins.elem name (map lib.getName home.home.packages)) [
-  "codex"
-  "claude-code"
-  "opencode"
-  "pi"
-  "herdr"
-  "neovim"
-];
-assert builtins.all (name: builtins.elem name (map lib.getName bootstrapHome.home.packages)) [
   "codex"
   "claude-code"
   "opencode"
@@ -370,33 +342,20 @@ assert !(home.home.sessionVariables ? GOMODCACHE);
 assert home.xdg.localBinInPath;
 assert lib.getName cfg.users.users.${cfg.my.host.userName}.shell == "zsh";
 assert lib.hasInfix "home-manager" home.home.activationPackage.drvPath;
-assert bootstrap.programs.zsh.enable;
-assert lib.getName bootstrap.users.users.${bootstrap.my.host.userName}.shell == "zsh";
-assert lib.hasInfix "home-manager" bootstrapHome.home.activationPackage.drvPath;
-assert bootstrapHome.my.liveConfig.repoRoot == "/home/dkumlin/.config/dotfiles";
-assert builtins.all (group: bootstrapHome.my.liveConfig.groups.${group}) [
-  "shell"
-  "git"
-  "editors"
-  "terminalTools"
-  "multiplexer"
-  "agents"
-];
-assert !bootstrapHome.my.liveConfig.groups.ghostty && !bootstrapHome.my.liveConfig.groups.wayland;
 assert
-  bootstrap.networking.nameservers == [
+  cfg.networking.nameservers == [
     "1.1.1.1"
     "9.9.9.9"
   ];
 assert
-  bootstrap.services.logind.settings.Login == {
+  cfg.services.logind.settings.Login == {
     HandleLidSwitch = "ignore";
     HandleLidSwitchDocked = "ignore";
     HandleLidSwitchExternalPower = "ignore";
     KillUserProcesses = false;
   };
 assert
-  bootstrap.systemd.sleep.settings.Sleep == {
+  cfg.systemd.sleep.settings.Sleep == {
     AllowSuspend = "no";
     AllowHibernation = "no";
     AllowHybridSleep = "no";
@@ -574,13 +533,6 @@ pkgs.runCommand "srv-hatchi-policy"
     NIX_STUB = nixStub;
     SSH_STUB = sshStub;
     SOURCE_COMPOSE = pkgs.fetchurl { inherit (source) url sha256; };
-    INSTALL_VERIFIER = lib.getExe (
-      import ./install-vm.nix {
-        inherit pkgs;
-        flake = self;
-        anywhere = anywhereStub;
-      }
-    );
     SOPS_MANIFEST = pkgs.writeText "hatchi-template-manifest.json" (
       builtins.toJSON {
         secrets = lib.mapAttrsToList (name: secret: {
