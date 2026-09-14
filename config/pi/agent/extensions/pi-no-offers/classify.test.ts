@@ -117,6 +117,7 @@ describe("question turns", () => {
     "can you fix the failing test",
     "could you add the tests",
     "should be quick, go ahead",
+    "when done, open the pr",
   ];
 
   for (const userPrompt of imperatives) {

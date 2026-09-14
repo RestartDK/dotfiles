@@ -27,18 +27,7 @@ const CLOSER_RE = new RegExp(
 );
 const HAPPY_TO_RE = /\bhappy to\b(?=[^.!?\n]*\bif you\b)/i;
 
-const QUESTION_PREFIXES = [
-  "explain",
-  "why",
-  "how",
-  "what",
-  "which",
-  "where",
-  "when",
-  "is",
-  "are",
-  "does",
-];
+const QUESTION_PREFIXES = ["explain", "why", "how", "what", "which", "where", "is", "are", "does"];
 const QUESTION_RE = new RegExp(`^(?:${QUESTION_PREFIXES.join("|")})\\b`, "i");
 const NO_CHANGES_RE = /no changes yet/i;
 

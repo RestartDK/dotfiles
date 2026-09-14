@@ -6,6 +6,7 @@ set -euo pipefail
 
 PR="" REPO="" ME="" STATUS_ONLY=0 PRETTY=0 INTERVAL=60
 MARKER="Checking with the author before changing anything"
+FIXED_PREFIX="Fixed in "
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -61,7 +62,7 @@ snapshot() {
       }
     }" -F owner="$OWNER" -F name="$NAME" -F pr="$PR")
 
-  jq -cn --argjson v "$view" --argjson t "$threads" --arg me "$ME" --arg marker "$MARKER" --arg pr "$PR" --arg repo "$REPO" '
+  jq -cn --argjson v "$view" --argjson t "$threads" --arg me "$ME" --arg marker "$MARKER" --arg fixed "$FIXED_PREFIX" --arg pr "$PR" --arg repo "$REPO" '
     ($t.errors // []) as $errors
     | if ($errors | length) > 0 then error($errors[0].message) else . end
     | ($v.statusCheckRollup // []) as $checks
@@ -89,7 +90,7 @@ snapshot() {
                     | select($marked != null)
                     | select(.author.login == $me
                              and (.body | contains($marker) | not)
-                             and (.body | startswith("Fixed in ") | not)
+                             and (.body | startswith($fixed) | not)
                              and (.createdAt > $marked.createdAt))]
                    | sort_by(.createdAt) | last) as $direction_comment
                 | (if $marked == null then {decision:"unanswered"}
