@@ -38,11 +38,6 @@ const QUESTION_PREFIXES = [
   "is",
   "are",
   "does",
-  "do",
-  "can",
-  "could",
-  "should",
-  "would",
 ];
 const QUESTION_RE = new RegExp(`^(?:${QUESTION_PREFIXES.join("|")})\\b`, "i");
 const NO_CHANGES_RE = /no changes yet/i;

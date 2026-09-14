@@ -87,7 +87,13 @@ describe("irreversible work", () => {
 });
 
 describe("question turns", () => {
-  const prompts = ["explain this", "why does x?", "how does it work", "no changes yet, just look"];
+  const prompts = [
+    "explain this",
+    "why does x?",
+    "how does it work",
+    "is it green?",
+    "no changes yet, just look",
+  ];
 
   for (const userPrompt of prompts) {
     test(`"${userPrompt}" skips the nudge`, () => {
@@ -104,6 +110,24 @@ describe("question turns", () => {
     expect(isQuestionTurn("This ends with a question?")).toBe(true);
     expect(isQuestionTurn("carry on")).toBe(false);
   });
+
+  const imperatives = [
+    "do this now then",
+    "do it",
+    "can you fix the failing test",
+    "could you add the tests",
+    "should be quick, go ahead",
+  ];
+
+  for (const userPrompt of imperatives) {
+    test(`"${userPrompt}" nudges on a trailing offer`, () => {
+      expect(isQuestionTurn(userPrompt)).toBe(false);
+      expect(verdictFor("Done. Say the word", userPrompt)).toEqual({
+        nudge: true,
+        closer: "Say the word",
+      });
+    });
+  }
 });
 
 describe("guards", () => {
