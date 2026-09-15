@@ -141,7 +141,16 @@ s=$(snapshot)
 emit "$s"
 [ "$STATUS_ONLY" = 1 ] && exit 0
 v=$(echo "$s" | jq -r .verdict)
-while ! terminal "$v"; do
+# READY needs two consecutive snapshots: right after a push the check rollup is
+# empty until GitHub attaches the new runs, and a single empty poll reads as green.
+ready_seen=0
+while true; do
+  if terminal "$v"; then
+    if [ "$v" != READY ] || [ "$ready_seen" = 1 ]; then break; fi
+    ready_seen=1
+  else
+    ready_seen=0
+  fi
   sleep "$INTERVAL"
   s=$(snapshot)
   emit "$s"
