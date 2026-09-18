@@ -6,6 +6,10 @@ directory = "~/.herdr/worktrees"
 [ui.toast]
 delivery = "herdr"
 
+[ui.sound]
+enabled = true
+path = "sounds/za-warudo.mp3"
+
 [ui]
 agent_panel_sort = "priority"
 
