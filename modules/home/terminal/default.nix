@@ -52,7 +52,10 @@ in
         lib.mkMerge [
           {
             home.packages = [ herdrPackage ];
-            xdg.configFile."herdr/config.toml" = file "config/herdr/config.toml";
+            xdg.configFile = {
+              "herdr/config.toml" = file "config/herdr/config.toml";
+              "herdr/sounds/za-warudo.mp3" = file "config/herdr/sounds/za-warudo.mp3";
+            };
           }
 
           (lib.mkIf hasScattererInput {

@@ -107,15 +107,11 @@ Nana and both managed Macs run the same command at login or boot and every 15 mi
 
 ## CI and deployment
 
-`.github/filters.yml` selects CI jobs by changed paths. Skills-only Markdown edits skip machine builds. Host-specific changes select that host. Shared Nix inputs, packages, and modules select their consumers. Executable live config still gets formatting and lint checks without triggering deployment.
+Every pull request and `main` push runs one `CI result` job. A single Nix command checks formatting and lint, then builds the Nana and Hatchi NixOS systems. This gate does not build Darwin or Twin, run VM tests, deploy, activate, reboot, or contact either host.
 
-Linux builds each selected host's NixOS system and deployment checks without pulling in the other host's system. Hatchi also builds its bootstrap system and runs the installation and services VM tests. The `fleet` and `srv-hatchi-policy` tests remain available through local `traitor check`, but CI does not run them.
+`traitor verify srv-hatchi services-vm` and `traitor verify srv-hatchi policy` remain available as explicit local diagnostics; they are not branch-protection gates.
 
-`CI result` is the aggregate check to require in branch protection. It fails if a selected job fails or is cancelled, while allowing unrelated jobs to skip.
-
-`deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. CI records the Nana and Hatchi change flags for the entire push, so deployment does not guess from only the last commit. A Hatchi-only change does not select Nana, or vice versa. Shared system inputs select both.
-
-Both remote jobs are hard-disabled by their `if: false && ...` conditions. They cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once Nana's job is enabled, every successful main CI run invokes `traitor sync --expect REVISION`; deploy-rs runs afterward only when Nana's system configuration changed. A conflict or revision mismatch stops before deploy-rs can change the system.
+`deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. Both remote jobs are hard-disabled by their `if: false && ...` conditions, so they cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once enabled, a host deploys after every successful `main` build. Nana first invokes `traitor sync --expect REVISION`; a conflict or revision mismatch stops before deploy-rs can change the system.
 
 Before enabling a host, configure its GitHub environment, `srv-nana` or `srv-hatchi`, with required approval and these secrets:
 
@@ -127,7 +123,7 @@ The tailnet policy must permit that tag to reach the selected host on SSH. The h
 
 Hatchi's physical profile puts EFI, NixOS, service state, and databases on the system SSD. The data HDD mounts at `/srv` for media and Nextcloud files. A missing data disk does not block NixOS or SSH, but it prevents the application stack from starting.
 
-Hatchi is `install-ready`: its stable disk IDs, SMART result, and generated hardware facts are committed. Follow [the Hatchi installation procedure](hosts/srv-hatchi/INSTALL.md) to run the guarded `nixos-anywhere` installation from a clean `main` checkout. Normal deployment remains blocked until the host has its production network and deployment target and `commissioning.state` changes to `physical`.
+Hatchi has one physical NixOS configuration for installation and deployment. Its stable disk IDs and generated hardware facts are committed. Follow [the Hatchi installation procedure](hosts/srv-hatchi/INSTALL.md) to run the guarded `nixos-anywhere` installation from a clean `main` checkout.
 
 Hatchi's optional runtime 1Password provider and private NixOS verification procedure are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md). Missing restoration keys still block production enablement.
 

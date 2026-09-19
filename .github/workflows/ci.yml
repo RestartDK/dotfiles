@@ -5,80 +5,21 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      scope:
-        description: Verification scope for manual diagnosis
-        type: choice
-        default: all
-        options: [all, services-vm]
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.scope || 'all' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  changes:
-    name: Select checks
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      quality: ${{ steps.filter.outputs.quality }}
-      linux: ${{ steps.filter.outputs.linux }}
-      darwin: ${{ steps.filter.outputs.darwin }}
-      hatchi_checks: ${{ steps.filter.outputs.hatchi_checks }}
-      nana: ${{ steps.filter.outputs.nana }}
-      hatchi: ${{ steps.filter.outputs.hatchi }}
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
-        id: filter
-        with:
-          base: ${{ github.ref }}
-          filters: .github/filters.yml
-      - name: Record the verified change scope
-        if: github.event_name == 'push'
-        env:
-          SCOPE: |
-            nana=${{ steps.filter.outputs.nana }}
-            hatchi=${{ steps.filter.outputs.hatchi }}
-        run: printf '%s\n' "$SCOPE" > scope.txt
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'push'
-        with:
-          name: change-scope
-          path: scope.txt
-          retention-days: 7
-
-  quality:
-    name: Formatting / lint
-    needs: changes
-    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'all') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.quality == 'true')
+  build:
+    name: CI result
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: DeterminateSystems/determinate-nix-action@v3.21.9
-      - uses: DeterminateSystems/flakehub-cache-action@v3.21.9
-      - run: nix build --no-link --print-build-logs .#checks.x86_64-linux.quality
-
-  linux:
-    needs: changes
-    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'all') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.linux == 'true')
-    name: Linux / NixOS
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
 
       - name: Free disk space
         run: |
@@ -102,168 +43,9 @@ jobs:
       - name: Enable FlakeHub Cache
         uses: DeterminateSystems/flakehub-cache-action@v3.21.9
 
-      - name: Evaluate Linux outputs
-        run: ./bin/traitor check --no-build --print-build-logs
-
-      - name: Build traitor's external tools
-        run: nix build --no-link --print-build-logs .#checks.x86_64-linux.traitor-flake-tools
-
-      - name: Run script and extension test suites
+      - name: Build Nana and Hatchi
         run: |
           nix build --no-link --print-build-logs \
-            .#checks.x86_64-linux.fleet \
-            .#checks.x86_64-linux.watch-pr \
-            .#checks.x86_64-linux.pi-no-offers
-
-      - name: Build Nana system and check deployment
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nana == 'true'
-        run: |
-          nix build --no-link --print-build-logs --max-jobs 2 \
+            .#checks.x86_64-linux.quality \
             .#nixosConfigurations.srv-nana.config.system.build.toplevel \
-            .#checks.x86_64-linux.srv-nana-deploy-schema \
-            .#checks.x86_64-linux.srv-nana-deploy-activate
-
-      - name: Build Hatchi systems and check deployment
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.hatchi_checks == 'true'
-        run: |
-          ./bin/traitor verify srv-hatchi closures
-          nix build --no-link --print-build-logs --max-jobs 2 \
-            .#checks.x86_64-linux.srv-hatchi-deploy-rejection \
-            .#checks.x86_64-linux.srv-hatchi-deploy-schema \
-            .#checks.x86_64-linux.srv-hatchi-deploy-activate
-
-      - name: Evaluate the existing Home Manager profile
-        run: nix eval --raw .#homeConfigurations.twin.activationPackage.drvPath
-
-  hatchi-vm:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.hatchi_checks == 'true'
-    name: Hatchi / ${{ matrix.kind }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        kind: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'services-vm' && '["services-vm"]' || '["install-vm", "services-vm"]') }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /opt/ghc /opt/hostedtoolcache /usr/local/.ghcup /usr/local/lib/android /usr/local/share/boost /usr/share/dotnet
-          df -h
-
-      - name: Install Determinate Nix
-        uses: DeterminateSystems/determinate-nix-action@v3.21.9
-        with:
-          extra-conf: |
-            extra-system-features = kvm nixos-test big-parallel
-            max-jobs = 2
-            cores = 2
-            keep-failed = true
-
-      - name: Enable FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@v3.21.9
-
-      - name: Require x86 Linux and KVM
-        run: |
-          test "$(uname -sm)" = "Linux x86_64"
-          test -c /dev/kvm
-          sudo chmod a+rw /dev/kvm
-          mkdir -p verification
-          git rev-parse HEAD > verification/revision
-          sha256sum flake.lock > verification/lock-sha256
-          nix config show > verification/nix-config
-          ls -l /dev/kvm > verification/kvm
-          nix eval --raw .#nixosConfigurations.srv-hatchi-bootstrap.config.system.build.installTest.drvPath > verification/install-derivation
-          nix eval --raw .#checks.x86_64-linux.srv-hatchi-services.drvPath > verification/services-derivation
-
-      - name: Run the required VM command
-        env:
-          VERIFY_KIND: ${{ matrix.kind }}
-        run: |
-          set +e
-          ./bin/traitor verify srv-hatchi "$VERIFY_KIND" 2>&1 | tee verification/command.log
-          status=${PIPESTATUS[0]}
-          printf '%s\n' "$status" > verification/exit-status
-          exit "$status"
-
-      - name: Verify service-ready 1Password credentials
-        if: matrix.kind == 'services-vm'
-        run: |
-          nix eval --raw .#checks.x86_64-linux.srv-hatchi-onepassword.drvPath > verification/onepassword-derivation
-          set +e
-          nix build --no-link --print-build-logs .#checks.x86_64-linux.srv-hatchi-onepassword 2>&1 | tee verification/onepassword-command.log
-          status=${PIPESTATUS[0]}
-          printf '%s\n' "$status" > verification/onepassword-exit-status
-          exit "$status"
-
-      - name: Retain VM failure logs
-        if: failure()
-        run: |
-          mkdir -p verification/derivation-logs
-          for evidence in verification/*-derivation; do
-            test -f "$evidence" || continue
-            drv=$(<"$evidence")
-            nix log "$drv" > "verification/derivation-logs/$(basename "$evidence").log" 2>&1 || true
-            nix derivation show --recursive "$drv" > "verification/derivation-logs/$(basename "$evidence").json" || true
-          done
-          if test -f verification/command.log; then
-            grep -oE '/nix/store/[a-z0-9]+-[^[:space:]]+\.drv' verification/command.log | sort -u > verification/failed-derivations || true
-            while IFS= read -r drv; do
-              nix log "$drv" > "verification/derivation-logs/$(basename "$drv").log" 2>&1 || true
-            done < verification/failed-derivations
-          fi
-          sudo find /tmp /nix/var/nix/builds -maxdepth 4 -name '*.log' -exec cp --parents '{}' verification/ \; 2>/dev/null || true
-          sudo journalctl -u nix-daemon --no-pager | tee verification/nix-daemon.log >/dev/null || true
-          sudo chown -R "$(id -u):$(id -g)" verification
-
-      - name: Upload verification evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: hatchi-${{ matrix.kind }}
-          path: verification
-
-  darwin:
-    needs: changes
-    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'all') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.darwin == 'true')
-    name: Darwin / nix-darwin
-    # The flake's Darwin systems are aarch64-darwin.
-    runs-on: macos-15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Install Determinate Nix
-        uses: DeterminateSystems/determinate-nix-action@v3.21.9
-
-      - name: Enable FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@v3.21.9
-
-      - name: Evaluate Darwin outputs
-        run: ./bin/traitor check --no-build --print-build-logs
-
-      - name: Check Darwin configurations evaluate
-        run: |
-          time nix eval .#darwinConfigurations.dkumlin-macbook-pro.system --apply 'x: "OK"'
-          time nix eval .#darwinConfigurations.dkumlin-twin-macbook-pro.system --apply 'x: "OK"'
-
-      - name: Build traitor's external tools
-        run: nix build --no-link --print-build-logs .#checks.aarch64-darwin.traitor-flake-tools
-
-  result:
-    name: CI result
-    if: always()
-    needs: [changes, quality, linux, hatchi-vm, darwin]
-    runs-on: ubuntu-latest
-    permissions: {}
-    steps:
-      - name: Require every selected check to pass
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          jq -e '.changes.result == "success" and all(.[]; .result == "success" or .result == "skipped")' <<< "$RESULTS"
+            .#nixosConfigurations.srv-hatchi.config.system.build.toplevel

@@ -11,6 +11,8 @@ dstack wiring: invoked from `dstack-mode/playbooks/babysit.md` step order (confl
 
 Branch has unresolved merge conflicts and needs a reliable path to a buildable state.
 
+For a GitHub native stack, read `~/.agents/skills/dstack/dstack-mode/references/github-stacks.md`. An explicit conflict-resolution request authorizes the stack rebase. Check `gh stack view --short`, save the current branch heads, and confirm that no affected PR is queued. Run `gh stack rebase` to rebase the stack onto its configured trunk, then follow the workflow below for each conflict. Use `gh stack rebase --continue` after staging each resolution, or `gh stack rebase --abort` if the resolution cannot proceed.
+
 ## Workflow
 
 1. Detect all conflicting files from git status and conflict markers.
@@ -25,7 +27,7 @@ Branch has unresolved merge conflicts and needs a reliable path to a buildable s
 - Keep changes minimal and readable.
 - Do not leave conflict markers in any file.
 - Avoid broad refactors while resolving conflicts.
-- Do not push or tag during conflict resolution.
+- Do not push or tag during conflict resolution. After resolution and validation, return to the caller. If the user authorized updating the PRs, the caller publishes the stack with `gh stack push` and checks each remote head.
 
 ## Output
 

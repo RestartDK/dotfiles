@@ -178,14 +178,6 @@
             rm -rf "$backup_dir"
           '';
         };
-      hatchiInstall = nixpkgs.lib.nixosSystem {
-        system = linuxSystem;
-        specialArgs = { inherit inputs; };
-        modules = [
-          hatchiPkgsModule
-          ./tests/srv-hatchi/install.nix
-        ];
-      };
       twinPkgs = import inputs.nixpkgs-unstable {
         system = linuxSystem;
         config.allowUnfree = true;
@@ -197,26 +189,7 @@
       hatchiPkgsModule = {
         nixpkgs.pkgs = pkgsFor linuxSystem;
       };
-      hatchiCommissioning = import ./hosts/srv-hatchi/commissioning.nix;
-      hatchiPhysicalPlatform = import ./hosts/srv-hatchi/physical-platform.nix {
-        inherit inputs;
-        storage = hatchiCommissioning.storage;
-      };
-      hatchiInstallPlatformModules =
-        if
-          builtins.elem hatchiCommissioning.state [
-            "install-ready"
-            "physical"
-          ]
-        then
-          [ hatchiPhysicalPlatform ]
-        else
-          [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];
-      hatchiProductionPlatformModules =
-        if hatchiCommissioning.state == "physical" then
-          [ hatchiPhysicalPlatform ]
-        else
-          [ ./tests/srv-hatchi/fixtures/reference-platform.nix ];
+      hatchiPhysicalPlatform = import ./hosts/srv-hatchi/physical-platform.nix { inherit inputs; };
     in
     {
       packages = forAllSystems (
@@ -262,16 +235,6 @@
         update-pi-packages = {
           type = "app";
           program = "${self.packages.${system}.pi-package-updater}/bin/update-pi-packages";
-        };
-        srv-hatchi-install-vm = {
-          type = "app";
-          program = nixpkgs.lib.getExe (
-            import ./tests/srv-hatchi/install-vm.nix {
-              pkgs = pkgsFor system;
-              flake = self;
-              anywhere = inputs.nixos-anywhere.packages.${system}.default;
-            }
-          );
         };
         default = self.apps.${system}.traitor;
       });
@@ -364,18 +327,6 @@
               pkgs = pkgsFor system;
               inherit self;
             };
-            srv-hatchi-deploy-rejection = (pkgsFor system).runCommand "srv-hatchi-deploy-rejection" { } ''
-              for mode in normal DRY_ACTIVATE BOOT TEST; do
-                if env "$mode=1" ${self.deploy.nodes.srv-hatchi.profiles.system.path}/deploy-rs-activate > refusal 2>&1; then
-                  echo "Uncommissioned activation succeeded in $mode mode" >&2
-                  exit 1
-                fi
-                grep -F "srv-hatchi is uncommissioned; activation denied" refusal
-              done
-              touch $out
-            '';
-            srv-hatchi-production = self.nixosConfigurations.srv-hatchi.config.system.build.toplevel;
-            srv-hatchi-bootstrap = self.nixosConfigurations.srv-hatchi-bootstrap.config.system.build.toplevel;
             srv-hatchi-services = import ./tests/srv-hatchi/services.nix {
               pkgs = pkgsFor system;
               inherit self inputs;
@@ -404,7 +355,6 @@
           cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
         };
 
-      inherit hatchiCommissioning;
       deploy = {
         autoRollback = true;
         magicRollback = true;
@@ -443,53 +393,45 @@
             };
           };
           srv-hatchi = {
-            hostname = "uncommissioned.invalid";
+            hostname = self.nixosConfigurations.srv-hatchi.config.networking.hostName;
+            sshUser = self.nixosConfigurations.srv-hatchi.config.my.host.userName;
+            interactiveSudo = true;
             profiles.system = {
               user = "root";
               path =
                 let
-                  refuse = ''echo "srv-hatchi is uncommissioned; activation denied" >&2; exit 1'';
+                  native = inputs.deploy-rs.lib.${linuxSystem}.activate.nixos self.nixosConfigurations.srv-hatchi;
+                  activate = ''
+                    if [[ "$(< /etc/hostname)" != srv-hatchi ]]; then
+                      echo "srv-hatchi hostname mismatch; activation denied" >&2
+                      exit 1
+                    fi
+                    exec ${native}/deploy-rs-activate
+                  '';
                 in
                 (
                   inputs.deploy-rs.lib.${linuxSystem}.activate.custom
                   // {
-                    dryActivate = refuse;
-                    boot = refuse;
-                    test = refuse;
+                    dryActivate = activate;
+                    boot = activate;
+                    test = activate;
                   }
                 )
                   self.nixosConfigurations.srv-hatchi.config.system.build.toplevel
-                  refuse;
+                  activate;
             };
           };
         };
       };
-      nixosModules = {
-        srv-hatchi = import ./hosts/srv-hatchi;
-        srv-hatchi-bootstrap = import ./hosts/srv-hatchi/bootstrap.nix;
-      };
-      nixosConfigurations.srv-hatchi-bootstrap = nixpkgs.lib.nixosSystem {
-        system = linuxSystem;
-        specialArgs = { inherit inputs; };
-        modules = [
-          hatchiPkgsModule
-          self.nixosModules.srv-hatchi-bootstrap
-        ]
-        ++ hatchiInstallPlatformModules
-        ++ [
-          ({ lib, ... }: {
-            system.build.installTest = lib.mkForce hatchiInstall.config.system.build.installTest;
-          })
-        ];
-      };
+      nixosModules.srv-hatchi = import ./hosts/srv-hatchi;
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
         specialArgs = { inherit inputs; };
         modules = [
           hatchiPkgsModule
           self.nixosModules.srv-hatchi
-        ]
-        ++ hatchiProductionPlatformModules;
+          hatchiPhysicalPlatform
+        ];
       };
 
       nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {

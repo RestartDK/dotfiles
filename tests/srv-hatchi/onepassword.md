@@ -1,6 +1,6 @@
 # Hatchi 1Password secrets
 
-Nix owns application configuration. opnix fetches service-ready credentials into runtime files. The existing SOPS provider remains the default. Neither provider enables deployment or commissions the host.
+Nix owns application configuration. opnix fetches service-ready credentials into runtime files. The existing SOPS provider remains the default. Neither provider changes installation or deployment policy.
 
 ## Credential contract
 
