@@ -36,7 +36,7 @@ From the clean `main` checkout on the Mac, run:
 traitor install srv-hatchi root@<HATCHI_IP> --confirm-destroy
 ```
 
-`traitor install` accepts no additional installer options. It checks the configured disk identifiers, branch, upstream revision, hardware facts, working tree, and presence of the bootstrap files. It stages the clone at `/home/dkumlin/.config/dotfiles` and the bootstrap at `/var/lib/sops`, with secret files at mode `0600`. It invokes the pinned `nixos-anywhere` with `#srv-hatchi` and copies both through `--extra-files`. Bootstrap files remain root-owned; the `.config` tree uses UID 1000 and GID 100. The pre-switch check validates decryption before bootloader installation.
+`traitor install` accepts no additional installer options. It checks the configured disk identifiers, branch, upstream revision, hardware facts, working tree, and presence of the bootstrap files. It stages the clone at `/home/dkumlin/.config/dotfiles` and the bootstrap at `/var/lib/sops`, with secret files at mode `0600`. It invokes the pinned `nixos-anywhere` with `#srv-hatchi` and copies both through `--extra-files`. Bootstrap files remain root-owned; the `.config` tree uses UID 1000 and GID 100. The pre-switch check validates decryption before bootloader installation, after disk formatting. Invalid nonempty bootstrap files can therefore leave an erased machine without a bootable system.
 
 Disko creates a 1 GiB EFI partition and an ext4 root filesystem on the SSD. It formats the HDD as ext4 and mounts it at `/srv`.
 
@@ -112,4 +112,6 @@ From the Mac, check the deployment before switching:
 traitor deploy srv-hatchi --remote-build --dry-run
 ```
 
-The pre-switch check reads the manifest and decrypts the bootstrap without installing secrets. A successful dry run does not prove application startup or automatic rollback. Keep console access available during the first real deployment, particularly when the previous generation was not installed with deploy-rs.
+The pre-switch check reads the manifest and decrypts the bootstrap without installing secrets. The pinned deploy-rs ignores the activation script's failure status in dry-activation mode, so exit zero does not prove these checks passed. Inspect the diagnostics and resolve any reported failure before a real deployment. Real activation still rejects failed pre-switch checks.
+
+A dry run does not prove application startup or automatic rollback. Confirm that Hatchi actually receives `192.168.200.70`; the production DNS answer does not assign that address to an interface. Keep console access available during the first real deployment, particularly when the previous generation was not installed with deploy-rs.

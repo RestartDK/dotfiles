@@ -118,7 +118,7 @@ traitor deploy srv-hatchi --remote-build
 traitor deploy srv-hatchi --remote-build --dry-run
 ```
 
-`--dry-run` builds the configuration and runs deploy-rs dry activation without switching the active system. The two flags can appear in either order after the node. Linux CI keeps local builds by omitting `--remote-build`.
+`--dry-run` builds the configuration and runs deploy-rs dry activation without switching the active system. The pinned deploy-rs can exit successfully after a failed dry-activation check; inspect its diagnostics rather than treating exit zero as a readiness gate. The two flags can appear in either order after the node. Linux CI keeps local builds by omitting `--remote-build`.
 
 `deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. Both remote jobs are hard-disabled by their `if: false && ...` conditions, so they cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once enabled, a host deploys after every successful `main` build. Nana first invokes `traitor sync --expect REVISION`; a conflict or revision mismatch stops before deploy-rs can change the system.
 
