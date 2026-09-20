@@ -107,9 +107,18 @@ Nana and both managed Macs run the same command at login or boot and every 15 mi
 
 ## CI and deployment
 
-Every pull request and `main` push runs one `CI result` job. A single Nix command checks formatting and lint, then builds the Nana and Hatchi NixOS systems. This gate does not build Darwin or Twin, run VM tests, deploy, activate, reboot, or contact either host.
+Every pull request and `main` push runs one `CI result` job. A single Nix command checks formatting, lint, personal secrets, and Hatchi deployment safeguards, then builds the Nana and Hatchi NixOS systems. This gate does not build Darwin or Twin, run VM tests, deploy, activate, reboot, or contact either host.
 
-`traitor verify srv-hatchi services-vm` and `traitor verify srv-hatchi policy` remain available as explicit local diagnostics; they are not branch-protection gates.
+`traitor verify srv-hatchi services-vm` remains a manual diagnostic. `traitor verify srv-hatchi policy` runs the same deployment safeguards checked by CI, including bootstrap validation and exact-node CLI behavior.
+
+`traitor deploy <node>` builds locally by default. For deployment from a Mac without a Linux builder, add `--remote-build` to build on the target instead. Both `srv-nana` and `srv-hatchi` accept the flag.
+
+```bash
+traitor deploy srv-hatchi --remote-build
+traitor deploy srv-hatchi --remote-build --dry-run
+```
+
+`--dry-run` builds the configuration and runs deploy-rs dry activation without switching the active system. The two flags can appear in either order after the node. Linux CI keeps local builds by omitting `--remote-build`.
 
 `deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. Both remote jobs are hard-disabled by their `if: false && ...` conditions, so they cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once enabled, a host deploys after every successful `main` build. Nana first invokes `traitor sync --expect REVISION`; a conflict or revision mismatch stops before deploy-rs can change the system.
 
@@ -125,7 +134,7 @@ Hatchi's physical profile puts EFI, NixOS, service state, and databases on the s
 
 Hatchi has one physical NixOS configuration for installation and deployment. Its stable disk IDs and generated hardware facts are committed. Follow [the Hatchi installation procedure](hosts/srv-hatchi/INSTALL.md) to run the guarded `nixos-anywhere` installation from a clean `main` checkout.
 
-Hatchi's optional runtime 1Password provider and private NixOS verification procedure are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md). Missing restoration keys still block production enablement.
+Hatchi's production configuration enables runtime 1Password secrets and declares its LAN as `192.168.200.0/24`. SSH remains allowed on `tailscale0` independently of the LAN rules. Before deployment, [provision the SOPS bootstrap files](hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment). A native pre-switch check rejects missing or undecryptable bootstrap files before changing running services. Credential formats and verification limits are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md).
 
 ## Personal Pi secrets
 

@@ -435,6 +435,7 @@
           hatchiPkgsModule
           self.nixosModules.srv-hatchi
           hatchiPhysicalPlatform
+          ./hosts/srv-hatchi/production.nix
         ];
       };
 

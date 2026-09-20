@@ -26,6 +26,7 @@ invoke() {
 reject() {
   invoke 2 "$@"
   test ! -s "$NIX_CALLS"
+  test ! -s "$SSH_CALLS"
 }
 
 reject deploy
@@ -40,8 +41,15 @@ reject install srv-hatchi root@example.invalid --confirm-destroy extra
 reject verify
 reject verify srv-nana services-vm
 reject verify srv-hatchi --vm-test
-for flag in --hostname=other --auto-rollback=false --targets=srv-nana --skip-checks -- --remote-build; do
-  reject deploy srv-nana "$flag"
+for node in srv-nana srv-hatchi; do
+  reject deploy "$node" --dry-run --dry-run
+  reject deploy "$node" --remote-build --remote-build
+  reject deploy "$node" --remote-build true
+  reject deploy "$node" --remote-build --dry-run extra
+  for flag in --hostname=other --auto-rollback=false --targets=srv-nana --skip-checks --remote-build=true --; do
+    reject deploy "$node" "$flag"
+    reject deploy "$node" --remote-build "$flag"
+  done
 done
 for kind in services-vm closures policy; do
   for flag in --target-host=root@example.invalid --store-paths --phases=disko --extra-files=/tmp --flake=other --option --; do
@@ -60,6 +68,14 @@ git -C "$install_repo" -c user.name=Fixture -c user.email=fixture@example.invali
 git -C "$install_repo" remote add origin "$install_origin"
 git -C "$install_repo" push --quiet --set-upstream origin main
 install_revision="$(git -C "$install_repo" rev-parse HEAD)"
+FLAKE_DIR="$install_repo" invoke 1 install srv-hatchi root@example.invalid --confirm-destroy
+test ! -s "$NIX_CALLS"
+test ! -s "$SSH_CALLS"
+grep -F 'before installing Hatchi' "$TMPDIR/response"
+bootstrap="$HOME/.local/state/hatchi-bootstrap/var/lib/sops"
+install -d -m700 "$bootstrap/age"
+install -m600 "$ROOT/tests/srv-hatchi/fixtures/age-key.txt" "$bootstrap/age/keys.txt"
+install -m600 "$ROOT/tests/srv-hatchi/fixtures/synthetic-secrets.sops.yaml" "$bootstrap/srv-hatchi.yaml"
 : >"$NIX_CALLS"
 : >"$SSH_CALLS"
 NIX_STUB_INSPECT_EXTRA_FILES="$TMPDIR/staged-revision" \
@@ -103,15 +119,23 @@ if grep -Fx run "$NIX_CALLS"; then
 fi
 grep -F "Hatchi disk preflight failed; installation denied" "$TMPDIR/response"
 
-invoke 0 deploy srv-nana --dry-run
-printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#srv-nana" --dry-activate >"$TMPDIR/expected"
-diff -u "$TMPDIR/expected" "$NIX_CALLS"
-invoke 0 deploy srv-hatchi
-printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#srv-hatchi" >"$TMPDIR/expected"
-diff -u "$TMPDIR/expected" "$NIX_CALLS"
-invoke 0 deploy srv-hatchi --dry-run
-printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#srv-hatchi" --dry-activate >"$TMPDIR/expected"
-diff -u "$TMPDIR/expected" "$NIX_CALLS"
+for node in srv-nana srv-hatchi; do
+  invoke 0 deploy "$node"
+  printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" >"$TMPDIR/expected"
+  diff -u "$TMPDIR/expected" "$NIX_CALLS"
+  invoke 0 deploy "$node" --dry-run
+  printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --dry-activate >"$TMPDIR/expected"
+  diff -u "$TMPDIR/expected" "$NIX_CALLS"
+  invoke 0 deploy "$node" --remote-build
+  printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --remote-build >"$TMPDIR/expected"
+  diff -u "$TMPDIR/expected" "$NIX_CALLS"
+  invoke 0 deploy "$node" --remote-build --dry-run
+  printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --remote-build --dry-activate >"$TMPDIR/expected"
+  diff -u "$TMPDIR/expected" "$NIX_CALLS"
+  invoke 0 deploy "$node" --dry-run --remote-build
+  printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --dry-activate --remote-build >"$TMPDIR/expected"
+  diff -u "$TMPDIR/expected" "$NIX_CALLS"
+done
 invoke 0 twin
 printf '%s\n' run "$ROOT#home-manager" -- switch --flake "$ROOT#twin" -b hm-backup >"$TMPDIR/expected"
 diff -u "$TMPDIR/expected" "$NIX_CALLS"
@@ -137,6 +161,19 @@ jq --arg tmp "$TMPDIR" --arg fixture "$fixture" --arg key "$SOPS_AGE_KEY_FILE" '
   .secrets |= map(.sopsFile = $fixture | .path = ($tmp + "/secrets/" + .name)) |
   .templates |= map(.path = ($tmp + "/secrets/rendered/" + .name))
 ' "$SOPS_MANIFEST" >"$TMPDIR/manifest.json"
+bash "$ROOT/hosts/srv-hatchi/check-secrets.sh" "$TMPDIR/manifest.json" "$SOPS_AGE_KEY_FILE" "$fixture"
+age-keygen -o "$TMPDIR/wrong-age-key" 2>/dev/null
+for key in "$TMPDIR/missing-age-key" "$TMPDIR/wrong-age-key"; do
+  if bash "$ROOT/hosts/srv-hatchi/check-secrets.sh" "$TMPDIR/manifest.json" "$key" "$fixture" >"$TMPDIR/preflight-response" 2>&1; then
+    echo "Secret pre-switch check accepted a missing or incorrect age key" >&2
+    exit 1
+  fi
+done
+if bash "$ROOT/hosts/srv-hatchi/check-secrets.sh" "$TMPDIR/manifest.json" "$SOPS_AGE_KEY_FILE" "$TMPDIR/missing-secrets.yaml" >"$TMPDIR/preflight-response" 2>&1; then
+  echo "Secret pre-switch check accepted missing ciphertext" >&2
+  exit 1
+fi
+test ! -e "$TMPDIR/secrets"
 sops-install-secrets -ignore-passwd "$TMPDIR/manifest.json"
 rendered="$TMPDIR/secrets/rendered"
 config="$TMPDIR/qBittorrent.conf"
@@ -185,6 +222,10 @@ grep -Fx "WebUI\Password_PBKDF2=$password" "$rendered/qBittorrent.conf" >/dev/nu
 jq -e --rawfile password "$TMPDIR/secrets/adguard-password" '.users[0].password == $password' "$rendered/AdGuardHome.yaml" >/dev/null
 cp "$rendered/qBittorrent.conf" "$TMPDIR/rotated.conf"
 printf 'invalid ciphertext\n' >"$fixture"
+if bash "$ROOT/hosts/srv-hatchi/check-secrets.sh" "$TMPDIR/manifest.json" "$SOPS_AGE_KEY_FILE" "$fixture" >"$TMPDIR/preflight-response" 2>&1; then
+  echo 'Secret pre-switch check accepted invalid ciphertext' >&2
+  exit 1
+fi
 if sops-install-secrets -ignore-passwd "$TMPDIR/manifest.json"; then
   echo 'Invalid ciphertext accepted' >&2
   exit 1
