@@ -28,7 +28,7 @@ let
     }
     {
       home = macHome "dkumlin-twin-macbook-pro";
-      profile = "work";
+      profile = "personal";
       system = "aarch64-darwin";
     }
     {
