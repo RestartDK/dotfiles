@@ -158,6 +158,7 @@ in
       trustedInterfaces = lib.mkForce [ "lo" ];
       allowedTCPPorts = lib.mkForce [ ];
       allowedUDPPorts = lib.mkForce [ ];
+      interfaces.tailscale0.allowedTCPPorts = [ 22 ];
       extraInputRules = ''
         ${ingress networks.clientNetworks "tcp, udp" "53"}
         ${ingress networks.clientNetworks "tcp" "80, 443"}

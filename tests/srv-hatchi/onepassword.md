@@ -1,6 +1,6 @@
 # Hatchi 1Password secrets
 
-Nix owns application configuration. opnix fetches service-ready credentials into runtime files. The existing SOPS provider remains the default. Neither provider changes installation or deployment policy.
+Nix owns application configuration. The physical Hatchi configuration enables opnix in `hosts/srv-hatchi/production.nix` and fetches service-ready credentials into runtime files. The reusable service module retains SOPS as its default for isolated tests.
 
 ## Credential contract
 
@@ -18,19 +18,21 @@ Set each `my.hatchi.onepassword.references` option to a field containing the fol
 | `nextcloudPassword` | The initial Nextcloud administrator password |
 | `qbittorrentPasswordHash` | The complete qBittorrent `@ByteArray(base64-salt:base64-digest)` value for `daniel`, using PBKDF2-HMAC-SHA512 with 100000 iterations |
 
-The Cloudflare environment file, CouchDB INI fragment, both password hashes, and Grafana's key have null references until provisioned. Do not point these options at the old plain-token or plain-password fields. Store only credentials and their required wrappers in these fields, not entire application configurations.
+Production references point to the `nixos-acme-environment`, `nixos-admin-config`, `nixos-password-hash`, and `nixos-secret-key` fields in the existing Homelab items. These fields were prepared for a fresh installation. Do not point the formatted credential options at plain-token or plain-password fields. Store only credentials and their required wrappers, not entire application configurations.
 
 Changing an AdGuard or qBittorrent password requires updating its stored hash too. Obtain each hash with the application's supported tooling or configuration export. Hashes are not generated at boot. Changing Cloudflare or CouchDB credentials also requires updating the corresponding environment or INI field. Keep any separate login fields in sync.
 
-The existing Glance references retain the normal `password` field and the `add more/secret password` session key. Do not substitute Glance's separate `hashed password` field for its normal password. A new session key invalidates sessions but does not erase configuration. Grafana instead needs its original encryption key when restoring encrypted database credentials. Its password reference uses the built-in field ID `password`, not its displayed label `confirmNew`.
+The production Glance references retain the normal `password` field and the top-level `secret password` session key. Do not substitute Glance's separate `hashed password` field for its normal password. A new session key invalidates sessions but does not erase configuration. Grafana instead needs its original encryption key when restoring encrypted database credentials. Its password reference uses the built-in field ID `password`, not its displayed label `confirmNew`.
 
 A fresh CouchDB administrator login does not prove access to a restored database. Confirm the existing administrator and Grafana restoration key before migration.
 
 ## Bootstrap and runtime
 
-Only after provisioning every reference, set `my.hatchi.onepassword.enable = true`. Missing references fail evaluation.
+The physical configuration sets `my.hatchi.onepassword.enable = true`. Missing references fail evaluation. Glance, AdGuard, Grafana, Nextcloud, and qBittorrent use `daniel` for their fresh login accounts; the corresponding 1Password usernames match. CouchDB uses the administrator in its INI credential.
 
-SOPS decrypts the `opnix-token` entry from `/var/lib/sops/srv-hatchi.yaml` using `/var/lib/sops/age/keys.txt`. Provision both files out of band, root-owned with mode `0600`. The service account needs read access to the vault, not write access. `my.hatchi.onepassword.tokenFile` can instead select a separately provisioned runtime token file outside the Nix store.
+SOPS decrypts the `opnix-token` entry from `/var/lib/sops/srv-hatchi.yaml` using `/var/lib/sops/age/keys.txt`. Provision both files out of band, root-owned with mode `0600`. The `srv-hatchi-production` service account has read-only access to Homelab. Its token and age key are backed up in the `Hatchi production bootstrap` item. Neither belongs in Git or the Nix store. `my.hatchi.onepassword.tokenFile` can instead select a separately provisioned token file outside the Nix store.
+
+NixOS's native pre-switch check validates the SOPS manifest and decrypts the ciphertext to `/dev/null` before changing the bootloader or restarting services. Missing files, a wrong age key, or invalid ciphertext stop the switch. This does not prove 1Password is reachable from Hatchi or that every application can start. See [the provisioning procedure](../../hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment).
 
 ```text
 SOPS bootstrap token
@@ -54,8 +56,8 @@ traitor check --print-build-logs
 nix build --no-link --print-build-logs .#checks.x86_64-linux.srv-hatchi-onepassword
 ```
 
-The second command requires x86 Linux with KVM. It uses the standard NixOS VM test driver and public synthetic SOPS fixtures. A test-only fetch command replaces the 1Password network call, but the provider unit, runtime substitutions, credentials, and real services are exercised. The test checks six logins, permissions, provider restart propagation, missing-token and empty-file failures, and reboot. It runs alongside the existing SOPS services VM in CI. Policy and Fleet tests remain local-only.
+The second command requires x86 Linux with KVM. It uses the standard NixOS VM test driver and public synthetic SOPS fixtures. A test-only fetch command replaces the 1Password network call, but the provider unit, runtime substitutions, credentials, and real services are exercised. The test checks six logins, permissions, provider restart propagation, missing-token and empty-file failures, and reboot. VM tests are manual, not part of the default CI job.
 
-This test does not authenticate to 1Password or validate production field references. Earlier private SDK testing covered the superseded plain-password renderer, not this service-ready field contract.
+The VM test does not authenticate to 1Password or validate production field references. A private check on the Mac used the pinned opnix binary and the production service account to fetch all nine declared references and compare their contents with 1Password. That verifies credential delivery from the Mac, not Hatchi's live services.
 
 For a later private SDK check, `onepassword-machine.nix` composes the real modules without SSH, Tailscale, production ACME, or production data. Supply the VM platform separately, explicit test-only key references, and service-ready fixture fields in a test vault. Its Glance and Grafana key references default to null to prevent production-key inheritance. Use a short-lived read-only account, stream its token through stdin, and retire the account and VM afterward. Do not put real credentials in public tests or rebuild the revoked earlier test account implicitly.

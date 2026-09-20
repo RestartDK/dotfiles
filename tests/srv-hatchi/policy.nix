@@ -35,6 +35,10 @@ let
       checkout="$staging_root/home/dkumlin/.config/dotfiles"
       test -d "$checkout/.git"
       test -f "$checkout/hosts/srv-hatchi/hardware-configuration.nix"
+      for file in srv-hatchi.yaml age/keys.txt; do
+        cmp "$HOME/.local/state/hatchi-bootstrap/var/lib/sops/$file" "$staging_root/var/lib/sops/$file"
+        test "$(stat -c %a "$staging_root/var/lib/sops/$file")" = 600
+      done
       git -C "$checkout" rev-parse HEAD > "$NIX_STUB_INSPECT_EXTRA_FILES"
     fi
   '';
@@ -43,7 +47,8 @@ let
     cat >/dev/null
     exit "''${SSH_STUB_STATUS:-0}"
   '';
-  cfg = self.nixosConfigurations.srv-hatchi.config;
+  production = self.nixosConfigurations.srv-hatchi.config;
+  cfg = configured { };
   storage =
     (inputs.nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
@@ -64,7 +69,7 @@ let
           inherit inputs;
           storage = physicalStorage;
         })
-        { inherit lib; }
+          { inherit lib; }
       ) true
     );
   validPhysicalPlatform = evaluatePhysicalPlatform {
@@ -89,7 +94,10 @@ let
   configured =
     module:
     (self.nixosConfigurations.srv-hatchi.extendModules {
-      modules = [ module ];
+      modules = [
+        { disabledModules = [ ../../hosts/srv-hatchi/production.nix ]; }
+        module
+      ];
     }).config;
   onePasswordFixture.services.onepassword-secrets.secrets.integrationProbe = {
     reference = "op://fixture/integration/password";
@@ -212,6 +220,28 @@ assert !storage.boot.loader.grub.enable;
 assert cfg.networking.firewall.allowedTCPPorts == [ ];
 assert cfg.networking.firewall.allowedUDPPorts == [ ];
 assert cfg.networking.firewall.trustedInterfaces == [ "lo" ];
+assert cfg.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 ];
+assert production.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 ];
+assert production.my.hatchi.network.dnsAnswer == "192.168.200.70";
+assert production.my.hatchi.network.clientNetworks == [ "192.168.200.0/24" ];
+assert production.my.hatchi.network.adminNetworks == [ "192.168.200.0/24" ];
+assert
+  production.services.adguardhome.settings.dns.upstream_dns == [
+    "1.1.1.1"
+    "9.9.9.9"
+  ];
+assert lib.hasInfix "ip saddr 192.168.200.0/24 meta l4proto { tcp } th dport { 22 } accept"
+  production.networking.firewall.extraInputRules;
+assert production.my.hatchi.onepassword.enable;
+assert builtins.all (reference: reference != null) (
+  builtins.attrValues production.my.hatchi.onepassword.references
+);
+assert production.services.onepassword-secrets.enable;
+assert builtins.attrNames production.sops.secrets == [ "opnix-token" ];
+assert lib.hasInfix "hatchi-check-secrets" production.system.preSwitchChecks.hatchi-secrets;
+assert lib.hasInfix "/var/lib/sops/srv-hatchi.yaml"
+  production.system.preSwitchChecks.hatchi-secrets;
+assert lib.hasInfix "/var/lib/sops/age/keys.txt" production.system.preSwitchChecks.hatchi-secrets;
 assert cfg.systemd.services.sonarr.serviceConfig.StateDirectory == "sonarr";
 assert cfg.services.qbittorrent.serverConfig != { };
 assert !cfg.services.suwayomi-server.settings.server.basicAuthEnabled;
@@ -521,6 +551,7 @@ pkgs.runCommand "srv-hatchi-policy"
       pkgs.jq
       pkgs.yq-go
       pkgs.sops
+      pkgs.age
       pkgs.coreutils
       pkgs.diffutils
       pkgs.gnugrep

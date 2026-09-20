@@ -21,10 +21,20 @@ jobs:
       - name: Install Determinate Nix
         uses: DeterminateSystems/determinate-nix-action@v3.21.9
 
-      - name: Update flake.lock
-        uses: DeterminateSystems/update-flake-lock@v28
+      - name: Update flake inputs
+        run: ./bin/traitor update
+
+      - name: Format with updated inputs
+        run: nix fmt
+
+      - name: Create update PR
+        uses: peter-evans/create-pull-request@84ae59a2cdc2258d6fa0732dd66352dddae2a412
         with:
           branch: automation/update-flake-lock
-          commit-msg: "chore: update flake inputs"
-          pr-title: "chore: update flake inputs"
+          delete-branch: true
+          commit-message: "chore: update flake inputs"
+          title: "chore: update flake inputs"
+          body: |
+            Updates the flake inputs and formats the source with the updated formatter.
+            The lockfile and formatting changes are committed together for CI verification.
           token: ${{ secrets.FLAKE_UPDATE_TOKEN }}

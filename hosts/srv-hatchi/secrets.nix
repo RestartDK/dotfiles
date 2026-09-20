@@ -2,6 +2,7 @@
   inputs,
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -24,6 +25,14 @@ let
   afterSops = {
     requires = [ "sops-install-secrets.service" ];
     after = [ "sops-install-secrets.service" ];
+  };
+  checkSecrets = pkgs.writeShellApplication {
+    name = "hatchi-check-secrets";
+    runtimeInputs = [
+      config.sops.package
+      pkgs.sops
+    ];
+    text = builtins.readFile ./check-secrets.sh;
   };
 in
 {
@@ -77,6 +86,18 @@ in
         restartUnits = [ "opnix-secrets.service" ];
       };
     };
+    system.preSwitchChecks.hatchi-secrets =
+      lib.optionalString (config.sops.secrets != { }) ''
+        ${lib.getExe checkSecrets} ${config.system.build.sops-nix-manifest} \
+          ${lib.escapeShellArg config.sops.age.keyFile} \
+          ${lib.escapeShellArg config.sops.defaultSopsFile}
+      ''
+      + lib.optionalString (onePassword.enable && cfg.tokenFile != null) ''
+        if ! test -s ${lib.escapeShellArg cfg.tokenFile}; then
+          echo "Hatchi's 1Password token must be provisioned before deployment" >&2
+          exit 1
+        fi
+      '';
     systemd.services = lib.mkIf sopsToken {
       opnix-secrets = afterSops;
       opnix-secrets-restart = lib.mkIf (

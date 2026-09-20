@@ -309,6 +309,10 @@
                 TRAITOR=${./bin/traitor} bash ${./tests/traitor-sync.sh}
                 touch $out
               '';
+          personal-secrets = import ./tests/personal-secrets.nix {
+            pkgs = pkgsFor system;
+            inherit self inputs;
+          };
           quality = treefmtEval.${system}.config.build.check self;
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
             pkgs = pkgsFor system;
@@ -431,6 +435,7 @@
           hatchiPkgsModule
           self.nixosModules.srv-hatchi
           hatchiPhysicalPlatform
+          ./hosts/srv-hatchi/production.nix
         ];
       };
 

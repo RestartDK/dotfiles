@@ -1,7 +1,9 @@
-{ ... }:
+{ inputs, ... }:
 
 {
   imports = [
+    inputs.opnix.nixosModules.default
+    (import ../../profiles/personal-secrets.nix { userName = "dkumlin"; })
     ./hardware-configuration.nix
     ../../modules/nixos/base.nix
     ../../modules/nixos/numtide-cache.nix
@@ -34,6 +36,8 @@
     devices = [ "/dev/nvme0n1" ];
     useOSProber = true;
   };
+
+  services.onepassword-secrets.systemdIntegration.enable = false;
 
   system.stateVersion = "26.05";
 }
