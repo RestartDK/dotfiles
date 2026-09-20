@@ -127,6 +127,10 @@ Hatchi has one physical NixOS configuration for installation and deployment. Its
 
 Hatchi's optional runtime 1Password provider and private NixOS verification procedure are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md). Missing restoration keys still block production enablement.
 
+## Personal Pi secrets
+
+Both Macs and Nana use opnix to fetch the OpenRouter key from 1Password. Follow [the provisioning guide](tests/personal-secrets.md) to install each machine's service-account token and verify retrieval. Twin Linux and the Cobb bridge do not import this configuration.
+
 ## Cobb bridge profile
 
 This flake exports a reusable Home Manager module for Cobb:
