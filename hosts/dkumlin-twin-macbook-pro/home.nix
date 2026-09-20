@@ -18,7 +18,7 @@
     ];
   };
 
-  my.ai.profile = "work";
+  my.ai.profile = "personal";
 
   my.liveConfig = {
     enable = true;
