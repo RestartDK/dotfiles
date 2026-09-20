@@ -40,7 +40,7 @@ upstream.overrideAttrs (old: {
     cp -R ${../../config/agents/model-profiles} policy-check/profiles
     PI_POLICY_TEST_PROFILES="$PWD/policy-check/profiles" \
       PI_POLICY_TEST_EXTENSION="${typecheckSource}/config/pi/agent/extensions/subagents/index.ts" \
-      ${bun}/bin/bun test policy-check/tests/runtime.test.ts policy-check/tests/attempts.test.ts policy-check/tests/dispatch.test.ts
+      ${bun}/bin/bun test policy-check/tests/runtime.test.ts policy-check/tests/attempts.test.ts policy-check/tests/dispatch.test.ts policy-check/tests/summary-retry.test.ts
   ''
   + (old.preInstall or "");
   postInstall = (old.postInstall or "") + ''

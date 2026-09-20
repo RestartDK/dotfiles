@@ -44,7 +44,7 @@ const projects = [
     compilerOptions: {
       ...compilerOptions,
       noEmit: true,
-      rootDirs: [root, directory],
+      rootDirs: [root, directory, sdk],
     },
     include: [
       join(root, "config/pi/agent/extensions/pi-no-default-model.ts"),

@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Protocol, type Failure } from "../../config/pi/agent/extensions/subagents/protocol";
@@ -274,4 +276,82 @@ test("Pi unknown tool lifecycle events still throw", () => {
     [],
   );
   expect(() => protocol.accept({ type: "future_tool_execution_end" })).toThrow("Unknown Pi event");
+});
+
+const summaryRetries = {
+  summarization_retry_scheduled: {
+    type: "summarization_retry_scheduled",
+    attempt: 1,
+    maxAttempts: 1,
+    delayMs: 1,
+    errorMessage: "429 Too Many Requests",
+  },
+  summarization_retry_attempt_start: {
+    type: "summarization_retry_attempt_start",
+    source: "compaction",
+    reason: "manual",
+  },
+  summarization_retry_finished: { type: "summarization_retry_finished" },
+} satisfies {
+  [K in Extract<AgentSessionEvent["type"], `summarization_retry_${string}`>]: Extract<
+    AgentSessionEvent,
+    { type: K }
+  >;
+};
+
+for (const event of Object.values(summaryRetries)) {
+  test(`Pi ${event.type} alone grants neither success nor fallback`, () => {
+    const protocol = new Protocol(
+      { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
+      [],
+    );
+    protocol.accept(event);
+    expect(protocol.terminal).toBeUndefined();
+    expect(protocol.toolUsed).toBe(false);
+    expect(protocol.output).toBe("");
+    expect(protocol.usage.turns).toBe(0);
+  });
+
+  for (const stopReason of [
+    "stop",
+    "error",
+    "aborted",
+  ] satisfies AssistantMessage["stopReason"][]) {
+    test.each(piToolActivityEvents)(
+      `Pi ${event.type} preserves ${stopReason} terminal and $name evidence`,
+      ({ event: toolEvent }) => {
+        const protocol = new Protocol(
+          { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
+          ["write"],
+        );
+        protocol.accept(toolEvent);
+        protocol.accept({
+          type: "message_end",
+          message: {
+            ...piAssistantMessage,
+            stopReason,
+            errorMessage: "429 Too Many Requests",
+          },
+        });
+        const terminal = protocol.terminal;
+        const usage = { ...protocol.usage };
+        expect(terminal).toBeDefined();
+        protocol.accept(event);
+        expect(protocol.terminal).toBe(terminal);
+        expect(protocol.toolUsed).toBe(true);
+        expect(protocol.output).toBe("pi-ok");
+        expect(protocol.usage).toEqual(usage);
+      },
+    );
+  }
+}
+
+test("Pi unknown summarization lifecycle remains rejected", () => {
+  const protocol = new Protocol(
+    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
+    [],
+  );
+  expect(() => protocol.accept({ type: "summarization_retry_future" })).toThrow(
+    "Unknown Pi event: summarization_retry_future",
+  );
 });
