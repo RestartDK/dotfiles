@@ -47,5 +47,6 @@ jobs:
         run: |
           nix build --no-link --print-build-logs \
             .#checks.x86_64-linux.quality \
+            .#checks.x86_64-linux.personal-secrets \
             .#nixosConfigurations.srv-nana.config.system.build.toplevel \
             .#nixosConfigurations.srv-hatchi.config.system.build.toplevel
