@@ -14,7 +14,10 @@ import {
   isRecord,
   parsePolicy,
   resolveRoute,
-} from "../../config/pi/agent/extensions/subagents/policy";
+  type NativeTarget,
+} from "../../config/pi/agent/lib/model-policy";
+
+import { piToolActivityEvents, piWriteEnd } from "./pi-tool-events";
 
 const directories: string[] = [];
 afterEach(() => {
@@ -366,4 +369,173 @@ describe("real backend subprocesses", () => {
     expect(result.attempts).toHaveLength(2);
     expect(result.outcome.kind).toBe(mode === "stdout-quota" ? "success" : "failed");
   });
+});
+
+test("real synthetic quota falls back only before tools", async () => {
+  const { runner, task } = setup({ claude: "synthetic-quota" });
+  const result = await runner.run(task);
+  expect(result.outcome.kind).toBe("success");
+  expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
+  expect(result.attempts[0]?.actualModel).toBe("claude-fable-5-1");
+});
+test.each([
+  "synthetic-after-tool",
+  "synthetic-cancelled",
+  "synthetic-mismatch",
+  "synthetic-tool",
+  "synthetic-unknown-event",
+])("%s never replays", async (mode) => {
+  const { runner, task, calls } = setup({ claude: mode });
+  expect((await runner.run(task)).outcome.kind).toBe("failed");
+  expect(calls().some((call) => call.backend === "pi")).toBe(false);
+});
+test("parent cancellation while reading a real synthetic error never replays", async () => {
+  const { runner, task, calls } = setup({ claude: "synthetic-quota", split: true });
+  const controller = new AbortController();
+  const result = await runner.run(task, controller.signal, (update) => {
+    if (update.output.includes("monthly spend limit")) controller.abort();
+  });
+  expect(result.outcome.kind).toBe("cancelled");
+  expect(calls().some((call) => call.backend === "pi")).toBe(false);
+});
+
+const nativeQuotaErrors = [
+  {
+    provider: "anthropic",
+    id: "claude-fable-5-1",
+    error: '429 {"type":"error","error":{"type":"rate_limit_error","message":"TEST_QUOTA"}}',
+  },
+  {
+    provider: "openai",
+    id: "gpt-6-astra",
+    error:
+      'OpenAI API error (429): {"type":"insufficient_quota","code":"insufficient_quota","message":"TEST_QUOTA"}',
+  },
+] satisfies (Pick<NativeTarget, "provider" | "id"> & { error: string })[];
+
+function nativeQuotaSetup(
+  native: (typeof nativeQuotaErrors)[number],
+  scenario: Record<string, unknown> = {},
+) {
+  const setupResult = setup({
+    piError: native.error,
+    piErrorProvider: native.provider,
+    ...scenario,
+  });
+  setupResult.task.route.chain = [
+    { kind: "pi", provider: native.provider, id: native.id, thinking: "xhigh" },
+    { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+  ];
+  return setupResult;
+}
+
+test.each(nativeQuotaErrors)(
+  "native $provider quota before tools advances despite exit zero",
+  async (native) => {
+    const { runner, task, calls } = nativeQuotaSetup(native);
+    const result = await runner.run(task);
+    expect(result.outcome).toEqual({ kind: "success" });
+    expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
+    expect(result.attempts[0]).toMatchObject({
+      reason: "quota",
+      actualModel: `${native.provider}/${native.id}`,
+    });
+    expect(result.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
+    expect(result.output).toBe("pi-ok");
+    expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(2);
+  },
+);
+
+for (const guard of ["tool", "tool-call", "aborted", "unknown-event"]) {
+  test.each(nativeQuotaErrors)(
+    `native $provider quota after ${guard} never replays`,
+    async (native) => {
+      const { runner, task, calls } = nativeQuotaSetup(native, { piBeforeError: guard });
+      const result = await runner.run(task);
+      expect(result.outcome.kind).toBe("failed");
+      expect(result.attempts).toHaveLength(1);
+      expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
+      if (guard === "tool" || guard === "tool-call") {
+        expect(result.toolUsed).toBe(true);
+        expect(result.outcome).toMatchObject({
+          reason: expect.stringContaining("parent must reconcile"),
+        });
+      }
+    },
+  );
+}
+
+test.each(nativeQuotaErrors)(
+  "parent cancellation on native $provider quota never replays",
+  async (native) => {
+    const { runner, task, calls } = nativeQuotaSetup(native);
+    const controller = new AbortController();
+    const result = await runner.run(task, controller.signal, (update) => {
+      if (update.output === "native-error") controller.abort();
+    });
+    expect(result.outcome.kind).toBe("cancelled");
+    expect(result.attempts).toHaveLength(1);
+    expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
+  },
+);
+
+for (const native of nativeQuotaErrors) {
+  test.each(piToolActivityEvents)(
+    `Pi $name alone blocks replay after native ${native.provider} quota`,
+    async ({ event }) => {
+      const { runner, task, calls } = nativeQuotaSetup(native, { piEvents: [event], split: true });
+      task.tools = ["write"];
+      const result = await runner.run(task);
+      expect(result.toolUsed).toBe(true);
+      expect(result.outcome).toMatchObject({
+        kind: "failed",
+        reason: expect.stringContaining("parent must reconcile"),
+      });
+      expect(result.attempts).toHaveLength(1);
+      expect(result.attempts[0]).toMatchObject({ kind: "provider-failure", reason: "quota" });
+      expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
+      expect(calls().every((call) => call.args.includes(native.provider))).toBe(true);
+    },
+  );
+}
+
+test("Pi end-only write result then quota never repeats a completed write", async () => {
+  const { runner, task, calls } = nativeQuotaSetup(nativeQuotaErrors[0], {
+    piEvents: [piWriteEnd],
+    piWritePath: "end-only-write.txt",
+    split: true,
+  });
+  task.tools = ["write"];
+  const result = await runner.run(task);
+  expect(readFileSync(join(task.cwd, "end-only-write.txt"), "utf8")).toBe("write\n");
+  expect(result.toolUsed).toBe(true);
+  expect(result.outcome).toMatchObject({
+    kind: "failed",
+    reason: expect.stringContaining("parent must reconcile"),
+  });
+  expect(result.attempts).toHaveLength(1);
+  expect(result.output).toBe("native-error");
+  expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
+});
+
+test("Pi end-only write result followed by final success stays successful", async () => {
+  const { runner, task, calls } = setup(
+    {
+      claude: "quota",
+      piEvents: [piWriteEnd],
+      piWritePath: "end-only-write.txt",
+      split: true,
+    },
+    "work",
+  );
+  task.tools = ["write"];
+  const result = await runner.run(task);
+  expect(result.outcome).toEqual({ kind: "success" });
+  expect(result.toolUsed).toBe(true);
+  expect(result.output).toBe("pi-ok");
+  expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
+  expect(readFileSync(join(task.cwd, "end-only-write.txt"), "utf8")).toBe("write\n");
+  expect(calls().filter((call) => call.backend === "pi" && call.args.includes("-p"))).toHaveLength(
+    1,
+  );
 });

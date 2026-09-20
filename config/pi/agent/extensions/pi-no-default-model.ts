@@ -1,7 +1,5 @@
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 
-// Keep model and thinking-level changes local to the active session. Defaults
-// remain managed explicitly in settings.json instead of following UI switches.
 const ignoreDefaultChange = (): void => undefined;
 const settings = SettingsManager.prototype;
 

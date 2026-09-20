@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { Type, type Static } from "typebox";
 import { BackendRunner, instructionFiles, type Attempt, type Execution } from "./backend";
 import {
   backendLabel,
@@ -14,8 +14,9 @@ import {
   resolveRoute,
   type Policy,
   type ResolvedRoute,
-} from "./policy";
+} from "../../lib/model-policy";
 import { initialUsage, type UsageStats } from "./protocol";
+import { authorizeSessionPolicy } from "../../lib/session-policy";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -34,18 +35,7 @@ interface SubagentsConfig {
   agents: Record<string, WorkerPreset>;
 }
 
-interface WorkerTaskInput {
-  agent?: string;
-  task: string;
-  role?: string;
-  member?: string;
-  seat?: number;
-  model?: string;
-  thinking?: string;
-  tools?: string[];
-  systemPrompt?: string;
-  cwd?: string;
-}
+type WorkerTaskInput = Static<typeof WorkerTask>;
 
 interface ResolvedWorkerTask {
   name: string;
@@ -65,13 +55,10 @@ interface WorkerResult {
   actual?: Execution["actual"];
   tools: string[];
   cwd: string;
-  exitCode: number;
-  messages: unknown[];
+  outcome: Execution["outcome"];
   stderr: string;
   output: string;
   usage: UsageStats;
-  stopReason?: string;
-  errorMessage?: string;
 }
 
 interface SubagentsDetails {
@@ -89,16 +76,19 @@ interface RunAccumulator {
   attempts: Attempt[];
 }
 
-interface RunningRun {
-  status: "running";
+interface RunMetadata {
   id: RunId;
   task: ResolvedWorkerTask;
   writeCapable: boolean;
   startedAt: number;
   abort: AbortController;
   live: RunAccumulator;
-  done: Promise<TerminalRun>;
   joined: boolean;
+}
+
+interface RunningRun extends RunMetadata {
+  status: "running";
+  done: Promise<TerminalRun>;
 }
 
 interface TerminalRun {
@@ -402,7 +392,6 @@ async function runWorker(
         attempts: [...execution.attempts],
       });
   });
-  const outcome = result.outcome;
   return {
     name: task.name,
     task: task.task,
@@ -411,19 +400,10 @@ async function runWorker(
     cwd: task.cwd,
     attempts: result.attempts,
     actual: result.actual,
-    exitCode: outcome.kind === "success" ? 0 : 1,
-    messages: [],
+    outcome: result.outcome,
     stderr: result.stderr,
     output: result.output,
     usage: result.usage,
-    stopReason:
-      outcome.kind === "cancelled" ? "aborted" : outcome.kind === "success" ? "stop" : "error",
-    errorMessage:
-      outcome.kind === "failed" || outcome.kind === "provider-failure"
-        ? outcome.reason
-        : outcome.kind === "cancelled"
-          ? "Cancelled by parent"
-          : undefined,
   };
 }
 
@@ -458,11 +438,11 @@ function evictTerminalRuns() {
   }
 }
 
-function transitionRun(run: RunningRun, result: WorkerResult): TerminalRun {
-  result.messages = [];
+function transitionRun(run: RunMetadata, result: WorkerResult): TerminalRun {
   result.stderr = tailCap(result.stderr, STDERR_CAP_BYTES);
   const terminal: TerminalRun = {
-    status: result.stopReason === "aborted" ? "stopped" : isFailed(result) ? "failed" : "completed",
+    status:
+      result.outcome.kind === "cancelled" ? "stopped" : isFailed(result) ? "failed" : "completed",
     id: run.id,
     task: run.task,
     writeCapable: run.writeCapable,
@@ -477,20 +457,22 @@ function transitionRun(run: RunningRun, result: WorkerResult): TerminalRun {
 }
 
 function launchRun(backendRunner: BackendRunner, task: ResolvedWorkerTask): RunningRun {
-  const run: RunningRun = {
-    status: "running",
+  const metadata: RunMetadata = {
     id: newRunId(task.name),
     task,
     writeCapable: workerHasWriteTools(task),
     startedAt: Date.now(),
     abort: new AbortController(),
     live: { usage: initialUsage(), stderr: "", output: "", attempts: [] },
-    done: undefined as unknown as Promise<TerminalRun>,
     joined: false,
   };
-  run.done = runWorker(backendRunner, task, run.abort.signal, run.live).then((result) =>
-    transitionRun(run, result),
-  );
+  const run: RunningRun = {
+    ...metadata,
+    status: "running",
+    done: runWorker(backendRunner, task, metadata.abort.signal, metadata.live).then((result) =>
+      transitionRun(metadata, result),
+    ),
+  };
   runRegistry.set(run.id, run);
   return run;
 }
@@ -608,7 +590,7 @@ function summarizeRun(record: RunRecord): RunSummary {
 }
 
 function isFailed(result: WorkerResult): boolean {
-  return result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+  return result.outcome.kind !== "success";
 }
 
 function truncateOutput(output: string): string {
@@ -647,12 +629,27 @@ function formatResults(results: WorkerResult[]): string {
     const model = `\nprofile: ${result.route.profile}\nconfigured: ${selection.kind === "role" ? `${selection.role}/${selection.member}` : selection.model}\nactual: ${result.actual ? `${result.actual.backend}/${result.actual.model}` : "none"}\nattempts: ${result.attempts.map((attempt) => `${backendLabel(attempt.backend)} ${attempt.kind}${attempt.kind === "cooldown" ? ` until ${new Date(attempt.until).toISOString()}` : "reason" in attempt ? ` (${attempt.reason})` : ""}`).join(" -> ")}`;
     const usage = formatUsage(result.usage);
     const usageLine = usage ? `\nusage: ${usage}` : "";
-    const error = result.errorMessage ? `\nerror: ${result.errorMessage}` : "";
+    let reason: string | undefined;
+    const outcome = result.outcome;
+    switch (outcome.kind) {
+      case "success":
+        break;
+      case "cancelled":
+        reason = "Cancelled by parent";
+        break;
+      case "failed":
+      case "provider-failure":
+        reason = outcome.reason;
+        break;
+      default: {
+        const exhaustive: never = outcome;
+        return exhaustive;
+      }
+    }
+    const error = reason ? `\nerror: ${reason}` : "";
     const cleanStderr = cleanTerminalOutput(result.stderr);
     const stderr = cleanStderr ? `\nstderr:\n${cleanStderr}` : "";
-    const output = truncateOutput(
-      result.output || result.errorMessage || cleanStderr || "(no output)",
-    );
+    const output = truncateOutput(result.output || reason || cleanStderr || "(no output)");
     return `## ${result.name} ${status}${model}${usageLine}${error}${stderr}\n\n${output}`;
   });
 
@@ -783,6 +780,8 @@ export default function (pi: ExtensionAPI) {
     parameters: SubagentsParams,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      const policy = loadPolicy();
+      authorizeSessionPolicy(ctx.sessionManager, policy.profile);
       if (ctx.hasUI) fleetCtx = ctx;
       const config = readConfig(ctx.cwd, ctx.isProjectTrusted());
       const hasSingle = typeof params.task === "string" && params.task.trim().length > 0;
@@ -857,7 +856,6 @@ export default function (pi: ExtensionAPI) {
 
       let resolvedTasks: ResolvedWorkerTask[];
       try {
-        const policy = loadPolicy();
         resolvedTasks = taskInputs.map((task) => resolveWorkerTask(task, config, ctx.cwd, policy));
         await Promise.all(resolvedTasks.map((task) => assertDirectory(task.cwd)));
         if (signal?.aborted) throw new Error("Subagent dispatch cancelled before launch.");
@@ -1071,6 +1069,7 @@ export default function (pi: ExtensionAPI) {
           content: [
             { type: "text", text: `subagents_runs: ${finished}/${total} runs finished...` },
           ],
+          details: { results: [], runs: records.map(summarizeRun) },
         });
       });
 

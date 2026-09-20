@@ -210,6 +210,9 @@
           home-manager = inputs.home-manager.packages.${system}.default;
           nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
+          pi-profiled = pkgs.callPackage ./packages/pi-profiled {
+            upstream = inputs.llm-agents.packages.${system}.pi;
+          };
           pi-package-updater = piPackageUpdater;
           default = traitor;
         }

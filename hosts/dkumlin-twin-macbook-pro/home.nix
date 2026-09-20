@@ -18,9 +18,10 @@
     ];
   };
 
+  my.ai.profile = "work";
+
   my.liveConfig = {
     enable = true;
-    agentProfile = "work";
     repoRoot = "/Users/danielkumlin/.config/dotfiles";
     piSettingsFile = "config/pi/agent/settings-twin.json";
     sync.enable = true;

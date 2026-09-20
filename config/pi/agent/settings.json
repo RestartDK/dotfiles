@@ -1,7 +1,4 @@
 {
-  "defaultModel": "gpt-6-astra",
-  "defaultProvider": "openai-codex",
-  "defaultThinkingLevel": "xhigh",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
   ],

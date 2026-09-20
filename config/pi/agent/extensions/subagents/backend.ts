@@ -4,7 +4,13 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
-import { isRecord, type Backend, type ResolvedRoute } from "./policy";
+import {
+  backendModel,
+  isRecord,
+  type Backend,
+  type ResolvedRoute,
+  type WorkerInvocation,
+} from "../../lib/model-policy";
 import { capped, initialUsage, Protocol, type Failure, type UsageStats } from "./protocol";
 
 export interface Invocation {
@@ -268,7 +274,7 @@ export class BackendRunner {
           result.outcome = { kind: "cancelled" };
           break;
         }
-        const key = `${backend.kind}/${backend.model}`;
+        const key = `${backend.kind}/${backendModel(backend)}`;
         const now = this.runtime.now();
         for (const [endpoint, until] of this.cooldowns)
           if (until <= now) this.cooldowns.delete(endpoint);
@@ -430,9 +436,12 @@ export class BackendRunner {
           promptPath,
         ]);
       } else {
-        const separator = backend.model.indexOf("/");
-        const provider = backend.model.slice(0, separator);
-        const model = backend.model.slice(separator + 1);
+        const { provider, id: model } = backend;
+        const workerInvocation: WorkerInvocation = {
+          profile: task.route.profile,
+          selection: task.route.selection,
+          attempt: task.route.chain.indexOf(backend),
+        };
         let authText = "";
         const auth = await runProcess({
           invocation: this.runtime.pi(["auth", "check", "--provider", provider, "--json"]),
@@ -467,6 +476,8 @@ export class BackendRunner {
         const prompt = join(promptDir, "prompt.md");
         await writeFile(prompt, task.systemPrompt, { mode: 0o600 });
         const args = [
+          "--dstack-worker",
+          JSON.stringify(workerInvocation),
           "--mode",
           "json",
           "-p",

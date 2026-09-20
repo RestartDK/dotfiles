@@ -1,21 +1,21 @@
 { lib, ... }:
 
 {
+  options.my.ai.profile = lib.mkOption {
+    type = lib.types.enum [
+      "work"
+      "personal"
+    ];
+    default = "personal";
+    description = "Global billing policy for native Pi sessions and delegated workers.";
+  };
+
   options.my.liveConfig = {
     enable = lib.mkEnableOption "live out-of-store dotfile symlinks";
 
     repoRoot = lib.mkOption {
       type = lib.types.str;
       description = "Absolute path to the editable dotfiles checkout on this host.";
-    };
-
-    agentProfile = lib.mkOption {
-      type = lib.types.enum [
-        "work"
-        "personal"
-      ];
-      default = "personal";
-      description = "Global billing and model-role policy for subagents, separate from shared skills.";
     };
 
     piSettingsFile = lib.mkOption {

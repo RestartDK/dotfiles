@@ -3,10 +3,15 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  backendModel,
+  authorizeNative,
+  nativeTargets,
   loadPolicy,
   parsePolicy,
+  parseWorkerInvocation,
+  resolveWorkerInvocation,
   resolveRoute,
-} from "../../config/pi/agent/extensions/subagents/policy";
+} from "../../config/pi/agent/lib/model-policy";
 
 const root = join(import.meta.dir, "../../config/agents/model-profiles");
 const policy = (profile: string) =>
@@ -16,28 +21,29 @@ describe("profile routing", () => {
   test("work preserves billing providers and ordered subscription-first fallback", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
-      { kind: "pi", model: "openai/gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
       {
         kind: "pi",
-        model: "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
+        provider: "fireworks",
+        id: "accounts/fireworks/models/deepseek-v4p1-flash",
         thinking: "max",
       },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
       { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" },
-      { kind: "pi", model: "anthropic/claude-fable-5-1", thinking: "xhigh" },
-      { kind: "pi", model: "openai/gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
 
   test("personal selects only its three families", () => {
     const personal = policy("personal");
-    expect(resolveRoute(personal, { role: "feature" }).chain[0].model).toBe(
+    expect(backendModel(resolveRoute(personal, { role: "feature" }).chain[0])).toBe(
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
-    expect(resolveRoute(personal, { role: "review" }).chain.map((route) => route.model)).toEqual([
+    expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
       "claude-fable-5-1",
       "openai-codex/gpt-6-astra",
     ]);
@@ -49,10 +55,10 @@ describe("profile routing", () => {
   test("panels require an explicit member or seat", () => {
     const work = policy("work");
     expect(() => resolveRoute(work, { role: "arena-runners" })).toThrow("member or seat");
-    expect(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0].model).toBe(
-      "openai/gpt-5.6-sol",
-    );
-    expect(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0].model).toBe(
+    expect(
+      backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
+    ).toBe("openai/gpt-5.6-sol");
+    expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
       "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
     );
     for (const input of [
@@ -153,11 +159,23 @@ describe("profile routing", () => {
     const valid = {
       version: 1,
       profile: personal.profile,
-      routes: Object.fromEntries(personal.routes),
+      parent: "astra",
+      routes: Object.fromEntries(
+        [...personal.routes].map(([name, chain]) => [
+          name,
+          chain.map((backend) => ({
+            kind: backend.kind,
+            model: backendModel(backend),
+            thinking: backend.thinking,
+          })),
+        ]),
+      ),
       roles: Object.fromEntries(personal.roles),
     };
     const malformed = [
       { ...valid, version: 2 },
+      { ...valid, parent: "fable" },
+      { ...valid, parent: { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" } },
       { ...valid, fallback: "auto" },
       { ...valid, routes: { ...valid.routes, fable: [] } },
       {
@@ -193,4 +211,68 @@ describe("profile routing", () => {
       expect(() => parsePolicy(value)).toThrow();
     }
   });
+});
+
+test.each(["work", "personal"])(
+  "%s parent is native Astra and allowed targets exclude CLI backends",
+  (profile) => {
+    const selected = policy(profile);
+    expect(selected.parent).toEqual({
+      kind: "pi",
+      provider: profile === "work" ? "openai" : "openai-codex",
+      id: "gpt-6-astra",
+      thinking: "xhigh",
+    });
+    for (const target of nativeTargets(selected))
+      expect(() => authorizeNative(selected, target)).not.toThrow();
+    expect(() =>
+      authorizeNative(selected, { provider: "claude-cli", id: "claude-fable-5-1" }),
+    ).toThrow();
+    if (profile === "personal")
+      expect(() =>
+        authorizeNative(selected, { provider: "anthropic", id: "claude-fable-5-1" }),
+      ).toThrow();
+  },
+);
+
+test("worker invocation parses once and resolves its exact native attempt", () => {
+  const input = {
+    profile: "work",
+    selection: { kind: "role", role: "precise-code", member: "sol" },
+    attempt: 0,
+  } as const;
+  const invocation = parseWorkerInvocation(input);
+  expect(invocation).toEqual(input);
+  expect(resolveWorkerInvocation(policy("work"), invocation)).toEqual({
+    kind: "pi",
+    provider: "openai",
+    id: "gpt-5.6-sol",
+    thinking: "xhigh",
+  });
+  expect(() => resolveWorkerInvocation(policy("personal"), invocation)).toThrow(
+    "changed worker profile",
+  );
+  expect(() =>
+    resolveWorkerInvocation(policy("work"), {
+      ...invocation,
+      selection: { kind: "role", role: "review", member: "fable" },
+    }),
+  ).toThrow("native Pi target");
+});
+
+test("worker invocation rejects untyped extra fields and invalid attempts", () => {
+  const input = {
+    profile: "work",
+    selection: { kind: "role", role: "precise-code", member: "sol" },
+    attempt: 0,
+  } as const;
+  for (const invalid of [
+    { ...input, profile: "other" },
+    { ...input, attempt: -1 },
+    { ...input, attempt: 0.5 },
+    { ...input, model: "override" },
+    { ...input, selection: { ...input.selection, model: "override" } },
+    { ...input, selection: { kind: "unknown" } },
+  ])
+    expect(() => parseWorkerInvocation(invalid)).toThrow("AI policy");
 });

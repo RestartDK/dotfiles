@@ -11,9 +11,10 @@
   home.homeDirectory = "/Users/danielkumlin";
   home.stateVersion = "26.05";
 
+  my.ai.profile = "personal";
+
   my.liveConfig = {
     enable = true;
-    agentProfile = "personal";
     repoRoot = "/Users/danielkumlin/.config/dotfiles";
     sync.enable = true;
     groups = {

@@ -2,13 +2,20 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
-export type Backend =
-  | { kind: "pi"; model: string; thinking: string }
-  | { kind: "claude-cli"; model: string; thinking: "xhigh" };
+export type Effort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type NativeProvider = "openai" | "openai-codex" | "anthropic" | "fireworks" | "openrouter";
+export interface NativeTarget {
+  kind: "pi";
+  provider: NativeProvider;
+  id: string;
+  thinking: Effort;
+}
+export type Backend = NativeTarget | { kind: "claude-cli"; model: string; thinking: "xhigh" };
 export type Chain = [Backend, ...Backend[]];
 type Role = { kind: "single"; route: string } | { kind: "panel"; members: [string, ...string[]] };
 export interface Policy {
   profile: "work" | "personal";
+  parent: NativeTarget;
   routes: Map<string, Chain>;
   roles: Map<string, Role>;
 }
@@ -61,6 +68,34 @@ function invalid(message: string): never {
   throw new Error(`Invalid dstack model policy: ${message}`);
 }
 
+export function parseEffort(value: unknown): Effort {
+  switch (value) {
+    case "off":
+    case "minimal":
+    case "low":
+    case "medium":
+    case "high":
+    case "xhigh":
+    case "max":
+      return value;
+    default:
+      return invalid("unsupported thinking level");
+  }
+}
+
+function parseNativeProvider(value: string): NativeProvider {
+  switch (value) {
+    case "openai":
+    case "openai-codex":
+    case "anthropic":
+    case "fireworks":
+    case "openrouter":
+      return value;
+    default:
+      return invalid("unsupported native Pi provider");
+  }
+}
+
 function parseBackend(value: unknown, profile: Policy["profile"]): Backend {
   if (
     !isRecord(value) ||
@@ -77,11 +112,7 @@ function parseBackend(value: unknown, profile: Policy["profile"]): Backend {
   ) {
     return { kind: value.kind, model: value.model, thinking: value.thinking };
   }
-  if (
-    value.kind !== "pi" ||
-    !/^[a-z0-9-]+\/[^\s:]+$/.test(value.model) ||
-    !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(value.thinking)
-  ) {
+  if (value.kind !== "pi" || !/^[a-z0-9-]+\/[^\s:]+$/.test(value.model)) {
     return invalid("unsupported backend, model or thinking");
   }
   if (
@@ -90,19 +121,28 @@ function parseBackend(value: unknown, profile: Policy["profile"]): Backend {
   ) {
     return invalid("personal profile forbids this API route");
   }
-  return { kind: "pi", model: value.model, thinking: value.thinking };
+  const separator = value.model.indexOf("/");
+  return {
+    kind: "pi",
+    provider: parseNativeProvider(value.model.slice(0, separator)),
+    id: value.model.slice(separator + 1),
+    thinking: parseEffort(value.thinking),
+  };
 }
 
 export function parsePolicy(value: unknown): Policy {
   if (
     !isRecord(value) ||
-    Object.keys(value).some((key) => !["version", "profile", "routes", "roles"].includes(key)) ||
+    Object.keys(value).some(
+      (key) => !["version", "profile", "parent", "routes", "roles"].includes(key),
+    ) ||
     value.version !== 1 ||
     (value.profile !== "work" && value.profile !== "personal") ||
+    typeof value.parent !== "string" ||
     !isRecord(value.routes) ||
     !isRecord(value.roles)
   )
-    return invalid("expected version 1, profile, routes and roles");
+    return invalid("expected version 1, profile, parent route, routes and roles");
   const profile = value.profile;
   const routes = new Map<string, Chain>();
   for (const [name, raw] of Object.entries(value.routes)) {
@@ -112,7 +152,8 @@ export function parsePolicy(value: unknown): Policy {
     const [first, ...rest] = parsed;
     if (
       !first ||
-      new Set(parsed.map((backend) => `${backend.kind}/${backend.model}`)).size !== parsed.length
+      new Set(parsed.map((backend) => `${backend.kind}/${backendModel(backend)}`)).size !==
+        parsed.length
     )
       return invalid(`empty or duplicate route ${name}`);
     routes.set(name, [first, ...rest]);
@@ -141,7 +182,12 @@ export function parsePolicy(value: unknown): Policy {
     } else return invalid(`role ${name} has no valid route`);
   }
   for (const role of requiredRoles) if (!roles.has(role)) return invalid(`missing role ${role}`);
-  return { profile, routes, roles };
+  const parentChain = routes.get(value.parent);
+  if (!parentChain || parentChain.length !== 1 || parentChain[0].kind !== "pi")
+    return invalid(
+      "parent must reference one native Pi target, never Claude Code or a fallback chain",
+    );
+  return { profile, parent: parentChain[0], routes, roles };
 }
 
 export function loadPolicy(
@@ -153,13 +199,115 @@ export function loadPolicy(
     return parsePolicy(JSON.parse(readFileSync(path, "utf8")));
   } catch (error) {
     throw new Error(
-      `Subagent dispatch blocked by ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      `AI dispatch blocked by ${path}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }
 
+export function backendModel(backend: Backend): string {
+  switch (backend.kind) {
+    case "pi":
+      return `${backend.provider}/${backend.id}`;
+    case "claude-cli":
+      return backend.model;
+    default: {
+      const exhaustive: never = backend;
+      return exhaustive;
+    }
+  }
+}
+
 export function backendLabel(backend: Backend): string {
-  return `${backend.kind}/${backend.model}:${backend.thinking}`;
+  return `${backend.kind}/${backendModel(backend)}:${backend.thinking}`;
+}
+
+export function nativeTargets(policy: Policy): NativeTarget[] {
+  const targets = new Map<string, NativeTarget>([[backendModel(policy.parent), policy.parent]]);
+  for (const chain of policy.routes.values())
+    for (const backend of chain)
+      if (backend.kind === "pi") targets.set(backendModel(backend), backend);
+  return [...targets.values()];
+}
+
+export function authorizeNative(
+  policy: Policy,
+  target: { provider: string; id: string },
+): NativeTarget {
+  const native = nativeTargets(policy).find(
+    (allowed) => allowed.provider === target.provider && allowed.id === target.id,
+  );
+  if (!native)
+    throw new Error(
+      `AI policy blocks ${target.provider}/${target.id} in the ${policy.profile} profile. Select a declared native target.`,
+    );
+  return native;
+}
+
+export interface WorkerInvocation {
+  profile: Policy["profile"];
+  selection: ResolvedRoute["selection"];
+  attempt: number;
+}
+
+export function parseWorkerInvocation(value: unknown): WorkerInvocation {
+  if (
+    !isRecord(value) ||
+    (value.profile !== "work" && value.profile !== "personal") ||
+    !isRecord(value.selection) ||
+    typeof value.attempt !== "number" ||
+    !Number.isInteger(value.attempt) ||
+    value.attempt < 0 ||
+    Object.keys(value).some((key) => !["profile", "selection", "attempt"].includes(key))
+  )
+    throw new Error("AI policy blocks invalid worker invocation.");
+  const raw = value.selection;
+  if (
+    Object.keys(raw).some(
+      (key) =>
+        !(raw.kind === "role" ? ["kind", "role", "member"] : ["kind", "model"]).includes(key),
+    )
+  )
+    throw new Error("AI policy blocks invalid worker selection.");
+  let selection: WorkerInvocation["selection"];
+  if (raw.kind === "role" && typeof raw.role === "string" && typeof raw.member === "string")
+    selection = { kind: "role", role: raw.role, member: raw.member };
+  else if (raw.kind === "raw" && typeof raw.model === "string")
+    selection = { kind: "raw", model: raw.model };
+  else throw new Error("AI policy blocks invalid worker selection.");
+  return { profile: value.profile, selection, attempt: value.attempt };
+}
+
+export function resolveWorkerInvocation(
+  policy: Policy,
+  invocation: WorkerInvocation,
+): NativeTarget {
+  if (invocation.profile !== policy.profile)
+    throw new Error("AI policy blocks changed worker profile. Restart the worker.");
+  const selection = invocation.selection;
+  let route: ResolvedRoute;
+  switch (selection.kind) {
+    case "role": {
+      const role = policy.roles.get(selection.role);
+      if (!role || (role.kind === "single" && role.route !== selection.member))
+        throw new Error("AI policy blocks changed worker role.");
+      route = resolveRoute(policy, {
+        role: selection.role,
+        ...(role.kind === "panel" ? { member: selection.member } : {}),
+      });
+      break;
+    }
+    case "raw":
+      route = resolveRoute(policy, { model: selection.model });
+      break;
+    default: {
+      const exhaustive: never = selection;
+      return exhaustive;
+    }
+  }
+  const target = route.chain[invocation.attempt];
+  if (!target || target.kind !== "pi")
+    throw new Error("AI policy worker invocation requires a native Pi target.");
+  return target;
 }
 
 export function resolveRoute(policy: Policy, input: SelectionInput): ResolvedRoute {
@@ -173,7 +321,7 @@ export function resolveRoute(policy: Policy, input: SelectionInput): ResolvedRou
     if (input.member !== undefined || input.seat !== undefined)
       throw new Error("Raw models cannot select panel seats.");
     const matches = (backend: Backend) =>
-      `${backend.kind === "pi" ? "" : "claude-cli/"}${backend.model}:${backend.thinking}` ===
+      `${backend.kind === "pi" ? "" : "claude-cli/"}${backendModel(backend)}:${backend.thinking}` ===
       input.model;
     const chains = [...policy.routes.values()];
     const chain =

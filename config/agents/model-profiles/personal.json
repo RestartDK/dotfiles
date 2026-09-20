@@ -1,6 +1,7 @@
 {
   "version": 1,
   "profile": "personal",
+  "parent": "astra",
   "routes": {
     "astra": [
       {

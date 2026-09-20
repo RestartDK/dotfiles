@@ -1,6 +1,6 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { isRecord } from "../../config/pi/agent/extensions/subagents/policy";
+import { isRecord } from "../../config/pi/agent/lib/model-policy";
 
 const [backend, scriptPath, ...args] = process.argv.slice(2);
 if (!scriptPath) throw new Error("fixture needs scenario file");
@@ -64,6 +64,24 @@ if (backend === "claude") {
     apiKeySource: mode === "api-source" ? "apiKeyHelper" : "none",
     mcp_servers: [],
   });
+}
+if (backend === "claude" && mode.startsWith("synthetic")) {
+  if (mode === "synthetic-after-tool") await emit({ type: "tool_progress" });
+  if (mode === "synthetic-unknown-event") await emit({ type: "future_tool_execution" });
+  const events: unknown[] = readFileSync(new URL("./claude-quota.jsonl", import.meta.url), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  for (const event of events.slice(1)) {
+    if (!isRecord(event)) throw new Error("Malformed regression fixture");
+    if (mode === "synthetic-cancelled" && event.type === "result")
+      event.terminal_reason = "aborted_streaming";
+    if (mode === "synthetic-mismatch" && event.type === "result") event.api_error_status = 401;
+    if (mode === "synthetic-tool" && event.type === "assistant" && isRecord(event.message))
+      event.message.content = [{ type: "tool_use", name: "Read" }];
+    await emit(event);
+  }
+  process.exit(1);
 }
 if (mode === "unknown-event") await emit({ type: "future_tool_execution" });
 if (mode === "overflow") {
@@ -176,6 +194,28 @@ if (backend === "claude") {
 }
 const provider = mode === "wrong-provider" ? "wrong" : arg("--provider");
 await emit({ type: "message_start", message: { role: "assistant", provider, model, content: [] } });
+if (typeof scenario.piWritePath === "string") appendFileSync(scenario.piWritePath, "write\n");
+if (Array.isArray(scenario.piEvents)) for (const event of scenario.piEvents) await emit(event);
+if (typeof scenario.piError === "string" && provider === scenario.piErrorProvider) {
+  if (scenario.piBeforeError === "tool")
+    await emit({ type: "tool_execution_start", toolName: "read" });
+  if (scenario.piBeforeError === "unknown-event") await emit({ type: "future_tool_execution" });
+  await emit({
+    type: "message_end",
+    message: {
+      role: "assistant",
+      provider,
+      model,
+      content:
+        scenario.piBeforeError === "tool-call"
+          ? [{ type: "toolCall", name: "read", id: "1", arguments: {} }]
+          : [{ type: "text", text: "native-error" }],
+      stopReason: scenario.piBeforeError === "aborted" ? "aborted" : "error",
+      errorMessage: scenario.piError,
+    },
+  });
+  process.exit(0);
+}
 if (mode === "tool-failure") await emit({ type: "tool_execution_start", toolName: "read" });
 const failure = ["quota", "tool-failure", "unknown", "unknown-event"].includes(mode);
 if (mode === "stderr-quota") process.stderr.write("429 Too Many Requests");

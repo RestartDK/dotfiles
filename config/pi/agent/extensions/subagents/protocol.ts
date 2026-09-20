@@ -1,4 +1,4 @@
-import { isRecord, type Backend } from "./policy";
+import { backendModel, isRecord, type Backend } from "../../lib/model-policy";
 
 export interface UsageStats {
   input: number;
@@ -16,7 +16,7 @@ export type Failure = "auth" | "quota" | "unavailable";
 export type Terminal =
   | { kind: "success" }
   | { kind: "failure"; reason: string; provider?: Failure };
-const providerErrors = new Map<string, Failure>([
+const claudeErrors = new Map<string, Failure>([
   ["authentication_failed", "auth"],
   ["oauth_org_not_allowed", "auth"],
   ["account_on_hold", "auth"],
@@ -34,8 +34,46 @@ const httpFailure = (status: unknown): Failure | undefined => {
     return "unavailable";
   return undefined;
 };
+const nativeHttpStatuses = new Map<string, readonly number[]>([
+  ["authentication_error", [401]],
+  ["permission_error", [403]],
+  ["rate_limit_error", [429]],
+  ["rate_limit_exceeded", [429]],
+  ["insufficient_quota", [429]],
+  ["api_error", [500]],
+  ["overloaded_error", [529]],
+  ["server_error", [500, 503]],
+]);
 function piFailure(message: string): Failure | undefined {
-  if (message.length > 4096) return undefined;
+  if (Buffer.byteLength(message) > 4096) return undefined;
+  const native = /^(?:(\d{3}) |OpenAI API error \((\d{3})\): )(\{[\s\S]*\})$/.exec(message);
+  if (native) {
+    try {
+      const parsed: unknown = JSON.parse(native[3] ?? "");
+      if (!isRecord(parsed)) return undefined;
+      const status = Number(native[1] ?? native[2]);
+      const error = native[1]
+        ? parsed.type === "error" && isRecord(parsed.error)
+          ? parsed.error
+          : undefined
+        : parsed;
+      if (
+        !error ||
+        typeof error.type !== "string" ||
+        typeof error.message !== "string" ||
+        (parsed.status !== undefined && parsed.status !== status) ||
+        (error.status !== undefined && error.status !== status)
+      )
+        return undefined;
+      if (native[2] && error.type === "invalid_request_error")
+        return status === 401 && error.code === "invalid_api_key" ? "auth" : undefined;
+      if (error.code !== undefined && error.code !== null && error.code !== error.type)
+        return undefined;
+      return nativeHttpStatuses.get(error.type)?.includes(status) ? httpFailure(status) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
   try {
     const parsed: unknown = JSON.parse(message);
     if (isRecord(parsed)) {
@@ -43,7 +81,7 @@ function piFailure(message: string): Failure | undefined {
       return (
         httpFailure(parsed.status) ??
         httpFailure(error.status) ??
-        (typeof error.type === "string" ? providerErrors.get(error.type) : undefined)
+        (typeof error.type === "string" ? claudeErrors.get(error.type) : undefined)
       );
     }
   } catch {}
@@ -59,7 +97,7 @@ function piFailure(message: string): Failure | undefined {
     )
   )
     return "unavailable";
-  return providerErrors.get(message);
+  return claudeErrors.get(message);
 }
 export function capped(text: string, bytes = 50 * 1024): string {
   if (Buffer.byteLength(text) <= bytes) return text;
@@ -80,7 +118,9 @@ export class Protocol {
   toolUsed = false;
   resetAt?: number;
   private initialized = false;
-  private assistantError?: string;
+  private assistantError?:
+    | { kind: "model"; code: string }
+    | { kind: "synthetic"; code: string; failure: Failure };
 
   constructor(
     readonly backend: Backend,
@@ -143,17 +183,14 @@ export class Protocol {
     }
     if (texts.length) this.output = capped(texts.join("\n"));
     if (typeof value.model !== "string") throw new Error("Missing actual model");
-    const expected =
-      this.backend.kind === "pi"
-        ? this.backend.model.slice(this.backend.model.indexOf("/") + 1)
-        : this.backend.model;
+    const expected = this.backend.kind === "pi" ? this.backend.id : this.backend.model;
     if (this.backend.kind === "pi" && typeof value.provider !== "string")
       throw new Error("Missing actual Pi provider");
     this.actualModel =
       this.backend.kind === "pi" ? `${value.provider}/${value.model}` : value.model;
     if (
       value.model !== expected ||
-      (this.backend.kind === "pi" && this.actualModel !== this.backend.model)
+      (this.backend.kind === "pi" && this.actualModel !== backendModel(this.backend))
     )
       throw new Error("Backend returned an unexpected model/provider");
     return value;
@@ -168,9 +205,22 @@ export class Protocol {
       this.message(event.message);
       this.terminal = undefined;
     }
-    if (event.type === "tool_execution_start") {
-      this.toolUsed = true;
-      this.terminal = undefined;
+    if (event.type === "tool_execution_start") this.terminal = undefined;
+    switch (event.type) {
+      case "tool_execution_start":
+      case "tool_execution_update":
+      case "tool_execution_end":
+      case "tool_result_end":
+        this.toolUsed = true;
+        break;
+      case "message_start":
+      case "message_update":
+      case "message_end":
+        if (isRecord(event.message) && event.message.role === "toolResult") this.toolUsed = true;
+        break;
+      case "turn_end":
+        if (Array.isArray(event.toolResults) && event.toolResults.length > 0) this.toolUsed = true;
+        break;
     }
     if (
       event.type !== "message_end" ||
@@ -210,7 +260,7 @@ export class Protocol {
       if (typeof event.model === "string") this.actualModel = event.model;
       if (
         this.initialized ||
-        event.model !== this.backend.model ||
+        event.model !== backendModel(this.backend) ||
         !Array.isArray(event.tools) ||
         event.tools.length !== this.tools.length ||
         !this.tools.every((tool) => Array.isArray(event.tools) && event.tools.includes(tool)) ||
@@ -230,10 +280,38 @@ export class Protocol {
     } else if (event.type === "assistant") {
       if (!this.initialized || this.terminal)
         throw new Error("Claude assistant outside active session");
-      this.message(event.message);
+      if (this.assistantError?.kind === "synthetic")
+        throw new Error("Claude assistant after synthetic terminal error");
       if (event.error !== undefined && typeof event.error !== "string")
         throw new Error("Malformed Claude assistant error");
-      if (typeof event.error === "string") this.assistantError = event.error;
+      if (isRecord(event.message) && event.message.model === "<synthetic>") {
+        const message = event.message;
+        const failure = typeof event.error === "string" ? claudeErrors.get(event.error) : undefined;
+        if (
+          !failure ||
+          typeof event.error !== "string" ||
+          event.is_api_error_message !== true ||
+          message.role !== "assistant" ||
+          message.type !== "message" ||
+          message.stop_reason !== "stop_sequence" ||
+          message.stop_sequence !== "" ||
+          !Array.isArray(message.content) ||
+          message.content.length === 0
+        )
+          throw new Error("Malformed Claude synthetic provider error");
+        const texts: string[] = [];
+        for (const block of message.content) {
+          if (!isRecord(block) || block.type !== "text" || typeof block.text !== "string")
+            throw new Error("Synthetic provider errors cannot contain tools or other content");
+          texts.push(block.text);
+        }
+        this.output = capped(texts.join("\n"));
+        this.assistantError = { kind: "synthetic", code: event.error, failure };
+      } else {
+        this.message(event.message);
+        if (typeof event.error === "string")
+          this.assistantError = { kind: "model", code: event.error };
+      }
       this.usage.turns++;
     } else if (event.type === "rate_limit_event") {
       if (
@@ -276,17 +354,40 @@ export class Protocol {
         event.is_error === false &&
         event.terminal_reason === "completed"
       ) {
+        if (this.assistantError || event.api_error_status !== null)
+          throw new Error("Claude success contradicts provider error");
         this.terminal = { kind: "success" };
       } else if (event.is_error === true) {
+        let provider: Failure | undefined;
+        const failure = httpFailure(event.api_error_status);
+        if (this.assistantError?.kind === "synthetic") {
+          if (["aborted_streaming", "aborted_tools"].includes(event.terminal_reason)) {
+            provider = undefined;
+          } else if (
+            ["success", "error_during_execution"].includes(event.subtype) &&
+            event.terminal_reason === "api_error" &&
+            failure === this.assistantError.failure
+          ) {
+            provider = failure;
+          } else throw new Error("Claude synthetic error/result mismatch");
+        } else if (
+          event.subtype === "error_during_execution" &&
+          ["api_error", "model_error", "blocking_limit"].includes(event.terminal_reason)
+        ) {
+          const assistantFailure = this.assistantError
+            ? claudeErrors.get(this.assistantError.code)
+            : undefined;
+          if (
+            this.assistantError &&
+            (!assistantFailure || (failure && failure !== assistantFailure))
+          )
+            throw new Error("Claude provider error/result mismatch");
+          provider = failure ?? assistantFailure;
+        }
         this.terminal = {
           kind: "failure",
-          reason: this.assistantError ?? `Claude ${String(event.subtype)}`,
-          provider:
-            event.subtype === "error_during_execution" &&
-            ["api_error", "model_error", "blocking_limit"].includes(event.terminal_reason)
-              ? (httpFailure(event.api_error_status) ??
-                providerErrors.get(this.assistantError ?? ""))
-              : undefined,
+          reason: this.assistantError?.code ?? `Claude ${event.subtype}`,
+          provider,
         };
       } else throw new Error("Malformed Claude result");
     } else if (

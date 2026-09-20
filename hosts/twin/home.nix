@@ -17,9 +17,10 @@ in
 
   my.twinDevEnvironment.enable = true;
 
+  my.ai.profile = "work";
+
   my.liveConfig = {
     enable = true;
-    agentProfile = "work";
     repoRoot = "${settings.homeDirectory}/.config/dotfiles";
     piSettingsFile = "config/pi/agent/settings-twin.json";
     piSkillsPath = "config/pi/agent/skills-twin";

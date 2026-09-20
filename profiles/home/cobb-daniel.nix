@@ -24,9 +24,10 @@ in
   # configuration.
   my.twinDevEnvironment.enable = isCobbDevHost;
 
+  my.ai.profile = "work";
+
   my.liveConfig = {
     enable = isCobbDevHost;
-    agentProfile = "work";
     repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
     piSkillsPath = "config/pi/agent/skills-twin";
     groups = {

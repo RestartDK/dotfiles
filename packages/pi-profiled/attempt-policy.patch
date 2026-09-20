@@ -1,0 +1,202 @@
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -67,6 +67,8 @@
+      */
+     env?: ProviderEnv;
++    /** Synchronous authorization of serialized intent before each HTTP attempt, WS connect and send. Throwing is terminal. */
++    beforeRequest?: (serializedPayload: string, model: TModel) => undefined;
+     /**
+      * Optional callback for inspecting or replacing provider payloads before sending.
+      * Return undefined to keep the payload unchanged.
+      */
+--- a/dist/api/simple-options.js
++++ b/dist/api/simple-options.js
+@@ -24,6 +24,7 @@
+         sessionId: options?.sessionId,
+         headers: options?.headers,
+         onPayload: options?.onPayload,
++        beforeRequest: options?.beforeRequest,
+         onResponse: options?.onResponse,
+         timeoutMs: options?.timeoutMs,
+         websocketConnectTimeoutMs: options?.websocketConnectTimeoutMs,
+--- /dev/null
++++ b/dist/utils/request-authorization.js
+@@ -0,0 +1,14 @@
++export class RequestAuthorizationError extends Error {
++    constructor(cause) {
++        super(cause instanceof Error ? cause.message : String(cause), { cause });
++        this.name = "RequestAuthorizationError";
++    }
++}
++export function authorizeRequest(options, serializedPayload, model) {
++    try {
++        options?.beforeRequest?.(serializedPayload, model);
++    }
++    catch (cause) {
++        throw new RequestAuthorizationError(cause);
++    }
++}
+--- /dev/null
++++ b/dist/utils/request-authorization.d.ts
+@@ -0,0 +1,5 @@
++import type { Api, Model, ProviderRequestOptions } from "../types.js";
++export declare class RequestAuthorizationError extends Error {
++    constructor(cause: unknown);
++}
++export declare function authorizeRequest(options: ProviderRequestOptions<Model<Api>> | undefined, serializedPayload: string, model: Model<Api>): void;
+--- a/dist/api/openai-responses.js
++++ b/dist/api/openai-responses.js
+@@ -6,6 +6,7 @@
+ import { headersToRecord } from "../utils/headers.js";
+ import { getPiUserAgent } from "../utils/pi-user-agent.js";
+ import { getProviderEnvValue } from "../utils/provider-env.js";
++import { authorizeRequest } from "../utils/request-authorization.js";
+ import { retryProviderRequest } from "../utils/provider-retry.js";
+ import { createGrammarToolInputProperties } from "./constrained-sampling.js";
+ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
+@@ -120,7 +121,10 @@
+                 ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+                 maxRetries: 0,
+             };
+-            const { data: openaiStream, response } = await retryProviderRequest(() => client.responses.create(params, requestOptions).withResponse(), {
++            const { data: openaiStream, response } = await retryProviderRequest(() => {
++                authorizeRequest(options, JSON.stringify(params), model);
++                return client.responses.create(params, requestOptions).withResponse();
++            }, {
+                 maxRetries: options?.maxRetries,
+                 maxRetryDelayMs: options?.maxRetryDelayMs,
+                 signal: options?.signal,
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -7,6 +7,7 @@
+ import { parseStreamingJson } from "../utils/json-parse.js";
+ import { getPiUserAgent } from "../utils/pi-user-agent.js";
+ import { getProviderEnvValue } from "../utils/provider-env.js";
++import { authorizeRequest } from "../utils/request-authorization.js";
+ import { retryProviderRequest } from "../utils/provider-retry.js";
+ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+ import { appendGrammarToolInputJsonDelta, createGrammarToolInputProperties, getGrammarToolInput, getJsonSchemaToolParameters, resolveGrammarConstrainedSampling, resolveJsonSchemaStrictSampling, } from "./constrained-sampling.js";
+@@ -210,7 +211,10 @@
+                 ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+                 maxRetries: 0,
+             };
+-            const { data: openaiStream, response } = await retryProviderRequest(() => client.chat.completions.create(params, requestOptions).withResponse(), {
++            const { data: openaiStream, response } = await retryProviderRequest(() => {
++                authorizeRequest(options, JSON.stringify(params), model);
++                return client.chat.completions.create(params, requestOptions).withResponse();
++            }, {
+                 maxRetries: options?.maxRetries,
+                 maxRetryDelayMs: options?.maxRetryDelayMs,
+                 signal: options?.signal,
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -7,6 +7,7 @@
+ import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse.js";
+ import { getPiUserAgent } from "../utils/pi-user-agent.js";
+ import { getProviderEnvValue } from "../utils/provider-env.js";
++import { authorizeRequest } from "../utils/request-authorization.js";
+ import { retryProviderRequest } from "../utils/provider-retry.js";
+ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+ import { getJsonSchemaToolParameters, resolveJsonSchemaStrictSampling } from "./constrained-sampling.js";
+@@ -385,7 +386,10 @@
+                 ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+                 maxRetries: 0,
+             };
+-            const response = await retryProviderRequest(() => client.beta.messages.create(params, requestOptions).asResponse(), {
++            const response = await retryProviderRequest(() => {
++                authorizeRequest(options, JSON.stringify(params), model);
++                return client.beta.messages.create(params, requestOptions).asResponse();
++            }, {
+                 maxRetries: options?.maxRetries,
+                 maxRetryDelayMs: options?.maxRetryDelayMs,
+                 signal: options?.signal,
+--- a/dist/api/openai-codex-responses.js
++++ b/dist/api/openai-codex-responses.js
+@@ -1,3 +1,4 @@
++import { authorizeRequest, RequestAuthorizationError } from "../utils/request-authorization.js";
+ import { clampThinkingLevel } from "../models.js";
+ import { registerSessionResourceCleanup } from "../session-resources.js";
+ import { combineAbortSignals } from "../utils/abort-signals.js";
+@@ -212,6 +213,7 @@
+                         return;
+                     }
+                     catch (error) {
++                        if (error instanceof RequestAuthorizationError) throw error;
+                         const aborted = options?.signal?.aborted;
+                         const connectionLimitBeforeStart = !websocketStarted && isWebSocketConnectionLimitReachedError(error);
+                         const previousResponseNotFound = isPreviousResponseNotFoundError(error);
+@@ -258,6 +260,7 @@
+                 if (options?.signal?.aborted) {
+                     throw new Error("Request was aborted");
+                 }
++                authorizeRequest(options, bodyJson, model);
+                 try {
+                     const headerTimeoutSignal = httpTimeoutMs !== undefined && httpTimeoutMs > 0 ? AbortSignal.timeout(httpTimeoutMs) : undefined;
+                     const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
+@@ -777,7 +780,7 @@
+             websocketSessionCache.delete(sessionId);
+     }, SESSION_WEBSOCKET_CACHE_TTL_MS);
+ }
+-async function connectWebSocket(url, headers, signal, connectTimeoutMs = DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS, env) {
++async function connectWebSocket(url, headers, signal, connectTimeoutMs = DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS, env, authorize) {
+     const WebSocketCtor = await getWebSocketConstructor(env);
+     if (!WebSocketCtor) {
+         throw new Error("WebSocket transport is not available in this runtime");
+@@ -789,6 +792,7 @@
+         let timeout;
+         let socket;
+         try {
++            authorize?.();
+             socket = new WebSocketCtor(url, { headers: wsHeaders });
+         }
+         catch (error) {
+@@ -845,9 +849,9 @@
+         }
+     });
+ }
+-async function acquireWebSocket(url, headers, sessionId, accountId, signal, connectTimeoutMs, env) {
++async function acquireWebSocket(url, headers, sessionId, accountId, signal, connectTimeoutMs, env, authorize) {
+     if (!sessionId) {
+-        const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
++        const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env, authorize);
+         return {
+             socket,
+             reused: false,
+@@ -889,7 +893,7 @@
+             };
+         }
+         if (cached.busy) {
+-            const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
++            const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env, authorize);
+             return {
+                 socket,
+                 reused: false,
+@@ -905,7 +909,7 @@
+                 websocketSessionCache.delete(sessionId);
+         }
+     }
+-    const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
++    const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env, authorize);
+     const entry = { socket, busy: true, createdAt: Date.now() };
+     accountEntries = websocketSessionCache.get(sessionId);
+     if (!accountEntries) {
+@@ -1151,7 +1155,7 @@
+     }
+ }
+ async function processWebSocketStream(url, body, headers, output, stream, model, onStart, idleTimeoutMs, websocketConnectTimeoutMs, cacheSessionId, accountId, grammarToolInputProperties, options) {
+-    const { socket, entry, reused, release } = await acquireWebSocket(url, headers, cacheSessionId, accountId, options?.signal, websocketConnectTimeoutMs, options?.env);
++    const { socket, entry, reused, release } = await acquireWebSocket(url, headers, cacheSessionId, accountId, options?.signal, websocketConnectTimeoutMs, options?.env, () => authorizeRequest(options, JSON.stringify(body), model));
+     let keepConnection = true;
+     const useCachedContext = options?.transport === "websocket-cached" || options?.transport === "auto";
+     // ChatGPT Codex Responses rejects `store: true` ("Store must be set to false").
+@@ -1182,7 +1186,9 @@
+         }
+     }
+     try {
+-        socket.send(JSON.stringify({ type: "response.create", ...requestBody }));
++        const serializedRequest = JSON.stringify({ type: "response.create", ...requestBody });
++        authorizeRequest(options, serializedRequest, model);
++        socket.send(serializedRequest);
+         await processResponsesStream(startWebSocketOutputOnFirstEvent(mapCodexEvents(parseWebSocket(socket, options?.signal, idleTimeoutMs), output), onStart), output, stream, model, {
+             serviceTier: options?.serviceTier,
+             grammarToolInputProperties,
