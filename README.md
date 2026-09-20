@@ -129,7 +129,7 @@ Hatchi's optional runtime 1Password provider and private NixOS verification proc
 
 ## Personal Pi secrets
 
-The personal Mac and Nana use opnix to fetch the OpenRouter key from 1Password. Follow [the provisioning guide](tests/personal-secrets.md) to install each machine's service-account token and verify retrieval. Work hosts and the Cobb bridge do not import this configuration.
+Both Macs and Nana use opnix to fetch the OpenRouter key from 1Password. Follow [the provisioning guide](tests/personal-secrets.md) to install each machine's service-account token and verify retrieval. Twin Linux and the Cobb bridge do not import this configuration.
 
 ## Cobb bridge profile
 

@@ -6,7 +6,7 @@
 let
   mac = self.darwinConfigurations.dkumlin-macbook-pro.config;
   nana = self.nixosConfigurations.srv-nana.config;
-  workMac = self.darwinConfigurations.dkumlin-twin-macbook-pro.config;
+  twinMac = self.darwinConfigurations.dkumlin-twin-macbook-pro.config;
   twin = self.homeConfigurations.twin.config;
   personalHosts = [
     {
@@ -18,6 +18,11 @@ let
       config = nana;
       userName = "dkumlin";
       group = nana.users.users.dkumlin.group;
+    }
+    {
+      config = twinMac;
+      userName = "danielkumlin";
+      group = "staff";
     }
   ];
   cobb =
@@ -68,9 +73,9 @@ assert builtins.all (
   && !(home.home.sessionVariables ? OPENROUTER_API_KEY)
 ) personalHosts;
 assert mac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
+assert twinMac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
 assert nana.systemd.services.opnix-secrets.serviceConfig.User == "root";
 assert !nana.services.onepassword-secrets.systemdIntegration.enable;
-assert !(workMac.services ? onepassword-secrets);
 assert !(twin.programs ? onepassword-secrets);
 assert builtins.all
   (
