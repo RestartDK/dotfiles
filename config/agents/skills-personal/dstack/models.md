@@ -1,12 +1,7 @@
-# dstack per-role model choices (overrides skill defaults)
-# One line per role. Delete a line to fall back to the skill default.
-# `inherit-parent` or `auto`: the role runs on the parent chat model.
-feature, refactoring: fireworks/accounts/fireworks/models/deepseek-v4p1-flash:xhigh
-bug-fix: openai/gpt-5.6-sol
-prose, judgment, review: anthropic/claude-fable-5-1:xhigh
-how critics: anthropic/claude-fable-5-1:xhigh
-arena runners: anthropic/claude-fable-5-1:xhigh, openai/gpt-5.6-sol, fireworks/accounts/fireworks/models/deepseek-v4p1-flash:xhigh
-arena cross-judge pool: anthropic/claude-fable-5-1:xhigh, openai/gpt-5.6-sol
-interrogate reviewers: anthropic/claude-fable-5-1:xhigh, openai/gpt-5.6-sol, openrouter/z-ai/glm-5.3-flash:xhigh
-swarm workers: fireworks/accounts/fireworks/models/deepseek-v4p1-flash:xhigh
-reflect-judgment: anthropic/claude-fable-5-1:xhigh
+# Model policy
+
+Model routes live outside shared skills at `${XDG_CONFIG_HOME:-$HOME/.config}/dstack/models.json`. Nix selects `config/agents/model-profiles/work.json` or `personal.json` through `my.liveConfig.agentProfile`.
+
+Use `/subagents` to inspect the active profile, roles, panel members and ordered backend chains. Managed workers pass `role`, plus `member` or zero-based `seat` for panels. They do not pass raw models or thinking overrides. Missing or malformed policy blocks dispatch.
+
+The result reports the configured role, actual backend/model and every attempt, including cooldown skips. Fallback can reduce panel diversity. Never rename a fallback result to the intended model family.

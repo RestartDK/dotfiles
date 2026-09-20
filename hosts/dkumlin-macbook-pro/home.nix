@@ -13,6 +13,7 @@
 
   my.liveConfig = {
     enable = true;
+    agentProfile = "personal";
     repoRoot = "/Users/danielkumlin/.config/dotfiles";
     sync.enable = true;
     groups = {

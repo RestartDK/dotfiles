@@ -11,5 +11,5 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 }
 DEST="$REPO/.agents/skills/dstack"
 mkdir -p "$DEST"
-rsync -a --delete --exclude 'models.md' "$SRC/" "$DEST/"
-echo "vendored $SRC -> $DEST (models.md excluded; personal model choices stay local)"
+rsync -a --delete "$SRC/" "$DEST/"
+echo "vendored $SRC -> $DEST (billing policy remains in the host's dstack/models.json)"

@@ -9,6 +9,15 @@
       description = "Absolute path to the editable dotfiles checkout on this host.";
     };
 
+    agentProfile = lib.mkOption {
+      type = lib.types.enum [
+        "work"
+        "personal"
+      ];
+      default = "personal";
+      description = "Global billing and model-role policy for subagents, separate from shared skills.";
+    };
+
     piSettingsFile = lib.mkOption {
       type = lib.types.str;
       default = "config/pi/agent/settings.json";

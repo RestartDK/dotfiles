@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "profile": "work",
+  "routes": {
+    "astra": [
+      {
+        "kind": "pi",
+        "model": "openai/gpt-6-astra",
+        "thinking": "xhigh"
+      }
+    ],
+    "deepseek": [
+      {
+        "kind": "pi",
+        "model": "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
+        "thinking": "max"
+      }
+    ],
+    "fable": [
+      {
+        "kind": "claude-cli",
+        "model": "claude-fable-5-1",
+        "thinking": "xhigh"
+      },
+      {
+        "kind": "pi",
+        "model": "anthropic/claude-fable-5-1",
+        "thinking": "xhigh"
+      },
+      {
+        "kind": "pi",
+        "model": "openai/gpt-6-astra",
+        "thinking": "xhigh"
+      }
+    ],
+    "sol": [
+      {
+        "kind": "pi",
+        "model": "openai/gpt-5.6-sol",
+        "thinking": "xhigh"
+      }
+    ],
+    "glm": [
+      {
+        "kind": "pi",
+        "model": "openrouter/z-ai/glm-5.3-flash",
+        "thinking": "xhigh"
+      }
+    ],
+    "opus": [
+      {
+        "kind": "pi",
+        "model": "anthropic/claude-opus-5",
+        "thinking": "xhigh"
+      }
+    ]
+  },
+  "roles": {
+    "feature": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "refactoring": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "swarm-workers": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "bug-fix": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "perf-issue": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "hillclimb": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "reflect-tooling": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "fast-code": {
+      "kind": "single",
+      "route": "glm"
+    },
+    "why-investigators": {
+      "kind": "single",
+      "route": "glm"
+    },
+    "precise-code": {
+      "kind": "single",
+      "route": "sol"
+    },
+    "prose": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "judgment": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "review": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "hardest": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "how-explainer": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "why-synthesizer": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "reflect-judgment": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "reflect-divergent": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "reflect-synthesizer": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "how-explorer": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "how-critics": {
+      "kind": "panel",
+      "members": ["fable"]
+    },
+    "arena-runners": {
+      "kind": "panel",
+      "members": ["fable", "sol", "deepseek"]
+    },
+    "arena-cross-judge": {
+      "kind": "panel",
+      "members": ["fable", "sol"]
+    },
+    "architect-runners": {
+      "kind": "panel",
+      "members": ["fable", "sol", "glm", "opus"]
+    },
+    "interrogate-reviewers": {
+      "kind": "panel",
+      "members": ["fable", "sol", "glm"]
+    }
+  }
+}

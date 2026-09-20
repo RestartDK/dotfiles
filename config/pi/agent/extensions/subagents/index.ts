@@ -1,17 +1,27 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
-import { basename, dirname, join, resolve as resolvePath } from "node:path";
+import { stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join, resolve as resolvePath } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { BackendRunner, instructionFiles, type Attempt, type Execution } from "./backend";
+import {
+  backendLabel,
+  describePolicy,
+  loadPolicy,
+  resolveRoute,
+  type Policy,
+  type ResolvedRoute,
+} from "./policy";
+import { initialUsage, type UsageStats } from "./protocol";
 
 type JsonRecord = Record<string, unknown>;
 
 interface WorkerPreset {
   description?: string;
+  role?: string;
   model?: string;
   thinking?: string;
   tools?: string[];
@@ -27,6 +37,9 @@ interface SubagentsConfig {
 interface WorkerTaskInput {
   agent?: string;
   task: string;
+  role?: string;
+  member?: string;
+  seat?: number;
   model?: string;
   thinking?: string;
   tools?: string[];
@@ -37,28 +50,19 @@ interface WorkerTaskInput {
 interface ResolvedWorkerTask {
   name: string;
   task: string;
-  model?: string;
-  thinking?: string;
+  route: ResolvedRoute;
   tools: string[];
   systemPrompt: string;
   cwd: string;
-}
-
-interface UsageStats {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: number;
-  contextTokens: number;
-  turns: number;
+  contextFiles: string[];
 }
 
 interface WorkerResult {
   name: string;
   task: string;
-  model?: string;
-  thinking?: string;
+  route: ResolvedRoute;
+  attempts: Attempt[];
+  actual?: Execution["actual"];
   tools: string[];
   cwd: string;
   exitCode: number;
@@ -81,6 +85,8 @@ interface RunAccumulator {
   usage: UsageStats;
   stderr: string;
   output: string;
+  actual?: Execution["actual"];
+  attempts: Attempt[];
 }
 
 interface RunningRun {
@@ -154,7 +160,7 @@ function readStringList(value: unknown): string[] | undefined {
     const strings = value.filter(
       (item): item is string => typeof item === "string" && item.trim().length > 0,
     );
-    return strings.length > 0 ? strings.map((item) => item.trim()) : undefined;
+    return strings.map((item) => item.trim());
   }
 
   if (typeof value === "string") {
@@ -174,6 +180,9 @@ function parsePreset(value: unknown): WorkerPreset | undefined {
   const preset: WorkerPreset = {};
   if (typeof value.description === "string" && value.description.trim().length > 0) {
     preset.description = value.description.trim();
+  }
+  if (typeof value.role === "string" && value.role.trim().length > 0) {
+    preset.role = value.role.trim();
   }
   if (typeof value.model === "string" && value.model.trim().length > 0) {
     preset.model = value.model.trim();
@@ -259,6 +268,7 @@ function loadMarkdownAgents(dir: string): Record<string, WorkerPreset> {
     }
 
     const preset: WorkerPreset = { description, systemPrompt: body.trim() };
+    if (frontmatter.role?.trim()) preset.role = frontmatter.role.trim();
     if (frontmatter.model?.trim()) preset.model = frontmatter.model.trim();
     if (frontmatter.thinking?.trim()) preset.thinking = frontmatter.thinking.trim();
     const tools = readStringList(frontmatter.tools);
@@ -307,85 +317,16 @@ function readConfig(cwd: string, includeProject: boolean): SubagentsConfig {
 function configuredAgentSummary(config: SubagentsConfig): string {
   return Object.entries(config.agents)
     .map(([name, preset]) => {
-      const model = preset.model ? ` model=${preset.model}` : " model=parent-default";
+      const model = preset.role
+        ? ` role=${preset.role}`
+        : preset.model
+          ? ` model=${preset.model}`
+          : " role=required";
       const tools = preset.tools ? ` tools=${preset.tools.join(",")}` : "";
       const description = preset.description ? ` - ${preset.description}` : "";
       return `- ${name}:${model}${tools}${description}`;
     })
     .join("\n");
-}
-
-function getPiInvocation(args: string[]): { command: string; args: string[] } {
-  const currentScript = process.argv[1];
-  const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
-  if (currentScript && !isBunVirtualScript && existsSync(currentScript)) {
-    return { command: process.execPath, args: [currentScript, ...args] };
-  }
-
-  const execName = basename(process.execPath).toLowerCase();
-  const isGenericRuntime = /^(node|bun)(\.exe)?$/.test(execName);
-  if (!isGenericRuntime) return { command: process.execPath, args };
-
-  return { command: "pi", args };
-}
-
-function getFinalOutput(messages: unknown[]): string {
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index];
-    if (!isRecord(message) || message.role !== "assistant" || !Array.isArray(message.content))
-      continue;
-
-    for (const part of message.content) {
-      if (isRecord(part) && part.type === "text" && typeof part.text === "string") return part.text;
-    }
-  }
-
-  return "";
-}
-
-function initialUsage(): UsageStats {
-  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 };
-}
-
-function addUsage(result: WorkerResult, message: JsonRecord) {
-  if (message.role !== "assistant") return;
-  result.usage.turns += 1;
-
-  if (!isRecord(message.usage)) return;
-  const usage = message.usage;
-  result.usage.input += typeof usage.input === "number" ? usage.input : 0;
-  result.usage.output += typeof usage.output === "number" ? usage.output : 0;
-  result.usage.cacheRead += typeof usage.cacheRead === "number" ? usage.cacheRead : 0;
-  result.usage.cacheWrite += typeof usage.cacheWrite === "number" ? usage.cacheWrite : 0;
-  result.usage.contextTokens =
-    typeof usage.totalTokens === "number" ? usage.totalTokens : result.usage.contextTokens;
-
-  if (isRecord(usage.cost) && typeof usage.cost.total === "number") {
-    result.usage.cost += usage.cost.total;
-  }
-
-  if (!result.model && typeof message.model === "string") result.model = message.model;
-  if (typeof message.stopReason === "string") result.stopReason = message.stopReason;
-  if (typeof message.errorMessage === "string") result.errorMessage = message.errorMessage;
-}
-
-async function writePromptFile(name: string, prompt: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "pi-mini-subagent-"));
-  const safeName = name.replace(/[^\w.-]+/g, "_");
-  const path = join(dir, `${safeName}.md`);
-  await writeFile(path, prompt, { encoding: "utf-8", mode: 0o600 });
-  return path;
-}
-
-async function cleanupPromptFile(path: string | undefined) {
-  if (!path) return;
-
-  try {
-    await rm(dirname(path), { recursive: true, force: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[subagents] Failed to remove temporary prompt ${path}: ${message}`);
-  }
 }
 
 function workerHasWriteTools(task: ResolvedWorkerTask): boolean {
@@ -396,6 +337,7 @@ function resolveWorkerTask(
   input: WorkerTaskInput,
   config: SubagentsConfig,
   parentCwd: string,
+  policy: Policy,
 ): ResolvedWorkerTask {
   const preset = input.agent ? config.agents[input.agent] : undefined;
   if (input.agent && !preset) {
@@ -403,23 +345,39 @@ function resolveWorkerTask(
     throw new Error(`Unknown mini subagent "${input.agent}". Available: ${available}`);
   }
 
-  const name = input.agent ?? input.model ?? "ad-hoc-worker";
+  const managed = input.agent === "dstack-agent" || input.agent === "comment-sicko";
+  if (managed && input.model !== undefined)
+    throw new Error("Managed dstack agents require a role, not a raw model.");
+  if (input.agent === "comment-sicko" && input.role !== undefined && input.role !== "review")
+    throw new Error("comment-sicko requires the review role.");
+  const route = resolveRoute(policy, {
+    role:
+      input.agent === "comment-sicko"
+        ? "review"
+        : (input.role ?? (input.model === undefined ? preset?.role : undefined)),
+    member: input.member,
+    seat: input.seat,
+    model: input.model ?? (input.role === undefined && !managed ? preset?.model : undefined),
+    thinking: input.thinking ?? preset?.thinking,
+  });
+  const name = input.agent ?? input.role ?? input.model ?? "ad-hoc-worker";
   const tools = input.tools ?? preset?.tools ?? config.defaultTools;
   const promptParts = [
-    `You are ${name}, a child Pi worker spawned by a parent orchestrator.`,
+    `You are ${name}, a child worker spawned by a parent orchestrator.`,
     "Work only on the delegated task. Return a concise, self-contained result the parent can use without seeing your full transcript.",
     preset?.systemPrompt,
     input.systemPrompt,
   ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
 
+  const cwd = input.cwd ? resolvePath(parentCwd, input.cwd) : parentCwd;
   return {
     name,
     task: input.task,
-    model: input.model ?? preset?.model,
-    thinking: input.thinking ?? preset?.thinking,
+    route,
     tools,
     systemPrompt: promptParts.join("\n\n"),
-    cwd: input.cwd ? resolvePath(parentCwd, input.cwd) : parentCwd,
+    cwd,
+    contextFiles: instructionFiles(cwd, getAgentDir()),
   };
 }
 
@@ -428,149 +386,45 @@ async function assertDirectory(path: string): Promise<void> {
   if (!metadata.isDirectory()) throw new Error(`${path} is not a directory`);
 }
 
-const liveChildren = new Set<ChildProcess>();
-
-function terminateLiveChildren() {
-  for (const child of liveChildren) {
-    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
-  }
-}
-
-process.on("exit", terminateLiveChildren);
-
 async function runWorker(
+  backendRunner: BackendRunner,
   task: ResolvedWorkerTask,
   signal: AbortSignal | undefined,
   live?: RunAccumulator,
 ): Promise<WorkerResult> {
-  const result: WorkerResult = {
+  const result = await backendRunner.run(task, signal, (execution) => {
+    if (live)
+      Object.assign(live, {
+        usage: execution.usage,
+        stderr: execution.stderr,
+        output: execution.output,
+        actual: execution.actual,
+        attempts: [...execution.attempts],
+      });
+  });
+  const outcome = result.outcome;
+  return {
     name: task.name,
     task: task.task,
-    model: task.model,
-    thinking: task.thinking,
+    route: task.route,
     tools: task.tools,
     cwd: task.cwd,
-    exitCode: 0,
+    attempts: result.attempts,
+    actual: result.actual,
+    exitCode: outcome.kind === "success" ? 0 : 1,
     messages: [],
-    stderr: "",
-    output: "",
-    usage: live ? live.usage : initialUsage(),
+    stderr: result.stderr,
+    output: result.output,
+    usage: result.usage,
+    stopReason:
+      outcome.kind === "cancelled" ? "aborted" : outcome.kind === "success" ? "stop" : "error",
+    errorMessage:
+      outcome.kind === "failed" || outcome.kind === "provider-failure"
+        ? outcome.reason
+        : outcome.kind === "cancelled"
+          ? "Cancelled by parent"
+          : undefined,
   };
-
-  let promptPath: string | undefined;
-
-  try {
-    await assertDirectory(task.cwd);
-    promptPath = await writePromptFile(task.name, task.systemPrompt);
-
-    const args = ["--mode", "json", "-p", "--no-session", "--append-system-prompt", promptPath];
-    if (task.model) args.push("--model", task.model);
-    if (task.thinking) args.push("--thinking", task.thinking);
-    if (task.tools.length === 0) args.push("--no-tools");
-    else args.push("--tools", task.tools.join(","));
-    args.push(`Delegated task for ${task.name}:\n\n${task.task}`);
-
-    result.exitCode = await new Promise<number>((resolve) => {
-      const invocation = getPiInvocation(args);
-      const child = spawn(invocation.command, invocation.args, {
-        cwd: task.cwd,
-        shell: false,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      let settled = false;
-      let stdoutBuffer = "";
-      let aborted = false;
-      let killTimer: ReturnType<typeof setTimeout> | undefined;
-
-      liveChildren.add(child);
-
-      const finish = (code: number) => {
-        if (settled) return;
-        settled = true;
-        resolve(code);
-      };
-
-      const processLine = (line: string) => {
-        if (!line.trim()) return;
-
-        let event: unknown;
-        try {
-          event = JSON.parse(line);
-        } catch {
-          return;
-        }
-
-        if (!isRecord(event)) return;
-        if (
-          (event.type === "message_end" || event.type === "tool_result_end") &&
-          isRecord(event.message)
-        ) {
-          if (live) {
-            const text = getFinalOutput([event.message]);
-            if (text) live.output = text;
-          } else {
-            result.messages.push(event.message);
-          }
-          addUsage(result, event.message);
-        }
-      };
-
-      child.stdout.on("data", (data) => {
-        stdoutBuffer += data.toString();
-        const lines = stdoutBuffer.split("\n");
-        stdoutBuffer = lines.pop() ?? "";
-        for (const line of lines) processLine(line);
-      });
-
-      const appendStderr = (text: string) => {
-        if (live) live.stderr = tailCap(live.stderr + text, STDERR_CAP_BYTES);
-        else result.stderr += text;
-      };
-
-      child.stderr.on("data", (data) => {
-        appendStderr(data.toString());
-      });
-
-      child.on("error", (error) => {
-        liveChildren.delete(child);
-        appendStderr(`${error.message}\n`);
-        finish(1);
-      });
-
-      child.on("close", (code) => {
-        liveChildren.delete(child);
-        if (killTimer) clearTimeout(killTimer);
-        signal?.removeEventListener("abort", abort);
-        if (stdoutBuffer.trim().length > 0) processLine(stdoutBuffer);
-        if (aborted) {
-          result.stopReason = "aborted";
-          result.errorMessage = "Subagent aborted by parent signal.";
-        }
-        finish(code ?? 0);
-      });
-
-      const abort = () => {
-        aborted = true;
-        child.kill("SIGTERM");
-        killTimer = setTimeout(() => {
-          if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-        }, 5000);
-        killTimer.unref();
-      };
-
-      if (signal?.aborted) abort();
-      else signal?.addEventListener("abort", abort, { once: true });
-    });
-  } catch (error) {
-    result.exitCode = 1;
-    result.errorMessage = error instanceof Error ? error.message : String(error);
-  } finally {
-    await cleanupPromptFile(promptPath);
-  }
-
-  if (live) result.stderr = live.stderr;
-  result.output = live ? live.output : getFinalOutput(result.messages);
-  return result;
 }
 
 function tailCap(text: string, capBytes: number): string {
@@ -622,7 +476,7 @@ function transitionRun(run: RunningRun, result: WorkerResult): TerminalRun {
   return terminal;
 }
 
-function launchRun(task: ResolvedWorkerTask): RunningRun {
+function launchRun(backendRunner: BackendRunner, task: ResolvedWorkerTask): RunningRun {
   const run: RunningRun = {
     status: "running",
     id: newRunId(task.name),
@@ -630,11 +484,11 @@ function launchRun(task: ResolvedWorkerTask): RunningRun {
     writeCapable: workerHasWriteTools(task),
     startedAt: Date.now(),
     abort: new AbortController(),
-    live: { usage: initialUsage(), stderr: "", output: "" },
+    live: { usage: initialUsage(), stderr: "", output: "", attempts: [] },
     done: undefined as unknown as Promise<TerminalRun>,
     joined: false,
   };
-  run.done = runWorker(task, run.abort.signal, run.live).then((result) =>
+  run.done = runWorker(backendRunner, task, run.abort.signal, run.live).then((result) =>
     transitionRun(run, result),
   );
   runRegistry.set(run.id, run);
@@ -696,7 +550,17 @@ function formatRunLine(record: RunRecord): string {
   const usage = record.status === "running" ? record.live.usage : record.result.usage;
   const usageText = formatUsage(usage);
   const taskText = record.task.task.replace(/\s+/g, " ").slice(0, 60);
-  return `${record.id}  ${record.status}  ${elapsed}${usageText ? `  ${usageText}` : ""}  ${taskText}`;
+  const execution = record.status === "running" ? record.live : record.result;
+  const selection = record.task.route.selection;
+  const configured =
+    selection.kind === "role" ? `${selection.role}/${selection.member}` : selection.model;
+  const actual = execution.actual
+    ? `${execution.actual.backend}/${execution.actual.model}`
+    : "pending";
+  const attempts = execution.attempts
+    .map((attempt) => `${backendLabel(attempt.backend)}=${attempt.kind}`)
+    .join(", ");
+  return `${record.id}  ${record.status}  ${elapsed}${usageText ? `  ${usageText}` : ""}  ${configured} -> ${actual} [${attempts}]  ${taskText}`;
 }
 
 function fleetWidgetLines(): string[] {
@@ -779,7 +643,8 @@ function formatResults(results: WorkerResult[]): string {
   const succeeded = results.filter((result) => !isFailed(result)).length;
   const sections = results.map((result) => {
     const status = isFailed(result) ? "failed" : "succeeded";
-    const model = result.model ? `\nmodel: ${result.model}` : "";
+    const selection = result.route.selection;
+    const model = `\nprofile: ${result.route.profile}\nconfigured: ${selection.kind === "role" ? `${selection.role}/${selection.member}` : selection.model}\nactual: ${result.actual ? `${result.actual.backend}/${result.actual.model}` : "none"}\nattempts: ${result.attempts.map((attempt) => `${backendLabel(attempt.backend)} ${attempt.kind}${attempt.kind === "cooldown" ? ` until ${new Date(attempt.until).toISOString()}` : "reason" in attempt ? ` (${attempt.reason})` : ""}`).join(" -> ")}`;
     const usage = formatUsage(result.usage);
     const usageLine = usage ? `\nusage: ${usage}` : "";
     const error = result.errorMessage ? `\nerror: ${result.errorMessage}` : "";
@@ -822,15 +687,23 @@ const WorkerTask = Type.Object({
     }),
   ),
   task: Type.String({ description: "Self-contained task to give this worker." }),
+  role: Type.Optional(
+    Type.String({ description: "Policy role. Required for managed dstack agents." }),
+  ),
+  member: Type.Optional(
+    Type.String({ description: "Explicit panel member from the selected profile." }),
+  ),
+  seat: Type.Optional(
+    Type.Integer({ minimum: 0, description: "Zero-based panel seat, instead of member." }),
+  ),
   model: Type.Optional(
     Type.String({
-      description: "Override model for this worker, for example anthropic/claude-haiku-4-5.",
+      description:
+        "Ad-hoc allowlisted provider/model:effort, instead of role. Never overrides billing policy.",
     }),
   ),
   thinking: Type.Optional(
-    Type.String({
-      description: "Optional Pi thinking level override: off, minimal, low, medium, high, xhigh.",
-    }),
+    Type.String({ description: "Rejected. Effort is owned by policy; do not supply." }),
   ),
   tools: Type.Optional(
     Type.Array(Type.String(), { description: "Override enabled tools for this worker." }),
@@ -848,8 +721,11 @@ const SubagentsParams = Type.Object({
     Type.String({ description: "Configured worker preset name for a single worker." }),
   ),
   task: Type.Optional(Type.String({ description: "Single worker task. Use tasks for fan-out." })),
-  model: Type.Optional(Type.String({ description: "Single worker model override." })),
-  thinking: Type.Optional(Type.String({ description: "Single worker thinking override." })),
+  role: WorkerTask.properties.role,
+  member: WorkerTask.properties.member,
+  seat: WorkerTask.properties.seat,
+  model: WorkerTask.properties.model,
+  thinking: WorkerTask.properties.thinking,
   tools: Type.Optional(Type.Array(Type.String(), { description: "Single worker tools override." })),
   systemPrompt: Type.Optional(Type.String({ description: "Single worker extra system prompt." })),
   cwd: Type.Optional(Type.String({ description: "Single worker cwd." })),
@@ -886,6 +762,7 @@ const SubagentsRunsParams = Type.Object({
 });
 
 export default function (pi: ExtensionAPI) {
+  const backendRunner = new BackendRunner();
   const startupConfig = readConfig(process.cwd(), false);
   const startupAgents = configuredAgentSummary(startupConfig);
 
@@ -893,7 +770,10 @@ export default function (pi: ExtensionAPI) {
     name: "subagents",
     label: "Subagents",
     description: [
-      "Spawn one or more isolated Pi worker subprocesses on demand.",
+      "Spawn isolated workers using the host's global billing profile and role routes.",
+      "Managed dstack agents must select role, never model. Panels require member or zero-based seat. Thinking overrides are rejected.",
+      "Claude subscription workers provide mapped built-in tools only, without Pi extensions or MCP. Unsupported tools block dispatch. Output is bounded to 50 KiB.",
+      describePolicy(),
       "Use this only when the user explicitly asks for subagents, delegation, orchestration, parallel workers, or a second model opinion.",
       "The current Pi session/model is the orchestrator; this tool runs child workers with their own models/tools/prompts and returns their outputs.",
       "Prefer parallel read-only scouts/reviewers/planners, then at most one write-capable worker.",
@@ -921,10 +801,29 @@ export default function (pi: ExtensionAPI) {
         };
       }
 
+      if (
+        hasTasks &&
+        [
+          params.agent,
+          params.role,
+          params.member,
+          params.seat,
+          params.model,
+          params.thinking,
+          params.tools,
+          params.systemPrompt,
+          params.cwd,
+        ].some((value) => value !== undefined)
+      )
+        throw new Error("With tasks, put every worker selector and override on its task entry.");
+
       const taskInputs: WorkerTaskInput[] = hasTasks
-        ? params.tasks!.map((task) => ({
+        ? (params.tasks ?? []).map((task) => ({
             agent: task.agent,
             task: task.task,
+            role: task.role,
+            member: task.member,
+            seat: task.seat,
             model: task.model,
             thinking: task.thinking,
             tools: task.tools,
@@ -934,7 +833,10 @@ export default function (pi: ExtensionAPI) {
         : [
             {
               agent: params.agent,
-              task: params.task!,
+              task: params.task ?? "",
+              role: params.role,
+              member: params.member,
+              seat: params.seat,
               model: params.model,
               thinking: params.thinking,
               tools: params.tools,
@@ -955,7 +857,10 @@ export default function (pi: ExtensionAPI) {
 
       let resolvedTasks: ResolvedWorkerTask[];
       try {
-        resolvedTasks = taskInputs.map((task) => resolveWorkerTask(task, config, ctx.cwd));
+        const policy = loadPolicy();
+        resolvedTasks = taskInputs.map((task) => resolveWorkerTask(task, config, ctx.cwd, policy));
+        await Promise.all(resolvedTasks.map((task) => assertDirectory(task.cwd)));
+        if (signal?.aborted) throw new Error("Subagent dispatch cancelled before launch.");
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {
@@ -1013,7 +918,7 @@ export default function (pi: ExtensionAPI) {
           };
         }
 
-        const runs = resolvedTasks.map(launchRun);
+        const runs = resolvedTasks.map((task) => launchRun(backendRunner, task));
         refreshFleetWidget();
         ensureFleetTimer();
         const lines = runs.map(
@@ -1054,7 +959,7 @@ export default function (pi: ExtensionAPI) {
 
       emitUpdate();
       const results = await mapWithConcurrency(resolvedTasks, concurrency, async (task) => {
-        const result = await runWorker(task, signal);
+        const result = await runWorker(backendRunner, task, signal);
         runningResults.push(result);
         emitUpdate();
         return result;
@@ -1196,7 +1101,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
-    terminateLiveChildren();
+    backendRunner.stop();
+    for (const run of runningRuns()) run.abort.abort();
+    await Promise.all(runningRuns().map((run) => run.done));
     if (fleetTimer) {
       clearInterval(fleetTimer);
       fleetTimer = undefined;
@@ -1223,6 +1130,7 @@ export default function (pi: ExtensionAPI) {
             "Do not spawn write-capable workers in parallel unless I explicitly ask for that.",
             "Synthesize worker outputs yourself before answering.",
             "",
+            describePolicy(),
             "Configured workers:",
             configuredAgentSummary(config),
             "",
@@ -1235,14 +1143,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("subagents", {
-    description: "Show configured subagents workers",
+    description: "Show current billing profile, roles, panels, backend chains and workers",
     handler: async (_args, ctx) => {
       const config = readConfig(ctx.cwd, ctx.isProjectTrusted());
       const live = runningRuns();
       const liveText =
         live.length > 0 ? `\n\nLive background runs:\n${live.map(formatRunLine).join("\n")}` : "";
       ctx.ui.notify(
-        `Configured subagents workers:\n${configuredAgentSummary(config)}${liveText}`,
+        `${describePolicy()}\n\nConfigured subagents workers:\n${configuredAgentSummary(config)}${liveText}`,
         "info",
       );
     },

@@ -19,6 +19,7 @@ in
 
   my.liveConfig = {
     enable = true;
+    agentProfile = "work";
     repoRoot = "${settings.homeDirectory}/.config/dotfiles";
     piSettingsFile = "config/pi/agent/settings-twin.json";
     piSkillsPath = "config/pi/agent/skills-twin";
@@ -29,8 +30,6 @@ in
       terminalTools = true;
       ghostty = true;
       multiplexer = true;
-      # Keep the remote profile from touching existing Codex, Claude, OpenCode,
-      # or shared agent skills. Only Pi itself and Pi-specific config are managed.
       agents = false;
       agentSkills = false;
       agentSkillsGlobal = false;

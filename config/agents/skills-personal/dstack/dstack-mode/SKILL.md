@@ -117,13 +117,14 @@ Read the leaf skill in full for any principle you apply. Each entry names when i
 
 ## Subagents
 
-**Spawn subagents via the pi `subagents` tool. Use the `dstack-agent` definition (`~/.agents/skills/dstack/agents/dstack-agent.md`) for any delegate working inside a playbook step**, so delegation inherits this mode. The subagents extension discovers it from `~/.agents/agents/`, so pass `agent: "dstack-agent"` on every spawn (or `agent: "comment-sicko"` for its review). No other preset exists; a spawn that names one, or omits `model`, is wrong. Every `model` value is fully qualified with its provider (`openai/gpt-5.6-sol`, never `gpt-5.6-sol`; pi rejects bare ids as ambiguous). Routed workflow skills (`how`, `why`, `interrogate`, `reflect`, `swarm`, `arena`) prescribe their own models; respect what the skill prescribes.
+**Spawn subagents via the pi `subagents` tool. Use the `dstack-agent` definition (`~/.agents/skills/dstack/agents/dstack-agent.md`) for any delegate working inside a playbook step**, so delegation inherits this mode. The subagents extension discovers it from `~/.agents/agents/`, so pass `agent: "dstack-agent"` on every spawn (or `agent: "comment-sicko"` for its review). No other preset exists. Every managed spawn selects a `role`, never a raw `model` or `thinking` override. Panels also select an explicit `member` or zero-based `seat`. Read the subagents tool description or `/subagents` for the active host profile and panel members. Routed workflow skills prescribe role names; respect them. The global `${XDG_CONFIG_HOME:-~/.config}/dstack/models.json` policy owns providers, effort and fallback. Missing or invalid policy blocks dispatch. Never substitute a provider or inherit the parent model.
 
-**Model roles** (overrides in `~/.agents/skills/dstack/models.md`; a role with no line keeps its default):
+**Model roles** resolve through the host policy, not these shared skills.
 
-- Fast mechanical code: `openrouter/z-ai/glm-5.3-flash:xhigh`.
-- Precisely-specified code: `openai/gpt-5.6-sol`.
-- Judgment, prose, review: `anthropic/claude-fable-5-1:xhigh`.
+- Fast mechanical code uses `role: "fast-code"`.
+- Precisely-specified code uses `role: "precise-code"`.
+- Judgment, prose and review use `role: "judgment"`, `role: "prose"` and `role: "review"`.
+- Report the configured role and actual backend/model. A fallback may reduce panel diversity; do not count it as the originally selected family.
 
 You own every subagent's work. Review the diff and write your own summary, don't pass through what it said. Delegated implementation is not accepted until its diff passes the **thermo-nuclear-code-quality-review** standard. Workers run focused checks and never push. During interactive iteration, they return uncommitted diffs and verification evidence. Otherwise, they commit locally after required pre-commit checks. Run full CI on the reviewed combined diff at ship time. Fire a fresh subagent with consolidated scope rather than trusting a "done" summary after interrupts. A second opinion is the same prompt against a different model; agreement is high-signal. One writer per worktree or branch.
 

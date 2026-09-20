@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "profile": "personal",
+  "routes": {
+    "astra": [
+      {
+        "kind": "pi",
+        "model": "openai-codex/gpt-6-astra",
+        "thinking": "xhigh"
+      }
+    ],
+    "deepseek": [
+      {
+        "kind": "pi",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "thinking": "max"
+      }
+    ],
+    "fable": [
+      {
+        "kind": "claude-cli",
+        "model": "claude-fable-5-1",
+        "thinking": "xhigh"
+      },
+      {
+        "kind": "pi",
+        "model": "openai-codex/gpt-6-astra",
+        "thinking": "xhigh"
+      }
+    ]
+  },
+  "roles": {
+    "feature": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "refactoring": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "swarm-workers": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "bug-fix": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "perf-issue": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "hillclimb": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "reflect-tooling": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "fast-code": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "why-investigators": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "precise-code": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "prose": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "judgment": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "review": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "hardest": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "how-explainer": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "why-synthesizer": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "reflect-judgment": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "reflect-divergent": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "reflect-synthesizer": {
+      "kind": "single",
+      "route": "fable"
+    },
+    "how-explorer": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "how-critics": {
+      "kind": "panel",
+      "members": ["fable"]
+    },
+    "arena-runners": {
+      "kind": "panel",
+      "members": ["fable", "astra", "deepseek"]
+    },
+    "arena-cross-judge": {
+      "kind": "panel",
+      "members": ["fable", "astra", "deepseek"]
+    },
+    "architect-runners": {
+      "kind": "panel",
+      "members": ["fable", "astra", "deepseek"]
+    },
+    "interrogate-reviewers": {
+      "kind": "panel",
+      "members": ["fable", "astra", "deepseek"]
+    }
+  }
+}

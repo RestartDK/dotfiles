@@ -117,8 +117,8 @@ Launch all matching investigators in a single message so they run concurrently. 
 
 Subagent config (each):
 - spawn via the subagents tool
-- `model`: your configured why-investigators model (default `openrouter/z-ai/glm-5.3-flash:xhigh`)
-- `readonly`: `false` (agent mode). **Do not use readonly/Ask mode.** It strips MCP access, which disables MCP-backed investigators entirely. The source control investigator would be safe in readonly, but keep modes uniform. Investigators still shouldn't write anything. That's a posture, not a sandbox.
+- `role`: `why-investigators`
+- `tools`: explicitly list the required tools. Investigators must not write files. Claude routes do not expose Pi MCP tools. The parent must collect MCP evidence for those workers, or report that category blocked; never silently omit a requested capability.
 
 Each investigator gets:
 1. The base prompt from `references/investigator-prompt.md`
@@ -163,8 +163,8 @@ If your scope assessment suggests a single-commit trivial target where the PR de
 Spawn one synthesizer subagent:
 
 - spawn via the subagents tool
-- `model`: your configured why-synthesizer model (default `anthropic/claude-fable-5-1:xhigh`)
-- `readonly`: `false` (agent mode). The synthesizer's quality check spot-verifies citations, which can require MCP access. Readonly/Ask mode strips MCPs and defeats that.
+- `role`: `why-synthesizer`
+- `tools`: explicitly list the required tools. The parent supplies MCP evidence for citation checks when the selected backend cannot expose those tools. Report gaps rather than changing the billing route.
 
 The synthesizer gets:
 1. The investigator findings, including any null results and any categories skipped with justification

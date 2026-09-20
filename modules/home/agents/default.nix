@@ -61,6 +61,14 @@ in
         xdg.configFile."agents/agents" = dir "config/agents/agents";
       })
 
+      (lib.mkIf (agentSkillsEnabled || pi) {
+        xdg.configFile."dstack/models.json" = file "config/agents/model-profiles/${cfg.agentProfile}.json";
+      })
+
+      (lib.mkIf (pi && !agentSkillsEnabled) {
+        home.file.".agents/agents" = dir "config/agents/agents";
+      })
+
       (lib.mkIf codex {
         home.file.".codex/AGENTS.md" = file "config/codex/AGENTS.md";
         home.file.".codex/hooks.json" = file "config/codex/hooks.json";

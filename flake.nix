@@ -309,6 +309,10 @@
                 TRAITOR=${./bin/traitor} bash ${./tests/traitor-sync.sh}
                 touch $out
               '';
+          agent-profiles = import ./tests/agent-profiles.nix {
+            pkgs = pkgsFor system;
+            inherit self inputs;
+          };
           personal-secrets = import ./tests/personal-secrets.nix {
             pkgs = pkgsFor system;
             inherit self inputs;
