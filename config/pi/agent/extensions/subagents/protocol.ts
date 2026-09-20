@@ -153,6 +153,9 @@ export class Protocol {
           "auto_compaction_end",
           "auto_retry_start",
           "auto_retry_end",
+          "summarization_retry_scheduled",
+          "summarization_retry_attempt_start",
+          "summarization_retry_finished",
         ].includes(value.type)
       )
         throw new Error(`Unknown Pi event: ${value.type}`);
