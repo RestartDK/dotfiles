@@ -1,6 +1,15 @@
 { lib, ... }:
 
 {
+  options.my.ai.profile = lib.mkOption {
+    type = lib.types.enum [
+      "work"
+      "personal"
+    ];
+    default = "personal";
+    description = "Global billing policy for native Pi sessions and delegated workers.";
+  };
+
   options.my.liveConfig = {
     enable = lib.mkEnableOption "live out-of-store dotfile symlinks";
 

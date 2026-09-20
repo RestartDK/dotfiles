@@ -61,6 +61,15 @@ in
         xdg.configFile."agents/agents" = dir "config/agents/agents";
       })
 
+      (lib.mkIf (agentSkillsEnabled || pi) {
+        xdg.configFile."dstack/models.json" =
+          file "config/agents/model-profiles/${config.my.ai.profile}.json";
+      })
+
+      (lib.mkIf (pi && !agentSkillsEnabled) {
+        home.file.".agents/agents" = dir "config/agents/agents";
+      })
+
       (lib.mkIf codex {
         home.file.".codex/AGENTS.md" = file "config/codex/AGENTS.md";
         home.file.".codex/hooks.json" = file "config/codex/hooks.json";
@@ -89,6 +98,7 @@ in
         home.file.".pi/agent/models.json" = file "config/pi/agent/models.json";
         home.file.".pi/agent/mcp.json" = file "config/pi/agent/mcp.json";
         home.file.".pi/agent/extensions" = dir "config/pi/agent/extensions";
+        home.file.".pi/agent/lib" = dir "config/pi/agent/lib";
         home.file.".pi/agent/bin" = dir "config/pi/agent/bin";
         home.file.".pi/agent/prompts" = dir "config/pi/agent/prompts";
         home.file.".pi/agent/themes" = dir "config/pi/agent/themes";

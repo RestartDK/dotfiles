@@ -18,6 +18,8 @@
     ];
   };
 
+  my.ai.profile = "work";
+
   my.liveConfig = {
     enable = true;
     repoRoot = "/Users/danielkumlin/.config/dotfiles";

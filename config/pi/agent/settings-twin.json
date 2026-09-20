@@ -1,7 +1,4 @@
 {
-  "defaultModel": "claude-fable-5-1",
-  "defaultProvider": "anthropic",
-  "defaultThinkingLevel": "xhigh",
   "extensions": [
     "-extensions/pi-prompt/index.ts"
   ],

@@ -33,21 +33,14 @@ Write one clear paragraph. Reviewers challenge whether the work achieves the int
 
 ## Step 3, Spawn Reviewers
 
-Launch all reviewers in a single message in one subagents call. Use the `interrogate reviewers` list from `~/.agents/skills/dstack/models.md` when present, one reviewer per entry, extending or shrinking the Reviewer A/B/C/D labels below to the configured entry count; otherwise use the table defaults.
-
-| Subagent | Default model |
-|----------|---------------|
-| Reviewer A | `anthropic/claude-fable-5-1:xhigh` |
-| Reviewer B | `openai/gpt-5.6-sol` |
-| Reviewer C | `openrouter/z-ai/glm-5.3-flash:xhigh` |
-| Reviewer D | `anthropic/claude-opus-5:xhigh` |
+Launch all reviewers in one subagents call, one per entry in the active `interrogate-reviewers` panel shown by `/subagents`. Label reviewers A, B, C and onward to match the configured count.
 
 For each reviewer:
 - spawn via the subagents tool
-- `model`: the configured `interrogate reviewers` entry, or the table default with no configured line
-- `readonly`: `true`
+- `role`: `interrogate-reviewers`, with an explicit `member` or zero-based `seat`
+- `tools`: `["read", "grep", "find", "ls"]`
 
-If a model slug is rejected as unresolvable when you try to spawn the subagent, check the valid slugs in the subagents tool's error message, pick the closest equivalent (prefer the highest-reasoning tier of the same family), spawn with the valid slug, and open a separate PR to update the configured value or default table. Do not block the review on the slug issue. If the configured value is `inherit-parent` or `auto`, omit `model` instead; never treat those aliases as broken slugs or enter this fallback for them.
+Only the host policy may authorize fallback. Never choose a closest-equivalent slug or inherit the parent model. Report blocked routes, attempt history and actual backend/model. If fallback makes reviewers share a family, report reduced diversity rather than claiming independent model agreement.
 
 Read `references/reviewer-prompt.md` and fill in the template with:
 1. The stated intent

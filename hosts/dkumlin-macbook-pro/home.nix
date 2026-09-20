@@ -11,6 +11,8 @@
   home.homeDirectory = "/Users/danielkumlin";
   home.stateVersion = "26.05";
 
+  my.ai.profile = "personal";
+
   my.liveConfig = {
     enable = true;
     repoRoot = "/Users/danielkumlin/.config/dotfiles";

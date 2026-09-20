@@ -6,6 +6,9 @@ trap 'rm -rf "$work"' EXIT
 export HOME="$work/home"
 export PI_CODING_AGENT_DIR="$HOME/.pi/agent"
 export PI_OFFLINE=1 PI_TELEMETRY=0
+export XDG_CONFIG_HOME="$HOME/.config"
+mkdir -p "$XDG_CONFIG_HOME/dstack"
+cp "$MODEL_POLICY" "$XDG_CONFIG_HOME/dstack/models.json"
 unset OPENROUTER_API_KEY
 mkdir -p "$PI_CODING_AGENT_DIR"
 cd "$work"

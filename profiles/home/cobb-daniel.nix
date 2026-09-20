@@ -24,6 +24,8 @@ in
   # configuration.
   my.twinDevEnvironment.enable = isCobbDevHost;
 
+  my.ai.profile = "work";
+
   my.liveConfig = {
     enable = isCobbDevHost;
     repoRoot = "${config.home.homeDirectory}/.config/dotfiles";

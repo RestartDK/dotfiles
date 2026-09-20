@@ -101,10 +101,11 @@ pkgs.runCommand "personal-secrets-tests"
       pkgs.bash
       pkgs.coreutils
       pkgs.jq
-      inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi
+      self.packages.${pkgs.stdenv.hostPlatform.system}.pi-profiled
     ];
     MODELS_FILE = nativeHome.home.file.".pi/agent/models.json".source;
     BASE_MODELS = ../config/pi/agent/models.json;
+    MODEL_POLICY = ../config/agents/model-profiles/personal.json;
     SECRET_PATH = nativeHost.config.services.onepassword-secrets.secretPaths.openrouterApiKey;
   }
   ''

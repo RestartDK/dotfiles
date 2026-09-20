@@ -8,7 +8,7 @@
 
 let
   cfg = config.my.piNetnsWrapper;
-  piCodingAgent = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi;
+  piCodingAgent = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system}.pi-profiled;
   realPi = "${piCodingAgent}/bin/pi";
   piWrapper = pkgs.writeShellScriptBin "pi" ''
     set -euo pipefail

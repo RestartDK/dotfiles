@@ -1,0 +1,108 @@
+import type { Api, Model } from "@earendil-works/pi-ai";
+
+const cachedModels = {
+  fireworks: [
+    {
+      id: "accounts/fireworks/models/deepseek-v4p1-flash",
+      name: "DeepSeek V4.1 Flash",
+      provider: "fireworks",
+      reasoning: true,
+      input: ["text", "image"],
+      cost: {
+        input: 0.22,
+        output: 0.66,
+        cacheRead: 0.007,
+        cacheWrite: 0,
+      },
+      contextWindow: 1000000,
+      maxTokens: 384000,
+      api: "anthropic-messages",
+      baseUrl: "https://api.fireworks.ai/inference",
+      compat: {
+        supportsToolReferences: true,
+        allowEmptySignature: true,
+        sendSessionAffinityHeaders: true,
+        supportsEagerToolInputStreaming: false,
+        supportsCacheControlOnTools: false,
+        supportsLongCacheRetention: false,
+        forceAdaptiveThinking: true,
+      },
+      thinkingLevelMap: {
+        off: "none",
+        minimal: null,
+        low: "low",
+        medium: null,
+        high: "high",
+        xhigh: null,
+        max: "max",
+      },
+    },
+  ],
+  openrouter: [
+    {
+      id: "deepseek/deepseek-v4.1-flash",
+      name: "DeepSeek: DeepSeek V4.1 Flash",
+      api: "openai-completions",
+      baseUrl: "https://openrouter.ai/api/v1",
+      provider: "openrouter",
+      reasoning: true,
+      thinkingLevelMap: {
+        off: "none",
+        minimal: null,
+        low: "low",
+        medium: null,
+        high: "high",
+        xhigh: null,
+        max: "max",
+      },
+      input: ["text", "image"],
+      cost: {
+        input: 0.15,
+        output: 0.6,
+        cacheRead: 0.003,
+        cacheWrite: 0,
+      },
+      contextWindow: 1048576,
+      maxTokens: 384000,
+      compat: {
+        supportsDeveloperRole: false,
+        thinkingFormat: "openrouter",
+        sendSessionAffinityHeaders: true,
+        requiresReasoningContentOnAssistantMessages: true,
+      },
+    },
+    {
+      id: "z-ai/glm-5.3-flash",
+      name: "Z.ai: GLM 5.3 Flash",
+      api: "openai-completions",
+      baseUrl: "https://openrouter.ai/api/v1",
+      provider: "openrouter",
+      reasoning: true,
+      thinkingLevelMap: {
+        off: null,
+        minimal: null,
+        low: "low",
+        medium: null,
+        high: "high",
+        xhigh: null,
+        max: "max",
+      },
+      input: ["text", "image"],
+      cost: {
+        input: 0.09,
+        output: 0.3,
+        cacheRead: 0.018,
+        cacheWrite: 0,
+      },
+      contextWindow: 1048576,
+      maxTokens: 131072,
+      compat: {
+        supportsDeveloperRole: false,
+        thinkingFormat: "openrouter",
+        sendSessionAffinityHeaders: true,
+      },
+    },
+  ],
+} satisfies Record<string, Model<Api>[]>;
+
+export default cachedModels;

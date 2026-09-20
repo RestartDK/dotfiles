@@ -45,8 +45,8 @@ The right decomposition depends on the question. Use your judgment. Narrow quest
 Spawn all explorers in a single message:
 
 - spawn via the subagents tool
-- `model`: your configured how-explorer model (default `openrouter/z-ai/glm-5.3-flash:xhigh`)
-- `readonly`: `true`
+- `role`: `how-explorer`
+- `tools`: `["read", "grep", "find", "ls"]`
 
 Each explorer gets the same base prompt from `references/explorer-prompt.md` plus a specific exploration angle naming its slice. Each explorer should:
 - Start broad: Glob for relevant directories, Grep for key types/interfaces/class names
@@ -64,8 +64,8 @@ Then proceed to Step 3.
 Spawn a single Task subagent that explores and explains in one pass:
 
 - spawn via the subagents tool
-- `model`: your configured how-explainer model (default `anthropic/claude-fable-5-1:xhigh`)
-- `readonly`: `true`
+- `role`: `how-explainer`
+- `tools`: `["read", "grep", "find", "ls"]`
 
 The agent does its own exploration (Glob, Grep, Read) and writes the explanation directly. Read `references/explainer-prompt.md` for the communication style and output format. Same structure, just no explorer findings as input.
 
@@ -76,8 +76,8 @@ Proceed to Step 4.
 Once all explorers return, spawn a single Task subagent to synthesize their findings into one coherent explanation:
 
 - spawn via the subagents tool
-- `model`: your configured how-explainer model (default `anthropic/claude-fable-5-1:xhigh`)
-- `readonly`: `true`
+- `role`: `how-explainer`
+- `tools`: `["read", "grep", "find", "ls"]`
 
 The explainer gets all explorers' findings and writes the human-facing explanation (output format below). Read `references/explainer-prompt.md` for the full prompt template. The explainer reconciles overlapping findings, resolves contradictions, and weaves the slices into a unified picture.
 
@@ -109,12 +109,14 @@ Run the full explain flow above (Steps 1-4). You must understand the architectur
 
 ### Step 2. Spawn Critics
 
-After the explanation is complete, spawn one architectural critic per model in your configured how-critics list (defaults `anthropic/claude-fable-5-1:xhigh`, `openai/gpt-5.6-sol`, `openrouter/z-ai/glm-5.3-flash:xhigh`, `anthropic/claude-opus-5:xhigh`), all in a single message.
+After the explanation is complete, spawn one architectural critic per entry in the active `how-critics` panel, all in a single message.
 
 For each critic:
 - spawn via the subagents tool
-- `model`: one model from the configured how-critics list. These are minimum reasoning levels. The lead should escalate any model when the architecture warrants deeper analysis.
-- `readonly`: `true`
+- `role`: `how-critics`, with an explicit `member` or zero-based `seat` from `/subagents`. The policy owns effort.
+- `tools`: `["read", "grep", "find", "ls"]`
+
+Report actual models and any fallback that reduced diversity.
 
 Read `references/critic-prompt.md` for the prompt template. Each critic gets:
 1. The explanation from Step 1 (so they don't re-explore)

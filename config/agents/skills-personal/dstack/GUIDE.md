@@ -35,10 +35,9 @@ Audit rule: every cited principle must name the decision it changed. A bare cita
 
 ## Subagent roles
 
-- openrouter/z-ai/glm-5.3-flash:xhigh: fast mechanical edits, swarm workers.
-- openai/gpt-5.6-sol: precisely-specified implementation.
-- anthropic/claude-fable-5-1:xhigh: judgment, prose, review, cross-judging.
-  Change them in `models.md`. Fan-out list lengths set panel sizes (arena runners, interrogate reviewers).
+`/subagents` shows the active work or personal billing profile. Edit the selected source policy under `config/agents/model-profiles/`, not shared skills. Nix links it at `~/.config/dstack/models.json`.
+
+Workers select `role`, such as `feature`, `precise-code` or `review`. Panels also select `member` or a zero-based `seat`. Results identify the actual backend/model after fallback. A policy error stops dispatch instead of choosing a default.
 
 ## Recipes and pitfalls
 

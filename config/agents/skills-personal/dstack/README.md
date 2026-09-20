@@ -23,8 +23,8 @@ A repo adds `.agents/skills/dstack-<repo>/` with `references/` (principle carve-
 
 ## Model roles
 
-`models.md`. Defaults: mechanical code → openrouter/z-ai/glm-5.3-flash:xhigh, precise-spec code → openai/gpt-5.6-sol, judgment/prose/review → anthropic/claude-fable-5-1:xhigh.
+The host's `~/.config/dstack/models.json` selects routes. `/subagents` lists roles and panels. Shared skills contain role names only; see `models.md`.
 
 ## Deferred from pstack, deliberately
 
-`orchestrate` + the orch CLI, `autopilot-full`/`autopilot-stack`, `autonomous-run` (folded into the mode's Autonomy section), `multi-phase-plan` + check-plan.mjs, `visual-parity`, `runtime-forensics`/`trace-forensics`, `authoring-a-skill`, `create/maintain-verification-skill`, `setup-pstack` (pattern noted in models.md), benny. Adopt when the need shows up; the pinned pstack commit has the sources.
+`orchestrate` + the orch CLI, `autopilot-full`/`autopilot-stack`, `autonomous-run` (folded into the mode's Autonomy section), `multi-phase-plan` + check-plan.mjs, `visual-parity`, `runtime-forensics`/`trace-forensics`, `authoring-a-skill`, `create/maintain-verification-skill`, `setup-pstack`, benny. Adopt when the need shows up; the pinned pstack commit has the sources.
