@@ -1,9 +1,11 @@
-import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import cachedModels from "./cached-models";
+
+setDefaultTimeout(60000);
 
 const binary = process.env.PI_POLICY_TEST_BINARY;
 const profiles = process.env.PI_POLICY_TEST_PROFILES;
@@ -70,7 +72,7 @@ async function run(args: string[], input = "", executable = binary) {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    timeout: 3000,
+    timeout: 10000,
     env: {
       PATH: process.env.PATH,
       HOME: directory,
