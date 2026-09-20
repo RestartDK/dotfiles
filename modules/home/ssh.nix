@@ -6,6 +6,7 @@ _:
     enableDefaultConfig = false;
     settings = {
       nana = {
+        header = "Host nana srv-nana";
         HostName = "100.111.97.20";
         User = "dkumlin";
         IdentityFile = "~/.ssh/nana.pub";
@@ -13,6 +14,7 @@ _:
       };
 
       hatchi = {
+        header = "Host hatchi srv-hatchi";
         HostName = "100.85.39.42";
         User = "dkumlin";
         IdentityFile = "~/.ssh/hatchi.pub";
