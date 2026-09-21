@@ -40,8 +40,6 @@ in
       claude = false;
       agents = false;
       agentSkills = false;
-      agentSkillsGlobal = false;
-      agentSkillsPersonal = false;
 
       git = true;
       editors = true;

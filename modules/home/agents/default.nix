@@ -9,19 +9,8 @@
 let
   cfg = config.my.liveConfig;
   allAgents = cfg.groups.agents;
-  allAgentSkills = allAgents || cfg.groups.agentSkills;
-  globalAgentSkills = cfg.groups.agentSkillsGlobal;
-  personalAgentSkills = cfg.groups.agentSkillsPersonal;
-  agentSkillsPath =
-    if allAgentSkills || (globalAgentSkills && personalAgentSkills) then
-      "config/agents/skills-all"
-    else if globalAgentSkills then
-      "config/agents/skills-global"
-    else if personalAgentSkills then
-      "config/agents/skills-personal"
-    else
-      null;
-  agentSkillsEnabled = agentSkillsPath != null;
+  agentSkillsEnabled = allAgents || cfg.groups.agentSkills;
+  agentSkillsPath = "config/agents/skills";
   codex = allAgents || cfg.groups.codex;
   claude = allAgents || cfg.groups.claude;
   opencode = allAgents || cfg.groups.opencode;

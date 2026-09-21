@@ -49,9 +49,7 @@
       wayland = lib.mkEnableOption "Wayland desktop config";
       multiplexer = lib.mkEnableOption "terminal multiplexer config (Herdr)";
       agents = lib.mkEnableOption "all AI agent config";
-      agentSkills = lib.mkEnableOption "all shared AI agent skills config";
-      agentSkillsGlobal = lib.mkEnableOption "global AI agent skills config";
-      agentSkillsPersonal = lib.mkEnableOption "personal AI agent skills config";
+      agentSkills = lib.mkEnableOption "shared AI agent skills config";
       codex = lib.mkEnableOption "Codex config";
       claude = lib.mkEnableOption "Claude config";
       opencode = lib.mkEnableOption "OpenCode config";

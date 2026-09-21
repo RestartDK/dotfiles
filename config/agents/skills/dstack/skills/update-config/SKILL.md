@@ -69,7 +69,7 @@ Only use raw `nix eval`, `nix build`, or Cobb-specific commands for targeted dia
 5. Add new Nix files and new dotfiles to Git before evaluating; flakes only see tracked files.
 6. Validate with `traitor check` when practical. For targeted validation, evaluate/build the affected flake output.
 7. If a rebuild is requested, use `traitor re`/`traitor test` or an explicit host command (`traitor nana`, `traitor mac`, `traitor work-mac`).
-8. After any edit, offer to open a PR for it; edits to `config/agents/skills-personal/dstack` always get this offer, since they take effect live and are otherwise unversioned. For PRs, create a branch, commit only intended changes, push, and create the PR with validation notes.
+8. After any edit, offer to open a PR for it; edits to `config/agents/skills/dstack` always get this offer, since they take effect live and are otherwise unversioned. For PRs, create a branch, commit only intended changes, push, and create the PR with validation notes.
 
 ## Repo map
 
@@ -115,23 +115,13 @@ High-churn config (Neovim, Pi, agent plugins, terminal config) should generally 
 
 ### Add or edit agent skills
 
-Personal skills live under:
+Every skill lives in one tree, dstack included:
 
 ```text
-config/agents/skills-personal/<skill-name>/SKILL.md
+config/agents/skills/<skill-name>/SKILL.md
 ```
 
-Portable/global skills live under:
-
-```text
-config/agents/skills-global/<skill-name>/SKILL.md
-```
-
-If a personal skill should also be available when `skills-all` is linked, add a symlink:
-
-```bash
-ln -s ../skills-personal/<skill-name> config/agents/skills-all/<skill-name>
-```
+`modules/home/agents/default.nix` links that directory to every harness (`~/.agents/skills`, `~/.pi/agent/skills`, `~/.codex/skills`, `~/.claude/skills`, `~/.config/opencode/skills`) when `my.liveConfig.groups.agents` or `agentSkills` is on. Hosts with both off (twin, the Cobb dev hosts) get `config/pi/agent/skills-twin` for Pi and nothing for the others; on those hosts a hand-made `~/.agents/skills/dstack -> ~/.config/dotfiles/config/agents/skills/dstack` link exposes dstack alone. `.system/` is Codex's regenerated system skills and is not hand-edited.
 
 ### Cobb bridge changes
 
