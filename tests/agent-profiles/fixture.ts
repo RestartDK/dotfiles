@@ -16,16 +16,18 @@ appendFileSync(
   `${scriptPath}.calls`,
   JSON.stringify({ backend, args, env: process.env, prompt }) + "\n",
 );
+const write = (text: string) =>
+  new Promise<void>((resolve) => process.stdout.write(text, () => resolve()));
 const emit = async (event: unknown) => {
   const text = JSON.stringify(event) + "\n";
   if (scenario.split) {
-    process.stdout.write(text.slice(0, 7));
+    await write(text.slice(0, 7));
     await Bun.sleep(2);
-    process.stdout.write(text.slice(7));
-  } else process.stdout.write(text);
+    await write(text.slice(7));
+  } else await write(text);
 };
 if (args.includes("auth") && backend === "pi") {
-  if (scenario.piAuth === "malformed") process.stdout.write("not json");
+  if (scenario.piAuth === "malformed") await write("not json");
   else
     await emit({
       status:
@@ -38,9 +40,9 @@ if (args.includes("auth") && backend === "pi") {
   process.exit(0);
 }
 if (args.includes("auth")) {
-  if (scenario.auth === "malformed") process.stdout.write("not json");
+  if (scenario.auth === "malformed") await write("not json");
   else
-    process.stdout.write(
+    await write(
       JSON.stringify({
         loggedIn: scenario.auth !== "logged-out",
         authMethod: scenario.auth === "api" ? "api_key" : "claude.ai",
