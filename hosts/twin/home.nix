@@ -33,8 +33,6 @@ in
       multiplexer = true;
       agents = false;
       agentSkills = false;
-      agentSkillsGlobal = false;
-      agentSkillsPersonal = false;
       pi = true;
       codex = false;
       claude = false;

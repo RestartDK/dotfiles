@@ -144,7 +144,7 @@ describe("profile routing", () => {
   });
 
   test("shared dstack instructions contain no executable model slugs", () => {
-    const directory = join(import.meta.dir, "../../config/agents/skills-personal/dstack");
+    const directory = join(import.meta.dir, "../../config/agents/skills/dstack");
     for (const path of readdirSync(directory, { recursive: true, encoding: "utf8" })) {
       if (path.endsWith(".md"))
         expect(readFileSync(join(directory, path), "utf8")).not.toMatch(

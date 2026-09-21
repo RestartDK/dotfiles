@@ -270,7 +270,7 @@
                 ];
               }
               ''
-                WATCH_PR_BIN=${./config/agents/skills-personal/dstack/dstack-mode/scripts/watch-pr} bash ${./tests/watch-pr.sh}
+                WATCH_PR_BIN=${./config/agents/skills/dstack/dstack-mode/scripts/watch-pr} bash ${./tests/watch-pr.sh}
                 touch $out
               '';
           pi-no-offers =

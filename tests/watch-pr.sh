@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-watch_bin=${WATCH_PR_BIN:-$root/config/agents/skills-personal/dstack/dstack-mode/scripts/watch-pr}
+watch_bin=${WATCH_PR_BIN:-$root/config/agents/skills/dstack/dstack-mode/scripts/watch-pr}
 test_bash=${WATCH_PR_TEST_BASH:-$(command -v bash)}
 test_dir=$(mktemp -d)
 trap 'rm -rf "$test_dir"' EXIT

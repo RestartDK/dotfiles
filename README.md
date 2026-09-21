@@ -69,9 +69,7 @@ modules/nixos/                       # NixOS reusable modules
 modules/home/                        # shared Home Manager modules
   shell/ editors/ terminal/ agents/ desktop/
 config/                              # source app dotfiles formerly in dotfiles/
-  agents/skills-global/              # portable skills safe to enable broadly
-  agents/skills-personal/            # personal-only skills such as homelab/Dokploy
-  agents/skills-all/                 # symlink farm combining global + personal skills
+  agents/skills/                     # every agent skill, dstack included; one tree linked to every harness
 packages/                            # local package definitions
 ```
 
