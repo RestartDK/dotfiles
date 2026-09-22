@@ -27,7 +27,7 @@
     piSkillsPath = lib.mkOption {
       type = lib.types.str;
       default = "config/pi/agent/skills";
-      description = "Repo-relative Pi-specific skills directory to link as ~/.pi/agent/skills when shared agent skills are disabled.";
+      description = "Repo-relative Pi-specific skills directory to link as ~/.agents/skills when shared agent skills are disabled.";
     };
 
     sync = {

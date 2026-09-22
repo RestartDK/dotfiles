@@ -121,7 +121,7 @@ Every skill lives in one tree, dstack included:
 config/agents/skills/<skill-name>/SKILL.md
 ```
 
-`modules/home/agents/default.nix` links that directory to every harness (`~/.agents/skills`, `~/.pi/agent/skills`, `~/.codex/skills`, `~/.claude/skills`, `~/.config/opencode/skills`) when `my.liveConfig.groups.agents` or `agentSkills` is on. Hosts with both off (twin, the Cobb dev hosts) get `config/pi/agent/skills-twin` for Pi and nothing for the others; on those hosts a hand-made `~/.agents/skills/dstack -> ~/.config/dotfiles/config/agents/skills/dstack` link exposes dstack alone. `.system/` is Codex's regenerated system skills and is not hand-edited.
+`modules/home/agents/default.nix` links that directory once at `~/.agents/skills` when `my.liveConfig.groups.agents` or `agentSkills` is on; Pi, Codex, and opencode all read it there. Claude Code reads only `~/.claude/skills`, so it gets its own link. Hosts with both groups off (twin, the Cobb dev hosts) get `config/pi/agent/skills-twin` at `~/.agents/skills` for Pi. `.system/` is Codex's regenerated system skills and is not hand-edited.
 
 ### Cobb bridge changes
 

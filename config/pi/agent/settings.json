@@ -31,9 +31,6 @@
     "greeting": "hey dk :)"
   },
   "quietStartup": true,
-  "skills": [
-    "~/.claude/skills"
-  ],
   "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen"
 }
