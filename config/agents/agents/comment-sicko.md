@@ -1,1 +1,1 @@
-../skills-personal/dstack/agents/comment-sicko.md
+../skills/dstack/agents/comment-sicko.md
