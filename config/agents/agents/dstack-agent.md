@@ -1,1 +1,1 @@
-../skills-personal/dstack/agents/dstack-agent.md
+../skills/dstack/agents/dstack-agent.md
