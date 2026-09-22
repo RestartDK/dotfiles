@@ -23,6 +23,26 @@ test("real synthetic quota retains init identity and recognizes error despite su
   expect(protocol.terminal).toEqual({ kind: "failure", reason: "rate_limit", provider: "quota" });
 });
 
+test("native Pi activity follows retries, compaction and tools without treating idle as success", () => {
+  const protocol = new Protocol(
+    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
+    [],
+  );
+  const activity = [
+    { type: "agent_start" },
+    { type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 1000, errorMessage: "busy" },
+    { type: "compaction_start", reason: "threshold" },
+    { type: "message_start", message: piAssistantMessage },
+    { type: "tool_execution_start", toolCallId: "read-1", toolName: "read", args: {} },
+    { type: "agent_settled" },
+  ] satisfies AgentSessionEvent[];
+  for (const event of activity) {
+    protocol.accept(event);
+    expect(protocol.activity).toBe(event.type);
+    expect(protocol.terminal).toBeUndefined();
+  }
+});
+
 function piError(errorMessage: string) {
   const protocol = new Protocol(
     { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },

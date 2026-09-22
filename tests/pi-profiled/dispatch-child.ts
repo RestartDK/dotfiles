@@ -16,7 +16,8 @@ if (args.includes("auth")) {
     provider: args[args.indexOf("--provider") + 1],
     model: args[args.indexOf("--model") + 1],
     content: [{ type: "text", text: "DISPATCH_FIXTURE_ONLY" }],
-    stopReason: "stop",
+    stopReason: task.includes("FAIL_DISPATCH") ? "error" : "stop",
+    ...(task.includes("FAIL_DISPATCH") ? { errorMessage: "Fixture failed" } : {}),
   };
   console.log(JSON.stringify({ type: "message_start", message }));
   if (task.includes("HOLD_UNTIL_STOP")) {

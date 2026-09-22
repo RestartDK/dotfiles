@@ -11,7 +11,14 @@ import {
   type ResolvedRoute,
   type WorkerInvocation,
 } from "../../lib/model-policy";
-import { capped, initialUsage, Protocol, type Failure, type UsageStats } from "./protocol";
+import {
+  capped,
+  initialUsage,
+  Protocol,
+  type Failure,
+  type PiActivity,
+  type UsageStats,
+} from "./protocol";
 
 export interface Invocation {
   command: string;
@@ -38,6 +45,7 @@ export interface Execution {
   outcome: Outcome;
   attempts: Attempt[];
   actual?: { backend: Backend["kind"]; model: string };
+  activity?: PiActivity;
   output: string;
   stderr: string;
   usage: UsageStats;
@@ -286,6 +294,7 @@ export class BackendRunner {
         }
         const attempt = await this.attempt(task, backend, mappedTools, signal, (protocol) => {
           result.output = protocol.output;
+          result.activity = protocol.activity;
           result.toolUsed ||= protocol.toolUsed;
           if (protocol.actualModel)
             result.actual = { backend: backend.kind, model: protocol.actualModel };

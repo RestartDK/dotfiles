@@ -1,4 +1,19 @@
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { backendModel, isRecord, type Backend } from "../../lib/model-policy";
+
+export type PiActivity = Extract<
+  AgentSessionEvent["type"],
+  | "agent_start"
+  | "turn_start"
+  | "turn_end"
+  | "message_start"
+  | "tool_execution_start"
+  | "auto_retry_start"
+  | "auto_retry_end"
+  | "compaction_start"
+  | "compaction_end"
+  | "agent_settled"
+>;
 
 export interface UsageStats {
   input: number;
@@ -114,6 +129,7 @@ export class Protocol {
   readonly usage = initialUsage();
   output = "";
   actualModel?: string;
+  activity?: PiActivity;
   terminal?: Terminal;
   toolUsed = false;
   resetAt?: number;
@@ -200,6 +216,23 @@ export class Protocol {
   }
 
   private pi(event: Record<string, unknown>): void {
+    switch (event.type) {
+      case "agent_start":
+      case "turn_start":
+      case "turn_end":
+      case "tool_execution_start":
+      case "auto_retry_start":
+      case "auto_retry_end":
+      case "compaction_start":
+      case "compaction_end":
+      case "agent_settled":
+        this.activity = event.type;
+        break;
+      case "message_start":
+        if (isRecord(event.message) && event.message.role === "assistant")
+          this.activity = event.type;
+        break;
+    }
     if (
       event.type === "message_start" &&
       isRecord(event.message) &&

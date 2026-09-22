@@ -15,6 +15,7 @@ let
     fileset = lib.fileset.unions [
       ../../config/pi/agent/lib
       ../../config/pi/agent/extensions/subagents
+      ../../config/pi/agent/extensions/pi-prompt
       ../../config/pi/agent/extensions/pi-no-default-model.ts
       ../../tests/agent-profiles
       ../../tests/pi-profiled
