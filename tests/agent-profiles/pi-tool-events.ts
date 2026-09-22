@@ -3,8 +3,8 @@ import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai"
 
 export const piAssistantMessage = {
   role: "assistant",
-  provider: "anthropic",
-  model: "claude-fable-5-1",
+  provider: "fireworks",
+  model: "accounts/fireworks/models/deepseek-v4p1-flash",
   api: "anthropic-messages",
   content: [{ type: "text", text: "pi-ok" }],
   stopReason: "stop",

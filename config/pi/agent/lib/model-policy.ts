@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 export type Effort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-export type NativeProvider = "openai" | "openai-codex" | "anthropic" | "fireworks" | "openrouter";
+export type NativeProvider = "openai-codex" | "fireworks" | "openrouter" | "ollama";
 export interface NativeTarget {
   kind: "pi";
   provider: NativeProvider;
@@ -85,18 +85,17 @@ export function parseEffort(value: unknown): Effort {
 
 function parseNativeProvider(value: string): NativeProvider {
   switch (value) {
-    case "openai":
     case "openai-codex":
-    case "anthropic":
     case "fireworks":
     case "openrouter":
+    case "ollama":
       return value;
     default:
       return invalid("unsupported native Pi provider");
   }
 }
 
-function parseBackend(value: unknown, profile: Policy["profile"]): Backend {
+function parseBackend(value: unknown): Backend {
   if (
     !isRecord(value) ||
     Object.keys(value).some((key) => !["kind", "model", "thinking"].includes(key)) ||
@@ -114,12 +113,6 @@ function parseBackend(value: unknown, profile: Policy["profile"]): Backend {
   }
   if (value.kind !== "pi" || !/^[a-z0-9-]+\/[^\s:]+$/.test(value.model)) {
     return invalid("unsupported backend, model or thinking");
-  }
-  if (
-    profile === "personal" &&
-    !["openai-codex/gpt-6-astra", "openrouter/deepseek/deepseek-v4.1-flash"].includes(value.model)
-  ) {
-    return invalid("personal profile forbids this API route");
   }
   const separator = value.model.indexOf("/");
   return {
@@ -148,7 +141,7 @@ export function parsePolicy(value: unknown): Policy {
   for (const [name, raw] of Object.entries(value.routes)) {
     if (!/^[a-z][a-z0-9-]*$/.test(name) || !Array.isArray(raw) || raw.length > 4)
       return invalid(`route ${name}`);
-    const parsed = raw.map((entry: unknown) => parseBackend(entry, profile));
+    const parsed = raw.map((entry: unknown) => parseBackend(entry));
     const [first, ...rest] = parsed;
     if (
       !first ||
@@ -219,28 +212,6 @@ export function backendModel(backend: Backend): string {
 
 export function backendLabel(backend: Backend): string {
   return `${backend.kind}/${backendModel(backend)}:${backend.thinking}`;
-}
-
-export function nativeTargets(policy: Policy): NativeTarget[] {
-  const targets = new Map<string, NativeTarget>([[backendModel(policy.parent), policy.parent]]);
-  for (const chain of policy.routes.values())
-    for (const backend of chain)
-      if (backend.kind === "pi") targets.set(backendModel(backend), backend);
-  return [...targets.values()];
-}
-
-export function authorizeNative(
-  policy: Policy,
-  target: { provider: string; id: string },
-): NativeTarget {
-  const native = nativeTargets(policy).find(
-    (allowed) => allowed.provider === target.provider && allowed.id === target.id,
-  );
-  if (!native)
-    throw new Error(
-      `AI policy blocks ${target.provider}/${target.id} in the ${policy.profile} profile. Select a declared native target.`,
-    );
-  return native;
 }
 
 export interface WorkerInvocation {

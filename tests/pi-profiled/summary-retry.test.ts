@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { zstdDecompressSync } from "node:zlib";
 import {
   cleanupSessionResources,
   InMemoryCredentialStore,
@@ -28,6 +29,7 @@ const { BackendRunner }: typeof import("../../config/pi/agent/extensions/subagen
 const { Protocol }: typeof import("../../config/pi/agent/extensions/subagents/protocol") =
   await import(join(dirname(extension), "protocol.ts"));
 
+const token = `e30.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url")}.fixture`;
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
 const originalWebSocket = globalThis.WebSocket;
@@ -38,15 +40,15 @@ let socketCalls: number;
 let wires: unknown[];
 const backend = {
   kind: "pi",
-  provider: "openai",
+  provider: "openai-codex",
   id: "gpt-5.6-sol",
   thinking: "xhigh",
 } satisfies BackendTask["route"]["chain"][number];
 const assistant: AssistantMessage = {
   role: "assistant",
-  provider: "openai",
+  provider: "openai-codex",
   model: "gpt-5.6-sol",
-  api: "openai-responses",
+  api: "openai-codex-responses",
   content: [{ type: "text", text: "Fixture partial output" }],
   stopReason: "stop",
   timestamp: 0,
@@ -141,9 +143,16 @@ beforeEach(() => {
     Object.assign(
       async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
         const request = new Request(input, init);
-        if (request.url !== "https://api.openai.com/v1/responses")
+        if (request.url !== "https://chatgpt.com/backend-api/codex/responses")
           throw new Error("Unexpected HTTP destination");
-        wires.push(await request.json());
+        const body = new Uint8Array(await request.arrayBuffer());
+        wires.push(
+          JSON.parse(
+            request.headers.get("content-encoding") === "zstd"
+              ? zstdDecompressSync(body).toString()
+              : new TextDecoder().decode(body),
+          ),
+        );
         if (wires.length === 1)
           return new Response(
             JSON.stringify({ error: { type: "rate_limit_error", message: "rate_limit_error" } }),
@@ -179,7 +188,7 @@ async function summarize(path: SummaryPath) {
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
   });
-  await modelRuntime.setRuntimeApiKey("openai", "credential-free-fixture");
+  await modelRuntime.setRuntimeApiKey("openai-codex", token);
   const model = modelRuntime.getModel(backend.provider, backend.id);
   if (!model) throw new Error("Missing fixture model");
   const tokens = path === "threshold" ? model.contextWindow - 512 : model.contextWindow + 512;
@@ -189,7 +198,7 @@ async function summarize(path: SummaryPath) {
   };
   const manager = SessionManager.inMemory(directory);
   manager.appendCustomEntry("dstack-model-policy", { profile: "work" });
-  manager.appendModelChange("openai", "gpt-5.6-sol");
+  manager.appendModelChange("openai-codex", "gpt-5.6-sol");
   manager.appendThinkingLevelChange("xhigh");
   const target = manager.appendMessage({
     role: "user",

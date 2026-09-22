@@ -7,7 +7,6 @@ import {
 } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
-  authorizeNative,
   isRecord,
   loadPolicy,
   parseEffort,
@@ -62,14 +61,13 @@ function workerTarget(policy: Policy): NativeTarget | undefined {
 }
 
 const transports = {
-  openai: [{ api: "openai-responses", baseUrl: "https://api.openai.com/v1" }],
   "openai-codex": [{ api: "openai-codex-responses", baseUrl: "https://chatgpt.com/backend-api" }],
-  anthropic: [{ api: "anthropic-messages", baseUrl: "https://api.anthropic.com" }],
   fireworks: [
     { api: "openai-completions", baseUrl: "https://api.fireworks.ai/inference/v1" },
     { api: "anthropic-messages", baseUrl: "https://api.fireworks.ai/inference" },
   ],
   openrouter: [{ api: "openai-completions", baseUrl: "https://openrouter.ai/api/v1" }],
+  ollama: [{ api: "openai-completions", baseUrl: "http://127.0.0.1:11434/v1" }],
 } satisfies Record<NativeProvider, { api: Api; baseUrl: string }[]>;
 
 export function authorizeModel(model: Model<Api>, profile = loadPolicy().profile): Policy {
@@ -78,12 +76,13 @@ export function authorizeModel(model: Model<Api>, profile = loadPolicy().profile
     throw new Error(
       "AI policy profile changed. Start a new session; history cannot cross billing profiles.",
     );
-  const target = authorizeNative(policy, model);
   const worker = workerTarget(policy);
   if (worker && (worker.provider !== model.provider || worker.id !== model.id))
     throw new Error("AI policy blocks changing the worker's resolved target.");
+  const pins = Object.entries(transports).find(([provider]) => provider === model.provider)?.[1];
+  if (!pins) throw new Error(`AI policy blocks unsupported provider ${model.provider}.`);
   if (
-    !transports[target.provider].some(
+    !pins.some(
       (transport) =>
         model.api === transport.api && model.baseUrl.replace(/\/$/, "") === transport.baseUrl,
     )
@@ -255,7 +254,6 @@ export function authorizeAttempt(
 }
 
 export function resolveExactModel(runtime: ModelRuntime, provider: string, id: string): Model<Api> {
-  authorizeNative(loadPolicy(), { provider, id });
   const model = runtime.getModel(provider, id);
   if (!model)
     throw new Error(

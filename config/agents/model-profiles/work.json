@@ -6,7 +6,7 @@
     "astra": [
       {
         "kind": "pi",
-        "model": "openai/gpt-6-astra",
+        "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
@@ -25,19 +25,14 @@
       },
       {
         "kind": "pi",
-        "model": "anthropic/claude-fable-5-1",
-        "thinking": "xhigh"
-      },
-      {
-        "kind": "pi",
-        "model": "openai/gpt-6-astra",
+        "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
     "sol": [
       {
         "kind": "pi",
-        "model": "openai/gpt-5.6-sol",
+        "model": "openai-codex/gpt-5.6-sol",
         "thinking": "xhigh"
       }
     ],
@@ -45,13 +40,6 @@
       {
         "kind": "pi",
         "model": "openrouter/z-ai/glm-5.3-flash",
-        "thinking": "xhigh"
-      }
-    ],
-    "opus": [
-      {
-        "kind": "pi",
-        "model": "anthropic/claude-opus-5",
         "thinking": "xhigh"
       }
     ]
@@ -151,7 +139,7 @@
     },
     "architect-runners": {
       "kind": "panel",
-      "members": ["fable", "sol", "glm", "opus"]
+      "members": ["fable", "sol", "glm"]
     },
     "interrogate-reviewers": {
       "kind": "panel",
