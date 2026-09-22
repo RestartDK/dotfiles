@@ -3,7 +3,7 @@
 @@ -1,3 +1,4 @@
 +import { authorizeModel, authorizeHeaders, authorizePayload, authorizeAttempt, workerRequestOptions, loadPolicy } from "./dstack-policy.js";
  import { dirname, join } from "node:path";
- import { createModels, lazyStream, ModelsError, } from "@earendil-works/pi-ai";
+ import { createModels, lazyStream, ModelsError, normalizeContext, } from "@earendil-works/pi-ai";
  import * as builtinProviderCatalog from "@earendil-works/pi-ai/providers/all";
 @@ -38,6 +39,7 @@
  }
@@ -21,10 +21,11 @@
          const resolution = await this.models.getAuth(providerOrModel, overrides);
          if (!resolution)
              return undefined;
-@@ -419,7 +422,17 @@
+@@ -418,8 +421,18 @@
+             return configured;
          const check = this.snapshot.auth.get(providerId);
          return check ? { configured: true, source: "environment", label: check.source } : { configured: false };
-     }
++    }
 +    assertPolicy(model) {
 +        authorizeModel(model, this.policyProfile);
 +        if (this.nativeExtensionProviders.has(model.provider) || this.extensionProviders.get(model.provider)?.streamSimple)
@@ -32,7 +33,7 @@
 +        for (const override of [this.config.getProvider(model.provider), this.extensionProviders.get(model.provider)]) {
 +            if (override?.baseUrl) authorizeModel({ ...model, baseUrl: override.baseUrl }, this.policyProfile);
 +        }
-+    }
+     }
      async prepareRequest(model, options) {
 +        model = Object.freeze({ ...model, headers: model.headers && Object.freeze({ ...model.headers }), thinkingLevelMap: model.thinkingLevelMap && Object.freeze({ ...model.thinkingLevelMap }), compat: Object.freeze({ ...model.compat, allowedFallbackModels: Object.freeze([]) }) });
 +        this.assertPolicy(model);
@@ -72,16 +73,16 @@
                  apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
                  headers,
                  env,
-@@ -460,7 +493,7 @@
-     }
+@@ -462,7 +495,7 @@
      streamSimple(model, context, options) {
+         const transcript = normalizeContext(context);
          return lazyStream(model, async () => {
 -            const prepared = await this.prepareRequest(model, options);
 +            const prepared = await this.prepareRequest(model, workerRequestOptions(model, options));
-             return prepared.provider.streamSimple(prepared.model, context, prepared.options);
+             return prepared.provider.streamSimple(prepared.model, transcript, prepared.options);
          });
      }
-@@ -469,6 +502,8 @@
+@@ -471,6 +504,8 @@
      }
      streamDeferred(model, handle, options) {
          return lazyStream(model, async () => {
@@ -90,7 +91,7 @@
              const prepared = await this.prepareRequest(model, options);
              if (!prepared.provider.fetchDeferred) {
                  throw new ModelsError("provider", `Provider ${model.provider} does not support deferred responses`);
-@@ -480,6 +515,8 @@
+@@ -482,6 +517,8 @@
          return this.streamDeferred(model, handle, options).result();
      }
      async cancelDeferred(model, handle, options) {
@@ -101,7 +102,7 @@
              throw new ModelsError("provider", `Provider ${model.provider} does not support deferred responses`);
 --- a/dist/core/sdk.js
 +++ b/dist/core/sdk.js
-@@ -1,13 +1,11 @@
+@@ -1,14 +1,12 @@
 +import { authorizeModel, authorizeRequestedEffort, authorizeEffectiveEffort, normalizeRequiredEffort, bindSessionPolicy, policyDefault, policyThinkingLevel, resolveExactModel } from "./dstack-policy.js";
  import { join } from "node:path";
  import { Agent, setDefaultStreamFn } from "@earendil-works/pi-agent-core";
@@ -110,13 +111,14 @@
  import { resolvePath } from "../utils/paths.js";
  import { AgentSession } from "./agent-session.js";
 -import { formatNoModelsAvailableMessage } from "./auth-guidance.js";
+ import { CacheWarmer } from "./cache-warmer.js";
 -import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
  import { convertToLlm } from "./messages.js";
 -import { findInitialModel } from "./model-resolver.js";
  import { ModelRuntime } from "./model-runtime.js";
  import { mergeProviderAttributionHeaders } from "./provider-attribution.js";
  import { DefaultResourceLoader } from "./resource-loader.js";
-@@ -81,61 +79,21 @@
+@@ -82,61 +80,21 @@
      const existingSession = sessionManager.buildSessionContext();
      const hasExistingSession = existingSession.messages.length > 0;
      const hasThinkingEntry = sessionManager.getBranch().some((entry) => entry.type === "thinking_level_change");
@@ -209,9 +211,10 @@
  export const defaultModelPerProvider = {
      "amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
 @@ -126,20 +126,6 @@
+         datedVersions.sort((a, b) => b.id.localeCompare(a.id));
          return datedVersions[0];
      }
- }
+-}
 -function buildFallbackModel(provider, modelId, availableModels) {
 -    const providerModels = availableModels.filter((m) => m.provider === provider);
 -    if (providerModels.length === 0)
@@ -225,11 +228,10 @@
 -        id: modelId,
 -        name: modelId,
 -    };
--}
+ }
  /**
   * Parse a pattern to extract model and thinking level.
-  * Handles models with colons in their IDs (e.g., OpenRouter's :exacto suffix).
-@@ -277,313 +263,17 @@
+@@ -278,313 +264,17 @@
      }
      return scopedModels;
  }
@@ -382,7 +384,14 @@
 -                error: undefined,
 -            };
 -        }
--    }
++    return resolvePolicyCli(options);
++}
++export async function findInitialModel(options) {
++    if (options.cliProvider !== undefined || options.cliModel !== undefined) {
++        const resolved = resolvePolicyCli(options);
++        if (resolved.error) throw new Error(resolved.error);
++        if (resolved.model) return { model: resolved.model, thinkingLevel: resolved.thinkingLevel ?? policyThinkingLevel(), fallbackMessage: undefined };
+     }
 -    if (provider) {
 -        // Parse thinking level suffix from the pattern before building the fallback model,
 -        // but only when --thinking is not explicitly provided.
@@ -416,7 +425,8 @@
 -        warning,
 -        error: `Model "${display}" not found. Use --list-models to see available models.`,
 -    };
--}
++    return { ...policyDefault(options.modelRuntime), fallbackMessage: undefined };
+ }
 -/**
 - * Find the initial model to use based on priority:
 - * 1. CLI args (provider + model)
@@ -425,9 +435,7 @@
 - * 4. Saved default from settings
 - * 5. First available model with valid API key
 - */
-+    return resolvePolicyCli(options);
-+}
- export async function findInitialModel(options) {
+-export async function findInitialModel(options) {
 -    const { cliProvider, cliModel, scopedModels, isContinuing, defaultProvider, defaultModelId, defaultThinkingLevel, modelThinkingLevels, modelRuntime, } = options;
 -    let model;
 -    let thinkingLevel = DEFAULT_THINKING_LEVEL;
@@ -487,7 +495,9 @@
 -    }
 -    // 5. No model found
 -    return { model: undefined, thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
--}
++export async function restoreModelFromSession(savedProvider, savedModelId, _currentModel, _shouldPrintMessages, modelRuntime) {
++    return { model: resolveExactModel(modelRuntime, savedProvider, savedModelId), fallbackMessage: undefined };
+ }
 -/**
 - * Restore model from session, with fallback to available models
 - */
@@ -546,16 +556,6 @@
 -}
 -//# sourceMappingURL=model-resolver.js.map
 \ No newline at end of file
-+    if (options.cliProvider !== undefined || options.cliModel !== undefined) {
-+        const resolved = resolvePolicyCli(options);
-+        if (resolved.error) throw new Error(resolved.error);
-+        if (resolved.model) return { model: resolved.model, thinkingLevel: resolved.thinkingLevel ?? policyThinkingLevel(), fallbackMessage: undefined };
-+    }
-+    return { ...policyDefault(options.modelRuntime), fallbackMessage: undefined };
-+}
-+export async function restoreModelFromSession(savedProvider, savedModelId, _currentModel, _shouldPrintMessages, modelRuntime) {
-+    return { model: resolveExactModel(modelRuntime, savedProvider, savedModelId), fallbackMessage: undefined };
-+}
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -1,3 +1,4 @@
@@ -571,7 +571,7 @@
  import { setCapabilityOverrides } from "@earendil-works/pi-tui";
  import chalk from "chalk";
  import { normalizeSessionName, parseArgs, printHelp } from "./cli/args.js";
-@@ -344,14 +344,14 @@
+@@ -349,14 +349,14 @@
      }
      return SessionManager.create(cwd, sessionDir, { id: parsed.sessionId });
  }
@@ -588,7 +588,7 @@
          const resolved = resolveCliModel({
              cliProvider: parsed.provider,
              cliModel: parsed.model,
-@@ -362,7 +362,7 @@
+@@ -367,7 +367,7 @@
              diagnostics.push({ type: "warning", message: resolved.warning });
          }
          if (resolved.error) {
@@ -597,7 +597,7 @@
          }
          if (resolved.model) {
              options.model = resolved.model;
-@@ -371,27 +371,6 @@
+@@ -376,29 +376,8 @@
              if (!parsed.thinking && resolved.thinkingLevel) {
                  options.thinkingLevel = resolved.thinkingLevel;
                  cliThinkingFromModel = true;
@@ -615,17 +615,19 @@
 -            // Use thinking level from scoped model config if explicitly set
 -            if (!parsed.thinking && savedInScope.thinkingLevel) {
 -                options.thinkingLevel = savedInScope.thinkingLevel;
--            }
--        }
+             }
+         }
 -        else {
 -            options.model = scopedModels[0].model;
 -            // Use thinking level from first scoped model if explicitly set
 -            if (!parsed.thinking && scopedModels[0].thinkingLevel) {
 -                options.thinkingLevel = scopedModels[0].thinkingLevel;
-             }
-         }
+-            }
+-        }
      }
-@@ -435,6 +414,7 @@
+     // Thinking level from CLI (takes precedence over scoped model thinking levels set above)
+     if (parsed.thinking) {
+@@ -440,6 +419,7 @@
      ]);
  }
  export async function main(args, options) {
@@ -633,7 +635,7 @@
      resetTimings();
      const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
      const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.PI_OFFLINE);
-@@ -637,7 +617,7 @@
+@@ -642,7 +622,7 @@
          const scopedModels = modelPatterns && modelPatterns.length > 0
              ? await resolveModelScope(modelPatterns, modelRuntime, { signal: AbortSignal.timeout(15_000) })
              : [];
@@ -649,7 +651,7 @@
  /**
   * AgentSession - Core abstraction for agent lifecycle and session management.
   *
-@@ -1252,6 +1253,8 @@
+@@ -1643,6 +1644,8 @@
       * @throws Error if no auth is configured for the model
       */
      async setModel(model, options = {}) {
@@ -658,7 +660,7 @@
          if (!(await this._modelRuntime.checkAuth(model.provider))) {
              throw new Error(`No API key for ${model.provider}/${model.id}`);
          }
-@@ -1307,6 +1310,8 @@
+@@ -1698,6 +1701,8 @@
          const len = scopedModels.length;
          const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
          const next = scopedModels[nextIndex];
@@ -667,7 +669,7 @@
          const thinkingLevel = this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
          // Apply model
          this.agent.state.model = next.model;
-@@ -1335,6 +1340,8 @@
+@@ -1726,6 +1731,8 @@
          const len = availableModels.length;
          const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
          const nextModel = availableModels[nextIndex];
@@ -676,7 +678,7 @@
          const thinkingLevel = this._getThinkingLevelForModelSwitch(nextModel);
          this.agent.state.model = nextModel;
          this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
-@@ -1360,6 +1367,7 @@
+@@ -1751,6 +1758,7 @@
      setThinkingLevel(level, options = {}) {
          const availableLevels = this.getAvailableThinkingLevels();
          const effectiveLevel = availableLevels.includes(level) ? level : this._clampThinkingLevel(level, availableLevels);
