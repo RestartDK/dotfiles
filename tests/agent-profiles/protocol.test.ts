@@ -33,7 +33,7 @@ test("real synthetic quota retains init identity and recognizes error despite su
 
 test("native Pi activity follows retries, compaction and tools without treating idle as success", () => {
   const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
+    { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
     [],
   );
   const activity = [

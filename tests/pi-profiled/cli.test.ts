@@ -47,16 +47,21 @@ function cacheModels() {
       ),
     ),
   );
+}
+function configureAuth() {
   writeFileSync(
     join(directory, "agent/auth.json"),
-    JSON.stringify(
-      Object.fromEntries(
-        ["fireworks", "openrouter", "openai-codex"].map((provider) => [
-          provider,
-          { type: "api_key", key: provider === "openai-codex" ? token : "fixture" },
-        ]),
-      ),
-    ),
+    JSON.stringify({
+      fireworks: { type: "api_key", key: "fixture" },
+      openrouter: { type: "api_key", key: "fixture" },
+      "openai-codex": {
+        type: "oauth",
+        access: token,
+        refresh: "fixture",
+        expires: Date.now() + 60 * 60 * 1000,
+        accountId: "fixture",
+      },
+    }),
   );
 }
 const glmWorker = JSON.stringify({
@@ -111,6 +116,7 @@ beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "pi-policy-cli-"));
   mkdirSync(join(directory, "config/dstack"), { recursive: true });
   mkdirSync(join(directory, "agent"));
+  cacheModels();
   profile("personal");
   calls = 0;
 });
@@ -216,7 +222,7 @@ test.each([
     profile(fixture.profile);
     const selected = fixture.model;
     if (!selected) throw new Error("Missing cached fixture");
-    cacheModels();
+    configureAuth();
     const worker = JSON.stringify({
       profile: fixture.profile,
       selection: { kind: "role", role: fixture.role, member: fixture.member },
@@ -238,7 +244,7 @@ test.each([
 
 test("worker CLI intent stays exact before native normalization", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   for (const args of [
     ["--thinking", "high"],
     ["--thinking", "max"],
@@ -279,7 +285,7 @@ test.each([
   "$member worker rejects real capability downgrades from $requested to high",
   async (fixture) => {
     profile(fixture.profile);
-    cacheModels();
+    configureAuth();
     const selected = fixture.model;
     if (!selected) throw new Error("Missing cached model");
     const downgraded = {
@@ -317,7 +323,7 @@ test.each([
 
 test("normalized worker effort survives setModel while unrelated effective effort and target changes fail", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   const result = await run(
     ["--dstack-worker", glmWorker, "--mode", "rpc"],
     [
@@ -357,7 +363,7 @@ test("normalized worker effort survives setModel while unrelated effective effor
 
 test("supported exact worker effort cannot be raised to an unrelated native level", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   const selected = cachedModels.openrouter[1];
   if (!selected) throw new Error("Missing GLM fixture");
   writeFileSync(
@@ -384,7 +390,7 @@ test("supported exact worker effort cannot be raised to an unrelated native leve
 
 test("cached parent selections retain compatible session-local effort overrides", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   expect(await state(["--model", `${glmReference}:xhigh`])).toContain('"thinkingLevel":"max"');
   expect(await state(["--model", glmReference, "--thinking", "high"])).toContain(
     '"thinkingLevel":"high"',
@@ -457,9 +463,10 @@ test("a compatible parent override does not require the catalog to support the u
 
 test("signed binary reauthorizes native HTTP retries after policy revocation", async () => {
   profile("work");
+  configureAuth();
   writeFileSync(
     join(directory, "agent/settings.json"),
-    JSON.stringify({ retry: { enabled: false, provider: { maxRetries: 1 } } }),
+    JSON.stringify({ transport: "sse", retry: { enabled: false, provider: { maxRetries: 1 } } }),
   );
   const attemptsPath = join(directory, "attempts.json");
   const extensionPath = join(directory, "transport-fixture.ts");
@@ -486,8 +493,6 @@ export default function () {
     extensionPath,
     "--model",
     "openai-codex/gpt-6-astra",
-    "--api-key",
-    token,
     "--mode",
     "json",
     "-p",

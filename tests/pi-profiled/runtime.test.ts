@@ -53,6 +53,7 @@ afterAll(() => {
 });
 let directory: string;
 let policyPath: string;
+let credentials: InMemoryCredentialStore;
 let runtime: ModelRuntime;
 const sessions: AgentSession[] = [];
 
@@ -137,17 +138,37 @@ beforeEach(async () => {
   process.env.PI_CODING_AGENT_DIR = join(directory, "agent");
   process.env.PI_OFFLINE = "1";
   process.env.PI_TELEMETRY = "0";
-  mkdirSync(join(directory, "config/dstack"), { recursive: true });
+  for (const path of ["config/dstack", "agent"])
+    mkdirSync(join(directory, path), { recursive: true });
+  writeFileSync(
+    join(directory, "agent/models-store.json"),
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(cachedModels).map(([provider, models]) => [
+          provider,
+          { models, checkedAt: Date.now(), lastModified: Date.now() },
+        ]),
+      ),
+    ),
+  );
   policyPath = join(directory, "config/dstack/models.json");
   profile("personal");
   network.mockClear();
   socketCalls = 0;
+  credentials = new InMemoryCredentialStore();
+  await credentials.modify("openai-codex", async () => ({
+    type: "oauth",
+    access: token,
+    refresh: "fixture",
+    expires: Date.now() + 60 * 60 * 1000,
+    accountId: "fixture",
+  }));
   runtime = await ModelRuntime.create({
-    credentials: new InMemoryCredentialStore(),
-    modelsPath: null,
+    credentials,
+    modelsPath: join(directory, "agent/models.json"),
   });
-  for (const provider of ["openai-codex", "openrouter", "fireworks"])
-    await runtime.setRuntimeApiKey(provider, provider === "openai-codex" ? token : "fixture");
+  for (const provider of ["openai", "openrouter", "fireworks"])
+    await runtime.setRuntimeApiKey(provider, "fixture");
 });
 afterEach(() => {
   configureInvocation([]);
@@ -168,7 +189,7 @@ test.each(["personal", "work"] as const)(
     profile(name);
     runtime = await ModelRuntime.create({
       credentials: new InMemoryCredentialStore(),
-      modelsPath: null,
+      modelsPath: join(directory, "agent/models.json"),
     });
     const current = await session();
     expect(current.model?.provider).toBe(name === "work" ? "openai-codex" : "openrouter");
@@ -382,10 +403,7 @@ test.each([
   ["openrouter", "z-ai/glm-5.3-flash"],
 ])("%s real serializer rejects transformed wire identities before HTTP", async (provider, id) => {
   profile("work");
-  runtime = await ModelRuntime.create({
-    credentials: new InMemoryCredentialStore(),
-    modelsPath: null,
-  });
+  runtime = await ModelRuntime.create({ credentials, modelsPath: null });
   const selected = model(provider, id);
   for (const payload of [
     { model: "denied" },
@@ -403,10 +421,7 @@ test.each([
 
 test("allowed native request reaches its real transport with the exact wire model", async () => {
   profile("work");
-  runtime = await ModelRuntime.create({
-    credentials: new InMemoryCredentialStore(),
-    modelsPath: null,
-  });
+  runtime = await ModelRuntime.create({ credentials, modelsPath: null });
   const observed: { wire: unknown; host: string | null } = { wire: undefined, host: null };
   const modelHeaders = { Host: "chatgpt.com" };
   const transformedHeaders = { Host: "chatgpt.com" };
@@ -469,8 +484,8 @@ test("automatic retry rechecks the profile before a second provider invocation",
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
   });
-  await runtime.setRuntimeApiKey("openai-codex", token);
-  const current = await session();
+  await runtime.setRuntimeApiKey("openrouter", "fixture");
+  const current = await session(undefined, model("openrouter", "z-ai/glm-5.3-flash"));
   current.settingsManager.applyOverrides({
     retry: { enabled: true, maxRetries: 1, baseDelayMs: 1, provider: { maxRetries: 0 } },
   });
@@ -639,14 +654,13 @@ test.each(["branch", "manual", "auto", "prompt"] as const)(
         attempt: 0,
       }),
     ]);
-    runtime = await ModelRuntime.create({
-      credentials: new InMemoryCredentialStore(),
-      modelsPath: null,
-    });
-    await runtime.setRuntimeApiKey("openai-codex", token);
+    runtime = await ModelRuntime.create({ credentials, modelsPath: null });
     const manager = history("work");
     manager.appendModelChange("openai-codex", "gpt-5.6-sol");
     const current = await session(manager);
+    const stream = current.agent.streamFunction;
+    current.agent.streamFunction = (selected, context, options) =>
+      stream(selected, context, { ...options, transport: "sse" });
     const wires: unknown[] = [];
     network.mockImplementation(
       Object.assign(
