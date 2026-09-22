@@ -1,7 +1,7 @@
 {
   "version": 1,
   "profile": "personal",
-  "parent": "astra",
+  "parent": "deepseek",
   "routes": {
     "astra": [
       {

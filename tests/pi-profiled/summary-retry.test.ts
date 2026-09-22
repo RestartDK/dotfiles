@@ -38,15 +38,20 @@ let socketCalls: number;
 let wires: unknown[];
 const backend = {
   kind: "pi",
-  provider: "openai",
-  id: "gpt-5.6-sol",
+  provider: "openrouter",
+  id: "z-ai/glm-5.3-flash",
   thinking: "xhigh",
+} satisfies BackendTask["route"]["chain"][number];
+const fallback = {
+  ...backend,
+  provider: "openai-codex",
+  id: "gpt-6-astra",
 } satisfies BackendTask["route"]["chain"][number];
 const assistant: AssistantMessage = {
   role: "assistant",
-  provider: "openai",
-  model: "gpt-5.6-sol",
-  api: "openai-responses",
+  provider: backend.provider,
+  model: backend.id,
+  api: "openai-completions",
   content: [{ type: "text", text: "Fixture partial output" }],
   stopReason: "stop",
   timestamp: 0,
@@ -69,41 +74,29 @@ const writeEnd: JsonAgentSessionEvent = {
 };
 
 function response() {
-  const item = {
-    id: "msg_fixture",
-    type: "message",
-    role: "assistant",
-    status: "completed",
-    content: [{ type: "output_text", text: "Fixture summary", annotations: [] }],
+  const chunk = {
+    id: "chatcmpl_fixture",
+    object: "chat.completion.chunk",
+    created: 0,
+    model: backend.id,
   };
   const events = [
-    { type: "response.output_item.added", output_index: 0, item: { ...item, content: [] } },
     {
-      type: "response.content_part.added",
-      output_index: 0,
-      content_index: 0,
-      part: item.content[0],
+      ...chunk,
+      choices: [
+        { index: 0, delta: { role: "assistant", content: "Fixture summary" }, finish_reason: null },
+      ],
     },
     {
-      type: "response.output_text.delta",
-      output_index: 0,
-      content_index: 0,
-      delta: "Fixture summary",
-    },
-    { type: "response.output_item.done", output_index: 0, item },
-    {
-      type: "response.completed",
-      response: {
-        id: "resp_fixture",
-        status: "completed",
-        output: [item],
-        usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
-      },
+      ...chunk,
+      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+      usage: { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 },
     },
   ];
-  return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""), {
-    headers: { "content-type": "text/event-stream" },
-  });
+  return new Response(
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n",
+    { headers: { "content-type": "text/event-stream" } },
+  );
 }
 
 beforeEach(() => {
@@ -125,7 +118,7 @@ beforeEach(() => {
     "--dstack-worker",
     JSON.stringify({
       profile: "work",
-      selection: { kind: "role", role: "precise-code", member: "sol" },
+      selection: { kind: "role", role: "fast-code", member: "glm" },
       attempt: 0,
     }),
   ]);
@@ -141,7 +134,7 @@ beforeEach(() => {
     Object.assign(
       async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
         const request = new Request(input, init);
-        if (request.url !== "https://api.openai.com/v1/responses")
+        if (request.url !== "https://openrouter.ai/api/v1/chat/completions")
           throw new Error("Unexpected HTTP destination");
         wires.push(await request.json());
         if (wires.length === 1)
@@ -179,7 +172,7 @@ async function summarize(path: SummaryPath) {
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
   });
-  await modelRuntime.setRuntimeApiKey("openai", "credential-free-fixture");
+  await modelRuntime.setRuntimeApiKey(backend.provider, "fixture");
   const model = modelRuntime.getModel(backend.provider, backend.id);
   if (!model) throw new Error("Missing fixture model");
   const tokens = path === "threshold" ? model.contextWindow - 512 : model.contextWindow + 512;
@@ -189,7 +182,7 @@ async function summarize(path: SummaryPath) {
   };
   const manager = SessionManager.inMemory(directory);
   manager.appendCustomEntry("dstack-model-policy", { profile: "work" });
-  manager.appendModelChange("openai", "gpt-5.6-sol");
+  manager.appendModelChange(backend.provider, backend.id);
   manager.appendThinkingLevelChange("xhigh");
   const target = manager.appendMessage({
     role: "user",
@@ -256,7 +249,8 @@ async function summarize(path: SummaryPath) {
       }),
     );
   expect(wires).toHaveLength(3);
-  for (const wire of wires) expect(wire).toMatchObject({ reasoning: { effort: "xhigh" } });
+  for (const wire of wires)
+    expect(wire).toMatchObject({ model: backend.id, reasoning: { effort: "max" } });
   return { events, retries };
 }
 function count(file: string) {
@@ -269,7 +263,15 @@ async function replay(events: unknown[], options: { tools?: string[]; cancel?: b
   );
   writeFileSync(
     join(directory, "fallback.jsonl"),
-    JSON.stringify({ ...success, message: { ...assistant, model: "gpt-6-astra" } }) + "\n",
+    JSON.stringify({
+      ...success,
+      message: {
+        ...assistant,
+        provider: fallback.provider,
+        model: fallback.id,
+        api: "openai-codex-responses",
+      },
+    }) + "\n",
   );
   const runner = new BackendRunner({
     pi: (args) => ({
@@ -293,8 +295,8 @@ async function replay(events: unknown[], options: { tools?: string[]; cancel?: b
       {
         route: {
           profile: "work",
-          selection: { kind: "role", role: "precise-code", member: "sol" },
-          chain: [backend, { ...backend, id: "gpt-6-astra" }],
+          selection: { kind: "role", role: "fast-code", member: "glm" },
+          chain: [backend, fallback],
         },
         task: "Replay SDK summary retry",
         tools: options.tools ?? [],

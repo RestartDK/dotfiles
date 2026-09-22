@@ -25,6 +25,7 @@ import {
   ToolExecutionComponent,
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
+import cachedModels from "./cached-models";
 
 import { KeybindingsManager } from "../../dist/core/keybindings.js";
 
@@ -92,7 +93,7 @@ async function create(manager: SessionManager, powerline = false) {
   expect(resourceLoader.getExtensions().errors).toEqual([]);
   const modelRuntime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
-    modelsPath: null,
+    modelsPath: join(directory, "agent/models.json"),
   });
   const { session } = await createAgentSession({
     cwd: directory,
@@ -216,6 +217,17 @@ beforeEach(() => {
   process.argv[1] = join(import.meta.dir, "dispatch-child.ts");
   for (const path of ["config/dstack", "agent", ".agents/agents"])
     mkdirSync(join(directory, path), { recursive: true });
+  writeFileSync(
+    join(directory, "agent/models-store.json"),
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(cachedModels).map(([provider, models]) => [
+          provider,
+          { models, checkedAt: Date.now(), lastModified: Date.now() },
+        ]),
+      ),
+    ),
+  );
   writeFileSync(
     join(directory, ".agents/agents/dstack-agent.md"),
     "---\nname: dstack-agent\ndescription: Fixture worker\n---\nReturn the fixture marker.\n",

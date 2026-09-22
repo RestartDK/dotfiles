@@ -4,8 +4,16 @@ import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Protocol, type Failure } from "../../config/pi/agent/extensions/subagents/protocol";
+import type { NativeTarget } from "../../config/pi/agent/lib/model-policy";
 
 import { piAssistantMessage, piToolActivityEvents, piWriteEnd } from "./pi-tool-events";
+
+const piBackend = {
+  kind: "pi",
+  provider: "fireworks",
+  id: piAssistantMessage.model,
+  thinking: "xhigh",
+} satisfies NativeTarget;
 
 const events: unknown[] = readFileSync(join(import.meta.dir, "claude-quota.jsonl"), "utf8")
   .trim()
@@ -25,7 +33,7 @@ test("real synthetic quota retains init identity and recognizes error despite su
 
 test("native Pi activity follows retries, compaction and tools without treating idle as success", () => {
   const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
+    { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
     [],
   );
   const activity = [
@@ -44,16 +52,13 @@ test("native Pi activity follows retries, compaction and tools without treating 
 });
 
 function piError(errorMessage: string) {
-  const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-    [],
-  );
+  const protocol = new Protocol(piBackend, []);
   protocol.accept({
     type: "message_end",
     message: {
       role: "assistant",
-      provider: "anthropic",
-      model: "claude-fable-5-1",
+      provider: piBackend.provider,
+      model: piBackend.id,
       content: [],
       stopReason: "error",
       errorMessage,
@@ -173,7 +178,7 @@ test.each([
   ['{"error":{"status":401}}', "auth"],
   ['{"error":{"type":"overloaded"}}', "unavailable"],
   ["401 Unauthorized", "auth"],
-  ["No API key found for anthropic.", "auth"],
+  ["No API key found for fireworks.", "auth"],
   ["429 Too Many Requests", "quota"],
   ["429 rate_limit_error", "quota"],
   ["503 Service Unavailable", "unavailable"],
@@ -212,10 +217,7 @@ test.each(["rate_limit_error", "insufficient_quota", "authentication_error", "ap
 );
 
 test.each(piToolActivityEvents)("Pi $name latches without preceding tool frames", ({ event }) => {
-  const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-    ["write"],
-  );
+  const protocol = new Protocol(piBackend, ["write"]);
   protocol.accept(event);
   expect(protocol.toolUsed).toBe(true);
   protocol.accept({
@@ -234,10 +236,7 @@ for (const stopReason of ["stop", "error"]) {
   test.each(piToolActivityEvents)(
     `Pi $name preserves prior ${stopReason} terminal except at execution start`,
     ({ event }) => {
-      const protocol = new Protocol(
-        { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-        ["write"],
-      );
+      const protocol = new Protocol(piBackend, ["write"]);
       protocol.accept({
         type: "message_end",
         message: { ...piAssistantMessage, stopReason, errorMessage: "429 Too Many Requests" },
@@ -253,10 +252,7 @@ for (const stopReason of ["stop", "error"]) {
 }
 
 test("Pi end-only write result followed by a new assistant still finishes successfully", () => {
-  const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-    ["write"],
-  );
+  const protocol = new Protocol(piBackend, ["write"]);
   protocol.accept(piWriteEnd);
   protocol.accept({ type: "message_end", message: piAssistantMessage });
   expect(protocol.terminal).toEqual({ kind: "success" });
@@ -282,19 +278,13 @@ test.each([
   },
   { type: "session", message: { role: "toolResult" }, toolResults: [{}] },
 ])("Pi unrelated frame %j does not latch tools", (event) => {
-  const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-    [],
-  );
+  const protocol = new Protocol(piBackend, []);
   protocol.accept(event);
   expect(protocol.toolUsed).toBe(false);
 });
 
 test("Pi unknown tool lifecycle events still throw", () => {
-  const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-    [],
-  );
+  const protocol = new Protocol(piBackend, []);
   expect(() => protocol.accept({ type: "future_tool_execution_end" })).toThrow("Unknown Pi event");
 });
 
@@ -321,10 +311,7 @@ const summaryRetries = {
 
 for (const event of Object.values(summaryRetries)) {
   test(`Pi ${event.type} alone grants neither success nor fallback`, () => {
-    const protocol = new Protocol(
-      { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-      [],
-    );
+    const protocol = new Protocol(piBackend, []);
     protocol.accept(event);
     expect(protocol.terminal).toBeUndefined();
     expect(protocol.toolUsed).toBe(false);
@@ -340,10 +327,7 @@ for (const event of Object.values(summaryRetries)) {
     test.each(piToolActivityEvents)(
       `Pi ${event.type} preserves ${stopReason} terminal and $name evidence`,
       ({ event: toolEvent }) => {
-        const protocol = new Protocol(
-          { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-          ["write"],
-        );
+        const protocol = new Protocol(piBackend, ["write"]);
         protocol.accept(toolEvent);
         protocol.accept({
           type: "message_end",
@@ -367,10 +351,7 @@ for (const event of Object.values(summaryRetries)) {
 }
 
 test("Pi unknown summarization lifecycle remains rejected", () => {
-  const protocol = new Protocol(
-    { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-    [],
-  );
+  const protocol = new Protocol(piBackend, []);
   expect(() => protocol.accept({ type: "summarization_retry_future" })).toThrow(
     "Unknown Pi event: summarization_retry_future",
   );

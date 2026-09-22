@@ -32,7 +32,7 @@ if (args.includes("auth") && backend === "pi") {
     await emit({
       status:
         scenario.piAuth === "missing" ||
-        (scenario.piAuth === "missing-anthropic" && arg("--provider") === "anthropic")
+        (scenario.piAuth === "missing-fireworks" && arg("--provider") === "fireworks")
           ? "not_ready"
           : "ready",
       provider: scenario.piAuth === "wrong-provider" ? "wrong" : arg("--provider"),

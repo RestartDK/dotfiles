@@ -44,11 +44,14 @@ async function createRuntime() {
     auth: { apiKey: token },
     source: "fixture",
   }));
-  for (const provider of ["openai", "anthropic", "openrouter", "fireworks", "openai-codex"])
+  for (const provider of ["openrouter", "fireworks", "openai-codex"])
     await runtime.setRuntimeApiKey(provider, provider === "openai-codex" ? token : "fixture");
 }
 function model(provider: string, id: string): Model<Api> {
-  const selected = runtime.getModel(provider, id);
+  const selected =
+    [...cachedModels.fireworks, ...cachedModels.openrouter].find(
+      (candidate) => candidate.provider === provider && candidate.id === id,
+    ) ?? runtime.getModel(provider, id);
   if (!selected) throw new Error(`Missing fixture model ${provider}/${id}`);
   return selected;
 }
@@ -75,7 +78,7 @@ function corrupt() {
 }
 function revoke() {
   const policy = JSON.parse(readFileSync(policyPath, "utf8"));
-  policy.routes.sol[0].model = "openai/gpt-6-astra";
+  policy.routes.sol[0].model = "openai-codex/gpt-6-astra";
   writeFileSync(policyPath, JSON.stringify(policy));
 }
 beforeEach(async () => {
@@ -142,23 +145,18 @@ afterEach(() => {
 });
 
 const httpModels = [
-  ["openai", "gpt-5.6-sol"],
+  ["openai-codex", "gpt-5.6-sol"],
   ["openrouter", "z-ai/glm-5.3-flash"],
-  ["anthropic", "claude-fable-5-1"],
-  ["openai-codex", "gpt-6-astra"],
+  ["fireworks", "accounts/fireworks/models/deepseek-v4p1-flash"],
 ] as const;
 for (const [provider, id] of httpModels) {
   test.each(["profile", "corrupt", "unchanged"] as const)(
     `${provider} native HTTP retry %s`,
     async (change) => {
-      if (provider === "openai-codex") {
-        profile("personal");
-        await createRuntime();
-      }
       let payloadCalls = 0;
       respond = () => {
         if (calls.length > 1) return badRequest();
-        if (change === "profile") profile(provider === "openai-codex" ? "work" : "personal");
+        if (change === "profile") profile("personal");
         if (change === "corrupt") corrupt();
         return rateLimit();
       };
@@ -167,7 +165,7 @@ for (const [provider, id] of httpModels) {
         { messages: [...context.messages] },
         {
           apiKey: provider === "openai-codex" ? token : "fixture",
-          reasoning: "xhigh",
+          reasoning: provider === "fireworks" ? "max" : "xhigh",
           transport: "sse",
           maxRetries: 1,
           onPayload: () => {
@@ -183,15 +181,17 @@ for (const [provider, id] of httpModels) {
   );
 }
 
-test("native HTTP retry rechecks revoked route", async () => {
+test("native HTTP retry rechecks revoked worker route", async () => {
+  worker();
+  await createRuntime();
   respond = () => {
     revoke();
     return rateLimit();
   };
   const result = await runtime.completeSimple(
-    model("openai", "gpt-5.6-sol"),
+    model("openai-codex", "gpt-5.6-sol"),
     { messages: [...context.messages] },
-    { maxRetries: 1 },
+    { transport: "sse", maxRetries: 1 },
   );
   expect(calls.length).toBe(1);
   expect(result.errorMessage).toContain("AI ");
@@ -264,7 +264,7 @@ test("worker rejects stale effort after policy reload before transport", async (
   policy.routes.sol[0].thinking = "medium";
   writeFileSync(policyPath, JSON.stringify(policy));
   const result = await runtime.completeSimple(
-    model("openai", "gpt-5.6-sol"),
+    model("openai-codex", "gpt-5.6-sol"),
     { messages: [...context.messages] },
     { reasoning: "xhigh" },
   );
@@ -278,7 +278,7 @@ test.each(["medium", "max"] as const)(
     worker();
     await createRuntime();
     const result = await runtime.completeSimple(
-      model("openai", "gpt-5.6-sol"),
+      model("openai-codex", "gpt-5.6-sol"),
       { messages: [...context.messages] },
       { reasoning },
     );
@@ -293,7 +293,7 @@ const workerModels = [
     role: "precise-code",
     member: "sol",
     attempt: 0,
-    provider: "openai",
+    provider: "openai-codex",
     id: "gpt-5.6-sol",
     effort: "xhigh",
   },
@@ -302,8 +302,8 @@ const workerModels = [
     role: "review",
     member: "fable",
     attempt: 1,
-    provider: "anthropic",
-    id: "claude-fable-5-1",
+    provider: "openai-codex",
+    id: "gpt-6-astra",
     effort: "xhigh",
   },
   {
@@ -329,17 +329,8 @@ const workerModels = [
     role: "feature",
     member: "astra",
     attempt: 0,
-    provider: "openai",
+    provider: "openai-codex",
     id: "gpt-6-astra",
-    effort: "xhigh",
-  },
-  {
-    profile: "work",
-    role: "architect-runners",
-    member: "opus",
-    attempt: 0,
-    provider: "anthropic",
-    id: "claude-opus-5",
     effort: "xhigh",
   },
   {
@@ -407,25 +398,10 @@ for (const target of workerModels) {
       selected.api === "anthropic-messages"
         ? {
             thinking: { type: "adaptive" },
-            output_config: { effort: target.provider === "anthropic" ? "high" : target.effort },
+            output_config: { effort: target.effort },
           }
         : { reasoning: { effort: target.effort } },
     );
-    if (target.provider === "anthropic") {
-      expect(wire).toHaveProperty("messages");
-      if (
-        typeof wire !== "object" ||
-        wire === null ||
-        !("messages" in wire) ||
-        !Array.isArray(wire.messages)
-      )
-        throw new Error("Missing native messages");
-      expect(wire.messages.at(-1)).toEqual({
-        role: "system",
-        content: [],
-        output_config: { effort: target.effort },
-      });
-    }
     calls = [];
     for (const changed of [undefined, "none", "low", "max" === target.effort ? "xhigh" : "max"]) {
       const result = await runtime.completeSimple(
@@ -504,7 +480,7 @@ test.each(["low", "none", "off", "unrelated"])(
 test("worker raw requests cannot bypass wire effort and valid raw effort still works", async () => {
   worker();
   await createRuntime();
-  const selected = model("openai", "gpt-5.6-sol");
+  const selected = model("openai-codex", "gpt-5.6-sol");
   for (const reasoningEffort of [undefined, "none", "low", "max"] as const) {
     const result = await runtime.complete(
       selected,
@@ -517,17 +493,17 @@ test("worker raw requests cannot bypass wire effort and valid raw effort still w
   const allowed = await runtime.complete(
     selected,
     { messages: [...context.messages] },
-    { reasoningEffort: "xhigh" },
+    { reasoningEffort: "xhigh", transport: "sse" },
   );
   expect(calls.length).toBe(1);
   expect(allowed.errorMessage).toContain("fixture stop");
 });
 
 test("worker request hook cannot be overridden and sampling parameters cannot lower effort", async () => {
-  worker();
+  worker("fast-code", "glm");
   await createRuntime();
   const result = await runtime.completeSimple(
-    model("openai", "gpt-5.6-sol"),
+    model("openrouter", "z-ai/glm-5.3-flash"),
     { messages: [...context.messages] },
     {
       reasoning: "xhigh",
@@ -549,10 +525,11 @@ test("worker effort changes during retry stop the next native attempt", async ()
     return rateLimit();
   };
   const result = await runtime.completeSimple(
-    model("openai", "gpt-5.6-sol"),
+    model("openai-codex", "gpt-5.6-sol"),
     { messages: [...context.messages] },
     {
       reasoning: "xhigh",
+      transport: "sse",
       maxRetries: 1,
       beforeRequest: () => undefined,
     },
@@ -561,44 +538,14 @@ test("worker effort changes during retry stop the next native attempt", async ()
   expect(result.errorMessage).toContain("Restart");
 });
 
-test("managed Anthropic worker validates the final effort control message", async () => {
-  worker("review", "fable", 1);
-  await createRuntime();
-  for (const effort of [undefined, "low", "max"] as const) {
-    const result = await runtime.completeSimple(
-      model("anthropic", "claude-fable-5-1"),
-      { messages: [...context.messages] },
-      {
-        onPayload: (payload) => {
-          if (
-            typeof payload !== "object" ||
-            payload === null ||
-            !("messages" in payload) ||
-            !Array.isArray(payload.messages)
-          )
-            throw new Error("Missing native messages");
-          return {
-            ...payload,
-            messages: [
-              ...payload.messages.slice(0, -1),
-              ...(effort ? [{ role: "system", content: [], output_config: { effort } }] : []),
-            ],
-          };
-        },
-      },
-    );
-    expect(result.errorMessage).toContain("AI policy");
-  }
-  expect(calls.length).toBe(0);
-});
-
 test("parent compatible effort overrides remain available at the wire", async () => {
   let wire: unknown;
   await runtime.completeSimple(
-    model("openai", "gpt-5.6-sol"),
+    model("openai-codex", "gpt-5.6-sol"),
     { messages: [...context.messages] },
     {
       reasoning: "high",
+      transport: "sse",
       onPayload: (payload) => {
         wire = payload;
       },
@@ -611,10 +558,6 @@ test("parent compatible effort overrides remain available at the wire", async ()
 test.each(httpModels)(
   "%s declared transport has no deferred dispatch escape",
   async (provider, id) => {
-    if (provider === "openai-codex") {
-      profile("personal");
-      await createRuntime();
-    }
     const selected = model(provider, id);
     const handle = { provider, modelId: id, api: selected.api, id: "fixture" };
     expect((await runtime.fetchDeferred(selected, handle)).errorMessage).toContain(

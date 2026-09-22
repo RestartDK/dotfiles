@@ -4,8 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   backendModel,
-  authorizeNative,
-  nativeTargets,
   loadPolicy,
   parsePolicy,
   parseWorkerInvocation,
@@ -18,10 +16,13 @@ const policy = (profile: string) =>
   parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
 
 describe("profile routing", () => {
-  test("work preserves billing providers and ordered subscription-first fallback", () => {
+  test("work resolves Codex routes and ordered subscription-first fallback", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
-      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+    ]);
+    expect(resolveRoute(work, { role: "precise-code" }).chain).toEqual([
+      { kind: "pi", provider: "openai-codex", id: "gpt-5.6-sol", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
       {
@@ -33,12 +34,11 @@ describe("profile routing", () => {
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
       { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" },
-      { kind: "pi", provider: "anthropic", id: "claude-fable-5-1", thinking: "xhigh" },
-      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
 
-  test("personal selects only its three families", () => {
+  test("personal dispatch uses declared routes and rejects undeclared raw targets", () => {
     const personal = policy("personal");
     expect(backendModel(resolveRoute(personal, { role: "feature" }).chain[0])).toBe(
       "openrouter/deepseek/deepseek-v4.1-flash",
@@ -47,7 +47,7 @@ describe("profile routing", () => {
       "claude-fable-5-1",
       "openai-codex/gpt-6-astra",
     ]);
-    expect(() => resolveRoute(personal, { model: "anthropic/claude-fable-5-1:xhigh" })).toThrow(
+    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
       "not allowed",
     );
   });
@@ -57,7 +57,7 @@ describe("profile routing", () => {
     expect(() => resolveRoute(work, { role: "arena-runners" })).toThrow("member or seat");
     expect(
       backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
-    ).toBe("openai/gpt-5.6-sol");
+    ).toBe("openai-codex/gpt-5.6-sol");
     expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
       "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
     );
@@ -93,7 +93,7 @@ describe("profile routing", () => {
       "how-critics": ["fable"],
       "arena-runners": work ? ["fable", "sol", "deepseek"] : ["fable", "astra", "deepseek"],
       "arena-cross-judge": work ? ["fable", "sol"] : ["fable", "astra", "deepseek"],
-      "architect-runners": work ? ["fable", "sol", "glm", "opus"] : ["fable", "astra", "deepseek"],
+      "architect-runners": work ? ["fable", "sol", "glm"] : ["fable", "astra", "deepseek"],
       "interrogate-reviewers": work ? ["fable", "sol", "glm"] : ["fable", "astra", "deepseek"],
     };
     for (const [role, members] of Object.entries(panels)) {
@@ -111,16 +111,18 @@ describe("profile routing", () => {
     );
   });
 
-  test("raw requests use declared chains without skipping subscription priority", () => {
+  test("raw requests preserve declared chains and effort", () => {
     const work = policy("work");
-    expect(resolveRoute(work, { model: "anthropic/claude-fable-5-1:xhigh" }).chain[0].kind).toBe(
-      "claude-cli",
-    );
-    expect(resolveRoute(work, { model: "openai/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
-    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
+    expect(
+      resolveRoute(work, { model: "claude-cli/claude-fable-5-1:xhigh" }).chain.map(backendModel),
+    ).toEqual(["claude-fable-5-1", "openai-codex/gpt-6-astra"]);
+    expect(resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
+    expect(() => resolveRoute(work, { model: "openai-codex/undeclared:xhigh" })).toThrow(
       "not allowed",
     );
-    expect(() => resolveRoute(work, { model: "openai/gpt-6-astra:high" })).toThrow("not allowed");
+    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:high" })).toThrow(
+      "not allowed",
+    );
   });
 
   test("global policy is reloaded and honors XDG_CONFIG_HOME", () => {
@@ -159,7 +161,7 @@ describe("profile routing", () => {
     const valid = {
       version: 1,
       profile: personal.profile,
-      parent: "astra",
+      parent: "deepseek",
       routes: Object.fromEntries(
         [...personal.routes].map(([name, chain]) => [
           name,
@@ -178,13 +180,6 @@ describe("profile routing", () => {
       { ...valid, parent: { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" } },
       { ...valid, fallback: "auto" },
       { ...valid, routes: { ...valid.routes, fable: [] } },
-      {
-        ...valid,
-        routes: {
-          ...valid.routes,
-          fable: [{ kind: "pi", model: "anthropic/claude-fable-5-1", thinking: "xhigh" }],
-        },
-      },
       {
         ...valid,
         routes: {
@@ -213,25 +208,14 @@ describe("profile routing", () => {
   });
 });
 
-test.each(["work", "personal"])(
-  "%s parent is native Astra and allowed targets exclude CLI backends",
-  (profile) => {
-    const selected = policy(profile);
-    expect(selected.parent).toEqual({
-      kind: "pi",
-      provider: profile === "work" ? "openai" : "openai-codex",
-      id: "gpt-6-astra",
-      thinking: "xhigh",
-    });
-    for (const target of nativeTargets(selected))
-      expect(() => authorizeNative(selected, target)).not.toThrow();
-    expect(() =>
-      authorizeNative(selected, { provider: "claude-cli", id: "claude-fable-5-1" }),
-    ).toThrow();
-    if (profile === "personal")
-      expect(() =>
-        authorizeNative(selected, { provider: "anthropic", id: "claude-fable-5-1" }),
-      ).toThrow();
+test.each(["openai/gpt-6-astra", "anthropic/claude-fable-5-1"])(
+  "policy rejects unsupported provider in %s",
+  (model) => {
+    const input = JSON.parse(readFileSync(join(root, "personal.json"), "utf8"));
+    input.routes.astra = [{ kind: "pi", model, thinking: "xhigh" }];
+    expect(() => parsePolicy(input)).toThrow(
+      "Invalid dstack model policy: unsupported native Pi provider",
+    );
   },
 );
 
@@ -245,7 +229,7 @@ test("worker invocation parses once and resolves its exact native attempt", () =
   expect(invocation).toEqual(input);
   expect(resolveWorkerInvocation(policy("work"), invocation)).toEqual({
     kind: "pi",
-    provider: "openai",
+    provider: "openai-codex",
     id: "gpt-5.6-sol",
     thinking: "xhigh",
   });

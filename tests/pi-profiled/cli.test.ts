@@ -9,6 +9,7 @@ setDefaultTimeout(60000);
 
 const binary = process.env.PI_POLICY_TEST_BINARY;
 const profiles = process.env.PI_POLICY_TEST_PROFILES;
+const token = `e30.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url")}.fixture`;
 if (!binary || !profiles)
   throw new Error("CLI checks require the rebuilt binary and committed profiles");
 let directory: string;
@@ -46,16 +47,21 @@ function cacheModels() {
       ),
     ),
   );
+}
+function configureAuth() {
   writeFileSync(
     join(directory, "agent/auth.json"),
-    JSON.stringify(
-      Object.fromEntries(
-        ["fireworks", "openrouter", "openai"].map((provider) => [
-          provider,
-          { type: "api_key", key: "credential-free-fixture" },
-        ]),
-      ),
-    ),
+    JSON.stringify({
+      fireworks: { type: "api_key", key: "fixture" },
+      openrouter: { type: "api_key", key: "fixture" },
+      "openai-codex": {
+        type: "oauth",
+        access: token,
+        refresh: "fixture",
+        expires: Date.now() + 60 * 60 * 1000,
+        accountId: "fixture",
+      },
+    }),
   );
 }
 const glmWorker = JSON.stringify({
@@ -81,8 +87,8 @@ async function run(args: string[], input = "", executable = binary) {
       PI_OFFLINE: "1",
       PI_SKIP_VERSION_CHECK: "1",
       PI_TELEMETRY: "0",
-      PI_MODEL: "claude-fable-5-1",
-      PI_PROVIDER: "anthropic",
+      PI_MODEL: "gpt-5.6-sol",
+      PI_PROVIDER: "openai-codex",
       TERM: "dumb",
     },
   });
@@ -110,6 +116,7 @@ beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "pi-policy-cli-"));
   mkdirSync(join(directory, "config/dstack"), { recursive: true });
   mkdirSync(join(directory, "agent"));
+  cacheModels();
   profile("personal");
   calls = 0;
 });
@@ -127,9 +134,11 @@ test.each(["personal", "work"] as const)(
   async (name) => {
     profile(name);
     const output = await state();
-    expect(output).toContain(`"provider":"${name === "work" ? "openai" : "openai-codex"}"`);
-    expect(output).toContain('"id":"gpt-6-astra"');
-    expect(output).toContain('"thinkingLevel":"xhigh"');
+    expect(output).toContain(`"provider":"${name === "work" ? "openai-codex" : "openrouter"}"`);
+    expect(output).toContain(
+      `"id":"${name === "work" ? "gpt-6-astra" : "deepseek/deepseek-v4.1-flash"}"`,
+    );
+    expect(output).toContain(`"thinkingLevel":"${name === "work" ? "xhigh" : "max"}"`);
     expect(await state(["--thinking", "high"])).toContain('"thinkingLevel":"high"');
   },
 );
@@ -147,7 +156,7 @@ test("compiled process.execPath worker preserves role target and effort instead 
       "--dstack-worker",
       worker,
       "--provider",
-      "openai",
+      "openai-codex",
       "--model",
       "gpt-5.6-sol",
       "--thinking",
@@ -155,14 +164,14 @@ test("compiled process.execPath worker preserves role target and effort instead 
     ],
     executable,
   );
-  expect(output).toContain('"provider":"openai"');
+  expect(output).toContain('"provider":"openai-codex"');
   expect(output).toContain('"id":"gpt-5.6-sol"');
   expect(output).toContain('"thinkingLevel":"xhigh"');
   const changed = await run([
     "--dstack-worker",
     worker,
     "--model",
-    "openai/gpt-6-astra",
+    "openai-codex/gpt-6-astra",
     "-p",
     "denied",
   ]);
@@ -172,7 +181,7 @@ test("compiled process.execPath worker preserves role target and effort instead 
     "--dstack-worker",
     worker,
     "--model",
-    "openai/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-sol",
     "--thinking",
     "high",
     "-p",
@@ -213,7 +222,7 @@ test.each([
     profile(fixture.profile);
     const selected = fixture.model;
     if (!selected) throw new Error("Missing cached fixture");
-    cacheModels();
+    configureAuth();
     const worker = JSON.stringify({
       profile: fixture.profile,
       selection: { kind: "role", role: fixture.role, member: fixture.member },
@@ -235,7 +244,7 @@ test.each([
 
 test("worker CLI intent stays exact before native normalization", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   for (const args of [
     ["--thinking", "high"],
     ["--thinking", "max"],
@@ -276,7 +285,7 @@ test.each([
   "$member worker rejects real capability downgrades from $requested to high",
   async (fixture) => {
     profile(fixture.profile);
-    cacheModels();
+    configureAuth();
     const selected = fixture.model;
     if (!selected) throw new Error("Missing cached model");
     const downgraded = {
@@ -314,7 +323,7 @@ test.each([
 
 test("normalized worker effort survives setModel while unrelated effective effort and target changes fail", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   const result = await run(
     ["--dstack-worker", glmWorker, "--mode", "rpc"],
     [
@@ -322,7 +331,7 @@ test("normalized worker effort survives setModel while unrelated effective effor
       { id: "requested", type: "set_thinking_level", level: "xhigh" },
       { id: "effective", type: "set_thinking_level", level: "max" },
       { id: "lower", type: "set_thinking_level", level: "high" },
-      { id: "target", type: "set_model", provider: "openai", modelId: "gpt-6-astra" },
+      { id: "target", type: "set_model", provider: "openai-codex", modelId: "gpt-6-astra" },
       { id: "cycle", type: "cycle_model" },
       { id: "final", type: "get_state" },
     ]
@@ -354,7 +363,7 @@ test("normalized worker effort survives setModel while unrelated effective effor
 
 test("supported exact worker effort cannot be raised to an unrelated native level", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   const selected = cachedModels.openrouter[1];
   if (!selected) throw new Error("Missing GLM fixture");
   writeFileSync(
@@ -381,7 +390,7 @@ test("supported exact worker effort cannot be raised to an unrelated native leve
 
 test("cached parent selections retain compatible session-local effort overrides", async () => {
   profile("work");
-  cacheModels();
+  configureAuth();
   expect(await state(["--model", `${glmReference}:xhigh`])).toContain('"thinkingLevel":"max"');
   expect(await state(["--model", glmReference, "--thinking", "high"])).toContain(
     '"thinkingLevel":"high"',
@@ -396,7 +405,7 @@ test.each(["missing", "malformed", "claude-parent"])(
     else
       writeFileSync(
         policyPath(),
-        readFileSync(policyPath(), "utf8").replace('"parent": "astra"', '"parent": "fable"'),
+        readFileSync(policyPath(), "utf8").replace('"parent": "deepseek"', '"parent": "fable"'),
       );
     const result = await run(["-p", "denied"]);
     expect(result.status).not.toBe(0);
@@ -409,18 +418,17 @@ test("CLI provider/model substitution and denied native selections fail closed",
     join(directory, "agent/models.json"),
     JSON.stringify({
       providers: {
-        anthropic: { baseUrl: `${trap.url.origin}/anthropic`, apiKey: "fixture" },
-        "openai-codex": { baseUrl: `${trap.url.origin}/codex`, apiKey: "fixture" },
-        openai: { baseUrl: `${trap.url.origin}/openai`, apiKey: "fixture" },
+        "openai-codex": { baseUrl: `${trap.url.origin}/codex`, apiKey: token },
+        openrouter: { baseUrl: `${trap.url.origin}/openrouter`, apiKey: "fixture" },
       },
     }),
   );
   for (const args of [
-    ["--model", "anthropic/claude-fable-5-1"],
     ["--model", "claude-cli/claude-fable-5-1"],
     ["--model", "openai-codex/gpt-6-astra"],
-    ["--model", "openai/gpt-6-astra"],
-    ["--provider", "openai"],
+    ["--model", "openrouter/deepseek/deepseek-v4.1-flash"],
+    ["--provider", "openai", "--model", "gpt-6-astra"],
+    ["--provider", "openai-codex"],
     ["--model", ""],
   ]) {
     const result = await run([...args, "-p", "denied"]);
@@ -436,6 +444,7 @@ test("an explicitly empty CLI model never becomes the profile default", async ()
 });
 
 test("a compatible parent override does not require the catalog to support the unused default effort", async () => {
+  profile("work");
   writeFileSync(
     join(directory, "agent/models.json"),
     JSON.stringify({
@@ -454,9 +463,10 @@ test("a compatible parent override does not require the catalog to support the u
 
 test("signed binary reauthorizes native HTTP retries after policy revocation", async () => {
   profile("work");
+  configureAuth();
   writeFileSync(
     join(directory, "agent/settings.json"),
-    JSON.stringify({ retry: { enabled: false, provider: { maxRetries: 1 } } }),
+    JSON.stringify({ transport: "sse", retry: { enabled: false, provider: { maxRetries: 1 } } }),
   );
   const attemptsPath = join(directory, "attempts.json");
   const extensionPath = join(directory, "transport-fixture.ts");
@@ -482,9 +492,7 @@ export default function () {
     "-e",
     extensionPath,
     "--model",
-    "openai/gpt-6-astra",
-    "--api-key",
-    "credential-free-fixture",
+    "openai-codex/gpt-6-astra",
     "--mode",
     "json",
     "-p",

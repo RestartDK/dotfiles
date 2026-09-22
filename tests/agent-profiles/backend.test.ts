@@ -151,10 +151,13 @@ describe("real backend subprocesses", () => {
     expect(result.output).toBe("pi-ok");
   });
 
-  test("work Fable tries API Fable then API Astra without changing providers", async () => {
+  test("work Fable falls back directly to Codex Astra and honors both cooldowns", async () => {
     const { runner, task, calls } = setup({ claude: "quota", pi: "quota" }, "work");
     const result = await runner.run(task);
-    expect(result.attempts).toHaveLength(3);
+    expect(result.attempts.map((attempt) => attempt.kind)).toEqual([
+      "provider-failure",
+      "provider-failure",
+    ]);
     expect(
       calls()
         .filter((call) => call.backend === "pi" && call.args.includes("-p"))
@@ -162,16 +165,9 @@ describe("real backend subprocesses", () => {
           call.args[call.args.indexOf("--provider") + 1],
           call.args[call.args.indexOf("--model") + 1],
         ]),
-    ).toEqual([
-      ["anthropic", "claude-fable-5-1"],
-      ["openai", "gpt-6-astra"],
-    ]);
+    ).toEqual([["openai-codex", "gpt-6-astra"]]);
     const second = await runner.run(task);
-    expect(second.attempts.map((attempt) => attempt.kind)).toEqual([
-      "cooldown",
-      "cooldown",
-      "cooldown",
-    ]);
+    expect(second.attempts.map((attempt) => attempt.kind)).toEqual(["cooldown", "cooldown"]);
     expect(second.outcome.kind).toBe("failed");
   });
 
@@ -218,13 +214,24 @@ describe("real backend subprocesses", () => {
   );
 
   test("missing API credentials skip the request and advance to the next exact provider", async () => {
-    const { runner, task, calls } = setup({ claude: "quota", piAuth: "missing-anthropic" }, "work");
+    const { runner, task, calls } = setup({ piAuth: "missing-fireworks" }, "work");
+    task.route.chain = [
+      {
+        kind: "pi",
+        provider: "fireworks",
+        id: "accounts/fireworks/models/deepseek-v4p1-flash",
+        thinking: "max",
+      },
+      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+    ];
     const result = await runner.run(task);
     expect(result.outcome.kind).toBe("success");
-    expect(result.actual?.model).toBe("openai/gpt-6-astra");
+    expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
+    expect(result.attempts[0]).toMatchObject({ reason: "auth" });
+    expect(result.actual?.model).toBe("openai-codex/gpt-6-astra");
     const requests = calls().filter((call) => call.backend === "pi" && call.args.includes("-p"));
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.args).toContain("openai");
+    expect(requests[0]?.args).toContain("openai-codex");
     expect(requests[0]?.args).toContain("gpt-6-astra");
   });
 
@@ -401,13 +408,13 @@ test("parent cancellation while reading a real synthetic error never replays", a
 
 const nativeQuotaErrors = [
   {
-    provider: "anthropic",
-    id: "claude-fable-5-1",
+    provider: "fireworks",
+    id: "accounts/fireworks/models/deepseek-v4p1-flash",
     error: '429 {"type":"error","error":{"type":"rate_limit_error","message":"TEST_QUOTA"}}',
   },
   {
-    provider: "openai",
-    id: "gpt-6-astra",
+    provider: "openrouter",
+    id: "deepseek/deepseek-v4.1-flash",
     error:
       'OpenAI API error (429): {"type":"insufficient_quota","code":"insufficient_quota","message":"TEST_QUOTA"}',
   },

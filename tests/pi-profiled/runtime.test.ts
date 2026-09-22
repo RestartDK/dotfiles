@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { zstdDecompressSync } from "node:zlib";
 import {
   InMemoryCredentialStore,
   type Api,
@@ -29,6 +30,7 @@ const profiles = process.env.PI_POLICY_TEST_PROFILES;
 if (!profiles) throw new Error("PI_POLICY_TEST_PROFILES must point to the committed profiles");
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
+const token = `e30.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url")}.fixture`;
 const network = spyOn(globalThis, "fetch").mockImplementation(
   Object.assign(
     async () => {
@@ -51,6 +53,7 @@ afterAll(() => {
 });
 let directory: string;
 let policyPath: string;
+let credentials: InMemoryCredentialStore;
 let runtime: ModelRuntime;
 const sessions: AgentSession[] = [];
 
@@ -96,8 +99,8 @@ function history(marker: "personal" | "work" | "none" = "personal") {
 }
 async function session(manager = SessionManager.inMemory(directory), selected?: Model<Api>) {
   const settingsManager = SettingsManager.inMemory({
-    defaultProvider: "anthropic",
-    defaultModel: "claude-opus-5",
+    defaultProvider: "openai-codex",
+    defaultModel: "gpt-5.6-sol",
     defaultThinkingLevel: "low",
     retry: { enabled: false },
     compaction: { enabled: true, reserveTokens: 1024, keepRecentTokens: 128 },
@@ -135,17 +138,37 @@ beforeEach(async () => {
   process.env.PI_CODING_AGENT_DIR = join(directory, "agent");
   process.env.PI_OFFLINE = "1";
   process.env.PI_TELEMETRY = "0";
-  mkdirSync(join(directory, "config/dstack"), { recursive: true });
+  for (const path of ["config/dstack", "agent"])
+    mkdirSync(join(directory, path), { recursive: true });
+  writeFileSync(
+    join(directory, "agent/models-store.json"),
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(cachedModels).map(([provider, models]) => [
+          provider,
+          { models, checkedAt: Date.now(), lastModified: Date.now() },
+        ]),
+      ),
+    ),
+  );
   policyPath = join(directory, "config/dstack/models.json");
   profile("personal");
   network.mockClear();
   socketCalls = 0;
+  credentials = new InMemoryCredentialStore();
+  await credentials.modify("openai-codex", async () => ({
+    type: "oauth",
+    access: token,
+    refresh: "fixture",
+    expires: Date.now() + 60 * 60 * 1000,
+    accountId: "fixture",
+  }));
   runtime = await ModelRuntime.create({
-    credentials: new InMemoryCredentialStore(),
-    modelsPath: null,
+    credentials,
+    modelsPath: join(directory, "agent/models.json"),
   });
-  for (const provider of ["openai-codex", "openai", "anthropic", "openrouter", "fireworks"])
-    await runtime.setRuntimeApiKey(provider, "credential-free-fixture");
+  for (const provider of ["openai", "openrouter", "fireworks"])
+    await runtime.setRuntimeApiKey(provider, "fixture");
 });
 afterEach(() => {
   configureInvocation([]);
@@ -166,12 +189,14 @@ test.each(["personal", "work"] as const)(
     profile(name);
     runtime = await ModelRuntime.create({
       credentials: new InMemoryCredentialStore(),
-      modelsPath: null,
+      modelsPath: join(directory, "agent/models.json"),
     });
     const current = await session();
-    expect(current.model?.provider).toBe(name === "work" ? "openai" : "openai-codex");
-    expect(current.model?.id).toBe("gpt-6-astra");
-    expect(current.thinkingLevel).toBe("xhigh");
+    expect(current.model?.provider).toBe(name === "work" ? "openai-codex" : "openrouter");
+    expect(current.model?.id).toBe(
+      name === "work" ? "gpt-6-astra" : "deepseek/deepseek-v4.1-flash",
+    );
+    expect(current.thinkingLevel).toBe(name === "work" ? "xhigh" : "max");
     current.setThinkingLevel("high");
     expect(current.thinkingLevel).toBe("high");
   },
@@ -183,18 +208,34 @@ test("explicit native selection is exact and missing auth never selects another 
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
   });
-  const exact = resolveCliModel({ cliModel: "openai/gpt-5.6-sol:xhigh", modelRuntime: runtime });
-  expect(exact.model?.provider).toBe("openai");
+  const exact = resolveCliModel({
+    cliModel: "openai-codex/gpt-5.6-sol:xhigh",
+    modelRuntime: runtime,
+  });
+  expect(exact.error).toBeUndefined();
+  expect(exact.model?.provider).toBe("openai-codex");
   expect(exact.model?.id).toBe("gpt-5.6-sol");
   const current = await session(undefined, exact.model);
   await expect(current.prompt("No auth")).rejects.toThrow();
-  expect(current.model?.provider).toBe("openai");
+  expect(current.model?.provider).toBe("openai-codex");
   expect(resolveCliModel({ cliModel: "sol", modelRuntime: runtime }).error).toContain(
     "provider/model",
   );
   expect(
-    resolveCliModel({ cliModel: "openai/claude-fable-5-1", modelRuntime: runtime }).error,
-  ).toContain("AI policy");
+    resolveCliModel({ cliProvider: "openai", cliModel: "gpt-5.6-sol", modelRuntime: runtime })
+      .error,
+  ).toBe("AI policy blocks unsupported provider openai.");
+});
+
+test("personal session switches to a Codex model the profile does not declare", async () => {
+  const target = model("openai-codex", "gpt-5.6-sol");
+  expect(
+    resolveCliModel({ cliModel: "openai-codex/gpt-5.6-sol:xhigh", modelRuntime: runtime }).error,
+  ).toBeUndefined();
+  const current = await session();
+  await current.setModel(target);
+  expect(current.model?.provider).toBe("openai-codex");
+  expect(current.model?.id).toBe("gpt-5.6-sol");
 });
 
 test.each([
@@ -206,7 +247,7 @@ test.each([
   "fetchDeferred",
   "cancelDeferred",
 ] as const)("%s denies before provider invocation", async (method) => {
-  const denied = model("anthropic", "claude-fable-5-1");
+  const denied = model("openai", "gpt-5.6-sol");
   const provider = runtime.getProvider(denied.provider);
   if (!provider) throw new Error("Missing fixture provider");
   const stream = spyOn(provider, "stream");
@@ -240,7 +281,7 @@ test.each([
 test("normal turn and continuation stay guarded after direct model mutation and reload", async () => {
   const current = await session();
   await current.reload();
-  current.agent.state.model = model("anthropic", "claude-fable-5-1");
+  current.agent.state.model = model("openai", "gpt-5.6-sol");
   await current.prompt("denied turn");
   const result = current.messages.at(-1);
   expect(result?.role === "assistant" && result.errorMessage).toContain("AI policy");
@@ -253,7 +294,7 @@ test("normal turn and continuation stay guarded after direct model mutation and 
 test("manual compaction, automatic compaction and branch summary use the guarded runtime", async () => {
   const manager = history();
   const current = await session(manager);
-  current.agent.state.model = model("anthropic", "claude-fable-5-1");
+  current.agent.state.model = model("openai", "gpt-5.6-sol");
   await expect(current.compact()).rejects.toThrow("AI policy");
   const events: string[] = [];
   current.subscribe((event) => {
@@ -269,17 +310,15 @@ test("manual compaction, automatic compaction and branch summary use the guarded
 });
 
 test("selection and restore reject before mutation or cross-profile history transmission", async () => {
-  const current = await session();
+  const current = await session(history());
   const original = current.model;
-  await expect(current.setModel(model("anthropic", "claude-fable-5-1"))).rejects.toThrow(
-    "AI policy",
-  );
+  await expect(current.setModel(model("openai", "gpt-5.6-sol"))).rejects.toThrow("AI policy");
   expect(current.model).toBe(original);
   const available = spyOn(runtime, "getAvailableSnapshot").mockReturnValue([
     model(),
-    model("anthropic", "claude-fable-5-1"),
+    model("openai", "gpt-5.6-sol"),
   ]);
-  current.setScopedModels([{ model: model() }, { model: model("anthropic", "claude-fable-5-1") }]);
+  current.setScopedModels([{ model: model() }, { model: model("openai", "gpt-5.6-sol") }]);
   await expect(current.cycleModel()).rejects.toThrow("AI policy");
   current.setScopedModels([]);
   await expect(current.cycleModel()).rejects.toThrow("AI policy");
@@ -288,7 +327,7 @@ test("selection and restore reject before mutation or cross-profile history tran
   for (const marker of ["none", "work"] as const)
     await expect(session(history(marker))).rejects.toThrow("Start a new session");
   const manager = history();
-  manager.appendModelChange("anthropic", "claude-fable-5-1");
+  manager.appendModelChange("openai", "gpt-5.6-sol");
   await expect(session(manager)).rejects.toThrow("AI policy");
 });
 
@@ -315,7 +354,7 @@ test("API, base URL, post-auth endpoint and header substitutions never reach tra
   const selected = model();
   for (const changed of [
     { ...selected, api: "anthropic-messages" },
-    { ...selected, baseUrl: "https://api.anthropic.com" },
+    { ...selected, baseUrl: "https://evil.invalid" },
   ])
     expect((await runtime.completeSimple(changed, { messages: [user()] })).errorMessage).toContain(
       "substitution",
@@ -360,15 +399,11 @@ test("later provider registrations and recomposition cannot remove the core gate
 });
 
 test.each([
-  ["openai", "gpt-6-astra"],
-  ["anthropic", "claude-fable-5-1"],
+  ["openai-codex", "gpt-6-astra"],
   ["openrouter", "z-ai/glm-5.3-flash"],
 ])("%s real serializer rejects transformed wire identities before HTTP", async (provider, id) => {
   profile("work");
-  runtime = await ModelRuntime.create({
-    credentials: new InMemoryCredentialStore(),
-    modelsPath: null,
-  });
+  runtime = await ModelRuntime.create({ credentials, modelsPath: null });
   const selected = model(provider, id);
   for (const payload of [
     { model: "denied" },
@@ -378,7 +413,7 @@ test.each([
     const result = await runtime.completeSimple(
       selected,
       { messages: [user()] },
-      { apiKey: "fixture", onPayload: () => payload },
+      { apiKey: provider === "openai-codex" ? token : "fixture", onPayload: () => payload },
     );
     expect(result.errorMessage).toContain("wire model substitution");
   }
@@ -386,28 +421,32 @@ test.each([
 
 test("allowed native request reaches its real transport with the exact wire model", async () => {
   profile("work");
-  runtime = await ModelRuntime.create({
-    credentials: new InMemoryCredentialStore(),
-    modelsPath: null,
-  });
+  runtime = await ModelRuntime.create({ credentials, modelsPath: null });
   const observed: { wire: unknown; host: string | null } = { wire: undefined, host: null };
-  const modelHeaders = { Host: "api.openai.com" };
-  const transformedHeaders = { Host: "api.openai.com" };
+  const modelHeaders = { Host: "chatgpt.com" };
+  const transformedHeaders = { Host: "chatgpt.com" };
   const transport = network.mockImplementation(
     Object.assign(
-      async (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-        observed.wire = JSON.parse(String(init?.body));
-        observed.host = new Headers(init?.headers).get("host");
+      async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const request = new Request(input, init);
+        const body = new Uint8Array(await request.arrayBuffer());
+        observed.wire = JSON.parse(
+          request.headers.get("content-encoding") === "zstd"
+            ? zstdDecompressSync(body).toString()
+            : new TextDecoder().decode(body),
+        );
+        observed.host = request.headers.get("host");
         throw new Error("Fixture transport reached; network disabled");
       },
       { preconnect: originalFetch.preconnect },
     ),
   );
   const result = await runtime.completeSimple(
-    { ...model("openai"), headers: modelHeaders },
+    { ...model(), headers: modelHeaders },
     { messages: [user()] },
     {
-      apiKey: "fixture",
+      apiKey: token,
+      transport: "sse",
       maxRetries: 0,
       transformHeaders: async () => transformedHeaders,
       onPayload: () => {
@@ -418,13 +457,12 @@ test("allowed native request reaches its real transport with the exact wire mode
   );
   expect(transport).toHaveBeenCalledTimes(1);
   expect(observed.wire).toMatchObject({ model: "gpt-6-astra" });
-  expect(observed.host).toBe("api.openai.com");
+  expect(observed.host).toBe("chatgpt.com");
   expect(result.stopReason).toBe("error");
   transport.mockClear();
 });
 
 test("Codex SSE and WebSocket payload substitutions are denied before transport", async () => {
-  const token = `e30.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url")}.fixture`;
   const auth = spyOn(runtime, "getAuth").mockImplementation(async () => ({
     auth: { apiKey: token },
     source: "fixture",
@@ -446,8 +484,8 @@ test("automatic retry rechecks the profile before a second provider invocation",
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
   });
-  await runtime.setRuntimeApiKey("openai", "fixture");
-  const current = await session();
+  await runtime.setRuntimeApiKey("openrouter", "fixture");
+  const current = await session(undefined, model("openrouter", "z-ai/glm-5.3-flash"));
   current.settingsManager.applyOverrides({
     retry: { enabled: true, maxRetries: 1, baseDelayMs: 1, provider: { maxRetries: 0 } },
   });
@@ -616,19 +654,26 @@ test.each(["branch", "manual", "auto", "prompt"] as const)(
         attempt: 0,
       }),
     ]);
-    runtime = await ModelRuntime.create({
-      credentials: new InMemoryCredentialStore(),
-      modelsPath: null,
-    });
-    await runtime.setRuntimeApiKey("openai", "fixture");
+    runtime = await ModelRuntime.create({ credentials, modelsPath: null });
     const manager = history("work");
-    manager.appendModelChange("openai", "gpt-5.6-sol");
+    manager.appendModelChange("openai-codex", "gpt-5.6-sol");
     const current = await session(manager);
+    const stream = current.agent.streamFunction;
+    current.agent.streamFunction = (selected, context, options) =>
+      stream(selected, context, { ...options, transport: "sse" });
     const wires: unknown[] = [];
     network.mockImplementation(
       Object.assign(
-        async (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-          wires.push(JSON.parse(String(init?.body)));
+        async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+          const request = new Request(input, init);
+          const body = new Uint8Array(await request.arrayBuffer());
+          wires.push(
+            JSON.parse(
+              request.headers.get("content-encoding") === "zstd"
+                ? zstdDecompressSync(body).toString()
+                : new TextDecoder().decode(body),
+            ),
+          );
           const item = {
             id: "msg_fixture",
             type: "message",
