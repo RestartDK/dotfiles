@@ -1,6 +1,7 @@
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
-@@ -67,6 +67,8 @@
+@@ -71,6 +71,8 @@
+      * proxy variables.
       */
      env?: ProviderEnv;
 +    /** Synchronous authorization of serialized intent before each HTTP attempt, WS connect and send. Throwing is terminal. */
@@ -8,7 +9,6 @@
      /**
       * Optional callback for inspecting or replacing provider payloads before sending.
       * Return undefined to keep the payload unchanged.
-      */
 --- a/dist/api/simple-options.js
 +++ b/dist/api/simple-options.js
 @@ -24,6 +24,7 @@
@@ -46,15 +46,15 @@
 +export declare function authorizeRequest(options: ProviderRequestOptions<Model<Api>> | undefined, serializedPayload: string, model: Model<Api>): void;
 --- a/dist/api/openai-responses.js
 +++ b/dist/api/openai-responses.js
-@@ -6,6 +6,7 @@
+@@ -5,6 +5,7 @@
  import { headersToRecord } from "../utils/headers.js";
  import { getPiUserAgent } from "../utils/pi-user-agent.js";
  import { getProviderEnvValue } from "../utils/provider-env.js";
 +import { authorizeRequest } from "../utils/request-authorization.js";
  import { retryProviderRequest } from "../utils/provider-retry.js";
+ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools } from "../utils/transcript.js";
  import { createGrammarToolInputProperties } from "./constrained-sampling.js";
- import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
-@@ -120,7 +121,10 @@
+@@ -119,7 +120,10 @@
                  ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
                  maxRetries: 0,
              };
@@ -75,8 +75,8 @@
 +import { authorizeRequest } from "../utils/request-authorization.js";
  import { retryProviderRequest } from "../utils/provider-retry.js";
  import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
- import { appendGrammarToolInputJsonDelta, createGrammarToolInputProperties, getGrammarToolInput, getJsonSchemaToolParameters, resolveGrammarConstrainedSampling, resolveJsonSchemaStrictSampling, } from "./constrained-sampling.js";
-@@ -210,7 +211,10 @@
+ import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.js";
+@@ -194,7 +195,10 @@
                  ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
                  maxRetries: 0,
              };
@@ -90,15 +90,15 @@
                  signal: options?.signal,
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
-@@ -7,6 +7,7 @@
+@@ -6,6 +6,7 @@
  import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse.js";
  import { getPiUserAgent } from "../utils/pi-user-agent.js";
  import { getProviderEnvValue } from "../utils/provider-env.js";
 +import { authorizeRequest } from "../utils/request-authorization.js";
  import { retryProviderRequest } from "../utils/provider-retry.js";
  import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
- import { getJsonSchemaToolParameters, resolveJsonSchemaStrictSampling } from "./constrained-sampling.js";
-@@ -385,7 +386,10 @@
+ import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.js";
+@@ -390,7 +391,10 @@
                  ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
                  maxRetries: 0,
              };
@@ -117,7 +117,7 @@
  import { clampThinkingLevel } from "../models.js";
  import { registerSessionResourceCleanup } from "../session-resources.js";
  import { combineAbortSignals } from "../utils/abort-signals.js";
-@@ -212,6 +213,7 @@
+@@ -214,6 +215,7 @@
                          return;
                      }
                      catch (error) {
@@ -125,7 +125,7 @@
                          const aborted = options?.signal?.aborted;
                          const connectionLimitBeforeStart = !websocketStarted && isWebSocketConnectionLimitReachedError(error);
                          const previousResponseNotFound = isPreviousResponseNotFoundError(error);
-@@ -258,6 +260,7 @@
+@@ -260,6 +262,7 @@
                  if (options?.signal?.aborted) {
                      throw new Error("Request was aborted");
                  }
@@ -133,7 +133,7 @@
                  try {
                      const headerTimeoutSignal = httpTimeoutMs !== undefined && httpTimeoutMs > 0 ? AbortSignal.timeout(httpTimeoutMs) : undefined;
                      const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
-@@ -777,7 +780,7 @@
+@@ -780,7 +783,7 @@
              websocketSessionCache.delete(sessionId);
      }, SESSION_WEBSOCKET_CACHE_TTL_MS);
  }
@@ -142,7 +142,7 @@
      const WebSocketCtor = await getWebSocketConstructor(env);
      if (!WebSocketCtor) {
          throw new Error("WebSocket transport is not available in this runtime");
-@@ -789,6 +792,7 @@
+@@ -792,6 +795,7 @@
          let timeout;
          let socket;
          try {
@@ -150,7 +150,7 @@
              socket = new WebSocketCtor(url, { headers: wsHeaders });
          }
          catch (error) {
-@@ -845,9 +849,9 @@
+@@ -848,9 +852,9 @@
          }
      });
  }
@@ -162,7 +162,7 @@
          return {
              socket,
              reused: false,
-@@ -889,7 +893,7 @@
+@@ -892,7 +896,7 @@
              };
          }
          if (cached.busy) {
@@ -171,7 +171,7 @@
              return {
                  socket,
                  reused: false,
-@@ -905,7 +909,7 @@
+@@ -908,7 +912,7 @@
                  websocketSessionCache.delete(sessionId);
          }
      }
@@ -180,7 +180,7 @@
      const entry = { socket, busy: true, createdAt: Date.now() };
      accountEntries = websocketSessionCache.get(sessionId);
      if (!accountEntries) {
-@@ -1151,7 +1155,7 @@
+@@ -1154,7 +1158,7 @@
      }
  }
  async function processWebSocketStream(url, body, headers, output, stream, model, onStart, idleTimeoutMs, websocketConnectTimeoutMs, cacheSessionId, accountId, grammarToolInputProperties, options) {
@@ -189,7 +189,7 @@
      let keepConnection = true;
      const useCachedContext = options?.transport === "websocket-cached" || options?.transport === "auto";
      // ChatGPT Codex Responses rejects `store: true` ("Store must be set to false").
-@@ -1182,7 +1186,9 @@
+@@ -1185,7 +1189,9 @@
          }
      }
      try {

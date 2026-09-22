@@ -222,10 +222,10 @@ async function summarize(path: SummaryPath) {
   else if (path === "threshold" || path === "overflow") await session.prompt("Continue fixture");
   else {
     expect((await session.navigateTree(target, { summarize: true })).cancelled).toBe(false);
-    expect(manager.getLeafEntry()).toMatchObject({
-      type: "branch_summary",
-      summary: expect.stringContaining("Fixture summary"),
-    });
+    const leaf = manager.getLeafEntry() as { type?: unknown; summary?: unknown } | undefined;
+    expect(leaf?.type).toBe("branch_summary");
+    expect(typeof leaf?.summary).toBe("string");
+    expect(leaf?.summary).toContain("Fixture summary");
   }
   if (path === "manual" || path === "branchSummary") await session.prompt("Continue fixture");
   const retries = events.filter((event) => event.type.startsWith("summarization_retry_"));

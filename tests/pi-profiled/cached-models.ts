@@ -19,7 +19,6 @@ const cachedModels = {
       api: "anthropic-messages",
       baseUrl: "https://api.fireworks.ai/inference",
       compat: {
-        supportsToolReferences: true,
         allowEmptySignature: true,
         sendSessionAffinityHeaders: true,
         supportsEagerToolInputStreaming: false,

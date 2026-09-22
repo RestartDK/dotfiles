@@ -23,7 +23,7 @@ let
   };
 in
 assert lib.assertMsg (
-  upstream.version == "0.85.1"
+  upstream.version == "0.87.0"
 ) "pi-profiled must be reviewed against the new Pi version before updating";
 upstream.overrideAttrs (old: {
   pname = "pi-profiled";
