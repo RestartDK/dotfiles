@@ -32,10 +32,7 @@ test("real synthetic quota retains init identity and recognizes error despite su
 });
 
 test("native Pi activity follows retries, compaction and tools without treating idle as success", () => {
-  const protocol = new Protocol(
-    { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
-    [],
-  );
+  const protocol = new Protocol(piBackend, []);
   const activity = [
     { type: "agent_start" },
     { type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 1000, errorMessage: "busy" },
