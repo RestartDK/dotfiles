@@ -46,8 +46,6 @@ in
         home.file.".agents/.skill-lock.json" = file "config/agents/.skill-lock.json";
         home.file.".agents/skills" = dir agentSkillsPath;
         home.file.".agents/agents" = dir "config/agents/agents";
-        xdg.configFile."agents/skills" = dir agentSkillsPath;
-        xdg.configFile."agents/agents" = dir "config/agents/agents";
       })
 
       (lib.mkIf (agentSkillsEnabled || pi) {
@@ -56,6 +54,7 @@ in
       })
 
       (lib.mkIf (pi && !agentSkillsEnabled) {
+        home.file.".agents/skills" = dir cfg.piSkillsPath;
         home.file.".agents/agents" = dir "config/agents/agents";
       })
 
@@ -64,7 +63,6 @@ in
         home.file.".codex/hooks.json" = file "config/codex/hooks.json";
         home.file.".codex/herdr-agent-state.sh" = file "config/codex/herdr-agent-state.sh";
         home.file.".codex/rules/default.rules" = file "config/codex/rules/default.rules";
-        home.file.".codex/skills" = lib.mkIf agentSkillsEnabled (dir agentSkillsPath);
       })
 
       (lib.mkIf claude {
@@ -77,7 +75,6 @@ in
         xdg.configFile."opencode/opencode.json" = file "config/opencode/opencode.json";
         xdg.configFile."opencode/package.json" = file "config/opencode/package.json";
         xdg.configFile."opencode/plugins" = dir "config/opencode/plugins";
-        xdg.configFile."opencode/skills" = lib.mkIf agentSkillsEnabled (dir agentSkillsPath);
       })
 
       (lib.mkIf pi {
@@ -97,13 +94,6 @@ in
         home.file = piPackageFiles;
       })
 
-      (lib.mkIf (pi && agentSkillsEnabled) {
-        home.file.".pi/agent/skills" = dir agentSkillsPath;
-      })
-
-      (lib.mkIf (pi && !agentSkillsEnabled) {
-        home.file.".pi/agent/skills" = dir cfg.piSkillsPath;
-      })
     ]
   );
 }
