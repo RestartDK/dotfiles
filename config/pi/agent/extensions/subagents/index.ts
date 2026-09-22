@@ -1,10 +1,30 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve as resolvePath } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import type { AgentToolResult } from "@earendil-works/pi-agent-core";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  Theme,
+  ToolRenderResultOptions,
+} from "@earendil-works/pi-coding-agent";
+import {
+  CONFIG_DIR_NAME,
+  getAgentDir,
+  keyHint,
+  parseFrontmatter,
+} from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import { BackendRunner, instructionFiles, type Attempt, type Execution } from "./backend";
 import {
@@ -17,6 +37,7 @@ import {
 } from "../../lib/model-policy";
 import { initialUsage, type UsageStats } from "./protocol";
 import { authorizeSessionPolicy } from "../../lib/session-policy";
+import { fleetStatus, modelLabel, renderFleet, singleLine, type FleetRun } from "./fleet";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -39,6 +60,7 @@ type WorkerTaskInput = Static<typeof WorkerTask>;
 
 interface ResolvedWorkerTask {
   name: string;
+  label?: string;
   task: string;
   route: ResolvedRoute;
   tools: string[];
@@ -49,6 +71,7 @@ interface ResolvedWorkerTask {
 
 interface WorkerResult {
   name: string;
+  label?: string;
   task: string;
   route: ResolvedRoute;
   attempts: Attempt[];
@@ -73,11 +96,13 @@ interface RunAccumulator {
   stderr: string;
   output: string;
   actual?: Execution["actual"];
+  activity?: Execution["activity"];
   attempts: Attempt[];
 }
 
 interface RunMetadata {
   id: RunId;
+  scope: "foreground" | "background";
   task: ResolvedWorkerTask;
   writeCapable: boolean;
   startedAt: number;
@@ -94,12 +119,14 @@ interface RunningRun extends RunMetadata {
 interface TerminalRun {
   status: "completed" | "failed" | "stopped";
   id: RunId;
+  scope: RunMetadata["scope"];
   task: ResolvedWorkerTask;
   writeCapable: boolean;
   startedAt: number;
   finishedAt: number;
   result: WorkerResult;
   joined: boolean;
+  dismissed?: boolean;
 }
 
 type RunRecord = RunningRun | TerminalRun;
@@ -362,6 +389,7 @@ function resolveWorkerTask(
   const cwd = input.cwd ? resolvePath(parentCwd, input.cwd) : parentCwd;
   return {
     name,
+    label: input.label?.trim() || undefined,
     task: input.task,
     route,
     tools,
@@ -389,11 +417,13 @@ async function runWorker(
         stderr: execution.stderr,
         output: execution.output,
         actual: execution.actual,
+        activity: execution.activity,
         attempts: [...execution.attempts],
       });
   });
   return {
     name: task.name,
+    label: task.label,
     task: task.task,
     route: task.route,
     tools: task.tools,
@@ -415,9 +445,30 @@ function tailCap(text: string, capBytes: number): string {
 const runRegistry = new Map<RunId, RunRecord>();
 
 const FLEET_WIDGET_KEY = "subagents-fleet";
+const FLEET_VIEWS = ["panel", "status", "off"] as const;
+type FleetView = (typeof FLEET_VIEWS)[number];
 
+function isFleetView(value: unknown): value is FleetView {
+  return FLEET_VIEWS.some((view) => view === value);
+}
+
+function saveFleetView(view: FleetView): void {
+  const path = join(getAgentDir(), "subagents.json");
+  const temporary = `${path}.${randomBytes(4).toString("hex")}.tmp`;
+  mkdirSync(getAgentDir(), { recursive: true });
+  try {
+    writeFileSync(temporary, `${JSON.stringify({ view }, null, 2)}\n`, { mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+}
+
+let fleetView: FleetView = "panel";
 let fleetCtx: ExtensionContext | undefined;
 let fleetTimer: ReturnType<typeof setInterval> | undefined;
+let fleetRender: (() => void) | undefined;
+let lastFleetStatus: string | undefined;
 
 function newRunId(name: string): RunId {
   return `run-${name}-${randomBytes(4).toString("hex")}` as RunId;
@@ -427,14 +478,20 @@ function runningRuns(): RunningRun[] {
   return [...runRegistry.values()].filter((run): run is RunningRun => run.status === "running");
 }
 
+function backgroundRuns(): RunRecord[] {
+  return [...runRegistry.values()].filter((run) => run.scope === "background");
+}
+
 function evictTerminalRuns() {
-  const terminals = [...runRegistry.values()].filter(
-    (run): run is TerminalRun => run.status !== "running",
-  );
-  if (terminals.length <= MAX_TERMINAL_RUNS) return;
-  terminals.sort((a, b) => a.finishedAt - b.finishedAt);
-  for (const run of terminals.slice(0, terminals.length - MAX_TERMINAL_RUNS)) {
-    runRegistry.delete(run.id);
+  for (const scope of ["foreground", "background"] as const) {
+    const terminals = [...runRegistry.values()].filter(
+      (run): run is TerminalRun => run.status !== "running" && run.scope === scope,
+    );
+    if (terminals.length <= MAX_TERMINAL_RUNS) continue;
+    terminals.sort((a, b) => a.finishedAt - b.finishedAt);
+    for (const run of terminals.slice(0, terminals.length - MAX_TERMINAL_RUNS)) {
+      runRegistry.delete(run.id);
+    }
   }
 }
 
@@ -444,6 +501,7 @@ function transitionRun(run: RunMetadata, result: WorkerResult): TerminalRun {
     status:
       result.outcome.kind === "cancelled" ? "stopped" : isFailed(result) ? "failed" : "completed",
     id: run.id,
+    scope: run.scope,
     task: run.task,
     writeCapable: run.writeCapable,
     startedAt: run.startedAt,
@@ -453,12 +511,19 @@ function transitionRun(run: RunMetadata, result: WorkerResult): TerminalRun {
   };
   runRegistry.set(run.id, terminal);
   evictTerminalRuns();
+  refreshFleetWidget();
   return terminal;
 }
 
-function launchRun(backendRunner: BackendRunner, task: ResolvedWorkerTask): RunningRun {
+function launchRun(
+  backendRunner: BackendRunner,
+  task: ResolvedWorkerTask,
+  scope: RunMetadata["scope"],
+  signal?: AbortSignal,
+): RunningRun {
   const metadata: RunMetadata = {
     id: newRunId(task.name),
+    scope,
     task,
     writeCapable: workerHasWriteTools(task),
     startedAt: Date.now(),
@@ -469,11 +534,16 @@ function launchRun(backendRunner: BackendRunner, task: ResolvedWorkerTask): Runn
   const run: RunningRun = {
     ...metadata,
     status: "running",
-    done: runWorker(backendRunner, task, metadata.abort.signal, metadata.live).then((result) =>
-      transitionRun(metadata, result),
-    ),
+    done: runWorker(
+      backendRunner,
+      task,
+      signal ? AbortSignal.any([signal, metadata.abort.signal]) : metadata.abort.signal,
+      metadata.live,
+    ).then((result) => transitionRun(metadata, result)),
   };
   runRegistry.set(run.id, run);
+  refreshFleetWidget();
+  ensureFleetTimer();
   return run;
 }
 
@@ -494,9 +564,12 @@ function stopRuns(ids: RunId[]): { signaled: RunId[]; alreadyTerminal: TerminalR
 }
 
 function parseRunIds(raw: string[]): RunId[] {
-  const unknown = raw.filter((id) => !runRegistry.has(id as RunId));
+  const unknown = raw.filter((id) => runRegistry.get(id as RunId)?.scope !== "background");
   if (unknown.length > 0) {
-    const known = [...runRegistry.keys()].join(", ") || "none";
+    const known =
+      backgroundRuns()
+        .map((run) => run.id)
+        .join(", ") || "none";
     throw new Error(`Unknown run id(s): ${unknown.join(", ")}. Known runs: ${known}.`);
   }
   return raw as RunId[];
@@ -545,37 +618,64 @@ function formatRunLine(record: RunRecord): string {
   return `${record.id}  ${record.status}  ${elapsed}${usageText ? `  ${usageText}` : ""}  ${configured} -> ${actual} [${attempts}]  ${taskText}`;
 }
 
-function fleetWidgetLines(): string[] {
-  const records = [...runRegistry.values()];
-  const lines = records.filter((run) => run.status === "running").map(formatRunLine);
-  const unjoined = records.filter((run) => run.status !== "running" && !run.joined);
-  if (unjoined.length > 0) {
-    lines.push(`${unjoined.length} run(s) finished: join with subagents_runs to collect`);
-  }
-  return lines;
+function fleetRuns(): FleetRun[] {
+  return [...runRegistry.values()]
+    .filter(
+      (run) =>
+        run.status === "running" || (!run.dismissed && (!run.joined || run.status !== "completed")),
+    )
+    .map((run) => {
+      const execution = run.status === "running" ? run.live : run.result;
+      return {
+        id: run.id,
+        title: run.task.label ?? run.task.task,
+        model: execution.actual?.model,
+        activity: run.status === "running" ? run.live.activity : undefined,
+        status: run.status,
+        startedAt: run.startedAt,
+        finishedAt: run.status === "running" ? undefined : run.finishedAt,
+      };
+    });
 }
 
 function refreshFleetWidget() {
   const ctx = fleetCtx;
   if (ctx?.hasUI !== true) return;
-  const lines = fleetWidgetLines();
-  if (lines.length === 0) {
+  const runs = fleetRuns();
+  const status = fleetView === "off" ? undefined : fleetStatus(runs, ctx.ui.theme);
+  if (status !== lastFleetStatus) {
+    ctx.ui.setStatus(FLEET_WIDGET_KEY, status);
+    lastFleetStatus = status;
+  }
+  if ((fleetView !== "panel" || runningRuns().length === 0) && fleetTimer) {
+    clearInterval(fleetTimer);
+    fleetTimer = undefined;
+  }
+  if (fleetView !== "panel" || runs.length === 0) {
     ctx.ui.setWidget(FLEET_WIDGET_KEY, undefined);
+    fleetRender = undefined;
     return;
   }
-  ctx.ui.setWidget(FLEET_WIDGET_KEY, lines, { placement: "belowEditor" });
+  if (ctx.mode !== "tui") {
+    ctx.ui.setWidget(FLEET_WIDGET_KEY, renderFleet(runs, 80, ctx.ui.theme));
+    return;
+  }
+  if (!fleetRender) {
+    ctx.ui.setWidget(FLEET_WIDGET_KEY, (tui, theme) => {
+      fleetRender = () => tui.requestRender();
+      return {
+        render: (width) => renderFleet(fleetRuns(), width, theme),
+        invalidate() {},
+      };
+    });
+  }
+  fleetRender?.();
 }
 
 function ensureFleetTimer() {
-  if (fleetTimer || fleetCtx?.hasUI !== true) return;
-  if (runningRuns().length === 0) return;
-  fleetTimer = setInterval(() => {
-    if (runningRuns().length === 0) {
-      clearInterval(fleetTimer);
-      fleetTimer = undefined;
-    }
-    refreshFleetWidget();
-  }, 1000);
+  if (fleetView !== "panel" || fleetTimer || fleetCtx?.hasUI !== true || runningRuns().length === 0)
+    return;
+  fleetTimer = setInterval(refreshFleetWidget, fleetCtx.mode === "tui" ? 120 : 1000);
   fleetTimer.unref();
 }
 
@@ -684,6 +784,7 @@ const WorkerTask = Type.Object({
     }),
   ),
   task: Type.String({ description: "Self-contained task to give this worker." }),
+  label: Type.Optional(Type.String({ description: "Short task title for the live worker panel." })),
   role: Type.Optional(
     Type.String({ description: "Policy role. Required for managed dstack agents." }),
   ),
@@ -718,6 +819,7 @@ const SubagentsParams = Type.Object({
     Type.String({ description: "Configured worker preset name for a single worker." }),
   ),
   task: Type.Optional(Type.String({ description: "Single worker task. Use tasks for fan-out." })),
+  label: WorkerTask.properties.label,
   role: WorkerTask.properties.role,
   member: WorkerTask.properties.member,
   seat: WorkerTask.properties.seat,
@@ -758,10 +860,52 @@ const SubagentsRunsParams = Type.Object({
   ),
 });
 
+function renderWorkerResult(
+  result: AgentToolResult<SubagentsDetails>,
+  { expanded, isPartial }: ToolRenderResultOptions,
+  theme: Theme,
+) {
+  const text = result.content
+    .filter((item) => item.type === "text")
+    .map((item) => item.text)
+    .join("\n");
+  if (expanded) return new Text(cleanTerminalOutput(text), 0, 0);
+  const results = result.details?.results ?? [];
+  if (isPartial || results.length === 0) {
+    const summary = singleLine(text.split("\n")[0] ?? "");
+    return new Text(
+      summary + theme.fg("dim", ` (${keyHint("app.tools.expand", "details")})`),
+      0,
+      0,
+    );
+  }
+  const lines = results.map((worker) => {
+    const failed = isFailed(worker);
+    const stopped = worker.outcome.kind === "cancelled";
+    const icon = stopped ? "■" : failed ? "✕" : "✓";
+    const label = stopped ? "stopped" : failed ? "failed" : "done";
+    const state = theme.fg(stopped ? "muted" : failed ? "error" : "success", `${icon} ${label}`);
+    const model = worker.actual ? modelLabel(worker.actual.model) : "not started";
+    const reason =
+      "reason" in worker.outcome ? `\n  ${singleLine(worker.outcome.reason).slice(0, 180)}` : "";
+    return `${state} ${singleLine(worker.label ?? worker.name)} ${theme.fg("muted", model)}${reason}`;
+  });
+  lines.push(theme.fg("dim", keyHint("app.tools.expand", "reports and diagnostics")));
+  return new Text(lines.join("\n"), 0, 0);
+}
+
 export default function (pi: ExtensionAPI) {
   const backendRunner = new BackendRunner();
   const startupConfig = readConfig(process.cwd(), false);
   const startupAgents = configuredAgentSummary(startupConfig);
+
+  pi.on("session_start", (_event, ctx) => {
+    const saved = readJsonFile(join(getAgentDir(), "subagents.json")).view;
+    fleetView = isFleetView(saved) ? saved : "panel";
+    fleetCtx = ctx.hasUI ? ctx : undefined;
+    refreshFleetWidget();
+    ensureFleetTimer();
+  });
 
   pi.registerTool<typeof SubagentsParams, SubagentsDetails>({
     name: "subagents",
@@ -778,6 +922,20 @@ export default function (pi: ExtensionAPI) {
       `Configured global workers:\n${startupAgents}`,
     ].join("\n"),
     parameters: SubagentsParams,
+    renderCall(args, theme) {
+      const count = args.tasks?.length ?? 1;
+      const label = args.label ? ` · ${singleLine(args.label)}` : "";
+      return new Text(
+        theme.fg("toolTitle", theme.bold("Subagents")) +
+          theme.fg(
+            "muted",
+            ` ${count} worker${count === 1 ? "" : "s"}${args.background ? " · background" : ""}${label}`,
+          ),
+        0,
+        0,
+      );
+    },
+    renderResult: renderWorkerResult,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const policy = loadPolicy();
@@ -804,6 +962,7 @@ export default function (pi: ExtensionAPI) {
         hasTasks &&
         [
           params.agent,
+          params.label,
           params.role,
           params.member,
           params.seat,
@@ -819,6 +978,7 @@ export default function (pi: ExtensionAPI) {
       const taskInputs: WorkerTaskInput[] = hasTasks
         ? (params.tasks ?? []).map((task) => ({
             agent: task.agent,
+            label: task.label,
             task: task.task,
             role: task.role,
             member: task.member,
@@ -832,6 +992,7 @@ export default function (pi: ExtensionAPI) {
         : [
             {
               agent: params.agent,
+              label: params.label,
               task: params.task ?? "",
               role: params.role,
               member: params.member,
@@ -875,7 +1036,7 @@ export default function (pi: ExtensionAPI) {
             content: [
               {
                 type: "text",
-                text: `Refusing to launch a write-capable worker while background run ${blocking.id} (${blocking.task.name}) is still running. Join or stop it first, or set allowParallelWrites=true explicitly.`,
+                text: `Refusing to launch a write-capable worker while run ${blocking.id} (${blocking.task.name}) is still running. Wait for it to finish, or set allowParallelWrites=true explicitly.`,
               },
             ],
             details: { results: [] },
@@ -902,7 +1063,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       if (params.background === true) {
-        const live = runningRuns();
+        const live = backgroundRuns().filter((run) => run.status === "running");
         if (live.length + resolvedTasks.length > MAX_LIVE_RUNS) {
           return {
             content: [
@@ -916,9 +1077,7 @@ export default function (pi: ExtensionAPI) {
           };
         }
 
-        const runs = resolvedTasks.map((task) => launchRun(backendRunner, task));
-        refreshFleetWidget();
-        ensureFleetTimer();
+        const runs = resolvedTasks.map((task) => launchRun(backendRunner, task, "background"));
         const lines = runs.map(
           (run) => `- ${run.id}: ${run.task.task.replace(/\s+/g, " ").slice(0, 80)}`,
         );
@@ -956,12 +1115,15 @@ export default function (pi: ExtensionAPI) {
       };
 
       emitUpdate();
-      const results = await mapWithConcurrency(resolvedTasks, concurrency, async (task) => {
-        const result = await runWorker(backendRunner, task, signal);
-        runningResults.push(result);
+      const completed = await mapWithConcurrency(resolvedTasks, concurrency, async (task) => {
+        const terminal = await launchRun(backendRunner, task, "foreground", signal).done;
+        runningResults.push(terminal.result);
         emitUpdate();
-        return result;
+        return terminal;
       });
+      for (const terminal of completed) terminal.joined = true;
+      refreshFleetWidget();
+      const results = completed.map((terminal) => terminal.result);
 
       return {
         content: [{ type: "text", text: formatResults(results) }],
@@ -981,11 +1143,19 @@ export default function (pi: ExtensionAPI) {
       "stop SIGTERMs the live children of the given runs (all live runs when runIds is omitted); it is idempotent and reports already-terminal runs.",
     ].join("\n"),
     parameters: SubagentsRunsParams,
+    renderCall(args, theme) {
+      return new Text(
+        theme.fg("toolTitle", theme.bold("Subagents")) + theme.fg("muted", ` ${args.action ?? ""}`),
+        0,
+        0,
+      );
+    },
+    renderResult: renderWorkerResult,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       if (ctx.hasUI) fleetCtx = ctx;
       if (params.action === "status") {
-        let records = [...runRegistry.values()];
+        let records = backgroundRuns();
         if (params.runIds && params.runIds.length > 0) {
           try {
             records = parseRunIds(params.runIds).map((id) => runRegistry.get(id)!);
@@ -1014,7 +1184,9 @@ export default function (pi: ExtensionAPI) {
           ids =
             params.runIds && params.runIds.length > 0
               ? parseRunIds(params.runIds)
-              : runningRuns().map((run) => run.id);
+              : backgroundRuns()
+                  .filter((run) => run.status === "running")
+                  .map((run) => run.id);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           return {
@@ -1044,7 +1216,9 @@ export default function (pi: ExtensionAPI) {
         const ids =
           params.runIds && params.runIds.length > 0
             ? parseRunIds(params.runIds)
-            : [...runRegistry.values()].filter((run) => !run.joined).map((run) => run.id);
+            : backgroundRuns()
+                .filter((run) => !run.joined)
+                .map((run) => run.id);
         records = ids.map((id) => runRegistry.get(id)!);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1107,7 +1281,14 @@ export default function (pi: ExtensionAPI) {
       clearInterval(fleetTimer);
       fleetTimer = undefined;
     }
-    if (fleetCtx?.hasUI) fleetCtx.ui.setWidget(FLEET_WIDGET_KEY, undefined);
+    if (fleetCtx?.hasUI) {
+      fleetCtx.ui.setWidget(FLEET_WIDGET_KEY, undefined);
+      fleetCtx.ui.setStatus(FLEET_WIDGET_KEY, undefined);
+    }
+    runRegistry.clear();
+    fleetRender = undefined;
+    lastFleetStatus = undefined;
+    fleetCtx = undefined;
   });
 
   pi.registerCommand("orchestrate", {
@@ -1142,12 +1323,53 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("subagents", {
-    description: "Show current billing profile, roles, panels, backend chains and workers",
-    handler: async (_args, ctx) => {
+    description: "Worker details; clear finished rows; view panel|status|off (saved)",
+    getArgumentCompletions(prefix) {
+      return ["clear", ...FLEET_VIEWS.map((view) => `view ${view}`)]
+        .filter((value) => value.startsWith(prefix))
+        .map((value) => ({ value, label: value }));
+    },
+    handler: async (args, ctx) => {
+      if (ctx.hasUI) fleetCtx = ctx;
+      const [command, view, ...extra] = args.trim().split(/\s+/);
+      if (command === "view") {
+        if (view === undefined) {
+          ctx.ui.notify(
+            `Subagent view: ${fleetView}. Use /subagents view panel|status|off.`,
+            "info",
+          );
+          return;
+        }
+        if (!isFleetView(view) || extra.length > 0) {
+          ctx.ui.notify("Usage: /subagents view panel|status|off", "warning");
+          return;
+        }
+        fleetView = view;
+        refreshFleetWidget();
+        ensureFleetTimer();
+        try {
+          saveFleetView(view);
+          ctx.ui.notify(`Subagent view: ${view}`, "info");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          ctx.ui.notify(
+            `Subagent view: ${view} (session only; could not save: ${message})`,
+            "warning",
+          );
+        }
+        return;
+      }
+      if (args.trim() === "clear") {
+        for (const run of runRegistry.values()) {
+          if (run.status !== "running") run.dismissed = true;
+        }
+        refreshFleetWidget();
+        return;
+      }
       const config = readConfig(ctx.cwd, ctx.isProjectTrusted());
-      const live = runningRuns();
+      const records = [...runRegistry.values()];
       const liveText =
-        live.length > 0 ? `\n\nLive background runs:\n${live.map(formatRunLine).join("\n")}` : "";
+        records.length > 0 ? `\n\nWorker runs:\n${records.map(formatRunLine).join("\n")}` : "";
       ctx.ui.notify(
         `${describePolicy()}\n\nConfigured subagents workers:\n${configuredAgentSummary(config)}${liveText}`,
         "info",

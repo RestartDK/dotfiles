@@ -1858,10 +1858,8 @@ export default function piPrompt(pi: ExtensionAPI) {
           ctx.ui.setEditorComponent(undefined);
           ctx.ui.setFooter(undefined);
           ctx.ui.setHeader(undefined);
-          ctx.ui.setWidget("powerline-top", undefined);
           ctx.ui.setWidget("powerline-secondary", undefined);
           ctx.ui.setWidget("powerline-bash-transcript", undefined);
-          ctx.ui.setWidget("powerline-status", undefined);
           ctx.ui.setWidget("powerline-last-prompt", undefined);
           footerDataRef = null;
           tuiRef = null;
@@ -2428,34 +2426,6 @@ export default function piPrompt(pi: ExtensionAPI) {
 
   function installPowerlineWidgets(ctx: any) {
     ctx.ui.setWidget(
-      "powerline-status",
-      () => ({
-        dispose() {},
-        invalidate() {
-          requestStatusRender();
-        },
-        render(width: number): string[] {
-          return renderPowerlineStatusLines(width);
-        },
-      }),
-      { placement: "aboveEditor" },
-    );
-
-    ctx.ui.setWidget(
-      "powerline-top",
-      (_tui: any, theme: Theme) => ({
-        dispose() {},
-        invalidate() {
-          resetLayoutCache();
-        },
-        render(width: number): string[] {
-          return renderPowerlineTopLines(width, theme);
-        },
-      }),
-      { placement: "aboveEditor" },
-    );
-
-    ctx.ui.setWidget(
       "powerline-secondary",
       (_tui: any, theme: Theme) => ({
         dispose() {},
@@ -2527,10 +2497,8 @@ export default function piPrompt(pi: ExtensionAPI) {
         : null;
 
     teardownFixedEditorCompositor();
-    ctx.ui.setWidget("powerline-top", undefined);
     ctx.ui.setWidget("powerline-secondary", undefined);
     ctx.ui.setWidget("powerline-bash-transcript", undefined);
-    ctx.ui.setWidget("powerline-status", undefined);
     ctx.ui.setWidget("powerline-last-prompt", undefined);
 
     let autocompleteFixed = false;
@@ -2637,8 +2605,30 @@ export default function piPrompt(pi: ExtensionAPI) {
         }
       };
 
+      const originalInvalidate = editor.invalidate.bind(editor);
+      editor.invalidate = () => {
+        resetLayoutCache();
+        originalInvalidate();
+      };
+
+      let headerRows = 0;
+      let promptPadding = 0;
+      const originalHandleMouse = editor.handleMouse.bind(editor);
+      editor.handleMouse = (event) => {
+        if (event.y < headerRows) return undefined;
+        return originalHandleMouse({
+          ...event,
+          x: event.x - promptPadding,
+          y: event.y - headerRows,
+          width: Math.max(1, event.width - promptPadding),
+          height: Math.max(0, event.height - headerRows),
+        });
+      };
+
       const originalRender = editor.render.bind(editor);
       editor.render = (width: number): string[] => {
+        headerRows = 0;
+        promptPadding = 0;
         if (width < 10) {
           return originalRender(width);
         }
@@ -2648,7 +2638,8 @@ export default function piPrompt(pi: ExtensionAPI) {
         const prompt = `${ansi.getFgAnsi(200, 200, 200)}${promptGlyph}${ansi.reset}`;
         const promptPrefix = ` ${prompt} `;
         const contPrefix = "   ";
-        const contentWidth = Math.max(1, width - 3);
+        promptPadding = 3;
+        const contentWidth = Math.max(1, width - promptPadding);
         const lines = originalRender(contentWidth);
 
         if (lines.length === 0) return lines;
@@ -2680,7 +2671,11 @@ export default function piPrompt(pi: ExtensionAPI) {
           result.push(lines[i] || "");
         }
 
-        return result;
+        const header = config.fixedEditor
+          ? []
+          : [...renderPowerlineStatusLines(width), ...renderPowerlineTopLines(width, ctx.ui.theme)];
+        headerRows = header.length;
+        return [...header, ...result];
       };
 
       return editor;
