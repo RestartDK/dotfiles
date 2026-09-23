@@ -47,6 +47,7 @@ jobs:
         run: |
           nix build --no-link --print-build-logs \
             .#checks.x86_64-linux.quality \
+            .#checks.x86_64-linux.skills \
             .#checks.x86_64-linux.personal-secrets \
             .#checks.x86_64-linux.agent-profiles \
             .#checks.x86_64-linux.srv-hatchi-policy \
