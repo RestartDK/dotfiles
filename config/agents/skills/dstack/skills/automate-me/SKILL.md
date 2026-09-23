@@ -14,21 +14,25 @@ This skill orchestrates three others: an inline mining pass (see step 1), skill 
 
 ### 0. Check for an existing skill
 
-Look recursively for `.agents/skills/**/*-mode/SKILL.md` and `~/.agents/skills/*-mode/SKILL.md` matching the user's handle. Mode skills can live in a personal category directory (`.agents/skills/<handle>/`), not only at the top level. If one exists, confirm intent with a structured question (unless they already said "update my skill" or similar):
+Search both roots recursively for `**/*-mode/SKILL.md` matching the user's handle, since mode skills live in a personal category directory (`.agents/skills/<handle>/`), not only at the top level. If one exists, resolve its versioned source before computing dates or editing (step 4). Then confirm intent with a structured question (unless they already said "update my skill" or similar):
 
 - Update the existing skill (default for repeat runs)
 - Start fresh (rare; ask why before doing it)
 
 Update mode changes the rest of the flow:
-- Step 1 mines only history since the skill was last edited (`git log -1 --format=%cI <path>`).
+- Step 1 mines only history since the skill was last edited (`git log -1 --format=%cI <path>`), per source. A source with no prior coverage gets an agreed baseline window instead of the file date.
 - Step 2 asks what's changed or missing, not what to capture from zero.
 - Step 4 edits the existing file in place. Preserve sections the user hasn't contradicted; revise ones with new evidence; add new sections only for genuinely new rules.
 
-### 1. Mine their history
+### 1. Scope the evidence, then mine it
 
-Locate the active workspace's transcripts before fanning out. The pi sessions directory for this cwd is `~/.pi/agent/sessions/<cwd-slug>/` (slug = absolute cwd path with slashes turned into dashes). Do not glob across unrelated cwd slugs; that crosses workspace boundaries and reads private chats from unrelated projects. Worktree exception: slugs that are worktrees of the same repo count as this workspace and usually hold most of the history. Derive them, don't guess: `git worktree list --porcelain | awk '/^worktree /{print $2}'` prints every checkout path of the current repo; slugify each (slashes to dashes) and include those slug directories. Slugs of removed worktrees can be added by matching the repo directory name in the slug. The do-not-glob rule guards against unrelated projects, not your own repo's worktrees.
+A mode skill describes how the user works, so the evidence is wider than the current workspace and often wider than one machine. Confirm an explicit allowlist of hosts and workspaces before reading any transcript; ask once when the user has not supplied one, and name the other agent histories that exist locally (`~/.claude`, `~/.codex`, `~/.gemini`). Leave unapproved slugs untouched.
 
-Survey recent agent conversations within that scope for recurring patterns. Run multiple parallel subagents across slices of history (e.g. last 2-4 weeks, split into 3 slices so each has enough material). Each slice mining subagent reads transcripts from the workspace-scoped path the parent provides, looks for the signals below, and returns a short structured list of patterns it saw with evidence pointers. Default signals worth hunting:
+On one machine, pi sessions live at `~/.pi/agent/sessions/<cwd-slug>/` (slug = absolute cwd path with slashes turned into dashes). For each approved repository include its worktree slugs and any slug that extends a checkout path, since sessions started in a subdirectory get their own slug. Derive worktrees, don't guess: `git worktree list --porcelain | awk '/^worktree /{print $2}'`.
+
+Across machines, use the **fleet** skill (`~/.agents/skills/dstack/skills/fleet/SKILL.md`) for target selection and transport: `fleet list --json`, `fleet check TARGET... --json`, then a `--dry-run` you inspect before `--execute`. Fleet carries argv commands, not files, and reachability is not proof that the payload succeeded. Extract a bounded digest per host with an argv payload over an approved glob (a `jq` or `rg` command printing dates, slugs, and user-authored text), mine the digest locally, and report unavailable hosts rather than substituting another.
+
+Survey the digest for recurring patterns. Split the history into slices by host, workspace, and time, so one busy repository cannot fill every slice. Run parallel subagents, one per slice (3-4 is usually enough). Each slice mining subagent reads the paths the parent provides, looks for the signals below, and returns a short structured list of patterns it saw with evidence pointers. Cap each slice (for example, the most recent N sessions per workspace) so a large history cannot blow the context window. Default signals worth hunting:
 
 - Response preferences (length, tone, format, "dumb it down" corrections)
 - Delegation habits (subagents, models, specialized workflows, parallelism)
@@ -37,7 +41,7 @@ Survey recent agent conversations within that scope for recurring patterns. Run 
 - Process conventions (worktrees, commits, PRs, review/merge tooling)
 - Meta preferences (fixing skills mid-task, proposing new ones)
 
-Cross-check across slices before elevating a signal. Patterns seen in 2+ slices are high-confidence; lone signals are weak and usually get dropped.
+Cross-check across slices before elevating a signal. Patterns seen across independent hosts, workspaces, or time slices are high-confidence. A pattern that appears only because one repository fills every slice is repository-specific and belongs in that repository's layer, not the mode skill. Lone signals are weak and usually get dropped.
 
 ### 2. Ask the user directly
 
@@ -66,7 +70,8 @@ The **dstack-mode** skill shows the shape. Read it for granularity. Don't copy i
 
 Use the pi skill format (pi docs/skills.md) to author the skill. Placement:
 
-- Path: preserve an existing mode skill's category. For a new mode, use `.agents/skills/<handle>/<handle>-mode/SKILL.md` when the repo has an established personal category for that handle; otherwise default to `.agents/skills/<handle>-mode/SKILL.md` in the project (or `~/.agents/skills/<handle>-mode/` if the user prefers a personal skill).
+- Path: preserve an existing mode skill's category. For a new mode, use `.agents/skills/<handle>/<handle>-mode/SKILL.md` when the repo has an established personal category for that handle; otherwise default to `.agents/skills/<handle>-mode/SKILL.md` in the project, or the versioned source directory that deploys the user's personal skills.
+- Source, not install. Resolve the deployed path before editing. A harness path may be a symlink into a live checkout or a generated copy, and two machines can differ. Read the symlink and the deployment config to find the versioned source, edit that, and report which kind each host used.
 - Handle: the user's first name or chosen identifier.
 - Frontmatter `description`: trigger on their name + `/<handle>-mode` + "work in their style", not on generic keywords like "write code" or "review PR".
 - Frontmatter formatting: follow the pi skill frontmatter rules (docs/skills.md). Keep `description` as one YAML scalar; quote it or use `description: >-` with indented continuation lines when punctuation or wrapping requires it.

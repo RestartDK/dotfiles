@@ -260,6 +260,19 @@
                 FLEET_BIN=${./bin/fleet} FLEET_TEST_BASH=${(pkgsFor system).bash}/bin/bash bash ${./tests/fleet.sh}
                 touch $out
               '';
+          skills =
+            (pkgsFor system).runCommand "skills-tests"
+              {
+                nativeBuildInputs = [
+                  (pkgsFor system).bash
+                  (pkgsFor system).coreutils
+                  (pkgsFor system).jq
+                ];
+              }
+              ''
+                SKILLS_ROOT=${./config/agents/skills} SKILLS_LOCK=${./config/agents/.skill-lock.json} AGENTS_DIR=${./config/agents/agents} bash ${./tests/skills.sh}
+                touch $out
+              '';
           watch-pr =
             (pkgsFor system).runCommand "watch-pr-tests"
               {
