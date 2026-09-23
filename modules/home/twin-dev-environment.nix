@@ -21,22 +21,16 @@ in
     services.lorri.enable = true;
     xdg.enable = true;
 
-    home.file.".zshenv".text = ''
-      agent_dir="$HOME/.ssh/agent"
-      agent_link="$agent_dir/current"
-      incoming_agent="''${SSH_AUTH_SOCK:-}"
-
-      if [ -n "$incoming_agent" ] &&
-         [ "$incoming_agent" != "$agent_link" ] &&
-         [ -S "$incoming_agent" ] &&
-         { [[ "''${ZSH_EXECUTION_STRING:-}" == *"herdr remote-client-bridge"* ]] || [ ! -S "$agent_link" ]; }; then
-        mkdir -p "$agent_dir"
-        ln -sfn "$incoming_agent" "$agent_link"
-      fi
-
-      if [ -S "$agent_link" ]; then
-        export SSH_AUTH_SOCK="$agent_link"
-      fi
+    # Home Manager writes `.zshenv` itself for its session variables, and newer
+    # versions target the equivalent path `./.zshenv`, so a second
+    # `home.file.".zshenv"` collides and fails the generation build. `envExtra`
+    # merges into the file Home Manager already writes, runs for every non-login
+    # shell (including the `zsh -c` shells herdr's remote bridge spawns), and
+    # sources the shared snippet so interactive shells, dev hosts, and this
+    # file all run one implementation.
+    programs.zsh.envExtra = ''
+      [[ -r "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh" ]] &&
+        source "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh"
     '';
 
     # Keep Git identity, aliases, signing, and other host policy in the owning

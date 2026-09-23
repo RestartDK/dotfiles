@@ -42,6 +42,12 @@ elif [[ -S "$HOME/.1password/agent.sock" ]]; then
   export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
 fi
 
+# Repoint the shared agent socket at the connection that just arrived. Lives in
+# the checkout so hosts pick it up without a rebuild; the system .zshenv sources
+# the same file, which covers non-interactive shells.
+[[ -r "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh" ]] &&
+  source "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh"
+
 # Nix profiles. Prefer the NixOS/nix-darwin-managed user profile and retain a
 # standalone Home Manager profile only as a fallback. Remove both first so an
 # inherited PATH cannot preserve stale profile precedence. path_prepend adds to
