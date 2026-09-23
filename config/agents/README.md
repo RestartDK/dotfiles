@@ -15,4 +15,4 @@ Source of truth for the global agent configuration. Home Manager links these int
 - Vendor installs are tracked in `.skill-lock.json`. Authored skills are not listed there.
 - Repo-specific skills live in the repo at `<repo>/.agents/skills/`, never here.
 - Agent definitions are real files in `agents/`, not symlinks into the bundle.
-- `tests/skills.sh` enforces the layout and the lock in both directions.
+- `tests/skills.sh` checks the skill root layout and fails when the vendor lock names a missing skill. A skill that is not in the lock counts as authored.

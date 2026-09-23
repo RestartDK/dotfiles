@@ -270,7 +270,7 @@
                 ];
               }
               ''
-                SKILLS_ROOT=${./config/agents/skills} SKILLS_LOCK=${./config/agents/.skill-lock.json} bash ${./tests/skills.sh}
+                SKILLS_ROOT=${./config/agents/skills} SKILLS_LOCK=${./config/agents/.skill-lock.json} AGENTS_DIR=${./config/agents/agents} bash ${./tests/skills.sh}
                 touch $out
               '';
           watch-pr =
