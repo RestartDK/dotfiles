@@ -23,7 +23,6 @@ while IFS= read -r dir; do
   [ -f "$dir/SKILL.md" ] || fail "$name is neither the dstack bundle, .system, nor a skill"
 done < <(find "$skills" -mindepth 1 -maxdepth 1 -type d)
 
-[ -d "$skills/dstack/principles" ] || fail "dstack/principles is missing"
 [ ! -d "$skills/dstack/agents" ] || fail "agent definitions belong in config/agents/agents"
 
 while IFS= read -r name; do

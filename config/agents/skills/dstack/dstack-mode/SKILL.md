@@ -48,7 +48,7 @@ Remaining triggers:
 
 ## Principles
 
-Read the leaf skill in full for any principle you apply. Each entry names when it applies. Leaves live at `~/.agents/skills/dstack/principles/principle-<name>/SKILL.md`.
+Read the leaf skill in full for any principle you apply. Each entry names when it applies. Leaves live at `~/.agents/skills/dstack/principle-<name>/SKILL.md`.
 
 **Core**
 
