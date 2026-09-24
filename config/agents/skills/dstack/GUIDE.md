@@ -11,7 +11,7 @@ Give the agent a goal and a way to check it, in your own words. You do not need 
 - **Morning demo.** `/dstack get the app demoable` → stack-up → login URL + screenshot proof.
 - **Bug report.** `/dstack repro this run: <url>` → repro → bug-fix. The failing test lands before the fix so the diff tells the story.
 - **Feature.** `/dstack add X; acceptance: Y` → how → architect → delegated implementation → verified on the real surface.
-- **PR watching.** `/dstack babysit PR 123` (drive) or `/dstack check on PR 123` (one pass). Landing a green stack is `ship the stack`, a different playbook with its own gates.
+- **PR watching.** `/dstack babysit PR 123` watches through merge and verified resource cleanup; green checks and approval waits do not end it. Closure without merge also triggers cleanup. `/dstack check on PR 123` is one pass. Babysitting never authorizes a merge; landing a green stack is `ship the stack`, a different playbook with its own gates.
 - **Cleanup.** `/dstack refactor Z, behavior identical` → the pin comes first; no pin, no refactor.
 - **Design fork.** Don't answer "which approach?" yourself if a run can answer it: say `prototype both and show me`.
 

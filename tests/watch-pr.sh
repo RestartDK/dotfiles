@@ -15,7 +15,16 @@ set -u
 case "$*" in
 "api user -q .login") printf 'RestartDK\n' ;;
 "repo view --json nameWithOwner -q .nameWithOwner") printf 'twin-so/cobb\n' ;;
-"pr view "*) cat "$WATCH_PR_TEST_CASE_DIR/view.json" ;;
+"pr view "*)
+  if [[ -f "$WATCH_PR_TEST_CASE_DIR/poll" ]]; then
+    read -r poll <"$WATCH_PR_TEST_CASE_DIR/poll"
+    poll=$((poll + 1))
+    printf '%s\n' "$poll" >"$WATCH_PR_TEST_CASE_DIR/poll"
+    cat "$WATCH_PR_TEST_CASE_DIR/view-$poll.json"
+  else
+    cat "$WATCH_PR_TEST_CASE_DIR/view.json"
+  fi
+  ;;
 "api graphql "*) cat "$WATCH_PR_TEST_CASE_DIR/threads.json" ;;
 *)
   printf 'unexpected gh call: %s\n' "$*" >&2
@@ -338,5 +347,54 @@ JSON
 invoke 42 --me RestartDK --repo twin-so/cobb --status-only
 assert_failure "graphql error"
 assert_contains "MAX_NODE_LIMIT_EXCEEDED" "$last_output" "graphql error message"
+
+for waiting in READY REVIEW_REQUIRED; do
+  for outcome in MERGED CLOSED CI_FAIL CHANGES_REQUESTED; do
+    fixture "lifecycle-$waiting-$outcome"
+    threads <<'JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}
+JSON
+    if [[ $waiting == REVIEW_REQUIRED ]]; then
+      view <<'JSON'
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[],"isDraft":false}
+JSON
+    fi
+    cp "$fixture_dir/view.json" "$fixture_dir/view-1.json"
+    cp "$fixture_dir/view.json" "$fixture_dir/view-2.json"
+    case $outcome in
+    MERGED | CLOSED)
+      jq --arg state "$outcome" '.state = $state' "$fixture_dir/view.json" >"$fixture_dir/view-3.json"
+      verdict=$outcome
+      ;;
+    CI_FAIL)
+      jq '.statusCheckRollup = [{"name":"build","conclusion":"FAILURE"}]' "$fixture_dir/view.json" >"$fixture_dir/view-3.json"
+      verdict=CI_FAIL
+      ;;
+    CHANGES_REQUESTED)
+      jq '.reviewDecision = "CHANGES_REQUESTED"' "$fixture_dir/view.json" >"$fixture_dir/view-3.json"
+      verdict=REVIEW
+      ;;
+    esac
+    printf '0\n' >"$fixture_dir/poll"
+    invoke 42 --me RestartDK --repo twin-so/cobb --interval 0
+    assert_status 0 "$waiting to $outcome status"
+    assert_eq 3 "$(jq -s 'length' <<<"$last_output")" "$waiting stays armed across repeated snapshots"
+    assert_eq "$verdict" "$(jq -sr 'last.verdict' <<<"$last_output")" "$waiting wakes on $outcome"
+  done
+done
+
+for outcome in MERGED CLOSED; do
+  fixture "deferred-conflict-$outcome"
+  threads <<'JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}
+JSON
+  jq '.mergeable = "CONFLICTING"' "$fixture_dir/view.json" >"$fixture_dir/view-1.json"
+  cp "$fixture_dir/view-1.json" "$fixture_dir/view-2.json"
+  jq --arg state "$outcome" '.state = $state' "$fixture_dir/view.json" >"$fixture_dir/view-3.json"
+  printf '0\n' >"$fixture_dir/poll"
+  invoke 42 --me RestartDK --repo twin-so/cobb --interval 0 --until-closed
+  assert_status 0 "deferred conflict to $outcome status"
+  assert_eq "[\"CONFLICT\",\"CONFLICT\",\"$outcome\"]" "$(jq -sc '[.[].verdict]' <<<"$last_output")" "deferred blocker keeps cleanup watch armed"
+done
 
 printf 'watch-pr tests passed\n'
