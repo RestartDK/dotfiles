@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Stack-agnostic PR verdict watcher. Reads GitHub state, never mutates anything.
 # Verdicts: MERGED | CLOSED | CONFLICT | CI_FAIL | THREADS | HUMAN_PENDING | WAITING | REVIEW | READY
-# usage: watch-pr <pr-number> [--repo owner/name] [--status-only] [--pretty] [--interval N] [--me LOGIN]
 set -euo pipefail
 
-PR="" REPO="" ME="" STATUS_ONLY=0 PRETTY=0 INTERVAL=60
+PR="" REPO="" ME="" MODE=drive PRETTY=0 INTERVAL=60
 MARKER="Checking with the author before changing anything"
 FIXED_PREFIX="Fixed in "
 
@@ -19,7 +18,11 @@ while [ $# -gt 0 ]; do
     shift 2
     ;;
   --status-only)
-    STATUS_ONLY=1
+    MODE=status
+    shift
+    ;;
+  --until-closed)
+    MODE=closed
     shift
     ;;
   --pretty)
@@ -41,7 +44,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$PR" ] || {
-  echo "usage: watch-pr <pr-number> [--repo owner/name] [--status-only] [--pretty] [--interval N] [--me LOGIN]" >&2
+  echo "usage: watch-pr <pr-number> [--repo owner/name] [--status-only | --until-closed] [--pretty] [--interval N] [--me LOGIN]" >&2
   exit 1
 }
 
@@ -135,24 +138,19 @@ emit() {
   fi
 }
 
-terminal() { case "$1" in READY | CONFLICT | CI_FAIL | THREADS | REVIEW | MERGED | CLOSED) return 0 ;; *) return 1 ;; esac }
+terminal() {
+  case "$MODE:$1" in
+  *:MERGED | *:CLOSED | drive:CONFLICT | drive:CI_FAIL | drive:THREADS) return 0 ;;
+  drive:REVIEW) [ "$2" = CHANGES_REQUESTED ] ;;
+  *) return 1 ;;
+  esac
+}
 
 s=$(snapshot)
 emit "$s"
-[ "$STATUS_ONLY" = 1 ] && exit 0
-v=$(echo "$s" | jq -r .verdict)
-# READY needs two consecutive snapshots: right after a push the check rollup is
-# empty until GitHub attaches the new runs, and a single empty poll reads as green.
-ready_seen=0
-while true; do
-  if terminal "$v"; then
-    if [ "$v" != READY ] || [ "$ready_seen" = 1 ]; then break; fi
-    ready_seen=1
-  else
-    ready_seen=0
-  fi
+[ "$MODE" = status ] && exit 0
+while ! terminal "$(echo "$s" | jq -r .verdict)" "$(echo "$s" | jq -r .review)"; do
   sleep "$INTERVAL"
   s=$(snapshot)
   emit "$s"
-  v=$(echo "$s" | jq -r .verdict)
 done
