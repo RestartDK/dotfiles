@@ -30,6 +30,8 @@ in
       openssh.authorizedKeys.keyFiles = [ ../../config/ssh/public-keys/ci-deploy.pub ];
     };
 
+    nix.settings.trusted-users = [ cfg.userName ];
+
     security.sudo.extraRules = [
       {
         users = [ cfg.userName ];
