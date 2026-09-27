@@ -9,7 +9,10 @@ _:
         header = "Host nana srv-nana";
         HostName = "100.111.97.20";
         User = "dkumlin";
-        IdentityFile = "~/.ssh/nana.pub";
+        IdentityFile = [
+          "~/.ssh/nana.pub"
+          "~/.ssh/ci-deploy.pub"
+        ];
         IdentitiesOnly = true;
       };
 
@@ -17,7 +20,10 @@ _:
         header = "Host hatchi srv-hatchi";
         HostName = "100.85.39.42";
         User = "dkumlin";
-        IdentityFile = "~/.ssh/hatchi.pub";
+        IdentityFile = [
+          "~/.ssh/hatchi.pub"
+          "~/.ssh/ci-deploy.pub"
+        ];
         IdentitiesOnly = true;
       };
 
@@ -49,6 +55,7 @@ _:
     ".ssh/nana.pub".source = ../../config/ssh/public-keys/nana.pub;
     ".ssh/hatchi.pub".source = ../../config/ssh/public-keys/hatchi.pub;
     ".ssh/titan.pub".source = ../../config/ssh/public-keys/titan.pub;
+    ".ssh/ci-deploy.pub".source = ../../config/ssh/public-keys/ci-deploy.pub;
   };
 
   xdg.configFile."1Password/ssh/agent.toml".text = ''

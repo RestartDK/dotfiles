@@ -115,3 +115,11 @@ traitor deploy srv-hatchi --remote-build --dry-run
 The pre-switch check reads the manifest and decrypts the bootstrap without installing secrets. The pinned deploy-rs ignores the activation script's failure status in dry-activation mode, so exit zero does not prove these checks passed. Inspect the diagnostics and resolve any reported failure before a real deployment. Real activation still rejects failed pre-switch checks.
 
 A dry run does not prove application startup or automatic rollback. Confirm that Hatchi actually receives `192.168.200.70`; the production DNS answer does not assign that address to an interface. Keep console access available during the first real deployment, particularly when the previous generation was not installed with deploy-rs.
+
+The generation that first contains the deployment account must be activated by a credential that already exists on the host. Run that first activation as root over SSH from the Mac:
+
+```bash
+ssh root@srv-hatchi 'nixos-rebuild switch --flake /home/dkumlin/.config/dotfiles#srv-hatchi'
+```
+
+After that generation is running, `traitor deploy srv-hatchi --remote-build` and CI both authenticate as the deployment account with no password.

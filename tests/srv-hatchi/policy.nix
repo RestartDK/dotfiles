@@ -333,7 +333,26 @@ assert
   ];
 assert self.deploy.autoRollback && self.deploy.magicRollback;
 assert self.deploy.nodes.srv-hatchi.hostname == "srv-hatchi";
-assert self.deploy.nodes.srv-hatchi.sshUser == cfg.my.host.userName;
+assert self.deploy.nodes.srv-hatchi.sshUser == cfg.my.deploy.userName;
+assert self.deploy.nodes.srv-nana.sshUser == cfg.my.deploy.userName;
+assert builtins.all (node: !node.interactiveSudo) (builtins.attrValues self.deploy.nodes);
+assert cfg.users.users.${cfg.my.deploy.userName}.isSystemUser;
+assert cfg.users.users.${cfg.my.deploy.userName}.group == cfg.my.deploy.userName;
+assert !(builtins.elem "wheel" cfg.users.users.${cfg.my.deploy.userName}.extraGroups);
+assert cfg.users.users.${cfg.my.deploy.userName}.hashedPassword == null;
+assert cfg.users.users.${cfg.my.deploy.userName}.password == null;
+assert builtins.any (
+  rule:
+  builtins.elem cfg.my.deploy.userName rule.users
+  && builtins.any (
+    command: command.command == "ALL" && builtins.elem "NOPASSWD" command.options
+  ) rule.commands
+) cfg.security.sudo.extraRules;
+assert builtins.all (rule: rule.users == [ cfg.my.deploy.userName ]) (
+  builtins.filter (
+    rule: builtins.any (command: builtins.elem "NOPASSWD" command.options) rule.commands
+  ) cfg.security.sudo.extraRules
+);
 assert self.nixosConfigurations.srv-nana.config.virtualisation.docker.enable;
 assert home.home.username == cfg.my.host.userName;
 assert home.home.homeDirectory == cfg.my.host.homeDirectory;
