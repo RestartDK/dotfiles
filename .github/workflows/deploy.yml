@@ -52,4 +52,4 @@ jobs:
           mkdir -p "$HOME/.ssh"
           cat "config/ssh/known_hosts/$TARGET" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
-      - run: ./bin/traitor deploy "$TARGET"
+      - run: ./bin/traitor deploy "$TARGET" --remote-build
