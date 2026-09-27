@@ -50,20 +50,6 @@ jobs:
         run: |
           mkdir -p "$HOME/.ssh"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-      - name: Synchronize Nana's live dotfiles
-        if: env.TARGET == 'srv-nana'
-        env:
-          EXPECTED_REVISION: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          remote_traitor="/tmp/traitor-$EXPECTED_REVISION"
-          cleanup() {
-            ssh "dkumlin@$TARGET" rm -f "$remote_traitor" || true
-          }
-          trap cleanup EXIT
-          scp ./bin/traitor "dkumlin@$TARGET:$remote_traitor"
-          ssh "dkumlin@$TARGET" env \
-            FLAKE_DIR=/home/dkumlin/.config/dotfiles \
-            bash "$remote_traitor" sync --expect "$EXPECTED_REVISION"
       - run: ./bin/traitor deploy "$TARGET"
 
   hatchi:
