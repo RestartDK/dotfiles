@@ -339,6 +339,7 @@ assert builtins.all (node: !node.interactiveSudo) (builtins.attrValues self.depl
 assert cfg.users.users.${cfg.my.deploy.userName}.isSystemUser;
 assert cfg.users.users.${cfg.my.deploy.userName}.group == cfg.my.deploy.userName;
 assert !(builtins.elem "wheel" cfg.users.users.${cfg.my.deploy.userName}.extraGroups);
+assert builtins.elem cfg.my.deploy.userName cfg.nix.settings.trusted-users;
 assert cfg.users.users.${cfg.my.deploy.userName}.hashedPassword == null;
 assert cfg.users.users.${cfg.my.deploy.userName}.password == null;
 assert builtins.any (
