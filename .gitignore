@@ -29,3 +29,6 @@ node_modules/
 # editor/system noise
 .DS_Store
 *.swp
+
+# machine-local skill sync drop
+config/agents/skills/synced/

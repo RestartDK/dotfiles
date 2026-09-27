@@ -20,9 +20,9 @@ done < <(find "$skills" -mindepth 1 -maxdepth 1 -type f)
 while IFS= read -r dir; do
   name=$(basename "$dir")
   case $name in
-  dstack | .system) continue ;;
+  dstack | .system | synced) continue ;;
   esac
-  [ -f "$dir/SKILL.md" ] || fail "$name is neither the dstack bundle, .system, nor a skill"
+  [ -f "$dir/SKILL.md" ] || fail "$name is neither the dstack bundle, .system, the synced drop area, nor a skill"
 done < <(find "$skills" -mindepth 1 -maxdepth 1 -type d)
 
 for name in dstack-agent comment-sicko; do
