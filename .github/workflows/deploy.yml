@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  nana:
+  deploy:
     if: >-
       false &&
       github.event.workflow_run.conclusion == 'success' &&
@@ -19,16 +19,20 @@ jobs:
       github.event.workflow_run.head_sha == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment: srv-nana
+    environment: deploy
     permissions:
       contents: read
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [srv-nana, srv-hatchi]
     concurrency:
-      group: deploy-srv-nana
+      group: "deploy-${{ matrix.host }}"
       cancel-in-progress: false
     env:
-      TARGET: srv-nana
-    steps: &deploy_steps
+      TARGET: "${{ matrix.host }}"
+    steps:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -44,30 +48,9 @@ jobs:
       - uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Pin the server SSH host key
-        env:
-          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+      - name: Install the committed SSH host keys
         run: |
           mkdir -p "$HOME/.ssh"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          cat "config/ssh/known_hosts/$TARGET" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
       - run: ./bin/traitor deploy "$TARGET"
-
-  hatchi:
-    if: >-
-      false &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_sha == github.sha
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    environment: srv-hatchi
-    permissions:
-      contents: read
-      id-token: write
-    concurrency:
-      group: deploy-srv-hatchi
-      cancel-in-progress: false
-    env:
-      TARGET: srv-hatchi
-    steps: *deploy_steps
