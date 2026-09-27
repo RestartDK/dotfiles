@@ -164,7 +164,8 @@ run_rebuild() {
       PATH="$(sudo_path)" /usr/bin/sudo ./result/sw/bin/darwin-rebuild --flake ".#$host" --no-write-lock-file "$action" "$@"
     fi
   else
-    PATH="$(sudo_path)" nixos-rebuild --flake "$flake_dir#$host" --sudo --no-write-lock-file "$action" "$@"
+    # Nix refuses to read a git checkout owned by another user, and --sudo evaluates as root.
+    PATH="$(sudo_path)" nixos-rebuild --flake "path:$flake_dir#$host" --sudo --no-write-lock-file "$action" "$@"
   fi
 }
 
