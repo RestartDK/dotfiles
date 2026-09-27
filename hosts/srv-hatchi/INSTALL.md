@@ -119,7 +119,9 @@ A dry run does not prove application startup or automatic rollback. Confirm that
 The generation that first contains the deployment account must be activated by a credential that already exists on the host. Run that first activation as root over SSH from the Mac:
 
 ```bash
-ssh root@srv-hatchi 'nixos-rebuild switch --flake /home/dkumlin/.config/dotfiles#srv-hatchi'
+ssh root@srv-hatchi 'nixos-rebuild switch --flake "path:/home/dkumlin/.config/dotfiles#srv-hatchi"'
 ```
+
+The `path:` prefix is required. Without it, Nix reads the checkout as a Git repository through libgit2, which refuses a repository owned by another user, so a root rebuild cannot evaluate a checkout owned by `dkumlin`.
 
 After that generation is running, `traitor deploy srv-hatchi --remote-build` and CI both authenticate as the deployment account with no password.
