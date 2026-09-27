@@ -1,17 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const FORMAT_VERSION = 1;
+const FORMAT_VERSION = 1;
 export const POLL_MS = 150;
 const KEY_PATTERN = /^[a-z][a-z0-9-]{0,31}:[^\s]{1,240}$/;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
@@ -82,11 +74,11 @@ export function encodeKey(key: string): string {
   return key.replace(/%/g, "%25").replace(/\//g, "%2F");
 }
 
-export function decodeKey(encoded: string): string {
+function decodeKey(encoded: string): string {
   return encoded.replace(/%2F/g, "/").replace(/%25/g, "%");
 }
 
-export function assertId(id: string): string {
+function assertId(id: string): string {
   if (!ID_PATTERN.test(id)) throw new Error(`Invalid attempt id ${JSON.stringify(id)}`);
   return id;
 }
@@ -99,19 +91,11 @@ function attemptsDir(root: string): string {
   return join(root, "attempts");
 }
 
-function queueDir(root: string): string {
-  return join(root, "queue");
-}
-
 function leaseDir(root: string, resource: string): string {
   return join(leasesDir(root), encodeKey(resource));
 }
 
-function keyQueueDir(root: string, resource: string): string {
-  return join(queueDir(root), encodeKey(resource));
-}
-
-export function attemptPath(root: string, id: string): string {
+function attemptPath(root: string, id: string): string {
   return join(attemptsDir(root), `${assertId(id)}.json`);
 }
 
@@ -119,13 +103,17 @@ export function logPath(root: string, id: string): string {
   return join(attemptsDir(root), `${assertId(id)}.log`);
 }
 
-export function ensureState(root: string): void {
-  for (const dir of [root, leasesDir(root), attemptsDir(root), queueDir(root)]) {
+function statusPath(root: string, id: string): string {
+  return join(attemptsDir(root), `${assertId(id)}.status`);
+}
+
+function ensureState(root: string): void {
+  for (const dir of [root, leasesDir(root), attemptsDir(root)]) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 }
 
-export function processAlive(pid: number): boolean {
+function processAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -135,7 +123,7 @@ export function processAlive(pid: number): boolean {
   }
 }
 
-export function groupAlive(pgid: number): boolean {
+function groupAlive(pgid: number): boolean {
   try {
     process.kill(-pgid, 0);
     return true;
@@ -217,10 +205,15 @@ export function readLease(root: string, resource: string): LeaseRead {
     return { kind: "blocked", holder, reason: "Holder never recorded a process group" };
   }
   if (groupAlive(holder.pgid)) return { kind: "held", holder };
+  const recorded = readStatus(root, holder.id);
+  if (recorded !== undefined) {
+    settle(root, holder, recorded);
+    return { kind: "free" };
+  }
   return {
     kind: "blocked",
     holder,
-    reason: "Holder exited without recording an outcome; inspect the resource before resolving",
+    reason: "Holder exited without recording an exit status; inspect the resource before resolving",
   };
 }
 
@@ -234,7 +227,7 @@ function writeHolder(root: string, holder: Holder): void {
   );
 }
 
-export function writeAttempt(root: string, attempt: Attempt): void {
+function writeAttempt(root: string, attempt: Attempt): void {
   ensureState(root);
   writeFileSync(attemptPath(root, attempt.id), `${JSON.stringify(attempt, null, 2)}\n`, {
     mode: 0o600,
@@ -250,29 +243,6 @@ export function readAttempt(root: string, id: string): Attempt | undefined {
   } catch {
     return undefined;
   }
-}
-
-function waitMarkerPath(root: string, resource: string, id: string): string {
-  mkdirSync(keyQueueDir(root, resource), { recursive: true, mode: 0o700 });
-  return join(
-    keyQueueDir(root, resource),
-    `${Date.now().toString().padStart(13, "0")}-${assertId(id)}.wait`,
-  );
-}
-
-function ownMarker(root: string, resource: string, id: string): string | undefined {
-  const dir = keyQueueDir(root, resource);
-  if (!existsSync(dir)) return undefined;
-  const name = readdirSync(dir).find((entry) => entry.endsWith(`-${id}.wait`));
-  return name === undefined ? undefined : join(dir, name);
-}
-
-function queueHead(root: string, resource: string): string | undefined {
-  const dir = keyQueueDir(root, resource);
-  if (!existsSync(dir)) return undefined;
-  return readdirSync(dir)
-    .filter((entry) => entry.endsWith(".wait"))
-    .sort()[0];
 }
 
 function tryTake(root: string, spec: JobSpec): boolean {
@@ -312,29 +282,17 @@ export async function acquire(
 ): Promise<AcquireResult> {
   const waitMs = options.waitMs ?? 0;
   const deadline = Date.now() + waitMs;
-  let mine: string | undefined;
   for (;;) {
     const state = readLease(root, spec.resource);
     if (state.kind === "blocked") return { ok: false, state };
-    if (state.kind === "free") {
-      const head = queueHead(root, spec.resource);
-      const owned = ownMarker(root, spec.resource, spec.id);
-      const mayTake =
-        head === undefined || (owned !== undefined && head === owned.split("/").pop());
-      if (mayTake && tryTake(root, spec)) {
-        if (owned && existsSync(owned)) unlinkSync(owned);
-        const holder = readHolder(root, spec.resource);
-        if (holder === "corrupt" || holder === undefined)
-          throw new Error("Lease vanished after creation");
-        return { ok: true, holder };
-      }
+    if (state.kind === "free" && tryTake(root, spec)) {
+      const holder = readHolder(root, spec.resource);
+      if (holder === "corrupt" || holder === undefined)
+        throw new Error("Lease vanished after creation");
+      return { ok: true, holder };
     }
-    if (Date.now() >= deadline) {
-      if (mine && existsSync(mine)) unlinkSync(mine);
-      return { ok: false, state };
-    }
+    if (Date.now() >= deadline) return { ok: false, state };
     options.onWait?.(state);
-    if (mine === undefined) mine = waitMarkerPath(root, spec.resource, spec.id);
     await sleep(POLL_MS);
   }
 }
@@ -343,9 +301,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function settle(root: string, holder: Holder, exitCode?: number): Attempt {
-  const survivors = !groupConfirmedAbsent(holder.pgid);
-  const attempt: Attempt = {
+function attemptOf(
+  holder: Holder,
+  fields: Pick<Attempt, "finishedAt" | "outcome" | "state"> & {
+    exitCode?: number;
+    reason?: string;
+  },
+): Attempt {
+  return {
     version: FORMAT_VERSION,
     id: holder.id,
     owner: holder.owner,
@@ -354,18 +317,52 @@ export function settle(root: string, holder: Holder, exitCode?: number): Attempt
     revision: holder.revision,
     cwd: holder.cwd,
     startedAt: holder.startedAt,
-    finishedAt: new Date().toISOString(),
     pgid: holder.pgid,
+    finishedAt: fields.finishedAt,
+    exitCode: fields.exitCode,
+    outcome: fields.outcome,
+    state: fields.state,
+    reason: fields.reason,
+  };
+}
+
+function readStatus(root: string, id: string): number | undefined {
+  const path = statusPath(root, id);
+  if (!existsSync(path)) return undefined;
+  const parsed = Number.parseInt(readFileSync(path, "utf8").trim(), 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function quarantine(root: string, holder: Holder, reason: string): Attempt {
+  const attempt = attemptOf(holder, {
+    finishedAt: new Date().toISOString(),
+    outcome: "unknown",
+    state: "blocked",
+    reason,
+  });
+  writeHolder(root, { ...holder, state: "blocked", reason });
+  writeAttempt(root, attempt);
+  return attempt;
+}
+
+function settle(root: string, holder: Holder, exitCode?: number): Attempt {
+  const survivors = !groupConfirmedAbsent(holder.pgid);
+  const reason = survivors
+    ? "Command exited but its process group is still alive; inspect before resolving"
+    : undefined;
+  const attempt = attemptOf(holder, {
+    finishedAt: new Date().toISOString(),
     exitCode,
     outcome: holder.cancelRequested ? "cancelled" : exitCode === 0 ? "completed" : "failed",
     state: survivors ? "blocked" : "settled",
-  };
-  if (survivors)
-    attempt.reason =
-      "Command exited but its process group is still alive; inspect before resolving";
-  if (survivors) writeHolder(root, { ...holder, state: "blocked", reason: attempt.reason });
+    reason,
+  });
+  if (survivors) writeHolder(root, { ...holder, state: "blocked", reason });
   writeAttempt(root, attempt);
-  if (!survivors) rmSync(leaseDir(root, holder.resource), { recursive: true, force: true });
+  if (!survivors) {
+    rmSync(leaseDir(root, holder.resource), { recursive: true, force: true });
+    rmSync(statusPath(root, holder.id), { force: true });
+  }
   return attempt;
 }
 
@@ -379,8 +376,22 @@ function assertCommand(command: string[]): void {
   }
 }
 
-function spawnCommand(spec: JobSpec, mode: "inherit" | { logFile: string }): ChildProcess {
+function resolveExecutable(command: string): string | undefined {
+  if (command.includes("/")) return existsSync(command) ? command : undefined;
+  for (const dir of (process.env.PATH ?? "").split(":")) {
+    if (dir !== "" && existsSync(join(dir, command))) return join(dir, command);
+  }
+  return undefined;
+}
+
+function spawnCommand(
+  root: string,
+  spec: JobSpec,
+  mode: "inherit" | { logFile: string },
+): ChildProcess {
   assertCommand(spec.command);
+  if (resolveExecutable(spec.command[0]) === undefined)
+    throw new Error(`Command not found: ${spec.command[0]}`);
   if (mode === "inherit") {
     return spawn(spec.command[0], spec.command.slice(1), {
       cwd: spec.cwd,
@@ -388,12 +399,14 @@ function spawnCommand(spec: JobSpec, mode: "inherit" | { logFile: string }): Chi
       stdio: "inherit",
     });
   }
-  const redirect = 'log=$1; shift; exec >>"$log" 2>&1; exec "$@"';
-  return spawn("/bin/sh", ["-c", redirect, "pi-coordination", mode.logFile, ...spec.command], {
-    cwd: spec.cwd,
-    detached: true,
-    stdio: "ignore",
-  });
+  // Bun rejects numeric stdio descriptors, so the wrapper redirects the log and records the status.
+  const wrapper =
+    'log=$1; status=$2; shift 2; { "$@"; code=$?; echo "$code" > "$status"; exit "$code"; } >>"$log" 2>&1';
+  return spawn(
+    "/bin/sh",
+    ["-c", wrapper, "pi-coordination", mode.logFile, statusPath(root, spec.id), ...spec.command],
+    { cwd: spec.cwd, detached: true, stdio: "ignore" },
+  );
 }
 
 function running(root: string, spec: JobSpec, pgid: number | undefined): Holder {
@@ -414,25 +427,24 @@ function running(root: string, spec: JobSpec, pgid: number | undefined): Holder 
   return holder;
 }
 
-function failedStart(root: string, spec: JobSpec, error: unknown): Attempt {
+function currentHolder(root: string, spec: JobSpec): Holder {
+  const holder = readHolder(root, spec.resource);
+  if (holder === undefined || holder === "corrupt")
+    throw new Error("Lease vanished after creation");
+  return holder;
+}
+
+function failedStart(root: string, holder: Holder, error: unknown): Attempt {
   const detail = error instanceof Error ? error.message : String(error);
-  const now = new Date().toISOString();
-  const attempt: Attempt = {
-    version: FORMAT_VERSION,
-    id: spec.id,
-    owner: spec.owner,
-    resource: spec.resource,
-    label: spec.label,
-    revision: spec.revision,
-    cwd: spec.cwd,
-    startedAt: now,
-    finishedAt: now,
+  const attempt = attemptOf(holder, {
+    finishedAt: new Date().toISOString(),
     outcome: "failed",
     state: "settled",
     reason: `Command failed to start: ${detail}`,
-  };
+  });
   writeAttempt(root, attempt);
-  rmSync(leaseDir(root, spec.resource), { recursive: true, force: true });
+  rmSync(leaseDir(root, holder.resource), { recursive: true, force: true });
+  rmSync(statusPath(root, holder.id), { force: true });
   return attempt;
 }
 
@@ -453,13 +465,13 @@ export async function startDetached(
   if (!acquired.ok) return { kind: "refused", state: acquired.state };
   let child: ChildProcess;
   try {
-    child = spawnCommand(spec, { logFile: logPath(root, spec.id) });
+    child = spawnCommand(root, spec, { logFile: logPath(root, spec.id) });
   } catch (error) {
-    return { kind: "failed", attempt: failedStart(root, spec, error) };
+    return { kind: "failed", attempt: failedStart(root, currentHolder(root, spec), error) };
   }
   if (child.pid === undefined) {
     const error = await new Promise<unknown>((resolve) => child.once("error", resolve));
-    return { kind: "failed", attempt: failedStart(root, spec, error) };
+    return { kind: "failed", attempt: failedStart(root, currentHolder(root, spec), error) };
   }
   const holder = running(root, spec, child.pid);
   child.unref();
@@ -483,9 +495,9 @@ export async function runInForeground(
   if (!acquired.ok) return { kind: "refused", state: acquired.state };
   let child: ChildProcess;
   try {
-    child = spawnCommand(spec, "inherit");
+    child = spawnCommand(root, spec, "inherit");
   } catch (error) {
-    return { kind: "failed", attempt: failedStart(root, spec, error) };
+    return { kind: "failed", attempt: failedStart(root, currentHolder(root, spec), error) };
   }
   const holder = running(root, spec, child.pid);
   const outcome = await new Promise<
@@ -496,7 +508,7 @@ export async function runInForeground(
       resolve({ ok: true, exitCode: signal ? undefined : (code ?? undefined) }),
     );
   });
-  if (!outcome.ok) return { kind: "failed", attempt: failedStart(root, spec, outcome.error) };
+  if (!outcome.ok) return { kind: "failed", attempt: failedStart(root, holder, outcome.error) };
   return { kind: "settled", attempt: settle(root, holder, outcome.exitCode) };
 }
 
@@ -506,14 +518,23 @@ export type WatchResult =
   | { kind: "missing" };
 
 export function watch(root: string, id: string): WatchResult {
+  const holder = findLeaseById(root, id);
+  if (holder) {
+    const recorded = readStatus(root, holder.id);
+    if (recorded !== undefined) return { kind: "settled", attempt: settle(root, holder, recorded) };
+    if (groupConfirmedAbsent(holder.pgid))
+      return {
+        kind: "settled",
+        attempt: quarantine(
+          root,
+          holder,
+          "The command ended without recording an exit status; inspect before resolving",
+        ),
+      };
+    return { kind: "running", holder };
+  }
   const attempt = readAttempt(root, id);
-  if (attempt) return { kind: "settled", attempt };
-  const found = findLeaseById(root, id);
-  if (!found) return { kind: "missing" };
-  const holder = found.state.kind === "free" ? undefined : found.state.holder;
-  if (!holder) return { kind: "missing" };
-  if (groupConfirmedAbsent(holder.pgid)) return { kind: "settled", attempt: settle(root, holder) };
-  return { kind: "running", holder };
+  return attempt ? { kind: "settled", attempt } : { kind: "missing" };
 }
 
 export interface LeaseListItem {
@@ -544,11 +565,11 @@ export function listAttempts(root: string, limit = 50): Attempt[] {
     });
 }
 
-export function findLeaseById(root: string, id: string): LeaseListItem | undefined {
-  return listLeases(root).find((item) => {
-    const holder = item.state.kind === "free" ? undefined : item.state.holder;
-    return holder?.id === id;
-  });
+function findLeaseById(root: string, id: string): Holder | undefined {
+  for (const item of listLeases(root)) {
+    if (item.state.kind !== "free" && item.state.holder?.id === id) return item.state.holder;
+  }
+  return undefined;
 }
 
 export type CancelResult =
@@ -557,13 +578,12 @@ export type CancelResult =
   | { kind: "missing" };
 
 export function cancelAttempt(root: string, id: string): CancelResult {
-  const found = findLeaseById(root, id);
-  if (!found) {
+  const holder = findLeaseById(root, id);
+  if (!holder) {
     const attempt = readAttempt(root, id);
     return attempt ? { kind: "settled", attempt } : { kind: "missing" };
   }
-  const holder = found.state.kind === "free" ? undefined : found.state.holder;
-  if (!holder || holder.pgid === undefined) return { kind: "missing" };
+  if (holder.pgid === undefined) return { kind: "missing" };
   try {
     process.kill(-holder.pgid, "SIGTERM");
   } catch (error) {
@@ -579,34 +599,30 @@ export function cancelAttempt(root: string, id: string): CancelResult {
   return { kind: "cancelled", holder: blocked };
 }
 
-export function resolveBlocked(root: string, id: string, inspected: boolean): Attempt {
-  if (!inspected)
+export function resolveBlocked(root: string, id: string, options: { inspected: boolean }): Attempt {
+  if (!options.inspected)
     throw new Error("Inspect the resource and the process group, then pass --inspected");
-  const found = findLeaseById(root, id);
-  if (!found) throw new Error(`No attempt ${id} is holding a resource`);
-  const holder = found.state.kind === "free" ? undefined : found.state.holder;
+  const holder = findLeaseById(root, id);
   if (!holder) throw new Error(`No attempt ${id} is holding a resource`);
   if (!groupConfirmedAbsent(holder.pgid)) {
     throw new Error("Recorded process group is not confirmed absent; the resource stays blocked");
   }
-  const attempt: Attempt = {
-    version: FORMAT_VERSION,
-    id: holder.id,
-    owner: holder.owner,
-    resource: holder.resource,
-    label: holder.label,
-    revision: holder.revision,
-    cwd: holder.cwd,
-    startedAt: holder.startedAt,
+  const attempt = attemptOf(holder, {
     finishedAt: new Date().toISOString(),
-    pgid: holder.pgid,
     outcome: "unknown",
     state: "blocked",
     reason: "Operator acknowledged inspection; outcome remains unknown",
-  };
+  });
   writeAttempt(root, attempt);
   rmSync(leaseDir(root, holder.resource), { recursive: true, force: true });
+  rmSync(statusPath(root, holder.id), { force: true });
   return attempt;
+}
+
+export function tail(root: string, id: string, lines = 20): string {
+  const path = logPath(root, id);
+  if (!existsSync(path)) return "";
+  return readFileSync(path, "utf8").trimEnd().split("\n").slice(-lines).join("\n");
 }
 
 export function describe(attempt: Attempt): string {

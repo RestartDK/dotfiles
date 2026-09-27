@@ -1,5 +1,4 @@
 import { parseArgs } from "node:util";
-import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   cancelAttempt,
@@ -7,9 +6,9 @@ import {
   describeLease,
   listAttempts,
   listLeases,
-  logPath,
   POLL_MS,
   readAttempt,
+  tail,
   resolveBlocked,
   runInForeground,
   startDetached,
@@ -58,13 +57,6 @@ function refuse(reason: string): number {
   return 75;
 }
 
-function tail(root: string, id: string, lines = 20): string {
-  const path = logPath(root, id);
-  if (!existsSync(path)) return "";
-  const content = readFileSync(path, "utf8").trimEnd().split("\n");
-  return content.slice(-lines).join("\n");
-}
-
 async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
@@ -106,7 +98,10 @@ async function main(): Promise<number> {
           return 0;
         }
         if (result.kind === "existing") return refuse(`Attempt ${job.id} already exists`);
-        if (result.kind === "failed") return refuse(describe(result.attempt));
+        if (result.kind === "failed") {
+          console.error(describe(result.attempt));
+          return 1;
+        }
         return refuse(
           `Resource ${job.resource} is not available: ${result.state.kind === "blocked" ? result.state.reason : "held"}`,
         );
@@ -117,15 +112,16 @@ async function main(): Promise<number> {
       });
       if (result.kind === "settled") {
         console.log(describe(result.attempt));
-        const output = tail(root, job.id);
-        if (output) console.log(output);
         return result.attempt.exitCode ?? 1;
       }
       if (result.kind === "existing") {
         console.log(describe(result.attempt));
         return result.attempt.exitCode ?? 0;
       }
-      if (result.kind === "failed") return refuse(describe(result.attempt));
+      if (result.kind === "failed") {
+        console.error(describe(result.attempt));
+        return 1;
+      }
       return refuse(
         `Resource ${job.resource} is not available: ${result.state.kind === "blocked" ? result.state.reason : "held"}`,
       );
@@ -176,7 +172,7 @@ async function main(): Promise<number> {
     }
     case "resolve": {
       if (values.id === undefined) throw new Error("--id is required");
-      const attempt = resolveBlocked(root, values.id, values.inspected === true);
+      const attempt = resolveBlocked(root, values.id, { inspected: values.inspected === true });
       console.log(describe(attempt));
       return 0;
     }

@@ -6,11 +6,14 @@ import {
   acquire,
   encodeKey,
   groupConfirmedAbsent,
+  readAttempt,
   readLease,
   resolveBlocked,
   runInForeground,
   startDetached,
+  watch,
   type JobSpec,
+  type WatchResult,
 } from "../core.ts";
 
 const roots: string[] = [];
@@ -47,8 +50,8 @@ async function waitFor(predicate: () => boolean, timeoutMs = 4000): Promise<void
 function killGroup(pgid: number): void {
   try {
     process.kill(-pgid, "SIGKILL");
-  } catch {
-    // already gone
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
   }
 }
 
@@ -92,6 +95,30 @@ test("the same id returns the existing attempt instead of running twice", async 
   const second = await runInForeground(directory, job);
   expect(second.kind).toBe("existing");
   expect(readFileSync(counter, "utf8").trim().split("\n")).toHaveLength(1);
+});
+
+test("a detached command records its exit status and releases the key", async () => {
+  const directory = root();
+  const job = spec(directory, {
+    id: "detached-status",
+    resource: "test:detached",
+    command: ["/bin/sh", "-c", "exit 7"],
+  });
+
+  const started = await startDetached(directory, job);
+  expect(started.kind).toBe("started");
+  if (started.kind !== "started") throw new Error("unreachable");
+
+  let watched: WatchResult | undefined;
+  await waitFor(() => {
+    watched = watch(directory, job.id);
+    return watched.kind === "settled";
+  });
+  if (watched?.kind !== "settled") throw new Error("unreachable");
+  expect(watched.attempt.outcome).toBe("failed");
+  expect(watched.attempt.exitCode).toBe(7);
+  expect(readAttempt(directory, job.id)?.exitCode).toBe(7);
+  expect(readLease(directory, job.resource).kind).toBe("free");
 });
 
 test("a client that stops watching does not free the key", async () => {
@@ -147,7 +174,7 @@ test("a restart never replays a holder that died without recording an outcome", 
   expect(replay.kind).toBe("refused");
   expect(readFileSync(counter, "utf8").trim().split("\n")).toHaveLength(1);
 
-  const resolved = resolveBlocked(directory, "crashed", true);
+  const resolved = resolveBlocked(directory, "crashed", { inspected: true });
   expect(resolved.outcome).toBe("unknown");
   const granted = await acquire(
     directory,

@@ -38,7 +38,7 @@ The `coordinate` tool takes, watches, and cancels leases, and `/coord` shows hel
 
 ## Rules the code enforces
 
-The same attempt id returns the existing attempt, so retry with the id rather than a fresh one. A key whose holder died stays blocked until someone inspects the resource and runs `resolve --inspected`, and a command that leaves descendants behind keeps its key blocked even after it exits. Only `ESRCH` proves a process group is absent.
+The same attempt id returns the existing attempt, so retry with the id rather than a fresh one. A submitted command writes its output and exit status under `attempts/`, so the next read settles it and releases the key. A holder that died without a status stays blocked until someone inspects the resource and runs `resolve --inspected`, and a command that leaves descendants behind keeps its key blocked even after it exits. Only `ESRCH` proves a process group is absent.
 
 ## Tests
 

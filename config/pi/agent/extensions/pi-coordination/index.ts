@@ -10,9 +10,11 @@ import {
   listAttempts,
   listLeases,
   POLL_MS,
+  readAttempt,
   resolveBlocked,
   startDetached,
   stateDirectory,
+  tail,
   watch,
   type JobSpec,
 } from "./core.ts";
@@ -91,7 +93,7 @@ export default function coordination(pi: ExtensionAPI): void {
           ))
         )
           return;
-        ctx.ui.notify(describe(resolveBlocked(root, id, true)), "info");
+        ctx.ui.notify(describe(resolveBlocked(root, id, { inspected: true })), "info");
         return;
       }
       if (action && action !== "status")
@@ -107,7 +109,7 @@ export default function coordination(pi: ExtensionAPI): void {
     name: "coordinate",
     label: "Coordinate",
     description:
-      "Take an exclusive lease on a shared resource for one command, then queue, watch, or cancel it. Use it for a device, a checkout, or a build target that other agents may touch at the same time. A command that leaves descendants behind keeps its key blocked until someone inspects it and resolves it.",
+      "Take an exclusive lease on a shared resource for one command, then watch, inspect, or cancel it. Use it for a device, a checkout, or a build target that other agents may touch at the same time. A command that leaves descendants behind keeps its key blocked until someone inspects it and resolves it.",
     promptSnippet: "Take an exclusive lease on a shared resource before using it",
     promptGuidelines: [
       "Take a lease before touching a shared device, checkout, or build target, and use the same key other agents use.",
@@ -140,6 +142,21 @@ export default function coordination(pi: ExtensionAPI): void {
         };
       }
       const id = params.id ?? `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+      if (params.action === "status") {
+        const attempt = readAttempt(root, id);
+        if (!attempt)
+          return {
+            content: [{ type: "text", text: `No attempt ${id} is present` }],
+            details: { id },
+          };
+        const output = tail(root, id);
+        return {
+          content: [
+            { type: "text", text: output ? `${describe(attempt)}\n${output}` : describe(attempt) },
+          ],
+          details: { id, attempt },
+        };
+      }
       if (params.action === "watch") {
         watchAttempt(root, id, ctx);
         return {
@@ -152,7 +169,10 @@ export default function coordination(pi: ExtensionAPI): void {
       if (params.action === "cancel") {
         const result = cancelAttempt(root, id);
         if (result.kind === "missing")
-          return { content: [{ type: "text", text: `No attempt ${id} holds a resource` }] };
+          return {
+            content: [{ type: "text", text: `No attempt ${id} holds a resource` }],
+            details: { id },
+          };
         const text =
           result.kind === "cancelled"
             ? `Cancellation sent for ${id}; the key stays held until the group exits`
