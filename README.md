@@ -122,8 +122,10 @@ traitor deploy srv-hatchi --remote-build --dry-run
 
 Before enabling deploys, configure one GitHub environment named `deploy` with required approval and these secrets:
 
-- `TS_OAUTH_CLIENT_ID` and `TS_AUDIENCE` for a Tailscale federated identity restricted to this repository, environment, and `tag:ci-deploy`.
+- `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` for a Tailscale OAuth client with the `auth_keys` scope and `tag:ci-deploy`.
 - `SSH_PRIVATE_KEY` for the configured deployment user.
+
+The OAuth client secret does not expire on its own. Rotating it means creating a new credential in the Tailscale console and replacing the secret, which is the trade for not running the federated identity exchange.
 
 Host keys are committed under `config/ssh/known_hosts/`, reviewed in pull requests, and installed by the workflow, with strict host-key checking still on. Adding a machine means its host configuration, its `deploy.nodes` entry, a matrix entry in `deploy.yml`, and its host key file under `config/ssh/known_hosts/`.
 

@@ -41,7 +41,7 @@ jobs:
       - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          audience: ${{ secrets.TS_AUDIENCE }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci-deploy
           ping: ${{ env.TARGET }}
       - uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd
