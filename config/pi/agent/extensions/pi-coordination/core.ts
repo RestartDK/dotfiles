@@ -520,18 +520,17 @@ export type WatchResult =
 export function watch(root: string, id: string): WatchResult {
   const holder = findLeaseById(root, id);
   if (holder) {
+    if (!groupConfirmedAbsent(holder.pgid)) return { kind: "running", holder };
     const recorded = readStatus(root, holder.id);
     if (recorded !== undefined) return { kind: "settled", attempt: settle(root, holder, recorded) };
-    if (groupConfirmedAbsent(holder.pgid))
-      return {
-        kind: "settled",
-        attempt: quarantine(
-          root,
-          holder,
-          "The command ended without recording an exit status; inspect before resolving",
-        ),
-      };
-    return { kind: "running", holder };
+    return {
+      kind: "settled",
+      attempt: quarantine(
+        root,
+        holder,
+        "The command ended without recording an exit status; inspect before resolving",
+      ),
+    };
   }
   const attempt = readAttempt(root, id);
   return attempt ? { kind: "settled", attempt } : { kind: "missing" };

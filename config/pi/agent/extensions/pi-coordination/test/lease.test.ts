@@ -121,6 +121,23 @@ test("a detached command records its exit status and releases the key", async ()
   expect(readLease(directory, job.resource).kind).toBe("free");
 });
 
+test("a status file does not release a key while the process group is alive", async () => {
+  const directory = root();
+  const job = spec(directory, {
+    id: "live-group",
+    resource: "test:live",
+    command: ["/bin/sh", "-c", "sleep 30"],
+  });
+  const started = await startDetached(directory, job);
+  expect(started.kind).toBe("started");
+  if (started.kind !== "started") throw new Error("unreachable");
+  groups.push(started.pgid);
+
+  writeFileSync(join(directory, "attempts", "live-group.status"), "0\n");
+  expect(readLease(directory, job.resource).kind).toBe("held");
+  expect(watch(directory, job.id).kind).toBe("running");
+});
+
 test("a client that stops watching does not free the key", async () => {
   const directory = root();
   const job = spec(directory, {
