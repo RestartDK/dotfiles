@@ -48,6 +48,7 @@ const projects = [
     },
     include: [
       join(root, "config/pi/agent/extensions/pi-no-default-model.ts"),
+      join(root, "config/pi/agent/extensions/pi-coordination/**/*.ts"),
       join(root, "config/pi/agent/extensions/subagents/**/*.ts"),
       join(root, "config/pi/agent/lib/**/*.ts"),
       join(root, "tests/agent-profiles/**/*.ts"),
