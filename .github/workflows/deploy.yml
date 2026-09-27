@@ -12,7 +12,6 @@ permissions:
 jobs:
   deploy:
     if: >-
-      false &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
@@ -26,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        host: [srv-nana, srv-hatchi]
+        host: [srv-nana]
     concurrency:
       group: "deploy-${{ matrix.host }}"
       cancel-in-progress: false
