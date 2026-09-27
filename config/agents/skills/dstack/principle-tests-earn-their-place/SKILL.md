@@ -45,7 +45,9 @@ Deterministic, cheap, and nothing upstream of production catches the regression.
 
 ## Nondeterministic dependencies (models, third-party endpoints)
 
-A test that calls a model or a remote service earns its place only in the leg it cannot fake. Seed fixtures deterministically. Decode the result into a typed value and compare it to a typed expectation; never grep prose. Assert the artifact's provenance and shape, not the route taken to it. Pin the model to a production alias, not a hardcoded SKU string. Live in the one test package that owns retries and a long timeout. No in-test retry loops, no cache-busting nonces. A terminal "finished successfully" event is not an assertion.
+**Paid and live-harness calls are out of bounds.** A test may not spend money, need credentials, or spawn a real agent CLI, including behind an env-var hatch that points the suite at an installed binary or provider. When only a live model can check a behavior, check it once by hand, put the exact command and the observed result in the PR, and keep it out of the suite. The tempting case is the one to refuse. "The model should have chosen tool X" is an observation to record by hand, never a test to run in CI.
+
+Where the dependency is faked rather than called, a test earns its place only in the leg the fake cannot cover. Seed fixtures deterministically. Decode the result into a typed value and compare it to a typed expectation; never grep prose. Assert the artifact's provenance and shape, not the route taken to it. Pin the model to a production alias, not a hardcoded SKU string. No in-test retry loops, no cache-busting nonces. A terminal "finished successfully" event is not an assertion.
 
 ## Deleting tests
 
