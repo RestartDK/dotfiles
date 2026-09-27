@@ -118,7 +118,7 @@ traitor deploy srv-hatchi --remote-build --dry-run
 
 `--dry-run` builds the configuration and runs deploy-rs dry activation without switching the active system. The pinned deploy-rs can exit successfully after a failed dry-activation check; inspect its diagnostics rather than treating exit zero as a readiness gate. The two flags can appear in either order after the node. Linux CI keeps local builds by omitting `--remote-build`.
 
-`deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. Both remote jobs are hard-disabled by their `if: false && ...` conditions, so they cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once enabled, a host deploys after every successful `main` build. Nana first invokes `traitor sync --expect REVISION`; a conflict or revision mismatch stops before deploy-rs can change the system.
+`deploy.yml` is separate from CI. It reacts only to successful CI for a push to the current `main` revision. Both remote jobs are hard-disabled by their `if: false && ...` conditions, so they cannot read deployment secrets, join Tailscale, or SSH until those conditions are deliberately changed. Once enabled, a host deploys after every successful `main` build. CI authenticates as the dedicated deployment account and builds from the runner's checkout, so no host-side synchronization step runs; Nana's own sync timer keeps its live checkout current.
 
 Before enabling a host, configure its GitHub environment, `srv-nana` or `srv-hatchi`, with required approval and these secrets:
 
@@ -126,7 +126,7 @@ Before enabling a host, configure its GitHub environment, `srv-nana` or `srv-hat
 - `SSH_PRIVATE_KEY` for the configured deployment user.
 - `SSH_KNOWN_HOSTS` with the independently verified host key for `srv-nana` or `srv-hatchi`. Host-key checking remains strict.
 
-The tailnet policy must permit that tag to reach the selected host on SSH. The host must resolve by its deployment name, authorize the SSH key, and permit unattended sudo. The workflow uses OpenSSH over Tailscale, not Tailscale SSH authentication. The Tailscale action removes its ephemeral runner when the job ends.
+The tailnet policy must permit that tag to reach the selected host on SSH. The host must resolve by its deployment name and authorize the deployment account's key. That account, named by `my.deploy.userName` in `modules/nixos/deploy.nix`, is the only account with passwordless sudo; the interactive user keeps password sudo. Its only authorized key is `config/ssh/public-keys/ci-deploy.pub`, whose private half is in the GitHub environment secret and in 1Password for manual runs. The account and its sudo rule arrive in the same generation that first uses them, so a host's first activation must come from a credential it already has, such as root over SSH. The workflow uses OpenSSH over Tailscale, not Tailscale SSH authentication. The Tailscale action removes its ephemeral runner when the job ends.
 
 Hatchi's physical profile puts EFI, NixOS, service state, and databases on the system SSD. The data HDD mounts at `/srv` for media and Nextcloud files. A missing data disk does not block NixOS or SSH, but it prevents the application stack from starting.
 

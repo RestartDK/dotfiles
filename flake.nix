@@ -389,8 +389,8 @@
         nodes = {
           srv-nana = {
             hostname = self.nixosConfigurations.srv-nana.config.networking.hostName;
-            sshUser = self.nixosConfigurations.srv-nana.config.my.host.userName;
-            interactiveSudo = true;
+            sshUser = self.nixosConfigurations.srv-nana.config.my.deploy.userName;
+            interactiveSudo = false;
             profiles.system = {
               user = "root";
               path =
@@ -418,8 +418,8 @@
           };
           srv-hatchi = {
             hostname = self.nixosConfigurations.srv-hatchi.config.networking.hostName;
-            sshUser = self.nixosConfigurations.srv-hatchi.config.my.host.userName;
-            interactiveSudo = true;
+            sshUser = self.nixosConfigurations.srv-hatchi.config.my.deploy.userName;
+            interactiveSudo = false;
             profiles.system = {
               user = "root";
               path =

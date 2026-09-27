@@ -12,6 +12,7 @@ in
   imports = [
     inputs.home-manager.nixosModules.home-manager
     ../../modules/nixos/host-options.nix
+    ../../modules/nixos/deploy.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/numtide-cache.nix
   ];
