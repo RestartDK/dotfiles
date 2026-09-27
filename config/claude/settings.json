@@ -157,5 +157,10 @@
   },
   "model": "opus[1m]",
   "skipDangerousModePermissionPrompt": true,
-  "theme": "light"
+  "theme": "light",
+  "permissions": {
+    "allow": [
+      "mcp__pencil"
+    ]
+  }
 }
