@@ -46,7 +46,7 @@ let
       home = cobb;
       profile = "work";
       system = "x86_64-linux";
-      skillsPath = "config/pi/agent/skills-twin";
+      skillsPath = "config/agents/skills";
       claude = false;
     }
   ];
