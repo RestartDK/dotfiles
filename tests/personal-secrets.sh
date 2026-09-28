@@ -18,7 +18,7 @@ jq --arg source "$SECRET_PATH" --arg target "$secret" '
   .providers.openrouter.apiKey |= (split($source) | join($target))
 ' "$MODELS_FILE" >"$PI_CODING_AGENT_DIR/models.json"
 jq -e --slurpfile base "$BASE_MODELS" '
-  del(.providers.openrouter) == $base[0]
+  del(.providers.openrouter.apiKey) == $base[0]
 ' "$PI_CODING_AGENT_DIR/models.json" >/dev/null
 printf '%s\n' '{"anthropic":{"type":"api_key","key":"unrelated-fixture"}}' >"$PI_CODING_AGENT_DIR/auth.json"
 cp "$PI_CODING_AGENT_DIR/auth.json" "$work/auth-before.json"
