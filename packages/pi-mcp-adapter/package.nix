@@ -7,11 +7,11 @@
 
 buildNpmPackage (finalAttrs: {
   pname = "pi-mcp-adapter";
-  version = "2.36.0";
+  version = "3.1.0";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/pi-mcp-adapter/-/pi-mcp-adapter-${finalAttrs.version}.tgz";
-    hash = "sha256-y76o+5w7Tpt7ZU0KLiNMNf0KrY1ZOksjOBcoZNa2KfA=";
+    hash = "sha256-MvcEnQnohzabJExF/3dpKKvIQ+c/Uni0dAlUyQfEt9I=";
   };
 
   postPatch = ''
@@ -23,7 +23,7 @@ buildNpmPackage (finalAttrs: {
   npmFlags = [ "--legacy-peer-deps" ];
   npmPackFlags = [ "--ignore-scripts" ];
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-YCGW7Pev5OpxUIVGh4yr1YTRspdwIVwedD6ydiCuG2A=";
+  npmDepsHash = "sha256-Fa+q7Bx1d4rValBTkrS+ONmVI4NAGS1x/zt+oqFltPg=";
 
   dontNpmBuild = true;
 })
