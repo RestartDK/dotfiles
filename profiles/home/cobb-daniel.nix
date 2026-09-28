@@ -29,7 +29,7 @@ in
   my.liveConfig = {
     enable = isCobbDevHost;
     repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
-    piSkillsPath = "config/pi/agent/skills-twin";
+    piSkillsPath = "config/agents/skills";
     groups = {
       # Cobb's Daniel profile disables its generated shell and Neovim config
       # on development hosts, so the canonical dotfiles checkout owns both.
