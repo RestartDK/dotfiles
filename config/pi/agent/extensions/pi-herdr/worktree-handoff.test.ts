@@ -21,7 +21,9 @@ test("handoff command forks the session and carries the close-tab marker", () =>
   });
   assert.ok(command.includes("direnv allow ."));
   assert.ok(command.includes("PI_HERDR_CLOSE_TAB='w5Q:t7J'"));
-  assert.ok(command.includes("--fork '/home/daniel/.pi/agent/sessions/--home-daniel-cobb--/a.jsonl'"));
+  assert.ok(
+    command.includes("--fork '/home/daniel/.pi/agent/sessions/--home-daniel-cobb--/a.jsonl'"),
+  );
   assert.ok(command.includes("--name 'Move Pi Session'"));
 });
 
