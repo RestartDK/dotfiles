@@ -2,6 +2,7 @@
   lib,
   bun,
   fetchzip,
+  typescript,
   upstream,
 }:
 
@@ -23,7 +24,7 @@ let
   };
 in
 assert lib.assertMsg (
-  upstream.version == "0.87.1"
+  upstream.version == "0.99.1"
 ) "pi-profiled must be reviewed against the new Pi version before updating";
 upstream.overrideAttrs (old: {
   pname = "pi-profiled";
@@ -35,6 +36,8 @@ upstream.overrideAttrs (old: {
   preInstall = ''
     patch --batch -d node_modules/@earendil-works/pi-ai -p1 --fuzz=0 < ${./attempt-policy.patch}
     ${bun}/bin/bun build ${../../config/pi/agent/lib}/pi-policy.ts --target=bun --external '@earendil-works/*' --outfile dist/core/dstack-policy.js
+    mkdir -p node_modules
+    ln -sfn ${typescript}/lib/node_modules/typescript node_modules/typescript
     node ${./typecheck.mjs} "$PWD" ${typecheckSource} ${bunTypes}
     mkdir -p policy-check
     cp -R ${../../tests/pi-profiled} policy-check/tests

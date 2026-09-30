@@ -59,12 +59,10 @@ export const piToolActivityEvents = [
   { name: "tool_execution_end", event: piWriteEnd },
   { name: "tool_execution_end error", event: { ...piWriteEnd, isError: true } },
   { name: "tool_result_end", event: { type: "tool_result_end" } },
-  ...(["message_start", "message_update", "message_end"] satisfies AgentEvent["type"][]).map(
-    (type) => ({
-      name: `${type} toolResult`,
-      event: { type, message: toolResult },
-    }),
-  ),
+  ...(["message_start", "message_end"] satisfies AgentEvent["type"][]).map((type) => ({
+    name: `${type} toolResult`,
+    event: { type, message: toolResult },
+  })),
   {
     name: "turn_end toolResults",
     event: {

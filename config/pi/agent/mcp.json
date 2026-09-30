@@ -1,15 +1,10 @@
 {
-  "settings": {
-    "mcpFooterStatus": "off"
-  },
   "mcpServers": {
     "linear": {
-      "url": "https://mcp.linear.app/mcp",
-      "auth": "oauth"
+      "url": "https://mcp.linear.app/mcp"
     },
     "figma": {
       "url": "https://mcp.figma.com/mcp",
-      "auth": "oauth",
       "oauth": {
         "clientName": "Codex"
       }

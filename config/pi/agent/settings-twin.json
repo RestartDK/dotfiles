@@ -16,7 +16,6 @@
     ]
   },
   "packages": [
-    "./packages/pi-mcp-adapter",
     "./packages/pi-web-access"
   ],
   "powerline": {
@@ -41,6 +40,6 @@
     "greeting": "hey twin :)"
   },
   "quietStartup": true,
-  "theme": "Tokyo Night Day/Tokyo Night",
+  "theme": "system",
   "tuiMode": "fullscreen"
 }

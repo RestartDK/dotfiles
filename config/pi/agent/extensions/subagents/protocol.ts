@@ -250,7 +250,6 @@ export class Protocol {
         this.toolUsed = true;
         break;
       case "message_start":
-      case "message_update":
       case "message_end":
         if (isRecord(event.message) && event.message.role === "toolResult") this.toolUsed = true;
         break;

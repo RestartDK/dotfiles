@@ -6,7 +6,6 @@
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.80.1",
   "packages": [
-    "./packages/pi-mcp-adapter",
     "./packages/pi-web-access"
   ],
   "powerline": {
@@ -31,6 +30,6 @@
     "greeting": "hey dk :)"
   },
   "quietStartup": true,
-  "theme": "Tokyo Night Day/Tokyo Night",
+  "theme": "system",
   "tuiMode": "fullscreen"
 }
