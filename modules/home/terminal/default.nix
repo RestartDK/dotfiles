@@ -10,6 +10,8 @@ let
   cfg = config.my.liveConfig;
   hasScattererInput = dotfilesInputs ? scatterer;
   herdrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.herdr;
+  terminalBrowserPackage =
+    dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.terminal-browser;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
   # Upstream's packages.plugin is a ready-to-link Herdr plugin root: the
   # store manifest invokes the built binary directly (no bash launcher, no
@@ -51,7 +53,11 @@ in
       (lib.mkIf cfg.groups.multiplexer (
         lib.mkMerge [
           {
-            home.packages = [ herdrPackage ];
+            home.packages = [
+              herdrPackage
+              terminalBrowserPackage
+            ];
+            home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
             xdg.configFile = {
               "herdr/config.toml" = file "config/herdr/config.toml";
               "herdr/hostname-status.py" = file "config/herdr/hostname-status.py";
