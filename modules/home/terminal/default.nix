@@ -54,6 +54,9 @@ in
             home.packages = [ herdrPackage ];
             xdg.configFile = {
               "herdr/config.toml" = file "config/herdr/config.toml";
+              "herdr/hostname-status.py" = file "config/herdr/hostname-status.py";
+              "herdr/usage-status.py" = file "config/herdr/usage-status.py";
+              "herdr/sounds/haki.mp3" = file "config/herdr/sounds/haki.mp3";
               "herdr/sounds/za-warudo.mp3" = file "config/herdr/sounds/za-warudo.mp3";
             };
           }

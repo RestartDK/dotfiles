@@ -8,28 +8,43 @@ delivery = "herdr"
 
 [ui.sound]
 enabled = true
-path = "sounds/za-warudo.mp3"
+path = "sounds/haki.mp3"
 
 [ui]
 agent_panel_sort = "priority"
 
 show_agent_labels_on_pane_borders = false
+
+tab_bar_right = [
+  { type = "command", command = "python3 ~/.config/herdr/usage-status.py", interval_seconds = 60, timeout_seconds = 10 },
+  { type = "zoom" },
+  { type = "command", command = "python3 ~/.config/herdr/hostname-status.py", interval_seconds = 3600, timeout_seconds = 2 },
+]
+tab_bar_right_separator = " · "
+
 [ui.sidebar.agents]
+row_gap = 0
+rows = [["state_icon", "workspace", "tab"], ["agent"]]
+
+[ui.sidebar.spaces]
 row_gap = 0
 rows = [
   [
     "state_icon",
     "workspace",
-    "tab",
   ],
   [
-    "agent",
+    "$repo",
+    "branch",
+    "git_status",
   ],
   [
     { token = "$pr_open", fg = "#3FB950", bold = true },
     { token = "$pr_draft", fg = "#8B949E", bold = true },
     { token = "$pr_merged", fg = "#A371F7", bold = true },
     { token = "$pr_closed", fg = "#F85149", bold = true },
+    { token = "$pr_additions", fg = "#3FB950" },
+    { token = "$pr_deletions", fg = "#F85149" },
   ],
 ]
 
@@ -59,18 +74,6 @@ key = "prefix+shift+s"
 type = "plugin_action"
 command = "daniel.scatterer.apply-layout"
 description = "scatterer layout"
-
-[[keys.command]]
-key = "prefix+shift+a"
-type = "plugin_action"
-command = "daniel.scatterer.quick-start"
-description = "scatterer quick start"
-
-[[keys.command]]
-key = "prefix+shift+p"
-type = "plugin_action"
-command = "daniel.scatterer.pr-picker"
-description = "scatterer PR picker"
 
 [[keys.command]]
 key = "prefix+shift+g"
