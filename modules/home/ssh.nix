@@ -6,11 +6,11 @@
     enableDefaultConfig = false;
     settings = {
       nana-lan = lib.hm.dag.entryBefore [ "nana" ] {
-        header = "Match host nana,srv-nana exec \"ssh-keyscan -T 1 -p 22 192.168.200.182 >/dev/null 2>&1\"";
+        header = "Match host nana,srv-nana exec \"ping -c 1 -n -W 1 192.168.200.182 >/dev/null 2>&1\"";
         HostName = "192.168.200.182";
       };
       hatchi-lan = lib.hm.dag.entryBefore [ "hatchi" ] {
-        header = "Match host hatchi,srv-hatchi exec \"ssh-keyscan -T 1 -p 22 192.168.200.70 >/dev/null 2>&1\"";
+        header = "Match host hatchi,srv-hatchi exec \"ping -c 1 -n -W 1 192.168.200.70 >/dev/null 2>&1\"";
         HostName = "192.168.200.70";
       };
 
