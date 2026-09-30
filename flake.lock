@@ -601,11 +601,11 @@
         "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1788880024,
-        "narHash": "sha256-RCrG/k4y+e3MeWFRYmylMdG93LsS5zp/EWt7H46Sl6I=",
+        "lastModified": 1790754977,
+        "narHash": "sha256-EGaO9zA4RT6skdywGEIvJgavTN7XtoKAfG4XoADK/zg=",
         "owner": "RestartDK",
         "repo": "scatterer",
-        "rev": "c40a40df00763fabf6b4ee69c656837802808a8c",
+        "rev": "0263e3750febc5d2941e09ace43a8c9bab70f568",
         "type": "github"
       },
       "original": {
