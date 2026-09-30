@@ -913,7 +913,7 @@ export default function (pi: ExtensionAPI) {
     description: [
       "Spawn isolated workers using the host's global billing profile and role routes.",
       "Managed dstack agents must select role, never model. Panels require member or zero-based seat. Thinking overrides are rejected.",
-      "Claude subscription workers provide mapped built-in tools only, without Pi extensions or MCP. Unsupported tools block dispatch. Output is bounded to 50 KiB.",
+      "Workers run native Pi sessions with the route's exact provider, model and effort; the codemode tool is always available and output is bounded to 50 KiB.",
       describePolicy(),
       "Use this only when the user explicitly asks for subagents, delegation, orchestration, parallel workers, or a second model opinion.",
       "The current Pi session/model is the orchestrator; this tool runs child workers with their own models/tools/prompts and returns their outputs.",
@@ -1140,7 +1140,7 @@ export default function (pi: ExtensionAPI) {
       "Manage background runs launched by the subagents tool with background=true.",
       "join blocks until the given runs (or all unjoined runs when runIds is omitted) reach a terminal state and returns the same per-worker report as a synchronous subagents call; interrupting a join detaches and the children keep running.",
       "status returns a non-blocking snapshot with live usage counters.",
-      "stop SIGTERMs the live children of the given runs (all live runs when runIds is omitted); it is idempotent and reports already-terminal runs.",
+      "stop aborts the live worker sessions of the given runs (all live runs when runIds is omitted); it is idempotent and reports already-terminal runs.",
     ].join("\n"),
     parameters: SubagentsRunsParams,
     renderCall(args, theme) {
@@ -1205,7 +1205,7 @@ export default function (pi: ExtensionAPI) {
         refreshFleetWidget();
         ensureFleetTimer();
         const lines = [
-          ...signaled.map((id) => `${id}: SIGTERM sent (was running).`),
+          ...signaled.map((id) => `${id}: stop requested (was running).`),
           ...alreadyTerminal.map((run) => `${run.id}: already terminal (${run.status}).`),
         ];
         return { content: [{ type: "text", text: lines.join("\n") }], details: { results: [] } };

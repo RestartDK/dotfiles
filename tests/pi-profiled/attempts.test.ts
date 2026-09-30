@@ -301,7 +301,7 @@ const workerModels = [
     profile: "work",
     role: "review",
     member: "fable",
-    attempt: 1,
+    attempt: 0,
     provider: "openai-codex",
     id: "gpt-6-astra",
     effort: "xhigh",

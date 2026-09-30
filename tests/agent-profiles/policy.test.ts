@@ -16,7 +16,7 @@ const policy = (profile: string) =>
   parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
 
 describe("profile routing", () => {
-  test("work resolves Codex routes and ordered subscription-first fallback", () => {
+  test("work resolves Codex routes and keeps fable pi-only", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
       { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
@@ -33,7 +33,6 @@ describe("profile routing", () => {
       },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
-      { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" },
       { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
@@ -44,7 +43,6 @@ describe("profile routing", () => {
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
-      "claude-fable-5-1",
       "openai-codex/gpt-6-astra",
     ]);
     expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
@@ -113,9 +111,6 @@ describe("profile routing", () => {
 
   test("raw requests preserve declared chains and effort", () => {
     const work = policy("work");
-    expect(
-      resolveRoute(work, { model: "claude-cli/claude-fable-5-1:xhigh" }).chain.map(backendModel),
-    ).toEqual(["claude-fable-5-1", "openai-codex/gpt-6-astra"]);
     expect(resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
     expect(() => resolveRoute(work, { model: "openai-codex/undeclared:xhigh" })).toThrow(
       "not allowed",
@@ -176,8 +171,7 @@ describe("profile routing", () => {
     };
     const malformed = [
       { ...valid, version: 2 },
-      { ...valid, parent: "fable" },
-      { ...valid, parent: { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" } },
+      { ...valid, parent: "missing-route" },
       { ...valid, fallback: "auto" },
       { ...valid, routes: { ...valid.routes, fable: [] } },
       {
@@ -240,6 +234,7 @@ test("worker invocation parses once and resolves its exact native attempt", () =
     resolveWorkerInvocation(policy("work"), {
       ...invocation,
       selection: { kind: "role", role: "review", member: "fable" },
+      attempt: 1,
     }),
   ).toThrow("native Pi target");
 });

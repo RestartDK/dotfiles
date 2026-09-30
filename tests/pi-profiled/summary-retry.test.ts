@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   cleanupSessionResources,
   InMemoryCredentialStore,
@@ -16,17 +16,12 @@ import {
   type AgentSession,
   type JsonAgentSessionEvent,
 } from "@earendil-works/pi-coding-agent";
-import type { BackendTask } from "../../config/pi/agent/extensions/subagents/backend";
 import { toJsonEvent } from "../../dist/modes/json-event.js";
+import type { NativeTarget } from "../../config/pi/agent/lib/model-policy";
 
 const { configureInvocation } = await import("../../dist/core/dstack-policy.js");
 const profiles = process.env.PI_POLICY_TEST_PROFILES;
-const extension = process.env.PI_POLICY_TEST_EXTENSION;
-if (!profiles || !extension) throw new Error("Missing summary retry profiles or extension");
-const { BackendRunner }: typeof import("../../config/pi/agent/extensions/subagents/backend") =
-  await import(join(dirname(extension), "backend.ts"));
-const { Protocol }: typeof import("../../config/pi/agent/extensions/subagents/protocol") =
-  await import(join(dirname(extension), "protocol.ts"));
+if (!profiles) throw new Error("Missing summary retry profiles");
 
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
@@ -41,12 +36,7 @@ const backend = {
   provider: "openrouter",
   id: "z-ai/glm-5.3-flash",
   thinking: "xhigh",
-} satisfies BackendTask["route"]["chain"][number];
-const fallback = {
-  ...backend,
-  provider: "openai-codex",
-  id: "gpt-6-astra",
-} satisfies BackendTask["route"]["chain"][number];
+} satisfies NativeTarget;
 const assistant: AssistantMessage = {
   role: "assistant",
   provider: backend.provider,
@@ -63,14 +53,6 @@ const assistant: AssistantMessage = {
     totalTokens: 2000001,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   },
-};
-const success: JsonAgentSessionEvent = { type: "message_end", message: assistant };
-const writeEnd: JsonAgentSessionEvent = {
-  type: "tool_execution_end",
-  toolCallId: "write-1",
-  toolName: "write",
-  result: { content: [{ type: "text", text: "Wrote writes.txt" }] },
-  isError: false,
 };
 
 function response() {
@@ -112,8 +94,6 @@ beforeEach(() => {
     join(directory, "config/dstack/models.json"),
     readFileSync(join(profiles ?? "", "work.json")),
   );
-  for (const path of ["auth.jsonl", "workers.jsonl", "writes.txt"])
-    writeFileSync(join(directory, path), "");
   configureInvocation([
     "--dstack-worker",
     JSON.stringify({
@@ -251,157 +231,10 @@ async function summarize(path: SummaryPath) {
   expect(wires).toHaveLength(3);
   for (const wire of wires)
     expect(wire).toMatchObject({ model: backend.id, reasoning: { effort: "max" } });
-  return { events, retries };
-}
-function count(file: string) {
-  return readFileSync(join(directory, file), "utf8").split("\n").filter(Boolean).length;
-}
-async function replay(events: unknown[], options: { tools?: string[]; cancel?: boolean } = {}) {
-  writeFileSync(
-    join(directory, "events.jsonl"),
-    events.map((event) => JSON.stringify(event)).join("\n") + "\n",
-  );
-  writeFileSync(
-    join(directory, "fallback.jsonl"),
-    JSON.stringify({
-      ...success,
-      message: {
-        ...assistant,
-        provider: fallback.provider,
-        model: fallback.id,
-        api: "openai-codex-responses",
-      },
-    }) + "\n",
-  );
-  const runner = new BackendRunner({
-    pi: (args) => ({
-      command: process.execPath,
-      args: [
-        join(import.meta.dir, "summary-retry-child.ts"),
-        directory,
-        options.cancel ? "hold" : "exit",
-        ...args,
-      ],
-    }),
-    claude: () => {
-      throw new Error("Unexpected Claude invocation");
-    },
-    env: { HOME: directory, PATH: process.env.PATH },
-    now: Date.now,
-  });
-  const controller = new AbortController();
-  try {
-    return await runner.run(
-      {
-        route: {
-          profile: "work",
-          selection: { kind: "role", role: "fast-code", member: "glm" },
-          chain: [backend, fallback],
-        },
-        task: "Replay SDK summary retry",
-        tools: options.tools ?? [],
-        systemPrompt: "Fixture only",
-        cwd: directory,
-        contextFiles: [],
-      },
-      controller.signal,
-      (execution) => {
-        if (options.cancel && execution.output) controller.abort();
-      },
-    );
-  } finally {
-    runner.stop();
-  }
 }
 
 for (const path of ["manual", "threshold", "overflow", "branchSummary"] satisfies SummaryPath[]) {
-  test(`${path} SDK summary retry survives JSON worker parsing`, async () => {
-    const { events } = await summarize(path);
-    const result = await replay(events);
-    expect(result.output).toBe("Fixture summary");
-    expect(result.outcome).toEqual({ kind: "success" });
-    expect(result.attempts).toHaveLength(1);
-    expect(count("workers.jsonl")).toBe(1);
-    expect(count("auth.jsonl")).toBe(1);
-    expect(count("writes.txt")).toBe(0);
-  });
-  test(`${path} SDK retry events preserve terminal and partial output`, async () => {
-    const { retries } = await summarize(path);
-    for (const stopReason of [
-      "stop",
-      "error",
-      "aborted",
-    ] satisfies AssistantMessage["stopReason"][]) {
-      const protocol = new Protocol(backend, ["write"]);
-      protocol.accept(writeEnd);
-      protocol.accept({
-        type: "message_end",
-        message: { ...assistant, stopReason, errorMessage: "429 Too Many Requests" },
-      });
-      const terminal = protocol.terminal;
-      for (const event of retries) protocol.accept(JSON.parse(JSON.stringify(event)));
-      expect(protocol.terminal).toBe(terminal);
-      expect(protocol.toolUsed).toBe(true);
-      expect(protocol.output).toBe("Fixture partial output");
-    }
-    const result = await replay([success, ...retries]);
-    expect(result.outcome).toEqual({ kind: "success" });
-    expect(result.output).toBe("Fixture partial output");
-    expect(count("workers.jsonl")).toBe(1);
-  });
-  for (const errorMessage of ["429 Too Many Requests", "401 Unauthorized"]) {
-    for (const tools of [[], ["write"]]) {
-      test(`${path} retry then ${errorMessage} with tools=${tools.length} counts actual replay`, async () => {
-        const { retries } = await summarize(path);
-        const error: JsonAgentSessionEvent = {
-          type: "message_end",
-          message: { ...assistant, stopReason: "error", errorMessage },
-        };
-        const result = await replay([...(tools.length ? [writeEnd] : []), ...retries, error], {
-          tools,
-        });
-        expect(count("workers.jsonl")).toBe(tools.length ? 1 : 2);
-        expect(count("auth.jsonl")).toBe(tools.length ? 1 : 2);
-        expect(count("writes.txt")).toBe(tools.length);
-        expect(result.attempts).toHaveLength(tools.length ? 1 : 2);
-        expect(result.outcome).toEqual(
-          tools.length
-            ? {
-                kind: "failed",
-                reason: `${errorMessage.startsWith("429") ? "quota" : "auth"}. Partial output retained after tool use; parent must reconcile before retrying.`,
-              }
-            : { kind: "success" },
-        );
-        expect(result.output).toBe("Fixture partial output");
-        expect(result.toolUsed).toBe(Boolean(tools.length));
-      });
-    }
-  }
-  test(`${path} retry alone cannot complete or replay a task`, async () => {
-    const { retries } = await summarize(path);
-    const result = await replay(retries);
-    expect(result.outcome).toEqual({
-      kind: "failed",
-      reason: "Backend exited without a terminal result",
-    });
-    expect(count("workers.jsonl")).toBe(1);
-    expect(count("auth.jsonl")).toBe(1);
-  });
-  test(`${path} retry preserves cancellation and partial output without replay`, async () => {
-    const { retries } = await summarize(path);
-    const result = await replay([...retries, { type: "message_start", message: assistant }], {
-      cancel: true,
-    });
-    expect(result.outcome).toEqual({ kind: "cancelled" });
-    expect(result.output).toBe("Fixture partial output");
-    expect(count("workers.jsonl")).toBe(1);
+  test(`${path} SDK summarization retries under worker policy and effort`, async () => {
+    await summarize(path);
   });
 }
-test("unknown summary event fails closed through the child parser", async () => {
-  const result = await replay([{ type: "summarization_retry_future" }, success]);
-  expect(result.outcome).toEqual({
-    kind: "failed",
-    reason: "Unknown Pi event: summarization_retry_future",
-  });
-  expect(count("workers.jsonl")).toBe(1);
-});

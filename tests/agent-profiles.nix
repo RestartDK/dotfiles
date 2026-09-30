@@ -20,6 +20,17 @@ let
         }
       ];
     }).config;
+  piAiStub = pkgs.runCommand "pi-ai-resolution-stub" { } ''
+    mkdir -p $out/node_modules/@earendil-works/pi-ai
+    cat > $out/node_modules/@earendil-works/pi-ai/package.json <<'EOF'
+    { "name": "@earendil-works/pi-ai", "version": "0.0.0", "type": "module", "main": "index.js" }
+    EOF
+    cat > $out/node_modules/@earendil-works/pi-ai/index.js <<'EOF'
+    export function clampThinkingLevel() {
+      throw new Error("pi-ai is a resolution stub in the agent-profiles check");
+    }
+    EOF
+  '';
   owners = [
     {
       home = macHome "dkumlin-macbook-pro";
@@ -96,7 +107,10 @@ pkgs.runCommand "agent-profile-tests"
   }
   ''
     export HOME=$TMPDIR
-    cd ${../.}
+    cp -R ${../config} $TMPDIR/config
+    cp -R ${../tests} $TMPDIR/tests
+    cp -R ${piAiStub}/node_modules $TMPDIR/
+    cd $TMPDIR
     bun test tests/agent-profiles
     touch $out
   ''

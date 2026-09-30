@@ -14,7 +14,7 @@ Panels require `member` or a zero-based `seat`, never both. Managed dstack agent
 
 ## Native Pi parents
 
-The parent uses the profile's parent route. Work uses `astra` (`openai-codex/gpt-6-astra` at `xhigh`); personal uses `deepseek` (`openrouter/deepseek/deepseek-v4.1-flash` at `max`). Claude Code is a worker backend, never a parent target. Session-local compatible thinking changes remain available to parents. Workers retain their role's exact target and declared effort. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`. Downgrades and unrelated effective levels are blocked.
+The parent uses the profile's parent route. Work uses `astra` (`openai-codex/gpt-6-astra` at `xhigh`); personal uses `deepseek` (`openrouter/deepseek/deepseek-v4.1-flash` at `max`). Every route is a native Pi target and the parent chain is single-hop. Session-local compatible thinking changes remain available to parents. Workers retain their role's exact target and declared effort. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`. Downgrades and unrelated effective levels are blocked.
 
 `packages/pi-profiled` patches Pi 0.85.1 before compiling its Bun executable. The core runtime checks native requests even with extensions disabled, including retries, compaction and branch summaries. It rejects replacement transports, incompatible endpoints and transformed wire models. This is not a sandbox for arbitrary extension or shell code making its own requests.
 
@@ -22,21 +22,19 @@ Explicit selections require an exact provider and model. Any catalog model on a 
 
 The JSON policy stays live-editable. Changes to the compiled policy library or core patch require rebuilding `pi-profiled`. Default provider, model and thinking settings no longer override the profile's parent default.
 
-## Subscription backend
+## Worker sessions
 
-Fable first uses Claude Code with claude.ai authentication; both profiles fall back to Pi Codex Astra. Results report the actual backend/model, configured role and every attempt. Fallback can make panel members share a model family. Pi checks the selected provider's authentication before a model request and passes separate provider and model flags, so model-pattern matching cannot substitute another provider.
+Fable resolves to Pi Codex Astra in both profiles. A worker runs as an in-process Pi SDK session with its route's exact provider, model and effort, the preset system prompt, the requested tools and `codemode`. Results report the actual model and every attempt.
 
-Claude runs with safe mode, empty setting sources, hooks disabled, strict empty MCP configuration, no skills or Chrome, no persisted session, and `dontAsk` permissions. The child receives a small environment allowlist without API keys, auth-token overrides, provider switches or config-directory overrides. An auth-status check must confirm claude.ai and firstParty before dispatch. Init must confirm the requested model, exact tool set, no MCP and no API-key source.
+Recognized native HTTP and provider error envelopes classify as auth, quota or unavailable. Fallback requires a matching terminal provider failure before any tool use. Any tool use, including a read, closes fallback. Task/test failures, unknown errors, scope mismatches and cancellation never advance. The parent must reconcile partial work before retrying. Output is bounded to 50 KiB. Stderr stays empty because workers run in-process.
 
-Only requested tools are mapped and autoallowed. `read`, `grep`, `find`, `edit`, `write` and `bash` map to Claude's built-ins. `ls` maps to Glob for entry discovery, not Bash. Glob does not reproduce all ls metadata, hidden-file or directory-listing behavior. Unsupported capabilities, including Pi extension and MCP tools, block the call rather than silently disappear. Explicit `tools: []` stays empty. Global and ancestor project instructions use AGENTS.override.md, AGENTS.md, then CLAUDE.md precedence per directory. They join preset instructions and the explicit system prompt in a private temporary file, which is removed after the attempt. Pi-specific tools named in those instructions remain unavailable in Claude.
+Explicit `tools: []` still activates `codemode` only. Global and ancestor project instructions use AGENTS.override.md, AGENTS.md, then CLAUDE.md precedence per directory. They join the preset instructions and the explicit system prompt in the worker's session. Tools named in those instructions but not requested stay unavailable.
 
-Recognized synthetic Claude API errors retain the init model identity. A result with `subtype: "success"` and `is_error: true` is still an error. Fallback requires a matching terminal provider failure before any tool use. Any tool-use event, including a read, closes fallback. Task/test failures, unknown errors, malformed or truncated streams, scope mismatches and cancellation never advance. The parent must reconcile partial work before retrying. The tool latch does not protect against arbitrary external startup side effects; startup customizations are disabled separately.
-
-Each endpoint is attempted at most once per chain. A process-local cache skips recently unavailable endpoints, including the final endpoint. Known reset times are normalized from seconds and capped at 24 hours; otherwise cooldown is 60 seconds. There is no daemon, lockfile or retry loop. Output is bounded to 50 KiB, stderr to 16 KiB, JSON lines to 1 MiB and each stream to 16 MiB.
+Each endpoint is attempted at most once per chain. A process-local cache skips recently unavailable endpoints, including the final endpoint. Otherwise the cooldown is 60 seconds. There is no daemon, lockfile or retry loop.
 
 ## Checks
 
 - `tests/pi-profiled/cached-models.ts` contains only the three public Fireworks DeepSeek, OpenRouter DeepSeek and GLM model records observed in the local Pi cache. Tests load them through Pi's native catalog store, use fake credentials and send no CLI prompts. SDK serializer checks replace the network transport. No private cache or authentication data is included.
-- `bun test tests/agent-profiles` runs policy tests and real fixture executables without provider credentials.
-- `nix build --no-link .#checks.aarch64-darwin.agent-profiles` checks all four Nix owners, their enforced Pi packages and the fixtures. The package build also runs the strict production and full test typecheck against the patched SDK and source-emitted policy declarations, patched SDK tests and rebuilt CLI tests without credentials. Linux CI builds the matching x86_64-linux check.
-- In Pi, run `/subagents` and confirm the selected profile. Dispatch a no-tools review and inspect its actual backend, model and attempts. Repeat with a read-only task to check permission/tool parity. These are credentialed live checks, separate from fixtures.
+- `bun test tests/agent-profiles` runs policy tests and runner tests through the fake session seam without provider credentials.
+- `nix build --no-link .#checks.aarch64-darwin.agent-profiles` checks all four Nix owners, their enforced Pi packages and the profiles. The package build also runs the strict production and full test typecheck against the patched SDK and source-emitted policy declarations, patched SDK tests and rebuilt CLI tests without credentials. Linux CI builds the matching x86_64-linux check.
+- In Pi, run `/subagents` and confirm the selected profile. Dispatch a no-tools review and inspect its actual backend, model and attempts. Repeat with a read-only task to check permission/tool parity. These are credentialed live checks, separate from the offline suites.

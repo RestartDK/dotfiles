@@ -4,81 +4,116 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BackendRunner,
-  claudeTools,
   instructionFiles,
-  subscriptionEnv,
   type BackendTask,
   type Runtime,
+  type WorkerSessionOptions,
+  type WorkerSessionResult,
 } from "../../config/pi/agent/extensions/subagents/backend";
-import {
-  isRecord,
-  parsePolicy,
-  resolveRoute,
-  type NativeTarget,
-} from "../../config/pi/agent/lib/model-policy";
-
-import { piToolActivityEvents, piWriteEnd } from "./pi-tool-events";
+import { initialUsage } from "../../config/pi/agent/extensions/subagents/protocol";
+import { parsePolicy, resolveRoute } from "../../config/pi/agent/lib/model-policy";
 
 const directories: string[] = [];
+const originalXdg = process.env.XDG_CONFIG_HOME;
 afterEach(() => {
+  if (originalXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+  else process.env.XDG_CONFIG_HOME = originalXdg;
   for (const path of directories.splice(0)) rmSync(path, { recursive: true, force: true });
 });
-function setup(scenario: Record<string, unknown>, profile = "personal") {
-  const dir = mkdtempSync(join(tmpdir(), "agent-backend-test-"));
-  directories.push(dir);
-  const path = join(dir, "scenario.json");
-  writeFileSync(path, JSON.stringify(scenario));
-  const runtime: Runtime = {
-    pi: (args) => ({
-      command: process.execPath,
-      args: [join(import.meta.dir, "fixture.ts"), "pi", path, ...args],
-    }),
-    claude: (args) => ({
-      command: process.execPath,
-      args: [join(import.meta.dir, "fixture.ts"), "claude", path, ...args],
-    }),
-    env: {
-      HOME: process.env.HOME,
-      PATH: process.env.PATH,
-      TMPDIR: process.env.TMPDIR,
-      ANTHROPIC_API_KEY: "fixture-secret",
-      CLAUDE_CODE_USE_BEDROCK: "1",
-      CLAUDE_CODE_OAUTH_TOKEN: "fixture-secret",
-    },
-    now: () => 1_800_000_000_000,
-  };
-  const policy = parsePolicy(
-    JSON.parse(
-      readFileSync(
-        join(import.meta.dir, `../../config/agents/model-profiles/${profile}.json`),
-        "utf8",
-      ),
+
+type SessionCall = {
+  options: WorkerSessionOptions;
+  text: string;
+  disposed: number;
+};
+
+function profilePolicy(profile: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(
+    readFileSync(
+      join(import.meta.dir, `../../config/agents/model-profiles/${profile}.json`),
+      "utf8",
     ),
   );
+  if (typeof value !== "object" || value === null) throw new Error("invalid profile");
+  const policy = value as Record<string, unknown>;
+  const routes = policy.routes as Record<string, unknown>;
+  const roles = policy.roles as Record<string, unknown>;
+  routes.fallback = [
+    { kind: "pi", model: "openrouter/z-ai/glm-5.3-flash", thinking: "max" },
+    { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
+  ];
+  roles["fallback-role"] = { kind: "single", route: "fallback" };
+  return policy;
+}
+
+function result(over: Partial<WorkerSessionResult> = {}): WorkerSessionResult {
+  return {
+    outcome: { kind: "success" },
+    output: "ok",
+    stderr: "",
+    usage: initialUsage(),
+    toolUsed: false,
+    ...over,
+  };
+}
+
+function setup(profile = "personal", role?: "fallback-role") {
+  const dir = mkdtempSync(join(tmpdir(), "agent-backend-test-"));
+  directories.push(dir);
+  const configDir = join(dir, "config");
+  mkdirSync(join(configDir, "dstack"), { recursive: true });
+  const policyJson = profilePolicy(profile);
+  writeFileSync(join(configDir, "dstack/models.json"), JSON.stringify(policyJson));
+  process.env.XDG_CONFIG_HOME = configDir;
+  const policy = parsePolicy(policyJson);
   const task: BackendTask = {
-    route: resolveRoute(policy, { role: "review" }),
+    route: resolveRoute(policy, { role: role ?? "review" }),
     cwd: dir,
     task: "Report once",
     systemPrompt: "preset instruction",
     contextFiles: [],
     tools: [],
   };
-  const calls = () =>
-    readFileSync(`${path}.calls`, "utf8")
-      .trim()
-      .split("\n")
-      .map((line) => {
-        const value: unknown = JSON.parse(line);
-        if (!isRecord(value) || !Array.isArray(value.args) || !isRecord(value.env))
-          throw new Error("invalid fixture call");
-        return { args: value.args, env: value.env, backend: value.backend, prompt: value.prompt };
+  const sessions: SessionCall[] = [];
+  const scripts: Array<(options: WorkerSessionOptions) => Promise<WorkerSessionResult>> = [];
+  const runtime: Runtime = {
+    session: async (options) => {
+      const call: SessionCall = { options, text: "", disposed: 0 };
+      sessions.push(call);
+      const script = scripts.shift();
+      if (!script) throw new Error("No scripted session result");
+      return {
+        prompt: async (text: string) => {
+          call.text = text;
+          return script(options);
+        },
+        dispose: async () => {
+          call.disposed++;
+        },
+      };
+    },
+    now: () => 1_800_000_000_000,
+  };
+  const script = (
+    ...results: Array<
+      | WorkerSessionResult
+      | Error
+      | ((options: WorkerSessionOptions) => Promise<WorkerSessionResult>)
+    >
+  ) => {
+    for (const entry of results)
+      scripts.push(async (options) => {
+        if (entry instanceof Error) throw entry;
+        if (typeof entry === "function") return entry(options);
+        return entry;
       });
-  return { runtime, task, calls, runner: new BackendRunner(runtime), path, policy };
+  };
+  return { dir, task, sessions, runtime, script, policy };
 }
 
-describe("real backend subprocesses", () => {
-  test("loads global and ancestor instructions with override and Claude fallback precedence", () => {
-    const { task } = setup({});
+describe("typed backend sessions", () => {
+  test("loads global and ancestor instructions with override precedence", () => {
+    const { task } = setup();
     const dir = task.cwd;
     const global = join(dir, "agent");
     const repo = join(dir, "repo");
@@ -99,450 +134,264 @@ describe("real backend subprocesses", () => {
       join(child, "AGENTS.override.md"),
     ]);
   });
-  test("split stream, allowed limits, scoped tools, system context and subscription auth", async () => {
-    const { runner, task, calls } = setup({ claude: "allowed", split: true });
-    const context = join(task.cwd, "AGENTS.md");
-    writeFileSync(context, "project instruction");
-    task.contextFiles = [context];
-    task.tools = ["read", "grep", "find", "ls"];
-    const result = await runner.run(task);
-    expect(result.outcome.kind).toBe("success");
-    expect(result.actual).toEqual({ backend: "claude-cli", model: "claude-fable-5-1" });
-    expect(result.attempts).toHaveLength(1);
-    expect(result.usage.output).toBe(3);
-    expect(result.usage.turns).toBe(1);
-    const auth = calls().find((call) => call.args.includes("auth"));
-    expect(auth?.args).toEqual([
-      "--safe-mode",
-      "--setting-sources",
-      "",
-      "auth",
-      "status",
-      "--json",
+
+  test("drives one typed session with the route's provider, model, effort and task", async () => {
+    const { runtime, task, sessions, script } = setup();
+    task.tools = ["read", "grep"];
+    script(
+      result({
+        output: "done",
+        actualModel: "openai-codex/gpt-6-astra",
+        usage: {
+          input: 5,
+          output: 8,
+          cacheRead: 1,
+          cacheWrite: 2,
+          cost: 0.25,
+          contextTokens: 16,
+          turns: 1,
+        },
+      }),
+    );
+    const activities: string[] = [];
+    const controller = new AbortController();
+    const execution = await new BackendRunner(runtime).run(task, controller.signal, (update) => {
+      if (update.activity) activities.push(update.activity);
+    });
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.options).toMatchObject({
+      cwd: task.cwd,
+      provider: "openai-codex",
+      model: "gpt-6-astra",
+      thinking: "xhigh",
+      systemPrompt: "preset instruction",
+      tools: ["read", "grep", "codemode"],
+    });
+    expect(sessions[0]?.options.signal).toBeDefined();
+    expect(sessions[0]?.text).toBe("Delegated task:\n\nReport once");
+    sessions[0]?.options.onActivity?.("agent_start");
+    expect(activities).toContain("agent_start");
+    expect(sessions[0]?.disposed).toBe(1);
+    expect(execution.outcome).toEqual({ kind: "success" });
+    expect(execution.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
+    expect(execution.usage).toMatchObject({
+      input: 5,
+      output: 8,
+      cacheRead: 1,
+      cacheWrite: 2,
+      cost: 0.25,
+      contextTokens: 16,
+      turns: 1,
+    });
+  });
+
+  test("empty tools still activate codemode", async () => {
+    const { runtime, task, sessions, script } = setup();
+    script(result());
+    expect((await new BackendRunner(runtime).run(task)).outcome).toEqual({ kind: "success" });
+    expect(sessions[0]?.options.tools).toEqual(["codemode"]);
+  });
+
+  test("provider failure advances once and sums usage across attempts", async () => {
+    const { runtime, task, sessions, script } = setup("personal", "fallback-role");
+    script(
+      result({
+        outcome: { kind: "provider-failure", reason: "quota" },
+        output: "partial",
+        actualModel: "openrouter/z-ai/glm-5.3-flash",
+        usage: {
+          input: 1,
+          output: 2,
+          cacheRead: 3,
+          cacheWrite: 4,
+          cost: 0.5,
+          contextTokens: 11,
+          turns: 1,
+        },
+      }),
+      result({
+        output: "recovered",
+        actualModel: "openai-codex/gpt-6-astra",
+        usage: {
+          input: 5,
+          output: 6,
+          cacheRead: 7,
+          cacheWrite: 8,
+          cost: 1.5,
+          contextTokens: 22,
+          turns: 2,
+        },
+      }),
+    );
+    const execution = await new BackendRunner(runtime).run(task);
+    expect(sessions).toHaveLength(2);
+    expect(sessions.map((call) => call.options.model)).toEqual([
+      "z-ai/glm-5.3-flash",
+      "gpt-6-astra",
     ]);
-    const request = calls().find((call) => call.args.includes("-p"));
-    expect(request?.args).toContain("Read,Grep,Glob");
-    expect(request?.args).toContain("--safe-mode");
-    expect(request?.args).toContain("--strict-mcp-config");
-    expect(request?.args).not.toContain("--bare");
-    expect(request?.args).not.toContain("--dangerously-skip-permissions");
-    expect(request?.args).toContain("--append-system-prompt-file");
-    expect(request?.prompt).toContain("project instruction");
-    expect(request?.prompt).toContain("preset instruction");
-    for (const call of calls()) {
-      expect(call.env.ANTHROPIC_API_KEY).toBeUndefined();
-      expect(call.env.CLAUDE_CODE_USE_BEDROCK).toBeUndefined();
-      expect(call.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
-    }
-  });
-
-  test.each(["allowed", "allowed_warning"])("%s is not a failure or a cooldown", async (mode) => {
-    const { runner, task } = setup({ claude: mode });
-    expect((await runner.run(task)).outcome.kind).toBe("success");
-    expect((await runner.run(task)).attempts[0]?.kind).toBe("success");
-  });
-
-  test("quota before tools falls back once and reports actual Astra", async () => {
-    const { runner, task } = setup({ claude: "quota", pi: "success" });
-    const result = await runner.run(task);
-    expect(result.outcome.kind).toBe("success");
-    expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
-    expect(result.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
-    expect(result.output).toBe("pi-ok");
-  });
-
-  test("work Fable falls back directly to Codex Astra and honors both cooldowns", async () => {
-    const { runner, task, calls } = setup({ claude: "quota", pi: "quota" }, "work");
-    const result = await runner.run(task);
-    expect(result.attempts.map((attempt) => attempt.kind)).toEqual([
+    expect(execution.attempts.map((attempt) => attempt.kind)).toEqual([
       "provider-failure",
-      "provider-failure",
+      "success",
     ]);
-    expect(
-      calls()
-        .filter((call) => call.backend === "pi" && call.args.includes("-p"))
-        .map((call) => [
-          call.args[call.args.indexOf("--provider") + 1],
-          call.args[call.args.indexOf("--model") + 1],
-        ]),
-    ).toEqual([["openai-codex", "gpt-6-astra"]]);
+    expect(execution.attempts[0]).toMatchObject({
+      reason: "quota",
+      actualModel: "openrouter/z-ai/glm-5.3-flash",
+    });
+    expect(execution.outcome).toEqual({ kind: "success" });
+    expect(execution.output).toBe("recovered");
+    expect(execution.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
+    expect(execution.usage).toMatchObject({
+      input: 6,
+      output: 8,
+      cacheRead: 10,
+      cacheWrite: 12,
+      cost: 2,
+      contextTokens: 22,
+      turns: 3,
+    });
+  });
+
+  test("a thrown session prompt is a failure, not a fallback", async () => {
+    const { runtime, task, sessions, script } = setup();
+    script(new Error("boom"));
+    const execution = await new BackendRunner(runtime).run(task);
+    expect(execution.outcome).toEqual({ kind: "failed", reason: "boom" });
+    expect(execution.attempts).toHaveLength(1);
+    expect(sessions[0]?.disposed).toBe(1);
+  });
+
+  test("missing credentials advance only through the recognized auth failure", async () => {
+    const { runtime, task, script } = setup("personal", "fallback-role");
+    script(result({ outcome: { kind: "provider-failure", reason: "auth" } }), result());
+    const execution = await new BackendRunner(runtime).run(task);
+    expect(execution.attempts.map((attempt) => attempt.kind)).toEqual([
+      "provider-failure",
+      "success",
+    ]);
+    expect(execution.attempts[0]).toMatchObject({ reason: "auth" });
+  });
+
+  test("a failed policy invocation stops before any session", async () => {
+    const { runtime, task, sessions, script } = setup();
+    script(result());
+    writeFileSync(
+      join(process.env.XDG_CONFIG_HOME ?? "", "dstack/models.json"),
+      JSON.stringify(profilePolicy("work")),
+    );
+    const execution = await new BackendRunner(runtime).run(task);
+    expect(execution.outcome).toMatchObject({
+      kind: "failed",
+      reason: expect.stringContaining("changed worker profile"),
+    });
+    expect(sessions).toHaveLength(0);
+  });
+
+  test("tool use before a provider failure blocks replay with reconciliation", async () => {
+    const { runtime, task, script } = setup("personal", "fallback-role");
+    script(
+      result({
+        outcome: { kind: "provider-failure", reason: "quota" },
+        toolUsed: true,
+        output: "partial",
+      }),
+    );
+    const execution = await new BackendRunner(runtime).run(task);
+    expect(execution.toolUsed).toBe(true);
+    expect(execution.outcome).toMatchObject({
+      kind: "failed",
+      reason: expect.stringContaining("parent must reconcile"),
+    });
+    expect(execution.attempts).toHaveLength(1);
+    expect(execution.output).toBe("partial");
+  });
+
+  test("tool use on a later successful attempt stays successful", async () => {
+    const { runtime, task, script } = setup("personal", "fallback-role");
+    script(result({ outcome: { kind: "provider-failure", reason: "quota" } }));
+    script(result({ toolUsed: true, output: "done" }));
+    const execution = await new BackendRunner(runtime).run(task);
+    expect(execution.outcome).toEqual({ kind: "success" });
+    expect(execution.toolUsed).toBe(true);
+    expect(execution.output).toBe("done");
+    expect(execution.attempts.map((attempt) => attempt.kind)).toEqual([
+      "provider-failure",
+      "success",
+    ]);
+  });
+
+  test("cooldowns honor expiry and never bypass the final endpoint", async () => {
+    const { runtime, task, script } = setup("personal", "fallback-role");
+    script(
+      result({ outcome: { kind: "provider-failure", reason: "quota" } }),
+      result({ outcome: { kind: "provider-failure", reason: "quota" } }),
+    );
+    const runner = new BackendRunner(runtime);
+    await runner.run(task);
     const second = await runner.run(task);
     expect(second.attempts.map((attempt) => attempt.kind)).toEqual(["cooldown", "cooldown"]);
     expect(second.outcome.kind).toBe("failed");
-  });
-
-  test.each([
-    "tool-failure",
-    "unknown",
-    "unknown-event",
-    "aborted-streaming",
-    "aborted-tools",
-    "task-failure",
-    "budget",
-    "malformed",
-    "truncated",
-    "overflow",
-    "wrong-model",
-    "extra-tool",
-    "api-source",
-    "hook",
-  ])("%s never falls back", async (mode) => {
-    const { runner, task, calls } = setup({ claude: mode });
-    if (mode === "tool-failure") task.tools = ["read"];
-    const result = await runner.run(task);
-    expect(result.outcome.kind).toBe("failed");
-    expect(calls().some((call) => call.backend === "pi")).toBe(false);
-    if (mode === "tool-failure") {
-      expect(result.output).toBe("partial");
-      expect(result.toolUsed).toBe(true);
-      expect(result.outcome).toMatchObject({
-        reason: expect.stringContaining("parent must reconcile"),
-      });
-    }
-  });
-
-  test.each(["api", "logged-out"])(
-    "auth %s advances without a Claude paid request",
-    async (auth) => {
-      const { runner, task, calls } = setup({ auth });
-      const result = await runner.run(task);
-      expect(result.actual?.backend).toBe("pi");
-      expect(calls().some((call) => call.backend === "claude" && call.args.includes("-p"))).toBe(
-        false,
-      );
-    },
-  );
-
-  test("missing API credentials skip the request and advance to the next exact provider", async () => {
-    const { runner, task, calls } = setup({ piAuth: "missing-fireworks" }, "work");
-    task.route.chain = [
-      {
-        kind: "pi",
-        provider: "fireworks",
-        id: "accounts/fireworks/models/deepseek-v4p1-flash",
-        thinking: "max",
-      },
-      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
-    ];
-    const result = await runner.run(task);
-    expect(result.outcome.kind).toBe("success");
-    expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
-    expect(result.attempts[0]).toMatchObject({ reason: "auth" });
-    expect(result.actual?.model).toBe("openai-codex/gpt-6-astra");
-    const requests = calls().filter((call) => call.backend === "pi" && call.args.includes("-p"));
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.args).toContain("openai-codex");
-    expect(requests[0]?.args).toContain("gpt-6-astra");
-  });
-
-  test.each(["malformed", "wrong-provider"])(
-    "Pi auth %s stops without a model request",
-    async (piAuth) => {
-      const { runner, task, calls } = setup({ claude: "quota", piAuth }, "work");
-      expect((await runner.run(task)).outcome.kind).toBe("failed");
-      expect(calls().some((call) => call.backend === "pi" && call.args.includes("-p"))).toBe(false);
-    },
-  );
-
-  test("missing cwd is a configuration failure, not a missing executable", async () => {
-    const { runner, task, calls } = setup({ claude: "success" });
-    task.cwd = join(task.cwd, "missing-directory");
-    const result = await runner.run(task);
-    expect(result.outcome.kind).toBe("failed");
-    expect(result.attempts).toHaveLength(1);
-    expect(() => calls()).toThrow();
-  });
-
-  test("malformed auth stops and missing executable advances", async () => {
-    const { runtime, task } = setup({ auth: "malformed" });
-    expect((await new BackendRunner(runtime).run(task)).outcome.kind).toBe("failed");
-    runtime.claude = () => ({ command: "/missing-claude-fixture", args: [] });
-    expect(
-      (await new BackendRunner(runtime).run(task)).attempts.map((attempt) => attempt.kind),
-    ).toEqual(["provider-failure", "success"]);
-  });
-
-  test("cooldown honors seconds, expires, and does not bypass the final endpoint", async () => {
-    const { runner, runtime, task } = setup({
-      claude: "quota",
-      pi: "quota",
-      resetAt: 1_800_000_120,
-    });
-    await runner.run(task);
-    expect((await runner.run(task)).attempts.map((attempt) => attempt.kind)).toEqual([
-      "cooldown",
-      "cooldown",
-    ]);
-    runtime.now = () => 1_800_000_061_000;
-    expect((await runner.run(task)).attempts.map((attempt) => attempt.kind)).toEqual([
-      "cooldown",
-      "provider-failure",
-    ]);
-    runtime.now = () => 1_800_000_122_000;
-    expect((await runner.run(task)).attempts.map((attempt) => attempt.kind)).toEqual([
+    script(
+      result({ outcome: { kind: "provider-failure", reason: "quota" } }),
+      result({ outcome: { kind: "provider-failure", reason: "quota" } }),
+    );
+    const advanced: Runtime = { ...runtime, now: () => 1_800_000_061_000 };
+    const third = await new BackendRunner(advanced).run(task);
+    expect(third.attempts.map((attempt) => attempt.kind)).toEqual([
       "provider-failure",
       "provider-failure",
     ]);
   });
 
-  test("pre-cancelled dispatch does not spawn; cancellation on terminal failure never advances", async () => {
-    const { runner, task, calls } = setup({ claude: "quota" });
-    const pre = AbortSignal.abort();
-    expect((await runner.run(task, pre)).attempts).toEqual([]);
+  test("pre-cancelled dispatch never opens a session", async () => {
+    const { runtime, task, sessions } = setup();
+    const execution = await new BackendRunner(runtime).run(task, AbortSignal.abort());
+    expect(execution.outcome).toEqual({ kind: "cancelled" });
+    expect(execution.attempts).toEqual([]);
+    expect(sessions).toHaveLength(0);
+  });
+
+  test("cancellation aborts the live session and never advances", async () => {
+    const { runtime, task, sessions, script } = setup("personal", "fallback-role");
+    script(
+      (options) =>
+        new Promise((resolve) => {
+          options.signal?.addEventListener(
+            "abort",
+            () => resolve(result({ outcome: { kind: "cancelled" } })),
+            { once: true },
+          );
+          options.onActivity?.("agent_start");
+        }),
+    );
     const controller = new AbortController();
-    const result = await runner.run(task, controller.signal, (update) => {
-      if (update.output === "partial") controller.abort();
+    const execution = await new BackendRunner(runtime).run(task, controller.signal, (update) => {
+      if (update.activity === "agent_start") controller.abort();
     });
-    expect(result.outcome.kind).toBe("cancelled");
-    expect(calls().some((call) => call.backend === "pi")).toBe(false);
+    expect(execution.outcome).toEqual({ kind: "cancelled" });
+    expect(execution.attempts).toHaveLength(1);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.disposed).toBe(1);
   });
 
-  test("shutdown cancels active work and prevents subsequent spawns", async () => {
-    const { runner, task, calls } = setup({ claude: "quota" });
-    const result = await runner.run(task, undefined, (update) => {
-      if (update.output === "partial") runner.stop();
+  test("shutdown cancels active work and prevents subsequent sessions", async () => {
+    const { runtime, task, sessions, script } = setup("personal", "fallback-role");
+    script(
+      (options) =>
+        new Promise((resolve) => {
+          options.signal?.addEventListener(
+            "abort",
+            () => resolve(result({ outcome: { kind: "cancelled" } })),
+            { once: true },
+          );
+          options.onActivity?.("agent_start");
+        }),
+    );
+    const runner = new BackendRunner(runtime);
+    const execution = await runner.run(task, undefined, (update) => {
+      if (update.activity === "agent_start") runner.stop();
     });
-    expect(result.outcome.kind).toBe("cancelled");
-    const count = calls().length;
-    expect((await runner.run(task)).outcome.kind).toBe("cancelled");
-    expect(calls()).toHaveLength(count);
+    expect(execution.outcome).toEqual({ kind: "cancelled" });
+    expect((await runner.run(task)).outcome).toEqual({ kind: "cancelled" });
+    expect(sessions).toHaveLength(1);
   });
-
-  test("cancellation kills a TERM-resistant child and its descendants", async () => {
-    const { runner, task } = setup({ claude: "hang" });
-    const controller = new AbortController();
-    let descendant = 0;
-    const result = await runner.run(task, controller.signal, (update) => {
-      const match = /descendant=(\d+)/.exec(update.output);
-      if (match) {
-        descendant = Number(match[1]);
-        controller.abort();
-      }
-    });
-    expect(result.outcome.kind).toBe("cancelled");
-    expect(descendant).toBeGreaterThan(0);
-    let alive = true;
-    for (let attempt = 0; attempt < 50 && alive; attempt++) {
-      try {
-        process.kill(descendant, 0);
-        if (
-          process.platform === "linux" &&
-          /\) Z /.test(readFileSync(`/proc/${descendant}/stat`, "utf8"))
-        )
-          alive = false;
-      } catch {
-        alive = false;
-      }
-      if (alive) await Bun.sleep(10);
-    }
-    expect(alive).toBe(false);
-  });
-
-  test("unsupported tools fail before auth and empty tools remain empty", async () => {
-    const { runner, task, calls } = setup({ claude: "success" });
-    task.tools = ["mcp"];
-    expect((await runner.run(task)).outcome.kind).toBe("failed");
-    expect(() => calls()).toThrow();
-    task.tools = [];
-    expect((await runner.run(task)).outcome.kind).toBe("success");
-    expect(calls().find((call) => call.args.includes("-p"))?.args).toContain("");
-    expect(claudeTools(["ls"])).toEqual(["Glob"]);
-    expect(
-      subscriptionEnv({
-        HOME: "/home/test",
-        ANTHROPIC_BASE_URL: "evil",
-        CLAUDE_CONFIG_DIR: "evil",
-      }),
-    ).toEqual({ HOME: "/home/test" });
-  });
-
-  test("bounded output", async () => {
-    const { runner, task } = setup({ claude: "large-output" });
-    const result = await runner.run(task);
-    expect(result.outcome.kind).toBe("success");
-    expect(Buffer.byteLength(result.output)).toBeLessThanOrEqual(50 * 1024);
-  });
-
-  test.each([
-    "tool-failure",
-    "unknown",
-    "unknown-event",
-    "wrong-provider",
-    "stderr-quota",
-    "stdout-quota",
-  ])("Pi %s never authorizes another route", async (mode) => {
-    const { runner, task } = setup({ claude: "quota", pi: mode }, "work");
-    const result = await runner.run(task);
-    expect(result.attempts).toHaveLength(2);
-    expect(result.outcome.kind).toBe(mode === "stdout-quota" ? "success" : "failed");
-  });
-});
-
-test("real synthetic quota falls back only before tools", async () => {
-  const { runner, task } = setup({ claude: "synthetic-quota" });
-  const result = await runner.run(task);
-  expect(result.outcome.kind).toBe("success");
-  expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
-  expect(result.attempts[0]?.actualModel).toBe("claude-fable-5-1");
-});
-test.each([
-  "synthetic-after-tool",
-  "synthetic-cancelled",
-  "synthetic-mismatch",
-  "synthetic-tool",
-  "synthetic-unknown-event",
-])("%s never replays", async (mode) => {
-  const { runner, task, calls } = setup({ claude: mode });
-  expect((await runner.run(task)).outcome.kind).toBe("failed");
-  expect(calls().some((call) => call.backend === "pi")).toBe(false);
-});
-test("parent cancellation while reading a real synthetic error never replays", async () => {
-  const { runner, task, calls } = setup({ claude: "synthetic-quota", split: true });
-  const controller = new AbortController();
-  const result = await runner.run(task, controller.signal, (update) => {
-    if (update.output.includes("monthly spend limit")) controller.abort();
-  });
-  expect(result.outcome.kind).toBe("cancelled");
-  expect(calls().some((call) => call.backend === "pi")).toBe(false);
-});
-
-const nativeQuotaErrors = [
-  {
-    provider: "fireworks",
-    id: "accounts/fireworks/models/deepseek-v4p1-flash",
-    error: '429 {"type":"error","error":{"type":"rate_limit_error","message":"TEST_QUOTA"}}',
-  },
-  {
-    provider: "openrouter",
-    id: "deepseek/deepseek-v4.1-flash",
-    error:
-      'OpenAI API error (429): {"type":"insufficient_quota","code":"insufficient_quota","message":"TEST_QUOTA"}',
-  },
-] satisfies (Pick<NativeTarget, "provider" | "id"> & { error: string })[];
-
-function nativeQuotaSetup(
-  native: (typeof nativeQuotaErrors)[number],
-  scenario: Record<string, unknown> = {},
-) {
-  const setupResult = setup({
-    piError: native.error,
-    piErrorProvider: native.provider,
-    ...scenario,
-  });
-  setupResult.task.route.chain = [
-    { kind: "pi", provider: native.provider, id: native.id, thinking: "xhigh" },
-    { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
-  ];
-  return setupResult;
-}
-
-test.each(nativeQuotaErrors)(
-  "native $provider quota before tools advances despite exit zero",
-  async (native) => {
-    const { runner, task, calls } = nativeQuotaSetup(native);
-    const result = await runner.run(task);
-    expect(result.outcome).toEqual({ kind: "success" });
-    expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
-    expect(result.attempts[0]).toMatchObject({
-      reason: "quota",
-      actualModel: `${native.provider}/${native.id}`,
-    });
-    expect(result.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
-    expect(result.output).toBe("pi-ok");
-    expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(2);
-  },
-);
-
-for (const guard of ["tool", "tool-call", "aborted", "unknown-event"]) {
-  test.each(nativeQuotaErrors)(
-    `native $provider quota after ${guard} never replays`,
-    async (native) => {
-      const { runner, task, calls } = nativeQuotaSetup(native, { piBeforeError: guard });
-      const result = await runner.run(task);
-      expect(result.outcome.kind).toBe("failed");
-      expect(result.attempts).toHaveLength(1);
-      expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
-      if (guard === "tool" || guard === "tool-call") {
-        expect(result.toolUsed).toBe(true);
-        expect(result.outcome).toMatchObject({
-          reason: expect.stringContaining("parent must reconcile"),
-        });
-      }
-    },
-  );
-}
-
-test.each(nativeQuotaErrors)(
-  "parent cancellation on native $provider quota never replays",
-  async (native) => {
-    const { runner, task, calls } = nativeQuotaSetup(native);
-    const controller = new AbortController();
-    const result = await runner.run(task, controller.signal, (update) => {
-      if (update.output === "native-error") controller.abort();
-    });
-    expect(result.outcome.kind).toBe("cancelled");
-    expect(result.attempts).toHaveLength(1);
-    expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
-  },
-);
-
-for (const native of nativeQuotaErrors) {
-  test.each(piToolActivityEvents)(
-    `Pi $name alone blocks replay after native ${native.provider} quota`,
-    async ({ event }) => {
-      const { runner, task, calls } = nativeQuotaSetup(native, { piEvents: [event], split: true });
-      task.tools = ["write"];
-      const result = await runner.run(task);
-      expect(result.toolUsed).toBe(true);
-      expect(result.outcome).toMatchObject({
-        kind: "failed",
-        reason: expect.stringContaining("parent must reconcile"),
-      });
-      expect(result.attempts).toHaveLength(1);
-      expect(result.attempts[0]).toMatchObject({ kind: "provider-failure", reason: "quota" });
-      expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
-      expect(calls().every((call) => call.args.includes(native.provider))).toBe(true);
-    },
-  );
-}
-
-test("Pi end-only write result then quota never repeats a completed write", async () => {
-  const { runner, task, calls } = nativeQuotaSetup(nativeQuotaErrors[0], {
-    piEvents: [piWriteEnd],
-    piWritePath: "end-only-write.txt",
-    split: true,
-  });
-  task.tools = ["write"];
-  const result = await runner.run(task);
-  expect(readFileSync(join(task.cwd, "end-only-write.txt"), "utf8")).toBe("write\n");
-  expect(result.toolUsed).toBe(true);
-  expect(result.outcome).toMatchObject({
-    kind: "failed",
-    reason: expect.stringContaining("parent must reconcile"),
-  });
-  expect(result.attempts).toHaveLength(1);
-  expect(result.output).toBe("native-error");
-  expect(calls().filter((call) => call.args.includes("-p"))).toHaveLength(1);
-});
-
-test("Pi end-only write result followed by final success stays successful", async () => {
-  const { runner, task, calls } = setup(
-    {
-      claude: "quota",
-      piEvents: [piWriteEnd],
-      piWritePath: "end-only-write.txt",
-      split: true,
-    },
-    "work",
-  );
-  task.tools = ["write"];
-  const result = await runner.run(task);
-  expect(result.outcome).toEqual({ kind: "success" });
-  expect(result.toolUsed).toBe(true);
-  expect(result.output).toBe("pi-ok");
-  expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
-  expect(readFileSync(join(task.cwd, "end-only-write.txt"), "utf8")).toBe("write\n");
-  expect(calls().filter((call) => call.backend === "pi" && call.args.includes("-p"))).toHaveLength(
-    1,
-  );
 });

@@ -10,7 +10,7 @@ export interface NativeTarget {
   id: string;
   thinking: Effort;
 }
-export type Backend = NativeTarget | { kind: "claude-cli"; model: string; thinking: "xhigh" };
+export type Backend = NativeTarget;
 export type Chain = [Backend, ...Backend[]];
 type Role = { kind: "single"; route: string } | { kind: "panel"; members: [string, ...string[]] };
 export interface Policy {
@@ -104,13 +104,6 @@ function parseBackend(value: unknown): Backend {
   ) {
     return invalid("backend needs kind, model and thinking");
   }
-  if (
-    value.kind === "claude-cli" &&
-    value.model === "claude-fable-5-1" &&
-    value.thinking === "xhigh"
-  ) {
-    return { kind: value.kind, model: value.model, thinking: value.thinking };
-  }
   if (value.kind !== "pi" || !/^[a-z0-9-]+\/[^\s:]+$/.test(value.model)) {
     return invalid("unsupported backend, model or thinking");
   }
@@ -177,9 +170,7 @@ export function parsePolicy(value: unknown): Policy {
   for (const role of requiredRoles) if (!roles.has(role)) return invalid(`missing role ${role}`);
   const parentChain = routes.get(value.parent);
   if (!parentChain || parentChain.length !== 1 || parentChain[0].kind !== "pi")
-    return invalid(
-      "parent must reference one native Pi target, never Claude Code or a fallback chain",
-    );
+    return invalid("parent must reference one native Pi target with no fallback chain");
   return { profile, parent: parentChain[0], routes, roles };
 }
 
@@ -198,16 +189,7 @@ export function loadPolicy(
 }
 
 export function backendModel(backend: Backend): string {
-  switch (backend.kind) {
-    case "pi":
-      return `${backend.provider}/${backend.id}`;
-    case "claude-cli":
-      return backend.model;
-    default: {
-      const exhaustive: never = backend;
-      return exhaustive;
-    }
-  }
+  return `${backend.provider}/${backend.id}`;
 }
 
 export function backendLabel(backend: Backend): string {
@@ -292,8 +274,7 @@ export function resolveRoute(policy: Policy, input: SelectionInput): ResolvedRou
     if (input.member !== undefined || input.seat !== undefined)
       throw new Error("Raw models cannot select panel seats.");
     const matches = (backend: Backend) =>
-      `${backend.kind === "pi" ? "" : "claude-cli/"}${backendModel(backend)}:${backend.thinking}` ===
-      input.model;
+      `${backendModel(backend)}:${backend.thinking}` === input.model;
     const chains = [...policy.routes.values()];
     const chain =
       chains.find(([head]) => matches(head)) ?? chains.find((route) => route.some(matches));

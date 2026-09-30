@@ -397,7 +397,7 @@ test("cached parent selections retain compatible session-local effort overrides"
   );
 });
 
-test.each(["missing", "malformed", "claude-parent"])(
+test.each(["missing", "malformed", "bad-parent"])(
   "%s policy cannot be bypassed with --no-extensions",
   async (mode) => {
     if (mode === "missing") rmSync(policyPath());
@@ -405,7 +405,10 @@ test.each(["missing", "malformed", "claude-parent"])(
     else
       writeFileSync(
         policyPath(),
-        readFileSync(policyPath(), "utf8").replace('"parent": "deepseek"', '"parent": "fable"'),
+        readFileSync(policyPath(), "utf8").replace(
+          '"parent": "deepseek"',
+          '"parent": "how-critics"',
+        ),
       );
     const result = await run(["-p", "denied"]);
     expect(result.status).not.toBe(0);
@@ -424,7 +427,6 @@ test("CLI provider/model substitution and denied native selections fail closed",
     }),
   );
   for (const args of [
-    ["--model", "claude-cli/claude-fable-5-1"],
     ["--model", "openai-codex/gpt-6-astra"],
     ["--model", "openrouter/deepseek/deepseek-v4.1-flash"],
     ["--provider", "openai", "--model", "gpt-6-astra"],

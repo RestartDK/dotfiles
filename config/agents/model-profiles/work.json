@@ -19,11 +19,6 @@
     ],
     "fable": [
       {
-        "kind": "claude-cli",
-        "model": "claude-fable-5-1",
-        "thinking": "xhigh"
-      },
-      {
         "kind": "pi",
         "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
