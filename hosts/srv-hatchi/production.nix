@@ -3,8 +3,14 @@
   my.hatchi = {
     network = {
       dnsAnswer = "192.168.200.70";
-      clientNetworks = [ "192.168.200.0/24" ];
-      adminNetworks = [ "192.168.200.0/24" ];
+      clientNetworks = [
+        "192.168.200.0/24"
+        "192.168.205.0/24"
+      ];
+      adminNetworks = [
+        "192.168.200.0/24"
+        "192.168.205.0/24"
+      ];
       upstreamDNS = [
         "1.1.1.1"
         "9.9.9.9"

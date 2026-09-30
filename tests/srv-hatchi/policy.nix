@@ -223,14 +223,26 @@ assert cfg.networking.firewall.trustedInterfaces == [ "lo" ];
 assert cfg.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 ];
 assert production.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 ];
 assert production.my.hatchi.network.dnsAnswer == "192.168.200.70";
-assert production.my.hatchi.network.clientNetworks == [ "192.168.200.0/24" ];
-assert production.my.hatchi.network.adminNetworks == [ "192.168.200.0/24" ];
+assert
+  production.my.hatchi.network.clientNetworks == [
+    "192.168.200.0/24"
+    "192.168.205.0/24"
+  ];
+assert
+  production.my.hatchi.network.adminNetworks == [
+    "192.168.200.0/24"
+    "192.168.205.0/24"
+  ];
 assert
   production.services.adguardhome.settings.dns.upstream_dns == [
     "1.1.1.1"
     "9.9.9.9"
   ];
 assert lib.hasInfix "ip saddr 192.168.200.0/24 meta l4proto { tcp } th dport { 22 } accept"
+  production.networking.firewall.extraInputRules;
+assert lib.hasInfix "ip saddr 192.168.205.0/24 meta l4proto { tcp, udp } th dport { 53 } accept"
+  production.networking.firewall.extraInputRules;
+assert lib.hasInfix "ip saddr 192.168.205.0/24 meta l4proto { tcp } th dport { 22 } accept"
   production.networking.firewall.extraInputRules;
 assert production.my.hatchi.onepassword.enable;
 assert builtins.all (reference: reference != null) (
