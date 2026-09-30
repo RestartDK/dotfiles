@@ -38,7 +38,11 @@ in
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       (lib.mkIf cfg.groups.terminalTools {
-        home.packages = [ tuicrPackage ];
+        home.packages = [
+          tuicrPackage
+          terminalBrowserPackage
+        ];
+        home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
         xdg.configFile = {
           "btop/btop.conf" = file "config/btop/btop.conf";
           "thefuck/settings.py" = file "config/thefuck/settings.py";
@@ -53,11 +57,7 @@ in
       (lib.mkIf cfg.groups.multiplexer (
         lib.mkMerge [
           {
-            home.packages = [
-              herdrPackage
-              terminalBrowserPackage
-            ];
-            home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
+            home.packages = [ herdrPackage ];
             xdg.configFile = {
               "herdr/config.toml" = file "config/herdr/config.toml";
               "herdr/hostname-status.py" = file "config/herdr/hostname-status.py";
