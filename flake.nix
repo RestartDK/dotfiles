@@ -63,7 +63,7 @@
       treefmtEval = forAllSystems (
         system: inputs.treefmt-nix.lib.evalModule (pkgsFor system) ./treefmt.nix
       );
-      sshSettings = (import ./modules/home/ssh.nix { }).programs.ssh.settings;
+      sshSettings = (import ./modules/home/ssh.nix { inherit (home-manager) lib; }).programs.ssh.settings;
       fleetInventory = {
         schemaVersion = 1;
         hosts = map (name: { inherit name; }) (
