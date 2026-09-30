@@ -1,200 +1,45 @@
---- a/dist/core/model-runtime.js
-+++ b/dist/core/model-runtime.js
+--- a/dist/core/agent-session.js
++++ b/dist/core/agent-session.js
 @@ -1,3 +1,4 @@
-+import { authorizeModel, authorizeHeaders, authorizePayload, authorizeAttempt, workerRequestOptions, loadPolicy } from "./dstack-policy.js";
- import { dirname, join } from "node:path";
- import { createModels, lazyStream, ModelsError, normalizeContext, } from "@earendil-works/pi-ai";
- import * as builtinProviderCatalog from "@earendil-works/pi-ai/providers/all";
-@@ -38,6 +39,7 @@
- }
- /** Configured pi-ai Models collection used by coding-agent and SDK consumers. */
- export class ModelRuntime {
-+    policyProfile = loadPolicy().profile;
-     models;
-     credentials;
-     defaultBuiltins;
-@@ -339,6 +341,7 @@
-     async getAuth(providerOrModel, overrides = {}) {
-         if (typeof providerOrModel === "string")
-             return this.models.getAuth(providerOrModel, overrides);
-+        this.assertPolicy(providerOrModel);
-         const resolution = await this.models.getAuth(providerOrModel, overrides);
-         if (!resolution)
-             return undefined;
-@@ -418,8 +421,18 @@
-             return configured;
-         const check = this.snapshot.auth.get(providerId);
-         return check ? { configured: true, source: "environment", label: check.source } : { configured: false };
-+    }
-+    assertPolicy(model) {
-+        authorizeModel(model, this.policyProfile);
-+        if (this.nativeExtensionProviders.has(model.provider) || this.extensionProviders.get(model.provider)?.streamSimple)
-+            throw new Error("AI policy blocks replacement of native provider transports.");
-+        for (const override of [this.config.getProvider(model.provider), this.extensionProviders.get(model.provider)]) {
-+            if (override?.baseUrl) authorizeModel({ ...model, baseUrl: override.baseUrl }, this.policyProfile);
-+        }
-     }
-     async prepareRequest(model, options) {
-+        model = Object.freeze({ ...model, headers: model.headers && Object.freeze({ ...model.headers }), thinkingLevelMap: model.thinkingLevelMap && Object.freeze({ ...model.thinkingLevelMap }), compat: Object.freeze({ ...model.compat, allowedFallbackModels: Object.freeze([]) }) });
-+        this.assertPolicy(model);
-         const provider = this.models.getProvider(model.provider);
-         if (!provider)
-             throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
-@@ -438,11 +451,31 @@
-         const env = resolution.env || providerOptions.env
-             ? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
-             : undefined;
-+        const requestModel = Object.freeze(resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model);
-+        this.assertPolicy(requestModel);
-+        if (provider !== this.models.getProvider(model.provider))
-+            throw new Error("AI policy blocks provider replacement during request preparation.");
-+        headers = headers && Object.freeze({ ...headers });
-+        authorizeHeaders(requestModel, requestModel.headers);
-+        authorizeHeaders(requestModel, headers);
-         return {
-             provider,
--            model: resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model,
-+            model: requestModel,
-             options: {
-                 ...providerOptions,
-+                beforeRequest: (serializedPayload) => {
-+                    this.assertPolicy(requestModel);
-+                    if (provider !== this.models.getProvider(model.provider))
-+                        throw new Error("AI policy blocks provider replacement during a request.");
-+                    authorizeHeaders(requestModel, requestModel.headers);
-+                    authorizeHeaders(requestModel, headers);
-+                    return authorizeAttempt(serializedPayload, requestModel, this.policyProfile);
-+                },
-+                onPayload: async (payload, payloadModel) => {
-+                    const transformed = await providerOptions.onPayload?.(payload, payloadModel);
-+                    this.assertPolicy(requestModel);
-+                    return authorizePayload(transformed === undefined ? payload : transformed, requestModel, this.policyProfile);
-+                },
-                 apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
-                 headers,
-                 env,
-@@ -462,7 +495,7 @@
-     streamSimple(model, context, options) {
-         const transcript = normalizeContext(context);
-         return lazyStream(model, async () => {
--            const prepared = await this.prepareRequest(model, options);
-+            const prepared = await this.prepareRequest(model, workerRequestOptions(model, options));
-             return prepared.provider.streamSimple(prepared.model, transcript, prepared.options);
-         });
-     }
-@@ -471,6 +504,8 @@
-     }
-     streamDeferred(model, handle, options) {
-         return lazyStream(model, async () => {
-+            if (handle.provider !== model.provider || handle.modelId !== model.id || handle.api !== model.api)
-+                throw new Error("AI policy blocks deferred response identity substitution.");
-             const prepared = await this.prepareRequest(model, options);
-             if (!prepared.provider.fetchDeferred) {
-                 throw new ModelsError("provider", `Provider ${model.provider} does not support deferred responses`);
-@@ -482,6 +517,8 @@
-         return this.streamDeferred(model, handle, options).result();
-     }
-     async cancelDeferred(model, handle, options) {
-+        if (handle.provider !== model.provider || handle.modelId !== model.id || handle.api !== model.api)
-+            throw new Error("AI policy blocks deferred response identity substitution.");
-         const prepared = await this.prepareRequest(model, options);
-         if (!prepared.provider.cancelDeferred) {
-             throw new ModelsError("provider", `Provider ${model.provider} does not support deferred responses`);
---- a/dist/core/sdk.js
-+++ b/dist/core/sdk.js
-@@ -1,14 +1,12 @@
-+import { authorizeModel, authorizeRequestedEffort, authorizeEffectiveEffort, normalizeRequiredEffort, bindSessionPolicy, policyDefault, policyThinkingLevel, resolveExactModel } from "./dstack-policy.js";
- import { join } from "node:path";
- import { Agent, setDefaultStreamFn } from "@earendil-works/pi-agent-core";
- import { clampThinkingLevel, streamSimple } from "@earendil-works/pi-ai/compat";
- import { getAgentDir } from "../config.js";
- import { resolvePath } from "../utils/paths.js";
- import { AgentSession } from "./agent-session.js";
--import { formatNoModelsAvailableMessage } from "./auth-guidance.js";
- import { CacheWarmer } from "./cache-warmer.js";
--import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
- import { convertToLlm } from "./messages.js";
--import { findInitialModel } from "./model-resolver.js";
- import { ModelRuntime } from "./model-runtime.js";
- import { mergeProviderAttributionHeaders } from "./provider-attribution.js";
- import { DefaultResourceLoader } from "./resource-loader.js";
-@@ -82,61 +80,21 @@
-     const existingSession = sessionManager.buildSessionContext();
-     const hasExistingSession = existingSession.messages.length > 0;
-     const hasThinkingEntry = sessionManager.getBranch().some((entry) => entry.type === "thinking_level_change");
--    let model = options.model;
--    let modelFallbackMessage;
--    // If session has data, try to restore model from it
--    if (!model && hasExistingSession && existingSession.model) {
--        const restoredModel = modelRuntime.getModel(existingSession.model.provider, existingSession.model.modelId);
--        if (restoredModel && modelRuntime.hasConfiguredAuth(restoredModel.provider)) {
--            model = restoredModel;
--        }
--        if (!model) {
--            modelFallbackMessage = `Could not restore model ${existingSession.model.provider}/${existingSession.model.modelId}`;
--        }
--    }
--    // If still no model, use findInitialModel (checks settings default, then provider defaults)
--    if (!model) {
--        const result = await findInitialModel({
--            scopedModels: [],
--            isContinuing: hasExistingSession,
--            defaultProvider: settingsManager.getDefaultProvider(),
--            defaultModelId: settingsManager.getDefaultModel(),
--            defaultThinkingLevel: settingsManager.getDefaultThinkingLevel(),
--            modelThinkingLevels: settingsManager.getAllModelThinkingLevels(),
--            modelRuntime,
--        });
--        model = result.model;
--        if (!model) {
--            modelFallbackMessage = formatNoModelsAvailableMessage();
--        }
--        else if (modelFallbackMessage) {
--            modelFallbackMessage += `. Using ${model.provider}/${model.id}`;
--        }
--    }
--    let thinkingLevel = options.thinkingLevel;
--    // If session has data, restore thinking level from it
--    if (thinkingLevel === undefined && hasExistingSession) {
--        thinkingLevel = hasThinkingEntry
--            ? existingSession.thinkingLevel
--            : (settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
--    }
--    // Fall back to per-model override, then global default
--    if (thinkingLevel === undefined && model) {
--        const perModel = settingsManager.getModelThinkingLevel(model.provider, model.id);
--        if (perModel) {
--            thinkingLevel = perModel;
--        }
--    }
--    if (thinkingLevel === undefined) {
--        thinkingLevel = settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
--    }
--    // Clamp to model capabilities
--    if (!model) {
--        thinkingLevel = "off";
--    }
--    else {
--        thinkingLevel = clampThinkingLevel(model, thinkingLevel);
--    }
-+    const policy = bindSessionPolicy(sessionManager);
-+    const restored = existingSession.model;
-+    if (hasExistingSession && !restored)
-+        throw new Error("AI policy cannot restore history without an exact model. Start a new session.");
-+    const restoredModel = restored ? resolveExactModel(modelRuntime, restored.provider, restored.modelId) : undefined;
-+    const defaults = options.model || restoredModel ? undefined : policyDefault(modelRuntime);
-+    const model = options.model ?? restoredModel ?? defaults.model;
-+    authorizeModel(model, policy.profile);
-+    const requestedThinking = options.thinkingLevel ?? (hasExistingSession && hasThinkingEntry ? existingSession.thinkingLevel : undefined) ?? defaults?.thinkingLevel ?? policyThinkingLevel();
-+    if (options.thinkingLevel !== undefined) authorizeRequestedEffort(options.thinkingLevel);
-+    const thinkingLevel = defaults && options.thinkingLevel === undefined
-+        ? normalizeRequiredEffort(model, requestedThinking)
-+        : clampThinkingLevel(model, requestedThinking);
-+    authorizeEffectiveEffort(model, thinkingLevel);
-+    const modelFallbackMessage = undefined;
-     const defaultActiveToolNames = ["read", "bash", "edit", "write"];
-     const configuredDefaultToolNames = settingsManager.getDefaultTools();
-     const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
++import { authorizeModel, authorizeEffectiveEffort } from "./dstack-policy.js";
+ /**
+  * AgentSession - Core abstraction for agent lifecycle and session management.
+  *
+@@ -1876,6 +1877,8 @@
+      * @throws Error if no auth is configured for the model
+      */
+     async setModel(model, options = {}) {
++        authorizeModel(model);
++        authorizeEffectiveEffort(model, clampThinkingLevel(model, this._getThinkingLevelForModelSwitch(model)));
+         if (!(await this._modelRuntime.checkAuth(model.provider))) {
+             throw new Error(`No API key for ${model.provider}/${model.id}`);
+         }
+@@ -1931,6 +1934,8 @@
+         const len = scopedModels.length;
+         const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
+         const next = scopedModels[nextIndex];
++        authorizeModel(next.model);
++        authorizeEffectiveEffort(next.model, clampThinkingLevel(next.model, this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel)));
+         const thinkingLevel = this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
+         // Apply model
+         this.agent.state.model = next.model;
+@@ -1959,6 +1964,8 @@
+         const len = availableModels.length;
+         const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
+         const nextModel = availableModels[nextIndex];
++        authorizeModel(nextModel);
++        authorizeEffectiveEffort(nextModel, clampThinkingLevel(nextModel, this._getThinkingLevelForModelSwitch(nextModel)));
+         const thinkingLevel = this._getThinkingLevelForModelSwitch(nextModel);
+         this.agent.state.model = nextModel;
+         this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
+@@ -1984,6 +1991,7 @@
+     setThinkingLevel(level, options = {}) {
+         const availableLevels = this.getAvailableThinkingLevels();
+         const effectiveLevel = availableLevels.includes(level) ? level : this._clampThinkingLevel(level, availableLevels);
++        authorizeEffectiveEffort(this.model, effectiveLevel);
+         // Only persist if actually changing
+         const previousLevel = this.agent.state.thinkingLevel;
+         const isChanging = effectiveLevel !== previousLevel;
 --- a/dist/core/model-resolver.js
 +++ b/dist/core/model-resolver.js
 @@ -1,3 +1,4 @@
@@ -207,7 +52,7 @@
  import { minimatch } from "minimatch";
  import { isValidThinkingLevel } from "../cli/args.js";
 -import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
- /** Default model IDs for each known provider */
+ /** Default chat model IDs for providers with built-in chat models. */
  export const defaultModelPerProvider = {
      "amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
 @@ -126,20 +126,6 @@
@@ -556,6 +401,206 @@
 -}
 -//# sourceMappingURL=model-resolver.js.map
 \ No newline at end of file
+--- a/dist/core/model-runtime.js
++++ b/dist/core/model-runtime.js
+@@ -1,3 +1,4 @@
++import { authorizeModel, authorizeHeaders, authorizePayload, authorizeAttempt, workerRequestOptions, loadPolicy } from "./dstack-policy.js";
+ import { dirname, join } from "node:path";
+ import { clampThinkingLevel, createModels, lazyStream, ModelsError, normalizeContext, } from "@earendil-works/pi-ai";
+ import * as builtinProviderCatalog from "@earendil-works/pi-ai/providers/all";
+@@ -40,6 +41,7 @@
+ }
+ /** Configured pi-ai Models collection used by coding-agent and SDK consumers. */
+ export class ModelRuntime {
++    policyProfile = loadPolicy().profile;
+     models;
+     credentials;
+     defaultBuiltins;
+@@ -364,6 +366,7 @@
+     async getAuth(providerOrModel, overrides = {}) {
+         if (typeof providerOrModel === "string")
+             return this.models.getAuth(providerOrModel, overrides);
++        this.assertPolicy(providerOrModel);
+         const resolution = await this.models.getAuth(providerOrModel, overrides);
+         if (!resolution)
+             return undefined;
+@@ -443,8 +446,18 @@
+             return configured;
+         const check = this.snapshot.auth.get(providerId);
+         return check ? { configured: true, source: "environment", label: check.source } : { configured: false };
++    }
++    assertPolicy(model) {
++        authorizeModel(model, this.policyProfile);
++        if (this.nativeExtensionProviders.has(model.provider) || this.extensionProviders.get(model.provider)?.streamSimple)
++            throw new Error("AI policy blocks replacement of native provider transports.");
++        for (const override of [this.config.getProvider(model.provider), this.extensionProviders.get(model.provider)]) {
++            if (override?.baseUrl) authorizeModel({ ...model, baseUrl: override.baseUrl }, this.policyProfile);
++        }
+     }
+     async prepareRequest(model, options) {
++        model = Object.freeze({ ...model, headers: model.headers && Object.freeze({ ...model.headers }), thinkingLevelMap: model.thinkingLevelMap && Object.freeze({ ...model.thinkingLevelMap }), compat: Object.freeze({ ...model.compat, allowedFallbackModels: Object.freeze([]) }) });
++        this.assertPolicy(model);
+         const provider = this.models.getProvider(model.provider);
+         if (!provider)
+             throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
+@@ -463,12 +476,31 @@
+         const env = resolution.env || providerOptions.env
+             ? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
+             : undefined;
+-        const requestModel = resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model;
++        const requestModel = Object.freeze(resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model);
++        this.assertPolicy(requestModel);
++        if (provider !== this.models.getProvider(model.provider))
++            throw new Error("AI policy blocks provider replacement during request preparation.");
++        headers = headers && Object.freeze({ ...headers });
++        authorizeHeaders(requestModel, requestModel.headers);
++        authorizeHeaders(requestModel, headers);
+         return {
+             provider,
+             model: requestModel,
+             options: {
+                 ...providerOptions,
++                beforeRequest: (serializedPayload) => {
++                    this.assertPolicy(requestModel);
++                    if (provider !== this.models.getProvider(model.provider))
++                        throw new Error("AI policy blocks provider replacement during a request.");
++                    authorizeHeaders(requestModel, requestModel.headers);
++                    authorizeHeaders(requestModel, headers);
++                    return authorizeAttempt(serializedPayload, requestModel, this.policyProfile);
++                },
++                onPayload: async (payload, payloadModel) => {
++                    const transformed = await providerOptions.onPayload?.(payload, payloadModel);
++                    this.assertPolicy(requestModel);
++                    return authorizePayload(transformed === undefined ? payload : transformed, requestModel, this.policyProfile);
++                },
+                 apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
+                 headers,
+                 env,
+@@ -509,7 +541,7 @@
+         }
+         return lazyStream(model, async () => {
+             assertChatModel(model);
+-            const prepared = await this.prepareRequest(model, options);
++            const prepared = await this.prepareRequest(model, workerRequestOptions(model, options));
+             return prepared.provider.streamSimple(prepared.model, transcript, prepared.options);
+         });
+     }
+@@ -519,6 +551,8 @@
+     streamDeferred(model, handle, options) {
+         return lazyStream(model, async () => {
+             assertChatModel(model);
++            if (handle.provider !== model.provider || handle.modelId !== model.id || handle.api !== model.api)
++                throw new Error("AI policy blocks deferred response identity substitution.");
+             const prepared = await this.prepareRequest(model, options);
+             if (!prepared.provider.fetchDeferred) {
+                 throw new ModelsError("provider", `Provider ${model.provider} does not support deferred responses`);
+@@ -531,6 +565,8 @@
+     }
+     async cancelDeferred(model, handle, options) {
+         assertChatModel(model);
++        if (handle.provider !== model.provider || handle.modelId !== model.id || handle.api !== model.api)
++            throw new Error("AI policy blocks deferred response identity substitution.");
+         const prepared = await this.prepareRequest(model, options);
+         if (!prepared.provider.cancelDeferred) {
+             throw new ModelsError("provider", `Provider ${model.provider} does not support deferred responses`);
+--- a/dist/core/sdk.js
++++ b/dist/core/sdk.js
+@@ -1,14 +1,12 @@
++import { authorizeModel, authorizeRequestedEffort, authorizeEffectiveEffort, normalizeRequiredEffort, bindSessionPolicy, policyDefault, policyThinkingLevel, resolveExactModel } from "./dstack-policy.js";
+ import { join } from "node:path";
+ import { Agent, setDefaultStreamFn } from "@earendil-works/pi-agent-core";
+ import { clampThinkingLevel, streamSimple } from "@earendil-works/pi-ai/compat";
+ import { getAgentDir } from "../config.js";
+ import { resolvePath } from "../utils/paths.js";
+ import { AgentSession } from "./agent-session.js";
+-import { formatNoModelsAvailableMessage } from "./auth-guidance.js";
+ import { CacheWarmer } from "./cache-warmer.js";
+-import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
+ import { convertToLlm } from "./messages.js";
+-import { findInitialModel } from "./model-resolver.js";
+ import { ModelRuntime } from "./model-runtime.js";
+ import { mergeProviderAttributionHeaders } from "./provider-attribution.js";
+ import { DefaultResourceLoader } from "./resource-loader.js";
+@@ -83,64 +81,24 @@
+     const existingSession = sessionManager.buildSessionContext();
+     const hasExistingSession = existingSession.messages.length > 0;
+     const hasThinkingEntry = sessionManager.getBranch().some((entry) => entry.type === "thinking_level_change");
+-    let model = options.model;
+-    let modelFallbackMessage;
++    const policy = bindSessionPolicy(sessionManager);
+     // Assistant messages name the physical model that answered, so a virtual selection is only in
+     // model_change entries.
+     const sessionModel = getBranchSelection(sessionManager.getBranch(), (provider, modelId) => modelRuntime.getModel(provider, modelId));
+-    // If session has data, try to restore model from it
+-    if (!model && hasExistingSession && sessionModel) {
+-        const restoredModel = modelRuntime.getModel(sessionModel.provider, sessionModel.modelId);
+-        if (restoredModel && modelRuntime.hasConfiguredAuth(restoredModel.provider)) {
+-            model = restoredModel;
+-        }
+-        if (!model) {
+-            modelFallbackMessage = `Could not restore model ${sessionModel.provider}/${sessionModel.modelId}`;
+-        }
+-    }
+-    // If still no model, use findInitialModel (checks settings default, then provider defaults)
+-    if (!model) {
+-        const result = await findInitialModel({
+-            scopedModels: [],
+-            isContinuing: hasExistingSession,
+-            defaultProvider: settingsManager.getDefaultProvider(),
+-            defaultModelId: settingsManager.getDefaultModel(),
+-            defaultThinkingLevel: settingsManager.getDefaultThinkingLevel(),
+-            modelThinkingLevels: settingsManager.getAllModelThinkingLevels(),
+-            modelRuntime,
+-        });
+-        model = result.model;
+-        if (!model) {
+-            modelFallbackMessage = formatNoModelsAvailableMessage();
+-        }
+-        else if (modelFallbackMessage) {
+-            modelFallbackMessage += `. Using ${model.provider}/${model.id}`;
+-        }
+-    }
+-    let thinkingLevel = options.thinkingLevel;
+-    // If session has data, restore thinking level from it
+-    if (thinkingLevel === undefined && hasExistingSession) {
+-        thinkingLevel = hasThinkingEntry
+-            ? existingSession.thinkingLevel
+-            : (settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
+-    }
+-    // Fall back to per-model override, then global default
+-    if (thinkingLevel === undefined && model) {
+-        const perModel = settingsManager.getModelThinkingLevel(model.provider, model.id);
+-        if (perModel) {
+-            thinkingLevel = perModel;
+-        }
+-    }
+-    if (thinkingLevel === undefined) {
+-        thinkingLevel = settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
+-    }
+-    // Clamp to model capabilities
+-    if (!model) {
+-        thinkingLevel = "off";
+-    }
+-    else {
+-        thinkingLevel = clampThinkingLevel(model, thinkingLevel);
+-    }
++    if (hasExistingSession && !sessionModel)
++        throw new Error("AI policy cannot restore history without an exact model. Start a new session.");
++    const restoredModel = sessionModel ? resolveExactModel(modelRuntime, sessionModel.provider, sessionModel.modelId) : undefined;
++    const defaults = options.model || restoredModel ? undefined : policyDefault(modelRuntime);
++    const model = options.model ?? restoredModel ?? defaults.model;
++    authorizeModel(model, policy.profile);
++    const requestedThinking = options.thinkingLevel ?? (hasExistingSession && hasThinkingEntry ? existingSession.thinkingLevel : undefined) ?? defaults?.thinkingLevel ?? policyThinkingLevel();
++    if (options.thinkingLevel !== undefined)
++        authorizeRequestedEffort(options.thinkingLevel);
++    const thinkingLevel = defaults && options.thinkingLevel === undefined
++        ? normalizeRequiredEffort(model, requestedThinking)
++        : clampThinkingLevel(model, requestedThinking);
++    authorizeEffectiveEffort(model, thinkingLevel);
++    const modelFallbackMessage = undefined;
+     const configuredDefaultToolNames = settingsManager.getDefaultTools();
+     const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
+     const excludedToolNames = options.excludeTools;
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -1,3 +1,4 @@
@@ -571,7 +616,7 @@
  import { setCapabilityOverrides } from "@earendil-works/pi-tui";
  import chalk from "chalk";
  import { normalizeSessionName, parseArgs, printHelp } from "./cli/args.js";
-@@ -349,14 +349,14 @@
+@@ -350,14 +350,14 @@
      }
      return SessionManager.create(cwd, sessionDir, { id: parsed.sessionId });
  }
@@ -588,7 +633,7 @@
          const resolved = resolveCliModel({
              cliProvider: parsed.provider,
              cliModel: parsed.model,
-@@ -367,7 +367,7 @@
+@@ -368,7 +368,7 @@
              diagnostics.push({ type: "warning", message: resolved.warning });
          }
          if (resolved.error) {
@@ -597,7 +642,7 @@
          }
          if (resolved.model) {
              options.model = resolved.model;
-@@ -376,29 +376,8 @@
+@@ -377,29 +377,8 @@
              if (!parsed.thinking && resolved.thinkingLevel) {
                  options.thinkingLevel = resolved.thinkingLevel;
                  cliThinkingFromModel = true;
@@ -627,7 +672,7 @@
      }
      // Thinking level from CLI (takes precedence over scoped model thinking levels set above)
      if (parsed.thinking) {
-@@ -440,6 +419,7 @@
+@@ -441,6 +420,7 @@
      ]);
  }
  export async function main(args, options) {
@@ -635,7 +680,7 @@
      resetTimings();
      const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
      const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.PI_OFFLINE);
-@@ -642,7 +622,7 @@
+@@ -652,7 +632,7 @@
          const scopedModels = modelPatterns && modelPatterns.length > 0
              ? await resolveModelScope(modelPatterns, modelRuntime, { signal: AbortSignal.timeout(15_000) })
              : [];
@@ -644,45 +689,3 @@
          diagnostics.push(...sessionOptionDiagnostics);
          if (parsed.apiKey) {
              if (!sessionOptions.model) {
---- a/dist/core/agent-session.js
-+++ b/dist/core/agent-session.js
-@@ -1,3 +1,4 @@
-+import { authorizeModel, authorizeEffectiveEffort } from "./dstack-policy.js";
- /**
-  * AgentSession - Core abstraction for agent lifecycle and session management.
-  *
-@@ -1643,6 +1644,8 @@
-      * @throws Error if no auth is configured for the model
-      */
-     async setModel(model, options = {}) {
-+        authorizeModel(model);
-+        authorizeEffectiveEffort(model, clampThinkingLevel(model, this._getThinkingLevelForModelSwitch(model)));
-         if (!(await this._modelRuntime.checkAuth(model.provider))) {
-             throw new Error(`No API key for ${model.provider}/${model.id}`);
-         }
-@@ -1698,6 +1701,8 @@
-         const len = scopedModels.length;
-         const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
-         const next = scopedModels[nextIndex];
-+        authorizeModel(next.model);
-+        authorizeEffectiveEffort(next.model, clampThinkingLevel(next.model, this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel)));
-         const thinkingLevel = this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
-         // Apply model
-         this.agent.state.model = next.model;
-@@ -1726,6 +1731,8 @@
-         const len = availableModels.length;
-         const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
-         const nextModel = availableModels[nextIndex];
-+        authorizeModel(nextModel);
-+        authorizeEffectiveEffort(nextModel, clampThinkingLevel(nextModel, this._getThinkingLevelForModelSwitch(nextModel)));
-         const thinkingLevel = this._getThinkingLevelForModelSwitch(nextModel);
-         this.agent.state.model = nextModel;
-         this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
-@@ -1751,6 +1758,7 @@
-     setThinkingLevel(level, options = {}) {
-         const availableLevels = this.getAvailableThinkingLevels();
-         const effectiveLevel = availableLevels.includes(level) ? level : this._clampThinkingLevel(level, availableLevels);
-+        authorizeEffectiveEffort(this.model, effectiveLevel);
-         // Only persist if actually changing
-         const previousLevel = this.agent.state.thinkingLevel;
-         const isChanging = effectiveLevel !== previousLevel;
