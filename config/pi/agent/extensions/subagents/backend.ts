@@ -483,7 +483,11 @@ export class BackendRunner {
         if (auth.code !== 0) return fail({ kind: "failed", reason: "Pi auth check failed" });
         promptDir = await mkdtemp(join(tmpdir(), "pi-subagent-"));
         const prompt = join(promptDir, "prompt.md");
-        await writeFile(prompt, task.systemPrompt, { mode: 0o600 });
+        await writeFile(
+          prompt,
+          `${task.systemPrompt}\n\nPrefer a codemode script for anything bulky (listing, grepping, reading many files, parsing transcripts) and return only the digest. Your own output is capped, so keep the digest short.`,
+          { mode: 0o600 },
+        );
         const args = [
           "--dstack-worker",
           JSON.stringify(workerInvocation),
@@ -500,7 +504,7 @@ export class BackendRunner {
           "--append-system-prompt",
           prompt,
         ];
-        if (task.tools.length) args.push("--tools", task.tools.join(","));
+        if (task.tools.length) args.push("--tools", [...task.tools, "codemode"].join(","));
         else args.push("--no-tools");
         invocation = this.runtime.pi(args);
       }

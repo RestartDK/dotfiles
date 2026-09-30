@@ -122,6 +122,7 @@ describe("real backend subprocesses", () => {
     ]);
     const request = calls().find((call) => call.args.includes("-p"));
     expect(request?.args).toContain("Read,Grep,Glob");
+    expect(request?.args).not.toContain("read,grep,find,ls,codemode");
     expect(request?.args).toContain("--safe-mode");
     expect(request?.args).toContain("--strict-mcp-config");
     expect(request?.args).not.toContain("--bare");
@@ -143,10 +144,13 @@ describe("real backend subprocesses", () => {
   });
 
   test("quota before tools falls back once and reports actual Astra", async () => {
-    const { runner, task } = setup({ claude: "quota", pi: "success" });
+    const { runner, task, calls } = setup({ claude: "quota", pi: "success" });
+    task.tools = ["read", "grep"];
     const result = await runner.run(task);
     expect(result.outcome.kind).toBe("success");
     expect(result.attempts.map((attempt) => attempt.kind)).toEqual(["provider-failure", "success"]);
+    const pi = calls().find((call) => call.backend === "pi" && call.args.includes("-p"));
+    expect(pi?.args).toContain("read,grep,codemode");
     expect(result.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
     expect(result.output).toBe("pi-ok");
   });
