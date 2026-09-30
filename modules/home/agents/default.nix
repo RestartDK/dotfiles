@@ -88,7 +88,6 @@ in
         home.file.".pi/agent/lib" = dir "config/pi/agent/lib";
         home.file.".pi/agent/bin" = dir "config/pi/agent/bin";
         home.file.".pi/agent/prompts" = dir "config/pi/agent/prompts";
-        home.file.".pi/agent/themes" = dir "config/pi/agent/themes";
       })
 
       (lib.mkIf pi {
