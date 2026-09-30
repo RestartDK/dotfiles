@@ -68,6 +68,7 @@ in
       (lib.mkIf claude {
         home.file.".claude/settings.json" = file "config/claude/settings.json";
         home.file.".claude/hooks/herdr-agent-state.sh" = file "config/claude/hooks/herdr-agent-state.sh";
+        home.file.".claude/hooks/usage-statusline.py" = file "config/claude/hooks/usage-statusline.py";
         home.file.".claude/skills" = lib.mkIf agentSkillsEnabled (dir agentSkillsPath);
       })
 

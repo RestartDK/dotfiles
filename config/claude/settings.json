@@ -157,6 +157,11 @@
   },
   "model": "opus[1m]",
   "skipDangerousModePermissionPrompt": true,
+  "statusLine": {
+    "type": "command",
+    "command": "python3 $HOME/.claude/hooks/usage-statusline.py",
+    "refreshInterval": 60
+  },
   "theme": "light",
   "permissions": {
     "allow": [
