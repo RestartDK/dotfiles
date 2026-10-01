@@ -206,3 +206,17 @@ test.each(["mistral/mistral-large", "google/gemini-3-pro"])(
     );
   },
 );
+
+test.each([
+  ["settings.json", "personal"],
+  ["settings-work.json", "work"],
+])("%s lists the %s profile catalogue", (settingsFile, profileName) => {
+  const settings = JSON.parse(
+    readFileSync(join(import.meta.dir, "../../config/pi/agent", settingsFile), "utf8"),
+  );
+  const active = policy(profileName);
+  expect(settings.enabledModels).toEqual([
+    backendModel(active.parent),
+    ...[...active.providers].map((provider) => `${provider}/*`),
+  ]);
+});

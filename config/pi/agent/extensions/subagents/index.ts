@@ -439,18 +439,6 @@ function isFleetView(value: unknown): value is FleetView {
   return FLEET_VIEWS.some((view) => view === value);
 }
 
-function saveFleetView(view: FleetView): void {
-  const path = join(getAgentDir(), "subagents.json");
-  const temporary = `${path}.${randomBytes(4).toString("hex")}.tmp`;
-  mkdirSync(getAgentDir(), { recursive: true });
-  try {
-    writeFileSync(temporary, `${JSON.stringify({ view }, null, 2)}\n`, { mode: 0o600 });
-    renameSync(temporary, path);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-}
-
 let fleetView: FleetView = "panel";
 let fleetCtx: ExtensionContext | undefined;
 let fleetTimer: ReturnType<typeof setInterval> | undefined;
@@ -884,8 +872,7 @@ export default function (pi: ExtensionAPI) {
   const startupAgents = configuredAgentSummary(startupConfig);
 
   pi.on("session_start", (_event, ctx) => {
-    const saved = readJsonFile(join(getAgentDir(), "subagents.json")).view;
-    fleetView = isFleetView(saved) ? saved : "panel";
+    fleetView = "panel";
     fleetCtx = ctx.hasUI ? ctx : undefined;
     refreshFleetWidget();
     ensureFleetTimer();
@@ -1330,16 +1317,7 @@ export default function (pi: ExtensionAPI) {
         fleetView = view;
         refreshFleetWidget();
         ensureFleetTimer();
-        try {
-          saveFleetView(view);
-          ctx.ui.notify(`Subagent view: ${view}`, "info");
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(
-            `Subagent view: ${view} (session only; could not save: ${message})`,
-            "warning",
-          );
-        }
+        ctx.ui.notify(`Subagent view: ${view}`, "info");
         return;
       }
       if (args.trim() === "clear") {

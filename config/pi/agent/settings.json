@@ -4,7 +4,7 @@
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.80.1",
+  "lastChangelogVersion": "0.99.1",
   "packages": [
     "./packages/pi-web-access"
   ],
@@ -31,5 +31,11 @@
   },
   "quietStartup": true,
   "theme": "Tokyo Night Day/Tokyo Night",
-  "tuiMode": "fullscreen"
+  "tuiMode": "fullscreen",
+  "enabledModels": [
+    "openrouter/deepseek/deepseek-v4.1-flash",
+    "openrouter/*",
+    "openai/*",
+    "ollama/*"
+  ]
 }

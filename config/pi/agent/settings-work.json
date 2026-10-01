@@ -4,17 +4,7 @@
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.87.0",
-  "subagents": {
-    "maxParallel": 4,
-    "defaultTools": [
-      "read",
-      "grep",
-      "find",
-      "ls",
-      "bash"
-    ]
-  },
+  "lastChangelogVersion": "0.99.1",
   "packages": [
     "./packages/pi-web-access"
   ],
@@ -41,5 +31,13 @@
   },
   "quietStartup": true,
   "theme": "Tokyo Night Day/Tokyo Night",
-  "tuiMode": "fullscreen"
+  "tuiMode": "fullscreen",
+  "enabledModels": [
+    "openai/gpt-6.1-sol",
+    "fireworks/*",
+    "openrouter/*",
+    "openai/*",
+    "anthropic/*",
+    "ollama/*"
+  ]
 }
