@@ -3,7 +3,13 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 export type Effort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-export type NativeProvider = "openai" | "fireworks" | "openrouter" | "anthropic" | "ollama";
+export type NativeProvider =
+  | "openai"
+  | "openai-codex"
+  | "fireworks"
+  | "openrouter"
+  | "anthropic"
+  | "ollama";
 export interface NativeTarget {
   kind: "pi";
   provider: NativeProvider;
@@ -86,6 +92,7 @@ export function parseEffort(value: unknown): Effort {
 function parseNativeProvider(value: string): NativeProvider {
   switch (value) {
     case "openai":
+    case "openai-codex":
     case "fireworks":
     case "openrouter":
     case "anthropic":
