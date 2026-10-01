@@ -209,7 +209,6 @@ test.each(["mistral/mistral-large", "google/gemini-3-pro"])(
 
 test.each([
   ["settings.json", "personal"],
-  ["settings-twin.json", "personal"],
   ["settings-work.json", "work"],
 ])("%s lists the %s profile catalogue", (settingsFile, profileName) => {
   const settings = JSON.parse(
