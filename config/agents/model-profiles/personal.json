@@ -23,6 +23,13 @@
         "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
       }
+    ],
+    "sol": [
+      {
+        "kind": "pi",
+        "model": "openai-codex/gpt-6.1-sol",
+        "thinking": "xhigh"
+      }
     ]
   },
   "roles": {
