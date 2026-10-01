@@ -42,8 +42,8 @@ let
         description = "Group of the runtime file.";
       };
       consumers = lib.mkOption {
-        type = lib.types.listOf (lib.types.enum (lib.attrNames consumerOptions));
-        default = [ ];
+        type = lib.types.attrsOf lib.types.bool;
+        default = { };
         description = "Consumers that read the key. piKeyFile sets my.ai.openrouterKeyFile.";
       };
     };
@@ -52,8 +52,10 @@ let
     name:
     map (
       kind:
-      lib.setAttrByPath consumerOptions.${kind} config.services.onepassword-secrets.secretPaths.${name}
-    ) cfg.keys.${name}.consumers
+      lib.setAttrByPath (consumerOptions.${kind}
+        or (throw "my.secrets: unknown consumer '${kind}', expected one of ${lib.concatStringsSep ", " (lib.attrNames consumerOptions)}")
+      ) config.services.onepassword-secrets.secretPaths.${name}
+    ) (lib.attrNames (lib.filterAttrs (_: enabled: enabled) cfg.keys.${name}.consumers))
   ) (lib.attrNames cfg.keys);
 in
 {
