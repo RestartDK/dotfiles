@@ -9,13 +9,6 @@ let
   cfg = config.my.secrets;
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   user = config.users.users.${cfg.userName};
-  consumerOptions = {
-    piKeyFile = [
-      "my"
-      "ai"
-      "openrouterKeyFile"
-    ];
-  };
   keyModule = { ... }: {
     options = {
       reference = lib.mkOption {
@@ -41,38 +34,28 @@ let
         default = if isDarwin then "staff" else user.group;
         description = "Group of the runtime file.";
       };
-      consumers = lib.mkOption {
-        type = lib.types.attrsOf lib.types.bool;
-        default = { };
-        description = "Consumers that read the key. piKeyFile sets my.ai.openrouterKeyFile.";
-      };
     };
   };
-  consumerConfig = lib.concatMap (
-    name:
-    map (
-      kind:
-      lib.setAttrByPath (consumerOptions.${kind}
-        or (throw "my.secrets: unknown consumer '${kind}', expected one of ${lib.concatStringsSep ", " (lib.attrNames consumerOptions)}")
-      ) config.services.onepassword-secrets.secretPaths.${name}
-    ) (lib.attrNames (lib.filterAttrs (_: enabled: enabled) cfg.keys.${name}.consumers))
-  ) (lib.attrNames cfg.keys);
 in
 {
   options.my.secrets = {
     userName = lib.mkOption {
       type = lib.types.str;
-      description = "User whose runtime key files and consumers are configured.";
+      description = "User whose runtime key files are configured.";
     };
     tokenFile = lib.mkOption {
       type = lib.types.strMatching "/.+";
-      default = "/etc/opnix-token";
-      description = "1Password service-account token file that opnix reads.";
+      description = "1Password service-account token file that opnix reads. Provision it before the first fetch.";
     };
     keys = lib.mkOption {
       type = lib.types.attrsOf (lib.types.submodule keyModule);
       default = { };
       description = "Keys delivered from 1Password to runtime files. The attribute name is the opnix secret name.";
+    };
+    paths = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      readOnly = true;
+      description = "Runtime file for every declared key, for consumers to read.";
     };
   };
 
@@ -89,6 +72,10 @@ in
       }) cfg.keys;
     };
 
+    my.secrets.paths = lib.genAttrs (lib.attrNames cfg.keys) (
+      name: config.services.onepassword-secrets.secretPaths.${name}
+    );
+
     environment.systemPackages = lib.optionals isDarwin [
       inputs.opnix.packages.${pkgs.stdenv.hostPlatform.system}.default
     ];
@@ -103,7 +90,5 @@ in
       assertion = !(lib.hasPrefix "${builtins.storeDir}/" key.path);
       message = "my.secrets.keys.${name}.path must live outside the Nix store";
     }) cfg.keys;
-
-    home-manager.users.${cfg.userName} = lib.mkMerge consumerConfig;
   };
 }
