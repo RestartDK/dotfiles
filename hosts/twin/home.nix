@@ -22,7 +22,7 @@ in
   my.liveConfig = {
     enable = true;
     repoRoot = "${settings.homeDirectory}/.config/dotfiles";
-    piSettingsFile = "config/pi/agent/settings-twin.json";
+    piSettingsFile = "config/pi/agent/settings-work.json";
     piSkillsPath = "config/pi/agent/skills-twin";
     groups = {
       shell = true;

@@ -44,9 +44,11 @@
   "tuiMode": "fullscreen",
   "deviceId": "137eae1f-8b8a-477f-a2de-3902c7047899",
   "enabledModels": [
-    "openrouter/deepseek/deepseek-v4.1-flash",
+    "openai/gpt-6.1-sol",
+    "fireworks/*",
     "openrouter/*",
     "openai/*",
+    "anthropic/*",
     "ollama/*"
   ]
 }

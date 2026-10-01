@@ -31,5 +31,11 @@
   },
   "quietStartup": true,
   "theme": "Tokyo Night Day/Tokyo Night",
-  "tuiMode": "fullscreen"
+  "tuiMode": "fullscreen",
+  "enabledModels": [
+    "openrouter/deepseek/deepseek-v4.1-flash",
+    "openrouter/*",
+    "openai/*",
+    "ollama/*"
+  ]
 }
