@@ -7,6 +7,7 @@
     ./hardware-configuration.nix
     ../../modules/nixos/base.nix
     ../../modules/nixos/deploy.nix
+    ../../modules/nixos/secrets.nix
     ../../modules/nixos/numtide-cache.nix
     ../../modules/nixos/desktop.nix
     ../../modules/nixos/hyprland.nix
