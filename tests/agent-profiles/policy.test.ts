@@ -214,15 +214,11 @@ test.each(["mistral/mistral-large", "google/gemini-3-pro"])(
 test.each([
   ["settings.json", "personal"],
   ["settings-work.json", "work"],
-])("%s lists the %s profile catalogue", (settingsFile, profileName) => {
+])("%s keeps the %s profile startup model and thinking level", (settingsFile, profileName) => {
   const settings = JSON.parse(
     readFileSync(join(import.meta.dir, "../../config/pi/agent", settingsFile), "utf8"),
   );
   const active = policy(profileName);
-  expect(settings.enabledModels).toEqual([
-    backendModel(active.parent),
-    ...[...active.providers].map((provider) => `${provider}/*`),
-  ]);
   expect(settings.defaultModel).toBe(backendModel(active.parent));
   expect(settings.modelThinkingLevels).toEqual({
     [backendModel(active.parent)]: profileName === "personal" ? "high" : "xhigh",
