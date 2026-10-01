@@ -6,7 +6,7 @@
     "astra": [
       {
         "kind": "pi",
-        "model": "openai/gpt-6-astra",
+        "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
@@ -20,7 +20,7 @@
     "fable": [
       {
         "kind": "pi",
-        "model": "openai/gpt-6-astra",
+        "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
       }
     ]
@@ -148,6 +148,7 @@
   "providers": [
     "openrouter",
     "openai",
+    "openai-codex",
     "ollama"
   ]
 }

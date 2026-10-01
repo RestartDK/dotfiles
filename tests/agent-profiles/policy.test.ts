@@ -17,10 +17,10 @@ describe("profile routing", () => {
   test("work resolves Codex routes and keeps fable pi-only", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
-      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "precise-code" }).chain).toEqual([
-      { kind: "pi", provider: "openai", id: "gpt-6.1-sol", thinking: "xhigh" },
+      { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
       {
@@ -31,7 +31,7 @@ describe("profile routing", () => {
       },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
-      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
 
@@ -41,9 +41,9 @@ describe("profile routing", () => {
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
-      "openai/gpt-6-astra",
+      "openai-codex/gpt-6-astra",
     ]);
-    expect(() => resolveRoute(personal, { model: "openai/gpt-5.6-sol:xhigh" })).toThrow(
+    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
       "not allowed",
     );
   });
@@ -53,7 +53,7 @@ describe("profile routing", () => {
     expect(() => resolveRoute(work, { role: "arena-runners" })).toThrow("member or seat");
     expect(
       backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
-    ).toBe("openai/gpt-6.1-sol");
+    ).toBe("openai-codex/gpt-6.1-sol");
     expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
       "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
     );
@@ -109,9 +109,13 @@ describe("profile routing", () => {
 
   test("raw requests preserve declared chains and effort", () => {
     const work = policy("work");
-    expect(resolveRoute(work, { model: "openai/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
-    expect(() => resolveRoute(work, { model: "openai/undeclared:xhigh" })).toThrow("not allowed");
-    expect(() => resolveRoute(work, { model: "openai/gpt-6-astra:high" })).toThrow("not allowed");
+    expect(resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
+    expect(() => resolveRoute(work, { model: "openai-codex/undeclared:xhigh" })).toThrow(
+      "not allowed",
+    );
+    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:high" })).toThrow(
+      "not allowed",
+    );
   });
 
   test("global policy is reloaded and honors XDG_CONFIG_HOME", () => {
@@ -173,8 +177,8 @@ describe("profile routing", () => {
         routes: {
           ...valid.routes,
           astra: [
-            { kind: "pi", model: "openai/gpt-6-astra", thinking: "xhigh" },
-            { thinking: "high", model: "openai/gpt-6-astra", kind: "pi" },
+            { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
+            { thinking: "high", model: "openai-codex/gpt-6-astra", kind: "pi" },
           ],
         },
       },
