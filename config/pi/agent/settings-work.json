@@ -42,7 +42,6 @@
   "quietStartup": true,
   "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen",
-  "deviceId": "137eae1f-8b8a-477f-a2de-3902c7047899",
   "enabledModels": [
     "openai/gpt-6.1-sol",
     "fireworks/*",
