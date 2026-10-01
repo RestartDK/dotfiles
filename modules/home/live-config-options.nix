@@ -10,6 +10,12 @@
     description = "Global billing policy for native Pi sessions and delegated workers.";
   };
 
+  options.my.ai.openrouterKeyFile = lib.mkOption {
+    type = lib.types.nullOr (lib.types.strMatching "/.+");
+    default = null;
+    description = "Runtime file that holds the OpenRouter key. Null links the repository model catalogue unchanged.";
+  };
+
   options.my.liveConfig = {
     enable = lib.mkEnableOption "live out-of-store dotfile symlinks";
 

@@ -10,7 +10,6 @@
 let
   user = config.users.users.${userName};
   secrets = config.services.onepassword-secrets;
-  models = builtins.fromJSON (builtins.readFile ../config/pi/agent/models.json);
 in
 {
   services.onepassword-secrets = {
@@ -29,11 +28,5 @@ in
     inputs.opnix.packages.${pkgs.stdenv.hostPlatform.system}.default
   ];
 
-  home-manager.users.${userName}.home.file.".pi/agent/models.json".source = lib.mkForce (
-    (pkgs.formats.json { }).generate "pi-personal-models.json" (
-      lib.recursiveUpdate models {
-        providers.openrouter.apiKey = "!${pkgs.coreutils}/bin/cat ${lib.escapeShellArg secrets.secretPaths.openrouterApiKey}";
-      }
-    )
-  );
+  home-manager.users.${userName}.my.ai.openrouterKeyFile = secrets.secretPaths.openrouterApiKey;
 }

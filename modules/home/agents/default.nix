@@ -38,6 +38,21 @@ let
       value = piPackage name;
     }) piPackageNames
   );
+  modelsFile =
+    if config.my.ai.openrouterKeyFile == null then
+      file "config/pi/agent/models.json"
+    else
+      let
+        models = builtins.fromJSON (builtins.readFile ../../../config/pi/agent/models.json);
+      in
+      {
+        source = (pkgs.formats.json { }).generate "pi-models.json" (
+          lib.recursiveUpdate models {
+            providers.openrouter.apiKey = "!${pkgs.coreutils}/bin/cat ${lib.escapeShellArg config.my.ai.openrouterKeyFile}";
+          }
+        );
+        force = true;
+      };
 in
 {
   config = lib.mkIf cfg.enable (
@@ -82,7 +97,7 @@ in
         home.file.".pi/agent/AGENTS.md" = file "config/pi/agent/AGENTS.md";
         home.file.".pi/agent/keybindings.json" = file "config/pi/agent/keybindings.json";
         home.file.".pi/agent/settings.json" = file cfg.piSettingsFile;
-        home.file.".pi/agent/models.json" = file "config/pi/agent/models.json";
+        home.file.".pi/agent/models.json" = modelsFile;
         home.file.".pi/agent/mcp.json" = file "config/pi/agent/mcp.json";
         home.file.".pi/agent/extensions" = dir "config/pi/agent/extensions";
         home.file.".pi/agent/lib" = dir "config/pi/agent/lib";
