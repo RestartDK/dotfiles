@@ -32,7 +32,16 @@ const extension = process.env.PI_POLICY_TEST_EXTENSION;
 if (!profiles || !extension) throw new Error("Missing dispatch test profiles or extension");
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
-const workerModel = "openrouter/deepseek/deepseek-v4.1-flash";
+const workerTarget = {
+  kind: "pi",
+  model: "openrouter/deepseek/deepseek-v4.1-flash",
+  thinking: "max",
+} as const;
+const parentTarget = {
+  kind: "pi",
+  model: "openrouter/z-ai/glm-5.3-flash",
+  thinking: "high",
+} as const;
 const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
 function completion(model: string) {
   const chunk = { id: "chatcmpl_fixture", object: "chat.completion.chunk", created: 0, model };
@@ -99,9 +108,9 @@ function profile(name: "work" | "personal") {
   const policy: { parent: string; routes: Record<string, unknown> } = JSON.parse(
     readFileSync(join(profiles ?? "", `${name}.json`), "utf8"),
   );
-  for (const route of Object.keys(policy.routes))
-    policy.routes[route] = [{ kind: "pi", model: workerModel, thinking: "max" }];
-  policy.parent = "deepseek";
+  for (const route of Object.keys(policy.routes)) policy.routes[route] = [workerTarget];
+  policy.routes.parent = [parentTarget];
+  policy.parent = "parent";
   writeFileSync(join(directory, "config/dstack/models.json"), JSON.stringify(policy));
 }
 function workerRequests(): Array<{ url: string; body: Record<string, unknown> }> {
@@ -325,6 +334,24 @@ for (const name of ["work", "personal"] satisfies ("work" | "personal")[]) {
     expect(JSON.stringify(workerRequests()[0]?.body)).toContain("UNCHANGED_PROFILE");
   });
 }
+
+test("dispatch rejects a thinking downgrade and never opens a session", async () => {
+  const session = await create(manager);
+  const result = await tool(session).execute("dispatch-thinking", {
+    agent: "dstack-agent",
+    role: "feature",
+    task: "THINKING_OVERRIDE",
+    tools: [],
+    thinking: "low",
+  });
+  expect(result.isError).toBe(true);
+  expect(result.content).toEqual([
+    expect.objectContaining({
+      text: expect.stringContaining("Thinking overrides are forbidden"),
+    }),
+  ]);
+  expect(workerRequests()).toHaveLength(0);
+});
 
 for (const history of [false, true]) {
   test(`unmarked session rejects dispatch with history=${history}`, async () => {

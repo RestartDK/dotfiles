@@ -10,27 +10,27 @@ Nix selects `work.json` or `personal.json` with `my.ai.profile`. The standard Ma
 {"agent":"comment-sicko","role":"review","task":"Review the current diff"}
 ```
 
-Panels require `member` or a zero-based `seat`, never both. Managed dstack agents require roles. Ad-hoc `model` requests must match a declared route including effort and cannot bypass subscription priority. `thinking` overrides and combined `role`/`model` inputs are rejected.
+Panels require `member` or a zero-based `seat`, never both. Managed dstack agents require roles. Ad-hoc `model` requests must match a declared route including effort. `thinking` overrides and combined `role`/`model` inputs are rejected.
 
 ## Native Pi parents
 
-The parent uses the profile's parent route. Work uses `astra` (`openai-codex/gpt-6-astra` at `xhigh`); personal uses `deepseek` (`openrouter/deepseek/deepseek-v4.1-flash` at `max`). Every route is a native Pi target and the parent chain is single-hop. Session-local compatible thinking changes remain available to parents. Workers retain their role's exact target and declared effort. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`. Downgrades and unrelated effective levels are blocked.
+The parent uses the profile's parent route. Work uses `astra` (`openai-codex/gpt-6-astra` at `xhigh`); personal uses `deepseek` (`openrouter/deepseek/deepseek-v4.1-flash` at `max`). Every route is a native Pi target and the parent chain is single-hop. Session-local compatible thinking changes remain available to parents. Each worker runs the exact target its role resolves to. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`; implicit parent downgrades and unrelated effective levels are blocked.
 
-`packages/pi-profiled` patches Pi 0.85.1 before compiling its Bun executable. The core runtime checks native requests even with extensions disabled, including retries, compaction and branch summaries. It rejects replacement transports, incompatible endpoints and transformed wire models. This is not a sandbox for arbitrary extension or shell code making its own requests.
+`packages/pi-profiled` patches Pi 0.99.1 before compiling its Bun executable. The core runtime checks native requests even with extensions disabled, including retries, compaction and branch summaries. It rejects replacement transports, incompatible endpoints and transformed wire models. This is not a sandbox for arbitrary extension or shell code making its own requests.
 
-Explicit selections require an exact provider and model. Any catalog model on a pinned provider transport (`openai-codex`, `fireworks`, `openrouter`, `ollama`) is selectable; the policy still blocks provider API or endpoint substitution within a transport. Missing authentication, unresolved catalog entries and effort downgrades never select another model. Pi loads `models-store.json` as well as its pinned static catalog. Both declared DeepSeek IDs exist in the observed cache; an older static catalog alone does not make them unavailable. Fireworks DeepSeek uses `anthropic-messages` at `https://api.fireworks.ai/inference`. Work API success still requires the matching credentials. Restored history must carry the same profile marker. Older unmarked sessions and cross-profile sessions require a new session.
+Explicit selections require an exact provider and model. Any catalog model on a pinned provider transport (`openai-codex`, `fireworks`, `openrouter`, `anthropic`, `ollama`) is selectable; the policy still blocks provider API or endpoint substitution within a transport. Missing authentication, unresolved catalog entries and effort downgrades never select another model. Pi loads `models-store.json` as well as its pinned static catalog. Both declared DeepSeek IDs exist in the observed cache; an older static catalog alone does not make them unavailable. Fireworks DeepSeek uses `anthropic-messages` at `https://api.fireworks.ai/inference`. Work API success still requires the matching credentials. Restored history must carry the same profile marker. Older unmarked sessions and cross-profile sessions require a new session.
 
 The JSON policy stays live-editable. Changes to the compiled policy library or core patch require rebuilding `pi-profiled`. Default provider, model and thinking settings no longer override the profile's parent default.
 
 ## Worker sessions
 
-Fable resolves to Pi Codex Astra in both profiles. A worker runs as an in-process Pi SDK session with its route's exact provider, model and effort, the preset system prompt, the requested tools and `codemode`. Results report the actual model and every attempt.
+Fable resolves to Pi Codex Astra in both profiles. A worker runs as an in-process Pi SDK session with its route's provider, model and effort, the preset system prompt, the requested tools and `codemode`. Workers load no user extensions, skills, prompt templates or themes. Results report the actual model and every attempt.
 
-Recognized native HTTP and provider error envelopes classify as auth, quota or unavailable. Fallback requires a matching terminal provider failure before any tool use. Any tool use, including a read, closes fallback. Task/test failures, unknown errors, scope mismatches and cancellation never advance. The parent must reconcile partial work before retrying. Output is bounded to 50 KiB. Stderr stays empty because workers run in-process.
+Recognized native HTTP and provider error envelopes classify as auth, quota or unavailable. Fallback requires a matching terminal provider failure before any tool use. Any tool use, including a read, closes fallback. Task/test failures, unknown errors, scope mismatches and cancellation never advance. The parent must reconcile partial work before retrying. Output is bounded to 50 KiB.
 
-Explicit `tools: []` still activates `codemode` only. Global and ancestor project instructions use AGENTS.override.md, AGENTS.md, then CLAUDE.md precedence per directory. They join the preset instructions and the explicit system prompt in the worker's session. Tools named in those instructions but not requested stay unavailable.
+Explicit `tools: []` still activates `codemode` only. Pi's own resource loader loads the worker's project context files from its cwd; tools named in those instructions but not requested stay unavailable.
 
-Each endpoint is attempted at most once per chain. A process-local cache skips recently unavailable endpoints, including the final endpoint. Otherwise the cooldown is 60 seconds. There is no daemon, lockfile or retry loop.
+Each endpoint is attempted at most once per chain. A process-local cache skips recently unavailable endpoints for 60 seconds, including the final endpoint. There is no daemon, lockfile or retry loop.
 
 ## Checks
 

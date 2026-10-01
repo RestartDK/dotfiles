@@ -24,7 +24,6 @@ import {
 
 import cachedModels from "./cached-models";
 
-const { configureInvocation } = await import("../../dist/core/dstack-policy.js");
 
 const profiles = process.env.PI_POLICY_TEST_PROFILES;
 if (!profiles) throw new Error("PI_POLICY_TEST_PROFILES must point to the committed profiles");
@@ -131,7 +130,6 @@ async function session(manager = SessionManager.inMemory(directory), selected?: 
 }
 
 beforeEach(async () => {
-  configureInvocation([]);
   directory = mkdtempSync(join(tmpdir(), "pi-policy-runtime-"));
   process.env.HOME = directory;
   process.env.XDG_CONFIG_HOME = join(directory, "config");
@@ -171,7 +169,6 @@ beforeEach(async () => {
     await runtime.setRuntimeApiKey(provider, "fixture");
 });
 afterEach(() => {
-  configureInvocation([]);
   try {
     for (const current of sessions.splice(0)) current.dispose();
     expect(network).not.toHaveBeenCalled();
@@ -641,99 +638,3 @@ test("cached Fireworks Anthropic transport reaches its real serializer with exac
   expect(result.stopReason).toBe("error");
   network.mockClear();
 });
-
-test.each(["branch", "manual", "auto", "prompt"] as const)(
-  "worker %s uses required effort through native serializer",
-  async (kind) => {
-    profile("work");
-    configureInvocation([
-      "--dstack-worker",
-      JSON.stringify({
-        profile: "work",
-        selection: { kind: "role", role: "precise-code", member: "sol" },
-        attempt: 0,
-      }),
-    ]);
-    runtime = await ModelRuntime.create({ credentials, modelsPath: null });
-    const manager = history("work");
-    manager.appendModelChange("openai-codex", "gpt-5.6-sol");
-    const current = await session(manager);
-    const stream = current.agent.streamFunction;
-    current.agent.streamFunction = (selected, context, options) =>
-      stream(selected, context, { ...options, transport: "sse" });
-    const wires: unknown[] = [];
-    network.mockImplementation(
-      Object.assign(
-        async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-          const request = new Request(input, init);
-          const body = new Uint8Array(await request.arrayBuffer());
-          wires.push(
-            JSON.parse(
-              request.headers.get("content-encoding") === "zstd"
-                ? zstdDecompressSync(body).toString()
-                : new TextDecoder().decode(body),
-            ),
-          );
-          const item = {
-            id: "msg_fixture",
-            type: "message",
-            role: "assistant",
-            status: "completed",
-            content: [{ type: "output_text", text: "Fixture summary", annotations: [] }],
-          };
-          const events = [
-            { type: "response.output_item.added", output_index: 0, item: { ...item, content: [] } },
-            {
-              type: "response.content_part.added",
-              output_index: 0,
-              content_index: 0,
-              part: item.content[0],
-            },
-            {
-              type: "response.output_text.delta",
-              output_index: 0,
-              content_index: 0,
-              delta: "Fixture summary",
-            },
-            { type: "response.output_item.done", output_index: 0, item },
-            {
-              type: "response.completed",
-              response: {
-                id: "resp_fixture",
-                status: "completed",
-                output: [item],
-                usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
-              },
-            },
-          ];
-          return new Response(
-            events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
-            { headers: { "content-type": "text/event-stream" } },
-          );
-        },
-        { preconnect: originalFetch.preconnect },
-      ),
-    );
-    if (kind === "branch") {
-      const target = manager
-        .getEntries()
-        .find((entry) => entry.type === "message" && entry.message.role === "user");
-      if (!target) throw new Error("Missing branch fixture");
-      expect((await current.navigateTree(target.id, { summarize: true })).cancelled).toBe(false);
-    } else if (kind === "manual") {
-      expect((await current.compact()).summary).toContain("Fixture summary");
-    } else {
-      if (kind === "prompt")
-        current.settingsManager.applyOverrides({ compaction: { enabled: false } });
-      await current.prompt("worker fixture");
-      const last = current.messages.at(-1);
-      expect(last?.role === "assistant" && last.stopReason).toBe("stop");
-      if (kind === "auto")
-        expect(manager.getEntries().some((entry) => entry.type === "compaction")).toBe(true);
-    }
-    expect(wires.length).toBeGreaterThan(0);
-    for (const wire of wires)
-      expect(wire).toMatchObject({ model: "gpt-5.6-sol", reasoning: { effort: "xhigh" } });
-    network.mockClear();
-  },
-);

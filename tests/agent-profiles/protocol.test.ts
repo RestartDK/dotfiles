@@ -1,8 +1,6 @@
 import { expect, test } from "bun:test";
 import { piFailure, type Failure } from "../../config/pi/agent/extensions/subagents/protocol";
 
-const piError = (message: string) => piFailure(message);
-
 test.each([
   {
     message: '401 {"type":"error","error":{"type":"authentication_error","message":"TEST_AUTH"}}',
@@ -51,7 +49,7 @@ test.each([
     failure: "quota",
   },
 ])("native HTTP envelope $message classifies as $failure", ({ message, failure }) => {
-  expect(piError(message)).toBe(failure);
+  expect(piFailure(message)).toBe(failure);
 });
 
 test.each([
@@ -91,7 +89,7 @@ test.each([
   "rate_limit_error",
   "insufficient_quota",
 ])("native HTTP rejects malformed, unknown or contradictory input %s", (message) => {
-  expect(piError(message)).toBeUndefined();
+  expect(piFailure(message)).toBeUndefined();
 });
 
 test("provider classification is bounded to 4096 bytes", () => {
@@ -99,18 +97,17 @@ test("provider classification is bounded to 4096 bytes", () => {
   const suffix = '"}}';
   const exact = prefix + "x".repeat(4096 - prefix.length - suffix.length) + suffix;
   expect(Buffer.byteLength(exact)).toBe(4096);
-  expect(piError(exact)).toBe("quota");
-  expect(piError(exact.replace('"message":"', '"message":"x'))).toBeUndefined();
+  expect(piFailure(exact)).toBe("quota");
+  expect(piFailure(exact.replace('"message":"', '"message":"x'))).toBeUndefined();
   const multibyte = prefix + "å".repeat(2100) + suffix;
   expect(multibyte.length).toBeLessThan(4096);
   expect(Buffer.byteLength(multibyte)).toBeGreaterThan(4096);
-  expect(piError(multibyte)).toBeUndefined();
+  expect(piFailure(multibyte)).toBeUndefined();
 });
 
 test.each([
   ['{"status":429}', "quota"],
   ['{"error":{"status":401}}', "auth"],
-  ['{"error":{"type":"overloaded"}}', "unavailable"],
   ["401 Unauthorized", "auth"],
   ["No API key found for fireworks.", "auth"],
   ["No API key for openrouter/deepseek-v4.1-flash", "auth"],
@@ -118,10 +115,9 @@ test.each([
   ["429 Too Many Requests", "quota"],
   ["429 rate_limit_error", "quota"],
   ["503 Service Unavailable", "unavailable"],
-  ["rate_limit", "quota"],
 ] satisfies [string, Failure][])(
   "existing provider error format %s remains accepted",
   (message, failure) => {
-    expect(piError(message)).toBe(failure);
+    expect(piFailure(message)).toBe(failure);
   },
 );

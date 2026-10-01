@@ -10,8 +10,7 @@ export interface NativeTarget {
   id: string;
   thinking: Effort;
 }
-export type Backend = NativeTarget;
-export type Chain = [Backend, ...Backend[]];
+export type Chain = [NativeTarget, ...NativeTarget[]];
 type Role = { kind: "single"; route: string } | { kind: "panel"; members: [string, ...string[]] };
 export interface Policy {
   profile: "work" | "personal";
@@ -96,7 +95,7 @@ function parseNativeProvider(value: string): NativeProvider {
   }
 }
 
-function parseBackend(value: unknown): Backend {
+function parseBackend(value: unknown): NativeTarget {
   if (
     !isRecord(value) ||
     Object.keys(value).some((key) => !["kind", "model", "thinking"].includes(key)) ||
@@ -169,7 +168,7 @@ export function parsePolicy(value: unknown): Policy {
   }
   for (const role of requiredRoles) if (!roles.has(role)) return invalid(`missing role ${role}`);
   const parentChain = routes.get(value.parent);
-  if (!parentChain || parentChain.length !== 1 || parentChain[0].kind !== "pi")
+  if (!parentChain || parentChain.length !== 1)
     return invalid("parent must reference one native Pi target with no fallback chain");
   return { profile, parent: parentChain[0], routes, roles };
 }
@@ -188,79 +187,12 @@ export function loadPolicy(
   }
 }
 
-export function backendModel(backend: Backend): string {
+export function backendModel(backend: NativeTarget): string {
   return `${backend.provider}/${backend.id}`;
 }
 
-export function backendLabel(backend: Backend): string {
+export function backendLabel(backend: NativeTarget): string {
   return `${backend.kind}/${backendModel(backend)}:${backend.thinking}`;
-}
-
-export interface WorkerInvocation {
-  profile: Policy["profile"];
-  selection: ResolvedRoute["selection"];
-  attempt: number;
-}
-
-export function parseWorkerInvocation(value: unknown): WorkerInvocation {
-  if (
-    !isRecord(value) ||
-    (value.profile !== "work" && value.profile !== "personal") ||
-    !isRecord(value.selection) ||
-    typeof value.attempt !== "number" ||
-    !Number.isInteger(value.attempt) ||
-    value.attempt < 0 ||
-    Object.keys(value).some((key) => !["profile", "selection", "attempt"].includes(key))
-  )
-    throw new Error("AI policy blocks invalid worker invocation.");
-  const raw = value.selection;
-  if (
-    Object.keys(raw).some(
-      (key) =>
-        !(raw.kind === "role" ? ["kind", "role", "member"] : ["kind", "model"]).includes(key),
-    )
-  )
-    throw new Error("AI policy blocks invalid worker selection.");
-  let selection: WorkerInvocation["selection"];
-  if (raw.kind === "role" && typeof raw.role === "string" && typeof raw.member === "string")
-    selection = { kind: "role", role: raw.role, member: raw.member };
-  else if (raw.kind === "raw" && typeof raw.model === "string")
-    selection = { kind: "raw", model: raw.model };
-  else throw new Error("AI policy blocks invalid worker selection.");
-  return { profile: value.profile, selection, attempt: value.attempt };
-}
-
-export function resolveWorkerInvocation(
-  policy: Policy,
-  invocation: WorkerInvocation,
-): NativeTarget {
-  if (invocation.profile !== policy.profile)
-    throw new Error("AI policy blocks changed worker profile. Restart the worker.");
-  const selection = invocation.selection;
-  let route: ResolvedRoute;
-  switch (selection.kind) {
-    case "role": {
-      const role = policy.roles.get(selection.role);
-      if (!role || (role.kind === "single" && role.route !== selection.member))
-        throw new Error("AI policy blocks changed worker role.");
-      route = resolveRoute(policy, {
-        role: selection.role,
-        ...(role.kind === "panel" ? { member: selection.member } : {}),
-      });
-      break;
-    }
-    case "raw":
-      route = resolveRoute(policy, { model: selection.model });
-      break;
-    default: {
-      const exhaustive: never = selection;
-      return exhaustive;
-    }
-  }
-  const target = route.chain[invocation.attempt];
-  if (!target || target.kind !== "pi")
-    throw new Error("AI policy worker invocation requires a native Pi target.");
-  return target;
 }
 
 export function resolveRoute(policy: Policy, input: SelectionInput): ResolvedRoute {
@@ -273,7 +205,7 @@ export function resolveRoute(policy: Policy, input: SelectionInput): ResolvedRou
   if (input.model !== undefined) {
     if (input.member !== undefined || input.seat !== undefined)
       throw new Error("Raw models cannot select panel seats.");
-    const matches = (backend: Backend) =>
+    const matches = (backend: NativeTarget) =>
       `${backendModel(backend)}:${backend.thinking}` === input.model;
     const chains = [...policy.routes.values()];
     const chain =

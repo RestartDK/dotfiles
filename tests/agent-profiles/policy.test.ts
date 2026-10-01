@@ -6,8 +6,6 @@ import {
   backendModel,
   loadPolicy,
   parsePolicy,
-  parseWorkerInvocation,
-  resolveWorkerInvocation,
   resolveRoute,
 } from "../../config/pi/agent/lib/model-policy";
 
@@ -212,46 +210,3 @@ test.each(["openai/gpt-6-astra", "google/gemini-3-pro"])(
     );
   },
 );
-
-test("worker invocation parses once and resolves its exact native attempt", () => {
-  const input = {
-    profile: "work",
-    selection: { kind: "role", role: "precise-code", member: "sol" },
-    attempt: 0,
-  } as const;
-  const invocation = parseWorkerInvocation(input);
-  expect(invocation).toEqual(input);
-  expect(resolveWorkerInvocation(policy("work"), invocation)).toEqual({
-    kind: "pi",
-    provider: "openai-codex",
-    id: "gpt-5.6-sol",
-    thinking: "xhigh",
-  });
-  expect(() => resolveWorkerInvocation(policy("personal"), invocation)).toThrow(
-    "changed worker profile",
-  );
-  expect(() =>
-    resolveWorkerInvocation(policy("work"), {
-      ...invocation,
-      selection: { kind: "role", role: "review", member: "fable" },
-      attempt: 1,
-    }),
-  ).toThrow("native Pi target");
-});
-
-test("worker invocation rejects untyped extra fields and invalid attempts", () => {
-  const input = {
-    profile: "work",
-    selection: { kind: "role", role: "precise-code", member: "sol" },
-    attempt: 0,
-  } as const;
-  for (const invalid of [
-    { ...input, profile: "other" },
-    { ...input, attempt: -1 },
-    { ...input, attempt: 0.5 },
-    { ...input, model: "override" },
-    { ...input, selection: { ...input.selection, model: "override" } },
-    { ...input, selection: { kind: "unknown" } },
-  ])
-    expect(() => parseWorkerInvocation(invalid)).toThrow("AI policy");
-});

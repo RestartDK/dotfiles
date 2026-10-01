@@ -15,6 +15,23 @@ export type PiActivity = Extract<
   | "agent_settled"
 >;
 
+const piActivityTypes = {
+  agent_start: true,
+  turn_start: true,
+  turn_end: true,
+  message_start: true,
+  tool_execution_start: true,
+  auto_retry_start: true,
+  auto_retry_end: true,
+  compaction_start: true,
+  compaction_end: true,
+  agent_settled: true,
+} satisfies Record<PiActivity, true>;
+
+export function isPiActivity(type: AgentSessionEvent["type"]): type is PiActivity {
+  return type in piActivityTypes;
+}
+
 export interface UsageStats {
   input: number;
   output: number;
@@ -28,17 +45,6 @@ export function initialUsage(): UsageStats {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 };
 }
 export type Failure = "auth" | "quota" | "unavailable";
-const providerErrors = new Map<string, Failure>([
-  ["authentication_failed", "auth"],
-  ["oauth_org_not_allowed", "auth"],
-  ["account_on_hold", "auth"],
-  ["billing_error", "quota"],
-  ["rate_limit", "quota"],
-  ["overloaded", "unavailable"],
-  ["model_not_found", "unavailable"],
-  ["server_error", "unavailable"],
-  ["cloud_credential_error", "auth"],
-]);
 const httpFailure = (status: unknown): Failure | undefined => {
   if (status === 401 || status === 403) return "auth";
   if (status === 429) return "quota";
@@ -90,11 +96,7 @@ export function piFailure(message: string): Failure | undefined {
     const parsed: unknown = JSON.parse(message);
     if (isRecord(parsed)) {
       const error = isRecord(parsed.error) ? parsed.error : parsed;
-      return (
-        httpFailure(parsed.status) ??
-        httpFailure(error.status) ??
-        (typeof error.type === "string" ? providerErrors.get(error.type) : undefined)
-      );
+      return httpFailure(parsed.status) ?? httpFailure(error.status);
     }
   } catch {}
   if (
@@ -113,7 +115,7 @@ export function piFailure(message: string): Failure | undefined {
     )
   )
     return "unavailable";
-  return providerErrors.get(message);
+  return undefined;
 }
 export function capped(text: string, bytes = 50 * 1024): string {
   if (Buffer.byteLength(text) <= bytes) return text;

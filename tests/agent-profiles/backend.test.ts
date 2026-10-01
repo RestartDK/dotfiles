@@ -2,11 +2,16 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import {
   BackendRunner,
-  instructionFiles,
+  initialSessionResult,
+  reduceSessionEvent,
+  sessionResult,
   type BackendTask,
+  type Execution,
   type Runtime,
+  type SessionProgress,
   type WorkerSessionOptions,
   type WorkerSessionResult,
 } from "../../config/pi/agent/extensions/subagents/backend";
@@ -50,7 +55,6 @@ function result(over: Partial<WorkerSessionResult> = {}): WorkerSessionResult {
   return {
     outcome: { kind: "success" },
     output: "ok",
-    stderr: "",
     usage: initialUsage(),
     toolUsed: false,
     ...over,
@@ -71,7 +75,6 @@ function setup(profile = "personal", role?: "fallback-role") {
     cwd: dir,
     task: "Report once",
     systemPrompt: "preset instruction",
-    contextFiles: [],
     tools: [],
   };
   const sessions: SessionCall[] = [];
@@ -112,30 +115,7 @@ function setup(profile = "personal", role?: "fallback-role") {
 }
 
 describe("typed backend sessions", () => {
-  test("loads global and ancestor instructions with override precedence", () => {
-    const { task } = setup();
-    const dir = task.cwd;
-    const global = join(dir, "agent");
-    const repo = join(dir, "repo");
-    const child = join(repo, "child");
-    mkdirSync(global);
-    mkdirSync(child, { recursive: true });
-    for (const path of [
-      join(global, "CLAUDE.md"),
-      join(repo, "AGENTS.md"),
-      join(repo, "CLAUDE.md"),
-      join(child, "AGENTS.override.md"),
-      join(child, "AGENTS.md"),
-    ])
-      writeFileSync(path, "Repository instructions");
-    expect(instructionFiles(child, global).filter((path) => path.startsWith(dir))).toEqual([
-      join(global, "CLAUDE.md"),
-      join(repo, "AGENTS.md"),
-      join(child, "AGENTS.override.md"),
-    ]);
-  });
-
-  test("drives one typed session with the route's provider, model, effort and task", async () => {
+  test("drives one typed session with the route's target, task and tools", async () => {
     const { runtime, task, sessions, script } = setup();
     task.tools = ["read", "grep"];
     script(
@@ -161,15 +141,18 @@ describe("typed backend sessions", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.options).toMatchObject({
       cwd: task.cwd,
-      provider: "openai-codex",
-      model: "gpt-6-astra",
-      thinking: "xhigh",
+      target: { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
       systemPrompt: "preset instruction",
       tools: ["read", "grep", "codemode"],
     });
-    expect(sessions[0]?.options.signal).toBeDefined();
+    expect(sessions[0]?.options.signal).toBe(controller.signal);
     expect(sessions[0]?.text).toBe("Delegated task:\n\nReport once");
-    sessions[0]?.options.onActivity?.("agent_start");
+    sessions[0]?.options.onProgress?.({
+      activity: "agent_start",
+      usage: initialUsage(),
+      output: "",
+      toolUsed: false,
+    });
     expect(activities).toContain("agent_start");
     expect(sessions[0]?.disposed).toBe(1);
     expect(execution.outcome).toEqual({ kind: "success" });
@@ -190,6 +173,44 @@ describe("typed backend sessions", () => {
     script(result());
     expect((await new BackendRunner(runtime).run(task)).outcome).toEqual({ kind: "success" });
     expect(sessions[0]?.options.tools).toEqual(["codemode"]);
+  });
+
+  test("live progress forwards running usage, output and tool use before the attempt ends", async () => {
+    const { runtime, task, script } = setup();
+    script(
+      (options) =>
+        new Promise<WorkerSessionResult>((resolve) => {
+          options.onProgress?.({
+            activity: "message_start",
+            usage: {
+              input: 7,
+              output: 3,
+              cacheRead: 1,
+              cacheWrite: 0,
+              cost: 0.25,
+              contextTokens: 10,
+              turns: 1,
+            },
+            output: "streaming",
+            toolUsed: true,
+            actualModel: "openai-codex/gpt-6-astra",
+          });
+          resolve(result());
+        }),
+    );
+    const updates: Execution[] = [];
+    await new BackendRunner(runtime).run(task, undefined, (execution) => {
+      updates.push(structuredClone(execution));
+    });
+    expect(
+      updates.some(
+        (execution) =>
+          execution.output === "streaming" &&
+          execution.toolUsed &&
+          execution.usage.input === 7 &&
+          execution.actual?.model === "openai-codex/gpt-6-astra",
+      ),
+    ).toBe(true);
   });
 
   test("provider failure advances once and sums usage across attempts", async () => {
@@ -225,7 +246,7 @@ describe("typed backend sessions", () => {
     );
     const execution = await new BackendRunner(runtime).run(task);
     expect(sessions).toHaveLength(2);
-    expect(sessions.map((call) => call.options.model)).toEqual([
+    expect(sessions.map((call) => call.options.target.id)).toEqual([
       "z-ai/glm-5.3-flash",
       "gpt-6-astra",
     ]);
@@ -260,6 +281,18 @@ describe("typed backend sessions", () => {
     expect(sessions[0]?.disposed).toBe(1);
   });
 
+  test("a thrown session error routes through provider failure classification", async () => {
+    const { runtime, task, sessions, script } = setup("personal", "fallback-role");
+    script(
+      new Error('OpenAI API error (429): {"type":"insufficient_quota","message":"quota"}'),
+      result(),
+    );
+    const execution = await new BackendRunner(runtime).run(task);
+    expect(execution.attempts[0]).toMatchObject({ kind: "provider-failure", reason: "quota" });
+    expect(execution.outcome).toEqual({ kind: "success" });
+    expect(sessions).toHaveLength(2);
+  });
+
   test("missing credentials advance only through the recognized auth failure", async () => {
     const { runtime, task, script } = setup("personal", "fallback-role");
     script(result({ outcome: { kind: "provider-failure", reason: "auth" } }), result());
@@ -269,21 +302,6 @@ describe("typed backend sessions", () => {
       "success",
     ]);
     expect(execution.attempts[0]).toMatchObject({ reason: "auth" });
-  });
-
-  test("a failed policy invocation stops before any session", async () => {
-    const { runtime, task, sessions, script } = setup();
-    script(result());
-    writeFileSync(
-      join(process.env.XDG_CONFIG_HOME ?? "", "dstack/models.json"),
-      JSON.stringify(profilePolicy("work")),
-    );
-    const execution = await new BackendRunner(runtime).run(task);
-    expect(execution.outcome).toMatchObject({
-      kind: "failed",
-      reason: expect.stringContaining("changed worker profile"),
-    });
-    expect(sessions).toHaveLength(0);
   });
 
   test("tool use before a provider failure blocks replay with reconciliation", async () => {
@@ -360,7 +378,12 @@ describe("typed backend sessions", () => {
             () => resolve(result({ outcome: { kind: "cancelled" } })),
             { once: true },
           );
-          options.onActivity?.("agent_start");
+          options.onProgress?.({
+            activity: "agent_start",
+            usage: initialUsage(),
+            output: "",
+            toolUsed: false,
+          });
         }),
     );
     const controller = new AbortController();
@@ -383,7 +406,12 @@ describe("typed backend sessions", () => {
             () => resolve(result({ outcome: { kind: "cancelled" } })),
             { once: true },
           );
-          options.onActivity?.("agent_start");
+          options.onProgress?.({
+            activity: "agent_start",
+            usage: initialUsage(),
+            output: "",
+            toolUsed: false,
+          });
         }),
     );
     const runner = new BackendRunner(runtime);
@@ -393,5 +421,170 @@ describe("typed backend sessions", () => {
     expect(execution.outcome).toEqual({ kind: "cancelled" });
     expect((await runner.run(task)).outcome).toEqual({ kind: "cancelled" });
     expect(sessions).toHaveLength(1);
+  });
+});
+
+const usage = {
+  input: 1,
+  output: 2,
+  cacheRead: 3,
+  cacheWrite: 4,
+  totalTokens: 5,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.5 },
+};
+
+function assistant(over: Record<string, unknown> = {}): AgentSessionEvent {
+  return {
+    type: "message_end",
+    message: {
+      role: "assistant",
+      provider: "openrouter",
+      model: "deepseek/deepseek-v4.1-flash",
+      api: "openai-completions",
+      content: [{ type: "text", text: "answer" }],
+      stopReason: "stop",
+      timestamp: 0,
+      usage,
+      ...over,
+    },
+  } as AgentSessionEvent;
+}
+
+function toolActivity(type: string): AgentSessionEvent {
+  return { type } as AgentSessionEvent;
+}
+
+describe("session event mapping", () => {
+  test.each([
+    {
+      name: "tool_execution_start latches tool use",
+      events: [toolActivity("tool_execution_start")],
+      state: { toolUsed: true },
+    },
+    {
+      name: "tool_execution_update latches tool use",
+      events: [toolActivity("tool_execution_update")],
+      state: { toolUsed: true },
+    },
+    {
+      name: "tool_execution_end latches tool use",
+      events: [toolActivity("tool_execution_end")],
+      state: { toolUsed: true },
+    },
+    {
+      name: "turn_end with tool results latches tool use",
+      events: [{ type: "turn_end", toolResults: [{}] } as AgentSessionEvent],
+      state: { toolUsed: true },
+    },
+    {
+      name: "turn_end without tool results does not latch",
+      events: [{ type: "turn_end", toolResults: [] } as AgentSessionEvent],
+      state: { toolUsed: false },
+    },
+    {
+      name: "toolResult message latches tool use",
+      events: [
+        {
+          type: "message_end",
+          message: { role: "toolResult", toolCallId: "t", toolName: "read", content: [] },
+        } as AgentSessionEvent,
+      ],
+      state: { toolUsed: true },
+    },
+    {
+      name: "assistant tool call latches tool use",
+      events: [
+        assistant({
+          content: [{ type: "toolCall", id: "t", name: "read", arguments: {} }],
+          stopReason: "toolUse",
+        }),
+      ],
+      state: { toolUsed: true },
+    },
+    {
+      name: "assistant stop is a success with summed usage and output",
+      events: [assistant()],
+      state: {
+        output: "answer",
+        actualModel: "openrouter/deepseek/deepseek-v4.1-flash",
+        outcome: { kind: "success" },
+        usage: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, cost: 0.5, turns: 1 },
+      },
+    },
+    {
+      name: "assistant length is a success",
+      events: [assistant({ stopReason: "length" })],
+      state: { outcome: { kind: "success" } },
+    },
+    {
+      name: "assistant aborted is a failure",
+      events: [assistant({ stopReason: "aborted" })],
+      state: { outcome: { kind: "failed", reason: "Pi aborted" } },
+    },
+    {
+      name: "assistant error classifies a native quota envelope",
+      events: [
+        assistant({
+          stopReason: "error",
+          errorMessage: '429 {"type":"error","error":{"type":"rate_limit_error","message":"x"}}',
+        }),
+      ],
+      state: { outcome: { kind: "provider-failure", reason: "quota" } },
+    },
+    {
+      name: "quota after tool use keeps the latch and the provider failure",
+      events: [
+        toolActivity("tool_execution_start"),
+        assistant({
+          stopReason: "error",
+          errorMessage: '429 {"type":"error","error":{"type":"rate_limit_error","message":"x"}}',
+        }),
+      ],
+      state: { toolUsed: true, outcome: { kind: "provider-failure", reason: "quota" } },
+    },
+    {
+      name: "a substituted response model fails the attempt",
+      events: [assistant({ responseModel: "deepseek/deepseek-v4.1-flash-preview" })],
+      state: {
+        outcome: {
+          kind: "failed",
+          reason: expect.stringContaining("not the requested"),
+        },
+      },
+    },
+    {
+      name: "usage and turns sum across assistant messages",
+      events: [assistant(), assistant({ content: [{ type: "text", text: "second" }] })],
+      state: {
+        output: "second",
+        usage: { input: 2, output: 4, cacheRead: 6, cacheWrite: 8, cost: 1, turns: 2 },
+      },
+    },
+  ] satisfies Array<{ name: string; events: AgentSessionEvent[]; state: unknown }>)(
+    "$name",
+    ({ events, state }) => {
+      expect(events.reduce(reduceSessionEvent, initialSessionResult())).toMatchObject(state);
+    },
+  );
+
+  test("a session with no terminal message reports the missing terminal result", () => {
+    const state = [toolActivity("tool_execution_start")].reduce(
+      reduceSessionEvent,
+      initialSessionResult(),
+    );
+    expect(state.outcome).toBeUndefined();
+    expect(sessionResult(state)).toMatchObject({
+      outcome: { kind: "failed", reason: "Session exited without a terminal result" },
+    });
+  });
+
+  test("assistant output is bounded to 50 KiB", () => {
+    const text = "x".repeat(60 * 1024);
+    const state = reduceSessionEvent(
+      initialSessionResult(),
+      assistant({ content: [{ type: "text", text }] }),
+    );
+    expect(Buffer.byteLength(state.output, "utf8")).toBeLessThanOrEqual(50 * 1024);
+    expect(state.output).toContain("[output truncated]");
   });
 });

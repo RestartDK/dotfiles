@@ -1,18 +1,19 @@
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import {
-  backendModel,
-  parseEffort,
-  type Backend,
-  type ResolvedRoute,
-  type WorkerInvocation,
-} from "../../lib/model-policy";
-import { configureInvocation } from "../../lib/pi-policy";
+  createAgentSession,
+  createCodemodeExtension,
+  DefaultResourceLoader,
+  getAgentDir,
+  ModelRuntime,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { backendModel, type NativeTarget, type ResolvedRoute } from "../../lib/model-policy";
 import {
   capped,
   initialUsage,
+  isPiActivity,
   piFailure,
   type Failure,
   type PiActivity,
@@ -25,41 +26,43 @@ export interface BackendTask {
   tools: string[];
   systemPrompt: string;
   cwd: string;
-  contextFiles: string[];
 }
 export type Outcome =
   | { kind: "success" }
-  | { kind: "provider-failure"; reason: Failure | "missing-cli"; resetAt?: number }
+  | { kind: "provider-failure"; reason: Failure }
   | { kind: "failed"; reason: string }
   | { kind: "cancelled" };
-export type Attempt = { backend: Backend; actualModel?: string } & (
+export type Attempt = { backend: NativeTarget; actualModel?: string } & (
   | Outcome
   | { kind: "cooldown"; until: number }
 );
 export interface Execution {
   outcome: Outcome;
   attempts: Attempt[];
-  actual?: { backend: Backend["kind"]; model: string };
+  actual?: { backend: NativeTarget["kind"]; model: string };
   activity?: PiActivity;
   output: string;
-  stderr: string;
   usage: UsageStats;
   toolUsed: boolean;
 }
+export interface SessionProgress {
+  activity?: PiActivity;
+  usage: UsageStats;
+  output: string;
+  toolUsed: boolean;
+  actualModel?: string;
+}
 export interface WorkerSessionOptions {
   cwd: string;
-  provider: string;
-  model: string;
-  thinking: string;
+  target: NativeTarget;
   systemPrompt: string;
   tools: string[];
   signal?: AbortSignal;
-  onActivity?: (activity: PiActivity) => void;
+  onProgress?: (progress: SessionProgress) => void;
 }
 export interface WorkerSessionResult {
   outcome: Outcome;
   output: string;
-  stderr: string;
   usage: UsageStats;
   toolUsed: boolean;
   actualModel?: string;
@@ -73,41 +76,16 @@ export interface Runtime {
   now: () => number;
 }
 
-export function instructionFiles(cwd: string, agentDir: string): string[] {
-  const directories: string[] = [];
-  let current = cwd;
-  while (true) {
-    directories.unshift(current);
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  const files: string[] = [];
-  for (const directory of [agentDir, ...directories]) {
-    const path = ["AGENTS.override.md", "AGENTS.md", "CLAUDE.md"]
-      .map((name) => join(directory, name))
-      .find(existsSync);
-    if (path && !files.includes(path)) files.push(path);
-  }
-  return files;
+export interface SessionResultState {
+  usage: UsageStats;
+  output: string;
+  toolUsed: boolean;
+  actualModel?: string;
+  outcome?: Outcome;
 }
 
-function isPiActivity(type: AgentSessionEvent["type"]): type is PiActivity {
-  switch (type) {
-    case "agent_start":
-    case "turn_start":
-    case "turn_end":
-    case "message_start":
-    case "tool_execution_start":
-    case "auto_retry_start":
-    case "auto_retry_end":
-    case "compaction_start":
-    case "compaction_end":
-    case "agent_settled":
-      return true;
-    default:
-      return false;
-  }
+export function initialSessionResult(): SessionResultState {
+  return { usage: initialUsage(), output: "", toolUsed: false };
 }
 
 function assistantText(message: AssistantMessage): string | undefined {
@@ -123,29 +101,98 @@ function failureOutcome(reason: string): Outcome {
     : { kind: "failed", reason: capped(reason, 4096) };
 }
 
+function stopOutcome(message: AssistantMessage): Outcome | undefined {
+  switch (message.stopReason) {
+    case "error":
+      return failureOutcome(message.errorMessage ?? "Unknown Pi error");
+    case "stop":
+    case "length":
+      return { kind: "success" };
+    case "aborted":
+      return { kind: "failed", reason: "Pi aborted" };
+    case "toolUse":
+    case "pending":
+    case "deferred":
+      return undefined;
+    default: {
+      const exhaustive: never = message.stopReason;
+      return exhaustive;
+    }
+  }
+}
+
+export function reduceSessionEvent(
+  state: SessionResultState,
+  event: AgentSessionEvent,
+): SessionResultState {
+  switch (event.type) {
+    case "tool_execution_start":
+    case "tool_execution_update":
+    case "tool_execution_end":
+      return { ...state, toolUsed: true };
+    case "turn_end":
+      return event.toolResults.length > 0 ? { ...state, toolUsed: true } : state;
+    case "message_end": {
+      const message = event.message;
+      if (message.role === "toolResult") return { ...state, toolUsed: true };
+      if (message.role !== "assistant") return state;
+      const toolUsed =
+        state.toolUsed || message.content.some((block) => block.type === "toolCall");
+      const usage: UsageStats = {
+        input: state.usage.input + message.usage.input,
+        output: state.usage.output + message.usage.output,
+        cacheRead: state.usage.cacheRead + message.usage.cacheRead,
+        cacheWrite: state.usage.cacheWrite + message.usage.cacheWrite,
+        cost: state.usage.cost + message.usage.cost.total,
+        contextTokens: message.usage.totalTokens,
+        turns: state.usage.turns + 1,
+      };
+      const served = message.responseModel;
+      if (served !== undefined && served !== message.model)
+        return {
+          ...state,
+          usage,
+          toolUsed,
+          outcome: {
+            kind: "failed",
+            reason: `Pi answered with ${message.provider}/${served}, not the requested ${message.provider}/${message.model}.`,
+          },
+        };
+      return {
+        ...state,
+        usage,
+        output: assistantText(message) ?? state.output,
+        toolUsed,
+        actualModel: `${message.provider}/${served ?? message.model}`,
+        outcome: stopOutcome(message),
+      };
+    }
+    default:
+      return state;
+  }
+}
+
+const ABORT_GRACE_MS = 5_000;
+
 async function createPiSession(options: WorkerSessionOptions): Promise<WorkerSession> {
-  const {
-    createAgentSession,
-    createCodemodeExtension,
-    DefaultResourceLoader,
-    getAgentDir,
-    ModelRuntime,
-    SessionManager,
-    SettingsManager,
-  } = await import("@earendil-works/pi-coding-agent");
   const agentDir = getAgentDir();
   const settingsManager = SettingsManager.create(options.cwd, agentDir);
   const resourceLoader = new DefaultResourceLoader({
     cwd: options.cwd,
     agentDir,
     settingsManager,
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
     extensionFactories: [createCodemodeExtension()],
     appendSystemPrompt: [options.systemPrompt],
   });
   await resourceLoader.reload();
   const modelRuntime = await ModelRuntime.create();
-  const model = modelRuntime.getModel(options.provider, options.model);
-  if (!model) throw new Error(`Unknown worker model ${options.provider}/${options.model}.`);
+  const model = modelRuntime.getModel(options.target.provider, options.target.id);
+  if (!model)
+    throw new Error(`Unknown worker model ${options.target.provider}/${options.target.id}.`);
   const { session } = await createAgentSession({
     cwd: options.cwd,
     agentDir,
@@ -154,86 +201,75 @@ async function createPiSession(options: WorkerSessionOptions): Promise<WorkerSes
     modelRuntime,
     sessionManager: SessionManager.inMemory(options.cwd),
     model,
-    thinkingLevel: parseEffort(options.thinking),
+    thinkingLevel: options.target.thinking,
     tools: options.tools,
   });
   return {
     async prompt(text: string): Promise<WorkerSessionResult> {
-      const usage = initialUsage();
-      let output = "";
-      let toolUsed = false;
-      let actualModel: string | undefined;
-      let outcome: Outcome | undefined;
-      const unsubscribe = session.subscribe((event) => {
-        if (isPiActivity(event.type)) options.onActivity?.(event.type);
-        switch (event.type) {
-          case "tool_execution_start":
-          case "tool_execution_update":
-          case "tool_execution_end":
-            toolUsed = true;
-            break;
-          case "turn_end":
-            if (event.toolResults.length > 0) toolUsed = true;
-            break;
-          case "message_end": {
-            const message = event.message;
-            if (message.role === "toolResult") {
-              toolUsed = true;
-              break;
-            }
-            if (message.role !== "assistant") break;
-            if (message.content.some((block) => block.type === "toolCall")) toolUsed = true;
-            usage.turns++;
-            usage.input += message.usage.input;
-            usage.output += message.usage.output;
-            usage.cacheRead += message.usage.cacheRead;
-            usage.cacheWrite += message.usage.cacheWrite;
-            usage.contextTokens = message.usage.totalTokens;
-            usage.cost += message.usage.cost.total;
-            actualModel = `${message.provider}/${message.model}`;
-            output = assistantText(message) ?? output;
-            switch (message.stopReason) {
-              case "error":
-                outcome = failureOutcome(message.errorMessage ?? "Unknown Pi error");
-                break;
-              case "stop":
-              case "length":
-                outcome = { kind: "success" };
-                break;
-              case "aborted":
-                outcome = { kind: "failed", reason: "Pi aborted" };
-                break;
-              default:
-                outcome = undefined;
-            }
-            break;
-          }
-        }
-      });
-      if (options.signal?.aborted) {
-        unsubscribe();
-        return { outcome: { kind: "cancelled" }, output, stderr: "", usage, toolUsed, actualModel };
-      }
+      let state = initialSessionResult();
+      const signal = options.signal;
+      if (signal?.aborted)
+        return {
+          outcome: { kind: "cancelled" },
+          output: state.output,
+          usage: state.usage,
+          toolUsed: state.toolUsed,
+        };
       const abort = () => {
-        void session.abort();
+        session.abort().catch(() => {});
       };
-      options.signal?.addEventListener("abort", abort, { once: true });
+      let stopTimer: ReturnType<typeof setTimeout> | undefined;
+      let resolveStop: (() => void) | undefined;
+      const stopped = new Promise<"stopped">((resolve) => {
+        resolveStop = () => resolve("stopped");
+      });
+      const requestStop = () => {
+        abort();
+        stopTimer ??= setTimeout(() => resolveStop?.(), ABORT_GRACE_MS);
+      };
+      const unsubscribe = session.subscribe((event) => {
+        state = reduceSessionEvent(state, event);
+        if (event.type === "agent_start" && signal?.aborted) requestStop();
+        const activity = isPiActivity(event.type) ? event.type : undefined;
+        if (activity !== undefined || event.type === "message_end")
+          options.onProgress?.({
+            activity,
+            usage: state.usage,
+            output: state.output,
+            toolUsed: state.toolUsed,
+            actualModel: state.actualModel,
+          });
+      });
+      signal?.addEventListener("abort", requestStop, { once: true });
       try {
-        await session.prompt(text);
-      } catch (error) {
-        outcome = failureOutcome(error instanceof Error ? error.message : String(error));
+        await Promise.race([
+          session.prompt(text).then(
+            () => "settled" as const,
+            (error) => {
+              state = {
+                ...state,
+                outcome: failureOutcome(error instanceof Error ? error.message : String(error)),
+              };
+              return "settled" as const;
+            },
+          ),
+          stopped,
+        ]);
+        if (signal?.aborted) state = { ...state, outcome: { kind: "cancelled" } };
       } finally {
-        options.signal?.removeEventListener("abort", abort);
+        if (stopTimer !== undefined) clearTimeout(stopTimer);
+        signal?.removeEventListener("abort", requestStop);
         unsubscribe();
       }
-      if (options.signal?.aborted) outcome = { kind: "cancelled" };
       return {
-        outcome: outcome ?? { kind: "failed", reason: "Session exited without a terminal result" },
-        output,
-        stderr: "",
-        usage,
-        toolUsed,
-        actualModel,
+        outcome: state.outcome ?? {
+          kind: "failed",
+          reason: "Session exited without a terminal result",
+        },
+        output: state.output,
+        usage: state.usage,
+        toolUsed: state.toolUsed,
+        actualModel: state.actualModel,
       };
     },
     async dispose() {
@@ -263,14 +299,13 @@ export class BackendRunner {
       outcome: { kind: "failed", reason: "All configured routes are cooling down" },
       attempts: [],
       output: "",
-      stderr: "",
       usage: initialUsage(),
       toolUsed: false,
     };
     if (signal.aborted) return { ...result, outcome: { kind: "cancelled" } };
     try {
       for (const backend of task.route.chain) {
-        if (signal?.aborted) {
+        if (signal.aborted) {
           result.outcome = { kind: "cancelled" };
           break;
         }
@@ -284,14 +319,28 @@ export class BackendRunner {
           update?.(result);
           continue;
         }
-        const attempt = await this.attempt(task, backend, signal, (activity) => {
-          result.activity = activity;
-          result.actual = { backend: backend.kind, model: backendModel(backend) };
+        const base = { ...result.usage };
+        const attempt = await this.attempt(task, backend, signal, (progress) => {
+          result.activity = progress.activity ?? result.activity;
+          result.usage = {
+            input: base.input + progress.usage.input,
+            output: base.output + progress.usage.output,
+            cacheRead: base.cacheRead + progress.usage.cacheRead,
+            cacheWrite: base.cacheWrite + progress.usage.cacheWrite,
+            cost: base.cost + progress.usage.cost,
+            turns: base.turns + progress.usage.turns,
+            contextTokens: progress.usage.contextTokens,
+          };
+          result.output = progress.output || result.output;
+          result.toolUsed ||= progress.toolUsed;
+          if (progress.actualModel)
+            result.actual = { backend: backend.kind, model: progress.actualModel };
+          else if (!result.actual)
+            result.actual = { backend: backend.kind, model: backendModel(backend) };
           update?.(result);
         });
-        result.outcome = signal?.aborted ? { kind: "cancelled" } : attempt.outcome;
+        result.outcome = signal.aborted ? { kind: "cancelled" } : attempt.outcome;
         result.output = attempt.result.output;
-        result.stderr = attempt.result.stderr;
         result.toolUsed ||= attempt.result.toolUsed;
         result.actual = attempt.result.actualModel
           ? { backend: backend.kind, model: attempt.result.actualModel }
@@ -313,24 +362,16 @@ export class BackendRunner {
         });
         update?.(result);
         if (result.outcome.kind !== "provider-failure") break;
-        const reset = result.outcome.resetAt;
         const failedAt = this.runtime.now();
-        const expires =
-          reset !== undefined && reset > failedAt
-            ? Math.min(reset, failedAt + 24 * 60 * 60 * 1000)
-            : failedAt + 60_000;
         if (this.cooldowns.size >= 64) {
           const oldest = this.cooldowns.keys().next().value;
           if (oldest !== undefined) this.cooldowns.delete(oldest);
         }
-        this.cooldowns.set(key, expires);
+        this.cooldowns.set(key, failedAt + 60_000);
         if (result.toolUsed) break;
       }
     } catch (error) {
-      result.outcome = {
-        kind: "failed",
-        reason: error instanceof Error ? error.message : String(error),
-      };
+      result.outcome = failureOutcome(error instanceof Error ? error.message : String(error));
     }
     if (
       result.toolUsed &&
@@ -346,44 +387,27 @@ export class BackendRunner {
 
   private async attempt(
     task: BackendTask,
-    backend: Backend,
+    backend: NativeTarget,
     signal: AbortSignal | undefined,
-    onActivity: (activity: PiActivity) => void,
+    onProgress: (progress: SessionProgress) => void,
   ): Promise<{ outcome: Outcome; result: WorkerSessionResult }> {
-    const workerInvocation: WorkerInvocation = {
-      profile: task.route.profile,
-      selection: task.route.selection,
-      attempt: task.route.chain.indexOf(backend),
-    };
     let session: WorkerSession | undefined;
     try {
-      configureInvocation(["--dstack-worker", JSON.stringify(workerInvocation)]);
       session = await this.runtime.session({
         cwd: task.cwd,
-        provider: backend.provider,
-        model: backend.id,
-        thinking: backend.thinking,
+        target: backend,
         systemPrompt: task.systemPrompt,
         tools: [...new Set([...task.tools, "codemode"])],
         signal,
-        onActivity,
+        onProgress,
       });
       const result = await session.prompt(`Delegated task:\n\n${task.task}`);
       return { outcome: result.outcome, result };
     } catch (error) {
-      const outcome: Outcome = {
-        kind: "failed",
-        reason: error instanceof Error ? error.message : String(error),
-      };
+      const outcome = failureOutcome(error instanceof Error ? error.message : String(error));
       return {
         outcome,
-        result: {
-          outcome,
-          output: "",
-          stderr: "",
-          usage: initialUsage(),
-          toolUsed: false,
-        },
+        result: { outcome, output: "", usage: initialUsage(), toolUsed: false },
       };
     } finally {
       await session?.dispose();
