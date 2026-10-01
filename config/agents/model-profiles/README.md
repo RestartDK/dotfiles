@@ -14,7 +14,7 @@ Panels require `member` or a zero-based `seat`, never both. Managed dstack agent
 
 ## Native Pi parents
 
-The parent uses the profile's parent route. Work uses `sol` (`openai/gpt-6.1-sol` at `xhigh`); personal uses `deepseek` (`openrouter/deepseek/deepseek-v4.1-flash` at `max`). Every route is a native Pi target and the parent chain is single-hop. Session-local compatible thinking changes remain available to parents. Each worker runs the exact target its role resolves to. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`; implicit parent downgrades and unrelated effective levels are blocked.
+The parent uses the profile's parent route. Work uses `sol` (`openai-codex/gpt-6.1-sol` at `xhigh`); personal uses `deepseek` (`openrouter/deepseek/deepseek-v4.1-flash` at `max`). Every route is a native Pi target and the parent chain is single-hop. Session-local compatible thinking changes remain available to parents. Each worker runs the exact target its role resolves to. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`; implicit parent downgrades and unrelated effective levels are blocked.
 
 `packages/pi-profiled` patches Pi 0.99.1 before compiling its Bun executable. The core runtime checks native requests even with extensions disabled, including retries, compaction and branch summaries. It rejects replacement transports, incompatible endpoints and transformed wire models. This is not a sandbox for arbitrary extension or shell code making its own requests.
 

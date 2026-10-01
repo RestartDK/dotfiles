@@ -6,7 +6,7 @@
     "astra": [
       {
         "kind": "pi",
-        "model": "openai/gpt-6-astra",
+        "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
@@ -20,14 +20,14 @@
     "fable": [
       {
         "kind": "pi",
-        "model": "openai/gpt-6-astra",
+        "model": "openai-codex/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
     "sol": [
       {
         "kind": "pi",
-        "model": "openai/gpt-6.1-sol",
+        "model": "openai-codex/gpt-6.1-sol",
         "thinking": "xhigh"
       }
     ],
@@ -162,6 +162,7 @@
     "fireworks",
     "openrouter",
     "openai",
+    "openai-codex",
     "anthropic",
     "ollama"
   ]

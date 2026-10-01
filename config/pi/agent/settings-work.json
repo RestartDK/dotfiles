@@ -1,6 +1,7 @@
 {
   "extensions": [
-    "-extensions/pi-prompt/index.ts"
+    "-extensions/pi-prompt/index.ts",
+    "-extensions/pi-coordination/index.ts"
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
@@ -33,10 +34,11 @@
   "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen",
   "enabledModels": [
-    "openai/gpt-6.1-sol",
+    "openai-codex/gpt-6.1-sol",
     "fireworks/*",
     "openrouter/*",
     "openai/*",
+    "openai-codex/*",
     "anthropic/*",
     "ollama/*"
   ]

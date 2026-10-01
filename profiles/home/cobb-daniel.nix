@@ -26,6 +26,8 @@ in
 
   my.ai.profile = "work";
 
+  my.liveConfig.piSettingsFile = "config/pi/agent/settings-work.json";
+
   my.liveConfig = {
     enable = isCobbDevHost;
     repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
