@@ -31,6 +31,24 @@ let
     }
     EOF
   '';
+  piCodingAgentStub = pkgs.runCommand "pi-coding-agent-resolution-stub" { } ''
+    mkdir -p $out/node_modules/@earendil-works/pi-coding-agent
+    cat > $out/node_modules/@earendil-works/pi-coding-agent/package.json <<'EOF'
+    { "name": "@earendil-works/pi-coding-agent", "version": "0.0.0", "type": "module", "main": "index.js" }
+    EOF
+    cat > $out/node_modules/@earendil-works/pi-coding-agent/index.js <<'EOF'
+    export const CONFIG_DIR_NAME = ".pi";
+    export function DefaultResourceLoader() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function ModelRuntime() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function SessionManager() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function SettingsManager() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function createAgentSession() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function createCodemodeExtension() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function getAgentDir() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function keyHint() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function parseFrontmatter() { throw new Error("pi-coding-agent is a resolution stub"); }
+    EOF
+  '';
   owners = [
     {
       home = macHome "dkumlin-macbook-pro";
@@ -110,6 +128,8 @@ pkgs.runCommand "agent-profile-tests"
     cp -R ${../config} $TMPDIR/config
     cp -R ${../tests} $TMPDIR/tests
     cp -R ${piAiStub}/node_modules $TMPDIR/
+    chmod -R u+w $TMPDIR/node_modules
+    cp -R ${piCodingAgentStub}/node_modules/@earendil-works/pi-coding-agent $TMPDIR/node_modules/@earendil-works/
     cd $TMPDIR
     bun test tests/agent-profiles
     touch $out

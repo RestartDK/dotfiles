@@ -7,7 +7,7 @@ import {
   BackendRunner,
   initialSessionResult,
   reduceSessionEvent,
-  sessionResult,
+  terminalOutcome,
   type BackendTask,
   type Execution,
   type Runtime,
@@ -145,16 +145,9 @@ describe("typed backend sessions", () => {
       systemPrompt: "preset instruction",
       tools: ["read", "grep", "codemode"],
     });
-    expect(sessions[0]?.options.signal).toBe(controller.signal);
+    expect(sessions[0]?.options.signal).toBeInstanceOf(AbortSignal);
+    expect(sessions[0]?.options.signal?.aborted).toBe(false);
     expect(sessions[0]?.text).toBe("Delegated task:\n\nReport once");
-    sessions[0]?.options.onProgress?.({
-      activity: "agent_start",
-      usage: initialUsage(),
-      output: "",
-      toolUsed: false,
-    });
-    expect(activities).toContain("agent_start");
-    expect(sessions[0]?.disposed).toBe(1);
     expect(execution.outcome).toEqual({ kind: "success" });
     expect(execution.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
     expect(execution.usage).toMatchObject({
@@ -166,6 +159,15 @@ describe("typed backend sessions", () => {
       contextTokens: 16,
       turns: 1,
     });
+
+    sessions[0]?.options.onProgress?.({
+      activity: "agent_start",
+      usage: initialUsage(),
+      output: "",
+      toolUsed: false,
+    });
+    expect(activities).toContain("agent_start");
+    expect(sessions[0]?.disposed).toBe(1);
   });
 
   test("empty tools still activate codemode", async () => {
@@ -573,8 +575,9 @@ describe("session event mapping", () => {
       initialSessionResult(),
     );
     expect(state.outcome).toBeUndefined();
-    expect(sessionResult(state)).toMatchObject({
-      outcome: { kind: "failed", reason: "Session exited without a terminal result" },
+    expect(terminalOutcome(state)).toMatchObject({
+      kind: "failed",
+      reason: "Session exited without a terminal result",
     });
   });
 

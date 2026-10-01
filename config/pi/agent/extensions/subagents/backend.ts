@@ -88,6 +88,10 @@ export function initialSessionResult(): SessionResultState {
   return { usage: initialUsage(), output: "", toolUsed: false };
 }
 
+export function terminalOutcome(state: SessionResultState): Outcome {
+  return state.outcome ?? { kind: "failed", reason: "Session exited without a terminal result" };
+}
+
 function assistantText(message: AssistantMessage): string | undefined {
   const texts: string[] = [];
   for (const block of message.content) if (block.type === "text") texts.push(block.text);
@@ -261,10 +265,7 @@ async function createPiSession(options: WorkerSessionOptions): Promise<WorkerSes
         unsubscribe();
       }
       return {
-        outcome: state.outcome ?? {
-          kind: "failed",
-          reason: "Session exited without a terminal result",
-        },
+        outcome: terminalOutcome(state),
         output: state.output,
         usage: state.usage,
         toolUsed: state.toolUsed,
