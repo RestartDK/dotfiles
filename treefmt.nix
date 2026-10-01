@@ -6,7 +6,6 @@ let
     "config/karabiner/src/*.ts"
     "config/opencode/plugins/*.js"
     "config/pi/agent/lib/*.ts"
-    "packages/pi-profiled/*.mjs"
     "tests/pi-profiled/*.ts"
     "tests/agent-profiles/*.ts"
     "config/pi/agent/extensions/*.ts"

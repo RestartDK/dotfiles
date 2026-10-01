@@ -384,7 +384,7 @@ assert builtins.all (name: builtins.elem name (map lib.getName home.home.package
   "codex"
   "claude-code"
   "opencode"
-  "pi-profiled"
+  "pi"
   "herdr"
   "neovim"
 ];

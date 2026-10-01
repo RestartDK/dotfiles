@@ -136,8 +136,7 @@ export function reduceSessionEvent(
       const message = event.message;
       if (message.role === "toolResult") return { ...state, toolUsed: true };
       if (message.role !== "assistant") return state;
-      const toolUsed =
-        state.toolUsed || message.content.some((block) => block.type === "toolCall");
+      const toolUsed = state.toolUsed || message.content.some((block) => block.type === "toolCall");
       const usage: UsageStats = {
         input: state.usage.input + message.usage.input,
         output: state.usage.output + message.usage.output,

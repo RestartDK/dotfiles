@@ -15,7 +15,7 @@ let
   availableAgentPackages = {
     inherit (llmAgents) agent-browser codex opencode;
     "claude-code" = llmAgents.claude-code;
-    "pi-coding-agent" = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.pi-profiled;
+    "pi-coding-agent" = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.pi;
   };
   agentPackages = map (
     name:

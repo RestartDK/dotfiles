@@ -91,10 +91,10 @@ assert builtins.all (
     == home.lib.file.mkOutOfStoreSymlink "${home.my.liveConfig.repoRoot}/config/pi/agent/lib"
   && builtins.any (
     package:
-    package.drvPath == self.packages.${system}.pi-profiled.drvPath
-    || pkgs.lib.hasInfix (builtins.unsafeDiscardStringContext "${
-      self.packages.${system}.pi-profiled
-    }/bin/pi") (package.text or "")
+    package.drvPath == self.packages.${system}.pi.drvPath
+    || pkgs.lib.hasInfix (builtins.unsafeDiscardStringContext "${self.packages.${system}.pi}/bin/pi") (
+      package.text or ""
+    )
   ) home.home.packages
   && !(home.home.file ? ".pi/agent/auth.json")
 ) owners;
@@ -102,7 +102,7 @@ pkgs.runCommand "agent-profile-tests"
   {
     nativeBuildInputs = [
       pkgs.bun
-      self.packages.${pkgs.stdenv.hostPlatform.system}.pi-profiled
+      self.packages.${pkgs.stdenv.hostPlatform.system}.pi
     ];
   }
   ''
