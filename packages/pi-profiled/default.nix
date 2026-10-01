@@ -23,19 +23,9 @@ let
     ];
   };
 in
-assert lib.assertMsg (
-  upstream.version == "0.99.1"
-) "pi-profiled must be reviewed against the new Pi version before updating";
 upstream.overrideAttrs (old: {
   pname = "pi-profiled";
-  patches = (old.patches or [ ]) ++ [ ./core-policy.patch ];
-  patchFlags = [
-    "-p1"
-    "--fuzz=0"
-  ];
   preInstall = ''
-    patch --batch -d node_modules/@earendil-works/pi-ai -p1 --fuzz=0 < ${./attempt-policy.patch}
-    ${bun}/bin/bun build ${../../config/pi/agent/lib}/pi-policy.ts --target=bun --external '@earendil-works/*' --outfile dist/core/dstack-policy.js
     mkdir -p node_modules
     ln -sfn ${typescript}/lib/node_modules/typescript node_modules/typescript
     node ${./typecheck.mjs} "$PWD" ${typecheckSource} ${bunTypes}
@@ -44,11 +34,7 @@ upstream.overrideAttrs (old: {
     cp -R ${../../config/agents/model-profiles} policy-check/profiles
     PI_POLICY_TEST_PROFILES="$PWD/policy-check/profiles" \
       PI_POLICY_TEST_EXTENSION="${typecheckSource}/config/pi/agent/extensions/subagents/index.ts" \
-      ${bun}/bin/bun test policy-check/tests/runtime.test.ts policy-check/tests/attempts.test.ts policy-check/tests/dispatch.test.ts
+      ${bun}/bin/bun test policy-check/tests/dispatch.test.ts
   ''
   + (old.preInstall or "");
-  postInstall = (old.postInstall or "") + ''
-    PI_POLICY_TEST_PROFILES="$PWD/policy-check/profiles" PI_POLICY_TEST_BINARY="$out/bin/pi" \
-      ${bun}/bin/bun test policy-check/tests/cli.test.ts
-  '';
 })

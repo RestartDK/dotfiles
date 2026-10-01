@@ -36,7 +36,6 @@ import {
   type ResolvedRoute,
 } from "../../lib/model-policy";
 import { initialUsage, type UsageStats } from "./protocol";
-import { authorizeSessionPolicy } from "../../lib/session-policy";
 import { fleetStatus, modelLabel, renderFleet, singleLine, type FleetRun } from "./fleet";
 
 type JsonRecord = Record<string, unknown>;
@@ -924,7 +923,6 @@ export default function (pi: ExtensionAPI) {
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const policy = loadPolicy();
-      authorizeSessionPolicy(ctx.sessionManager, policy.profile);
       if (ctx.hasUI) fleetCtx = ctx;
       const config = readConfig(ctx.cwd, ctx.isProjectTrusted());
       const hasSingle = typeof params.task === "string" && params.task.trim().length > 0;

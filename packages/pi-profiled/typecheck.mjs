@@ -58,7 +58,6 @@ const projects = [
 ];
 try {
   mkdirSync(declarations, { recursive: true });
-  writeFileSync(join(declarations, "dstack-policy.d.ts"), 'export * from "./pi-policy.js";\n');
   for (const project of projects) {
     writeFileSync(config, JSON.stringify(project));
     const result = spawnSync(
