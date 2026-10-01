@@ -193,9 +193,19 @@ async function createPiSession(options: WorkerSessionOptions): Promise<WorkerSes
   });
   await resourceLoader.reload();
   const modelRuntime = await ModelRuntime.create();
-  const model = modelRuntime.getModel(options.target.provider, options.target.id);
-  if (!model)
+  const target = modelRuntime.getModel(options.target.provider, options.target.id);
+  if (!target)
     throw new Error(`Unknown worker model ${options.target.provider}/${options.target.id}.`);
+  modelRuntime.registerVirtualModel({
+    provider: "worker",
+    id: "pinned",
+    name: "Worker",
+    thinkingLevels: [options.target.thinking],
+    contextWindow: target.contextWindow,
+    maxTokens: target.maxTokens,
+    route: () => ({ model: target, thinkingLevel: options.target.thinking }),
+  });
+  const model = modelRuntime.getModel("worker", "pinned") ?? target;
   const { session } = await createAgentSession({
     cwd: options.cwd,
     agentDir,

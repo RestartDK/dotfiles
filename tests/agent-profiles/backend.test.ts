@@ -45,7 +45,7 @@ function profilePolicy(profile: string): Record<string, unknown> {
   const roles = policy.roles as Record<string, unknown>;
   routes.fallback = [
     { kind: "pi", model: "openrouter/z-ai/glm-5.3-flash", thinking: "max" },
-    { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
+    { kind: "pi", model: "openai/gpt-6-astra", thinking: "xhigh" },
   ];
   roles["fallback-role"] = { kind: "single", route: "fallback" };
   return policy;
@@ -121,7 +121,7 @@ describe("typed backend sessions", () => {
     script(
       result({
         output: "done",
-        actualModel: "openai-codex/gpt-6-astra",
+        actualModel: "openai/gpt-6-astra",
         usage: {
           input: 5,
           output: 8,
@@ -141,7 +141,7 @@ describe("typed backend sessions", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.options).toMatchObject({
       cwd: task.cwd,
-      target: { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+      target: { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
       systemPrompt: "preset instruction",
       tools: ["read", "grep", "codemode"],
     });
@@ -149,7 +149,7 @@ describe("typed backend sessions", () => {
     expect(sessions[0]?.options.signal?.aborted).toBe(false);
     expect(sessions[0]?.text).toBe("Delegated task:\n\nReport once");
     expect(execution.outcome).toEqual({ kind: "success" });
-    expect(execution.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
+    expect(execution.actual).toEqual({ backend: "pi", model: "openai/gpt-6-astra" });
     expect(execution.usage).toMatchObject({
       input: 5,
       output: 8,
@@ -168,6 +168,21 @@ describe("typed backend sessions", () => {
     });
     expect(activities).toContain("agent_start");
     expect(sessions[0]?.disposed).toBe(1);
+  });
+
+  test("concurrent workers keep their own route targets", async () => {
+    const { runtime, task, sessions, script, policy } = setup();
+    const astra = { ...task, route: resolveRoute(policy, { role: "review" }) };
+    const deepseek = { ...task, route: resolveRoute(policy, { role: "feature" }) };
+    script(result({ output: "a" }), result({ output: "b" }));
+    await Promise.all([
+      new BackendRunner(runtime).run(astra),
+      new BackendRunner(runtime).run(deepseek),
+    ]);
+    expect(sessions.map((session) => session.options.target)).toEqual([
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "max" },
+    ]);
   });
 
   test("empty tools still activate codemode", async () => {
@@ -195,7 +210,7 @@ describe("typed backend sessions", () => {
             },
             output: "streaming",
             toolUsed: true,
-            actualModel: "openai-codex/gpt-6-astra",
+            actualModel: "openai/gpt-6-astra",
           });
           resolve(result());
         }),
@@ -210,7 +225,7 @@ describe("typed backend sessions", () => {
           execution.output === "streaming" &&
           execution.toolUsed &&
           execution.usage.input === 7 &&
-          execution.actual?.model === "openai-codex/gpt-6-astra",
+          execution.actual?.model === "openai/gpt-6-astra",
       ),
     ).toBe(true);
   });
@@ -234,7 +249,7 @@ describe("typed backend sessions", () => {
       }),
       result({
         output: "recovered",
-        actualModel: "openai-codex/gpt-6-astra",
+        actualModel: "openai/gpt-6-astra",
         usage: {
           input: 5,
           output: 6,
@@ -262,7 +277,7 @@ describe("typed backend sessions", () => {
     });
     expect(execution.outcome).toEqual({ kind: "success" });
     expect(execution.output).toBe("recovered");
-    expect(execution.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
+    expect(execution.actual).toEqual({ backend: "pi", model: "openai/gpt-6-astra" });
     expect(execution.usage).toMatchObject({
       input: 6,
       output: 8,

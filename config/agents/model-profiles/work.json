@@ -1,12 +1,12 @@
 {
   "version": 1,
   "profile": "work",
-  "parent": "astra",
+  "parent": "sol",
   "routes": {
     "astra": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
+        "model": "openai/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
@@ -20,14 +20,14 @@
     "fable": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
+        "model": "openai/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
     "sol": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-5.6-sol",
+        "model": "openai/gpt-6.1-sol",
         "thinking": "xhigh"
       }
     ],
@@ -122,23 +122,47 @@
     },
     "how-critics": {
       "kind": "panel",
-      "members": ["fable"]
+      "members": [
+        "fable"
+      ]
     },
     "arena-runners": {
       "kind": "panel",
-      "members": ["fable", "sol", "deepseek"]
+      "members": [
+        "fable",
+        "sol",
+        "deepseek"
+      ]
     },
     "arena-cross-judge": {
       "kind": "panel",
-      "members": ["fable", "sol"]
+      "members": [
+        "fable",
+        "sol"
+      ]
     },
     "architect-runners": {
       "kind": "panel",
-      "members": ["fable", "sol", "glm"]
+      "members": [
+        "fable",
+        "sol",
+        "glm"
+      ]
     },
     "interrogate-reviewers": {
       "kind": "panel",
-      "members": ["fable", "sol", "glm"]
+      "members": [
+        "fable",
+        "sol",
+        "glm"
+      ]
     }
-  }
+  },
+  "providers": [
+    "fireworks",
+    "openrouter",
+    "openai",
+    "anthropic",
+    "ollama"
+  ]
 }

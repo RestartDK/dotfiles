@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 export type Effort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-export type NativeProvider = "openai-codex" | "fireworks" | "openrouter" | "anthropic" | "ollama";
+export type NativeProvider = "openai" | "fireworks" | "openrouter" | "anthropic" | "ollama";
 export interface NativeTarget {
   kind: "pi";
   provider: NativeProvider;
@@ -14,6 +14,7 @@ export type Chain = [NativeTarget, ...NativeTarget[]];
 type Role = { kind: "single"; route: string } | { kind: "panel"; members: [string, ...string[]] };
 export interface Policy {
   profile: "work" | "personal";
+  providers: Set<NativeProvider>;
   parent: NativeTarget;
   routes: Map<string, Chain>;
   roles: Map<string, Role>;
@@ -84,7 +85,7 @@ export function parseEffort(value: unknown): Effort {
 
 function parseNativeProvider(value: string): NativeProvider {
   switch (value) {
-    case "openai-codex":
+    case "openai":
     case "fireworks":
     case "openrouter":
     case "anthropic":
@@ -119,16 +120,24 @@ export function parsePolicy(value: unknown): Policy {
   if (
     !isRecord(value) ||
     Object.keys(value).some(
-      (key) => !["version", "profile", "parent", "routes", "roles"].includes(key),
+      (key) => !["version", "profile", "providers", "parent", "routes", "roles"].includes(key),
     ) ||
     value.version !== 1 ||
     (value.profile !== "work" && value.profile !== "personal") ||
+    !Array.isArray(value.providers) ||
     typeof value.parent !== "string" ||
     !isRecord(value.routes) ||
     !isRecord(value.roles)
   )
     return invalid("expected version 1, profile, parent route, routes and roles");
   const profile = value.profile;
+  const providers = new Set<NativeProvider>();
+  for (const provider of value.providers as unknown[]) {
+    const parsed = parseNativeProvider(typeof provider === "string" ? provider : "");
+    if (providers.has(parsed)) return invalid(`duplicate provider ${parsed}`);
+    providers.add(parsed);
+  }
+  if (providers.size === 0) return invalid("expected at least one provider");
   const routes = new Map<string, Chain>();
   for (const [name, raw] of Object.entries(value.routes)) {
     if (!/^[a-z][a-z0-9-]*$/.test(name) || !Array.isArray(raw) || raw.length > 4)
@@ -141,6 +150,9 @@ export function parsePolicy(value: unknown): Policy {
         parsed.length
     )
       return invalid(`empty or duplicate route ${name}`);
+    for (const backend of parsed)
+      if (!providers.has(backend.provider))
+        return invalid(`route ${name} uses ${backend.provider}`);
     routes.set(name, [first, ...rest]);
   }
   const roles = new Map<string, Role>();
@@ -170,7 +182,8 @@ export function parsePolicy(value: unknown): Policy {
   const parentChain = routes.get(value.parent);
   if (!parentChain || parentChain.length !== 1)
     return invalid("parent must reference one native Pi target with no fallback chain");
-  return { profile, parent: parentChain[0], routes, roles };
+  if (!providers.has(parentChain[0].provider)) return invalid("parent provider is not declared");
+  return { profile, providers, parent: parentChain[0], routes, roles };
 }
 
 export function loadPolicy(
