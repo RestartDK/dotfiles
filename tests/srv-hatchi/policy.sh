@@ -44,9 +44,11 @@ reject verify srv-hatchi --vm-test
 for node in srv-nana srv-hatchi; do
   reject deploy "$node" --dry-run --dry-run
   reject deploy "$node" --remote-build --remote-build
+  reject deploy "$node" --skip-checks --skip-checks
   reject deploy "$node" --remote-build true
+  reject deploy "$node" --skip-checks true
   reject deploy "$node" --remote-build --dry-run extra
-  for flag in --hostname=other --auto-rollback=false --targets=srv-nana --skip-checks --remote-build=true --; do
+  for flag in --hostname=other --auto-rollback=false --targets=srv-nana --remote-build=true --; do
     reject deploy "$node" "$flag"
     reject deploy "$node" --remote-build "$flag"
   done
@@ -128,6 +130,12 @@ for node in srv-nana srv-hatchi; do
   diff -u "$TMPDIR/expected" "$NIX_CALLS"
   invoke 0 deploy "$node" --remote-build
   printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --remote-build >"$TMPDIR/expected"
+  diff -u "$TMPDIR/expected" "$NIX_CALLS"
+  invoke 0 deploy "$node" --skip-checks
+  printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --skip-checks >"$TMPDIR/expected"
+  diff -u "$TMPDIR/expected" "$NIX_CALLS"
+  invoke 0 deploy "$node" --remote-build --skip-checks
+  printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --remote-build --skip-checks >"$TMPDIR/expected"
   diff -u "$TMPDIR/expected" "$NIX_CALLS"
   invoke 0 deploy "$node" --remote-build --dry-run
   printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --remote-build --dry-activate >"$TMPDIR/expected"
