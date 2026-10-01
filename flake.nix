@@ -393,6 +393,12 @@
         sshOpts = [
           "-o"
           "StrictHostKeyChecking=yes"
+          "-o"
+          "ConnectTimeout=15"
+          "-o"
+          "ServerAliveInterval=15"
+          "-o"
+          "ServerAliveCountMax=3"
         ];
         nodes = {
           srv-nana = {
