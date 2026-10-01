@@ -67,6 +67,7 @@ const transports = {
     { api: "anthropic-messages", baseUrl: "https://api.fireworks.ai/inference" },
   ],
   openrouter: [{ api: "openai-completions", baseUrl: "https://openrouter.ai/api/v1" }],
+  anthropic: [{ api: "anthropic-messages", baseUrl: "https://api.anthropic.com" }],
   ollama: [{ api: "openai-completions", baseUrl: "http://127.0.0.1:11434/v1" }],
 } satisfies Record<NativeProvider, { api: Api; baseUrl: string }[]>;
 

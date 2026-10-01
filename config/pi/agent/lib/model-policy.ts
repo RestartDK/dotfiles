@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 export type Effort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-export type NativeProvider = "openai-codex" | "fireworks" | "openrouter" | "ollama";
+export type NativeProvider = "openai-codex" | "fireworks" | "openrouter" | "anthropic" | "ollama";
 export interface NativeTarget {
   kind: "pi";
   provider: NativeProvider;
@@ -88,6 +88,7 @@ function parseNativeProvider(value: string): NativeProvider {
     case "openai-codex":
     case "fireworks":
     case "openrouter":
+    case "anthropic":
     case "ollama":
       return value;
     default:
@@ -108,12 +109,11 @@ function parseBackend(value: unknown): Backend {
     return invalid("unsupported backend, model or thinking");
   }
   const separator = value.model.indexOf("/");
-  return {
-    kind: "pi",
-    provider: parseNativeProvider(value.model.slice(0, separator)),
-    id: value.model.slice(separator + 1),
-    thinking: parseEffort(value.thinking),
-  };
+  const provider = parseNativeProvider(value.model.slice(0, separator));
+  const id = value.model.slice(separator + 1);
+  if (provider === "openrouter" && /(^|\/)~?anthropic\//.test(id))
+    return invalid("OpenRouter Anthropic models are forbidden");
+  return { kind: "pi", provider, id, thinking: parseEffort(value.thinking) };
 }
 
 export function parsePolicy(value: unknown): Policy {

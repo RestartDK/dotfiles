@@ -202,7 +202,7 @@ describe("profile routing", () => {
   });
 });
 
-test.each(["openai/gpt-6-astra", "anthropic/claude-fable-5-1"])(
+test.each(["openai/gpt-6-astra", "google/gemini-3-pro"])(
   "policy rejects unsupported provider in %s",
   (model) => {
     const input = JSON.parse(readFileSync(join(root, "personal.json"), "utf8"));
