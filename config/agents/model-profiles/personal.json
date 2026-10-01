@@ -6,7 +6,7 @@
     "astra": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
+        "model": "openai/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
@@ -19,13 +19,8 @@
     ],
     "fable": [
       {
-        "kind": "claude-cli",
-        "model": "claude-fable-5-1",
-        "thinking": "xhigh"
-      },
-      {
         "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
+        "model": "openai/gpt-6-astra",
         "thinking": "xhigh"
       }
     ]
@@ -113,23 +108,46 @@
     },
     "how-critics": {
       "kind": "panel",
-      "members": ["fable"]
+      "members": [
+        "fable"
+      ]
     },
     "arena-runners": {
       "kind": "panel",
-      "members": ["fable", "astra", "deepseek"]
+      "members": [
+        "fable",
+        "astra",
+        "deepseek"
+      ]
     },
     "arena-cross-judge": {
       "kind": "panel",
-      "members": ["fable", "astra", "deepseek"]
+      "members": [
+        "fable",
+        "astra",
+        "deepseek"
+      ]
     },
     "architect-runners": {
       "kind": "panel",
-      "members": ["fable", "astra", "deepseek"]
+      "members": [
+        "fable",
+        "astra",
+        "deepseek"
+      ]
     },
     "interrogate-reviewers": {
       "kind": "panel",
-      "members": ["fable", "astra", "deepseek"]
+      "members": [
+        "fable",
+        "astra",
+        "deepseek"
+      ]
     }
-  }
+  },
+  "providers": [
+    "openrouter",
+    "openai",
+    "ollama"
+  ]
 }

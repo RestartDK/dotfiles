@@ -1,7 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { watch } from "node:fs/promises";
-import * as childProcess from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -32,14 +30,64 @@ import { KeybindingsManager } from "../../dist/core/keybindings.js";
 const profiles = process.env.PI_POLICY_TEST_PROFILES;
 const extension = process.env.PI_POLICY_TEST_EXTENSION;
 if (!profiles || !extension) throw new Error("Missing dispatch test profiles or extension");
-const launches = spyOn(childProcess, "spawn");
 const originalEnv = { ...process.env };
-const originalArgv = [...process.argv];
 const originalFetch = globalThis.fetch;
+const workerTarget = {
+  kind: "pi",
+  model: "openrouter/deepseek/deepseek-v4.1-flash",
+  thinking: "max",
+} as const;
+const parentTarget = {
+  kind: "pi",
+  model: "openrouter/z-ai/glm-5.3-flash",
+  thinking: "high",
+} as const;
+const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+function completion(model: string) {
+  const chunk = { id: "chatcmpl_fixture", object: "chat.completion.chunk", created: 0, model };
+  const events = [
+    {
+      ...chunk,
+      choices: [
+        {
+          index: 0,
+          delta: { role: "assistant", content: "DISPATCH_FIXTURE_ONLY" },
+          finish_reason: null,
+        },
+      ],
+    },
+    {
+      ...chunk,
+      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+      usage: { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 },
+    },
+  ];
+  return new Response(
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n",
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
 const network = spyOn(globalThis, "fetch").mockImplementation(
   Object.assign(
-    async () => {
-      throw new Error("Unexpected HTTP request");
+    async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const request = new Request(input, init);
+      if (request.url !== "https://openrouter.ai/api/v1/chat/completions")
+        throw new Error(`Unexpected HTTP destination ${request.url}`);
+      const body = (await request.json()) as Record<string, unknown>;
+      requests.push({ url: request.url, body });
+      const prompt = JSON.stringify(body);
+      if (prompt.includes("HOLD_UNTIL_STOP"))
+        return new Promise<Response>((_resolve, reject) => {
+          request.signal.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        });
+      if (prompt.includes("FAIL_DISPATCH"))
+        return new Response(JSON.stringify({ error: { message: "Fixture failed" } }), {
+          status: 418,
+          headers: { "content-type": "application/json" },
+        });
+      return completion(String(body.model));
     },
     { preconnect: originalFetch.preconnect },
   ),
@@ -57,16 +105,16 @@ let manager: SessionManager;
 const sessions: AgentSession[] = [];
 
 function profile(name: "work" | "personal") {
-  writeFileSync(
-    join(directory, "config/dstack/models.json"),
-    readFileSync(join(profiles ?? "", `${name}.json`)),
+  const policy: { parent: string; routes: Record<string, unknown> } = JSON.parse(
+    readFileSync(join(profiles ?? "", `${name}.json`), "utf8"),
   );
+  for (const route of Object.keys(policy.routes)) policy.routes[route] = [workerTarget];
+  policy.routes.parent = [parentTarget];
+  policy.parent = "parent";
+  writeFileSync(join(directory, "config/dstack/models.json"), JSON.stringify(policy));
 }
-function calls(kind: "auth" | "workers"): unknown[] {
-  return readFileSync(join(directory, `${kind}.jsonl`), "utf8")
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+function workerRequests(): Array<{ url: string; body: Record<string, unknown> }> {
+  return requests;
 }
 function tool(session: AgentSession, name = "subagents") {
   const registered = session.agent.state.tools.find((entry) => entry.name === name);
@@ -200,9 +248,7 @@ async function blocked(session: AgentSession) {
   ).rejects.toThrow(
     "AI policy cannot resume history with a different or unknown profile. Start a new session",
   );
-  expect(launches).not.toHaveBeenCalled();
-  expect(calls("auth").length).toBe(0);
-  expect(calls("workers").length).toBe(0);
+  expect(requests).toHaveLength(0);
   expect(manager.getEntries()).toEqual(entries);
 }
 
@@ -211,10 +257,8 @@ beforeEach(() => {
   process.env.HOME = directory;
   process.env.XDG_CONFIG_HOME = join(directory, "config");
   process.env.PI_CODING_AGENT_DIR = join(directory, "agent");
-  process.env.PI_DISPATCH_TEST_DIR = directory;
   process.env.PI_OFFLINE = "1";
   process.env.PI_TELEMETRY = "0";
-  process.argv[1] = join(import.meta.dir, "dispatch-child.ts");
   for (const path of ["config/dstack", "agent", ".agents/agents"])
     mkdirSync(join(directory, path), { recursive: true });
   writeFileSync(
@@ -232,11 +276,14 @@ beforeEach(() => {
     join(directory, ".agents/agents/dstack-agent.md"),
     "---\nname: dstack-agent\ndescription: Fixture worker\n---\nReturn the fixture marker.\n",
   );
-  for (const kind of ["auth", "workers"]) writeFileSync(join(directory, `${kind}.jsonl`), "");
+  writeFileSync(
+    join(directory, "agent/auth.json"),
+    JSON.stringify({ openrouter: { type: "api_key", key: "fixture" } }),
+  );
   profile("work");
   manager = SessionManager.inMemory(directory);
-  launches.mockClear();
   network.mockClear();
+  requests.length = 0;
   socketCalls = 0;
 });
 afterEach(async () => {
@@ -247,17 +294,14 @@ afterEach(async () => {
       await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
       session.dispose();
     }
-    expect(network).not.toHaveBeenCalled();
     expect(socketCalls).toBe(0);
   } finally {
-    process.argv = [...originalArgv];
     for (const key of Object.keys(process.env)) if (!(key in originalEnv)) delete process.env[key];
     Object.assign(process.env, originalEnv);
     rmSync(directory, { recursive: true, force: true });
   }
 });
 afterAll(() => {
-  launches.mockRestore();
   network.mockRestore();
   globalThis.WebSocket = originalWebSocket;
 });
@@ -282,24 +326,32 @@ for (const name of ["work", "personal"] satisfies ("work" | "personal")[]) {
     expect(result.content).toEqual([
       expect.objectContaining({ text: expect.stringContaining("1/1 succeeded") }),
     ]);
-    expect(launches).toHaveBeenCalledTimes(2);
-    expect(calls("auth").length).toBe(1);
-    expect(calls("workers")).toEqual([
-      {
-        invocation: {
-          profile: name,
-          selection: {
-            kind: "role",
-            role: "feature",
-            member: name === "work" ? "astra" : "deepseek",
-          },
-          attempt: 0,
-        },
-        task: "Delegated task:\n\nUNCHANGED_PROFILE",
-      },
-    ]);
+    expect(workerRequests()).toHaveLength(1);
+    expect(workerRequests()[0]?.body).toMatchObject({
+      model: "deepseek/deepseek-v4.1-flash",
+      reasoning: { effort: "max" },
+    });
+    expect(JSON.stringify(workerRequests()[0]?.body)).toContain("UNCHANGED_PROFILE");
   });
 }
+
+test("dispatch rejects a thinking downgrade and never opens a session", async () => {
+  const session = await create(manager);
+  const result = await tool(session).execute("dispatch-thinking", {
+    agent: "dstack-agent",
+    role: "feature",
+    task: "THINKING_OVERRIDE",
+    tools: [],
+    thinking: "low",
+  });
+  expect(result.isError).toBe(true);
+  expect(result.content).toEqual([
+    expect.objectContaining({
+      text: expect.stringContaining("Thinking overrides are forbidden"),
+    }),
+  ]);
+  expect(workerRequests()).toHaveLength(0);
+});
 
 for (const history of [false, true]) {
   test(`unmarked session rejects dispatch with history=${history}`, async () => {
@@ -342,15 +394,15 @@ test("stale session can join an existing background dispatch", async () => {
   expect(result.content).toEqual([
     expect.objectContaining({ text: expect.stringContaining("1/1 succeeded") }),
   ]);
-  expect(calls("auth").length).toBe(1);
-  expect(calls("workers").length).toBe(1);
+  expect(workerRequests()).toHaveLength(1);
 });
 
 test("stale session can stop and join an existing running dispatch", async () => {
   const session = await create(manager);
-  const watcher = watch(join(directory, "workers.jsonl"), { signal: AbortSignal.timeout(5000) });
   const started = (async () => {
-    for await (const _event of watcher) if (calls("workers").length > 0) return;
+    for (let attempt = 0; attempt < 500 && workerRequests().length === 0; attempt++)
+      await Bun.sleep(10);
+    expect(workerRequests().length).toBeGreaterThan(0);
   })();
   await tool(session).execute("background", {
     role: "feature",
@@ -362,14 +414,13 @@ test("stale session can stop and join an existing running dispatch", async () =>
   profile("personal");
   const stopped = await tool(session, "subagents_runs").execute("stop", { action: "stop" });
   expect(stopped.content).toEqual([
-    expect.objectContaining({ text: expect.stringContaining("SIGTERM sent") }),
+    expect.objectContaining({ text: expect.stringContaining("stop requested") }),
   ]);
   const joined = await tool(session, "subagents_runs").execute("join", { action: "join" });
   expect(joined.content).toEqual([
     expect.objectContaining({ text: expect.stringContaining("Cancelled by parent") }),
   ]);
-  expect(calls("auth").length).toBe(1);
-  expect(calls("workers").length).toBe(1);
+  expect(workerRequests()).toHaveLength(1);
 });
 
 test("foreground workers use native activity, resize safely, and never become background handles", async () => {
@@ -400,7 +451,7 @@ test("foreground workers use native activity, resize safely, and never become ba
     }
     view.width = 80;
     expect(view.text).toContain("Inspect 漢字 auth module");
-    expect(view.text).toContain("Astra");
+    expect(view.text).toContain("DeepSeek");
     const status = await tool(session, "subagents_runs").execute("status", { action: "status" });
     expect(status.content).toEqual([{ type: "text", text: "No background runs." }]);
   } finally {
@@ -649,7 +700,7 @@ for (const marker of ["unmarked", "personal", null]) {
     const entries = manager.getEntries();
     await expect(create(manager)).rejects.toThrow("different or unknown profile");
     expect(manager.getEntries()).toEqual(entries);
-    expect(launches).not.toHaveBeenCalled();
+    expect(requests).toHaveLength(0);
   });
 }
 
@@ -691,6 +742,6 @@ for (const mode of ["resume", "fork"]) {
     profile("personal");
     await expect(create(restored)).rejects.toThrow("different or unknown profile");
     expect(restored.getEntries()).toEqual(entries);
-    expect(launches).not.toHaveBeenCalled();
+    expect(requests).toHaveLength(0);
   });
 }

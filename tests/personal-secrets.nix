@@ -101,7 +101,7 @@ pkgs.runCommand "personal-secrets-tests"
       pkgs.bash
       pkgs.coreutils
       pkgs.jq
-      self.packages.${pkgs.stdenv.hostPlatform.system}.pi-profiled
+      self.packages.${pkgs.stdenv.hostPlatform.system}.pi
     ];
     MODELS_FILE = nativeHome.home.file.".pi/agent/models.json".source;
     BASE_MODELS = ../config/pi/agent/models.json;

@@ -20,6 +20,35 @@ let
         }
       ];
     }).config;
+  piAiStub = pkgs.runCommand "pi-ai-resolution-stub" { } ''
+    mkdir -p $out/node_modules/@earendil-works/pi-ai
+    cat > $out/node_modules/@earendil-works/pi-ai/package.json <<'EOF'
+    { "name": "@earendil-works/pi-ai", "version": "0.0.0", "type": "module", "main": "index.js" }
+    EOF
+    cat > $out/node_modules/@earendil-works/pi-ai/index.js <<'EOF'
+    export function clampThinkingLevel() {
+      throw new Error("pi-ai is a resolution stub in the agent-profiles check");
+    }
+    EOF
+  '';
+  piCodingAgentStub = pkgs.runCommand "pi-coding-agent-resolution-stub" { } ''
+    mkdir -p $out/node_modules/@earendil-works/pi-coding-agent
+    cat > $out/node_modules/@earendil-works/pi-coding-agent/package.json <<'EOF'
+    { "name": "@earendil-works/pi-coding-agent", "version": "0.0.0", "type": "module", "main": "index.js" }
+    EOF
+    cat > $out/node_modules/@earendil-works/pi-coding-agent/index.js <<'EOF'
+    export const CONFIG_DIR_NAME = ".pi";
+    export function DefaultResourceLoader() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function ModelRuntime() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function SessionManager() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function SettingsManager() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function createAgentSession() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function createCodemodeExtension() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function getAgentDir() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function keyHint() { throw new Error("pi-coding-agent is a resolution stub"); }
+    export function parseFrontmatter() { throw new Error("pi-coding-agent is a resolution stub"); }
+    EOF
+  '';
   owners = [
     {
       home = macHome "dkumlin-macbook-pro";
@@ -80,10 +109,10 @@ assert builtins.all (
     == home.lib.file.mkOutOfStoreSymlink "${home.my.liveConfig.repoRoot}/config/pi/agent/lib"
   && builtins.any (
     package:
-    package.drvPath == self.packages.${system}.pi-profiled.drvPath
-    || pkgs.lib.hasInfix (builtins.unsafeDiscardStringContext "${
-      self.packages.${system}.pi-profiled
-    }/bin/pi") (package.text or "")
+    package.drvPath == self.packages.${system}.pi.drvPath
+    || pkgs.lib.hasInfix (builtins.unsafeDiscardStringContext "${self.packages.${system}.pi}/bin/pi") (
+      package.text or ""
+    )
   ) home.home.packages
   && !(home.home.file ? ".pi/agent/auth.json")
 ) owners;
@@ -91,12 +120,17 @@ pkgs.runCommand "agent-profile-tests"
   {
     nativeBuildInputs = [
       pkgs.bun
-      self.packages.${pkgs.stdenv.hostPlatform.system}.pi-profiled
+      self.packages.${pkgs.stdenv.hostPlatform.system}.pi
     ];
   }
   ''
     export HOME=$TMPDIR
-    cd ${../.}
+    cp -R ${../config} $TMPDIR/config
+    cp -R ${../tests} $TMPDIR/tests
+    cp -R ${piAiStub}/node_modules $TMPDIR/
+    chmod -R u+w $TMPDIR/node_modules
+    cp -R ${piCodingAgentStub}/node_modules/@earendil-works/pi-coding-agent $TMPDIR/node_modules/@earendil-works/
+    cd $TMPDIR
     bun test tests/agent-profiles
     touch $out
   ''

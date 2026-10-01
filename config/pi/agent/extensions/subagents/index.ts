@@ -26,7 +26,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
-import { BackendRunner, instructionFiles, type Attempt, type Execution } from "./backend";
+import { BackendRunner, type Attempt, type Execution } from "./backend";
 import {
   backendLabel,
   describePolicy,
@@ -36,7 +36,6 @@ import {
   type ResolvedRoute,
 } from "../../lib/model-policy";
 import { initialUsage, type UsageStats } from "./protocol";
-import { authorizeSessionPolicy } from "../../lib/session-policy";
 import { fleetStatus, modelLabel, renderFleet, singleLine, type FleetRun } from "./fleet";
 
 type JsonRecord = Record<string, unknown>;
@@ -66,7 +65,6 @@ interface ResolvedWorkerTask {
   tools: string[];
   systemPrompt: string;
   cwd: string;
-  contextFiles: string[];
 }
 
 interface WorkerResult {
@@ -79,7 +77,6 @@ interface WorkerResult {
   tools: string[];
   cwd: string;
   outcome: Execution["outcome"];
-  stderr: string;
   output: string;
   usage: UsageStats;
 }
@@ -93,7 +90,6 @@ type RunId = string & { readonly __brand: "RunId" };
 
 interface RunAccumulator {
   usage: UsageStats;
-  stderr: string;
   output: string;
   actual?: Execution["actual"];
   activity?: Execution["activity"];
@@ -143,7 +139,6 @@ const MAX_TASKS = 8;
 const OUTPUT_CAP_BYTES = 50 * 1024;
 const MAX_TERMINAL_RUNS = 16;
 const MAX_LIVE_RUNS = 8;
-const STDERR_CAP_BYTES = 16 * 1024;
 const WRITE_TOOLS = new Set(["edit", "write"]);
 const DEFAULT_TOOLS = ["read", "grep", "find", "ls", "bash"];
 
@@ -395,7 +390,6 @@ function resolveWorkerTask(
     tools,
     systemPrompt: promptParts.join("\n\n"),
     cwd,
-    contextFiles: instructionFiles(cwd, getAgentDir()),
   };
 }
 
@@ -414,7 +408,6 @@ async function runWorker(
     if (live)
       Object.assign(live, {
         usage: execution.usage,
-        stderr: execution.stderr,
         output: execution.output,
         actual: execution.actual,
         activity: execution.activity,
@@ -431,15 +424,9 @@ async function runWorker(
     attempts: result.attempts,
     actual: result.actual,
     outcome: result.outcome,
-    stderr: result.stderr,
     output: result.output,
     usage: result.usage,
   };
-}
-
-function tailCap(text: string, capBytes: number): string {
-  while (Buffer.byteLength(text, "utf-8") > capBytes) text = text.slice(Math.ceil(text.length / 2));
-  return text;
 }
 
 const runRegistry = new Map<RunId, RunRecord>();
@@ -496,7 +483,6 @@ function evictTerminalRuns() {
 }
 
 function transitionRun(run: RunMetadata, result: WorkerResult): TerminalRun {
-  result.stderr = tailCap(result.stderr, STDERR_CAP_BYTES);
   const terminal: TerminalRun = {
     status:
       result.outcome.kind === "cancelled" ? "stopped" : isFailed(result) ? "failed" : "completed",
@@ -528,7 +514,7 @@ function launchRun(
     writeCapable: workerHasWriteTools(task),
     startedAt: Date.now(),
     abort: new AbortController(),
-    live: { usage: initialUsage(), stderr: "", output: "", attempts: [] },
+    live: { usage: initialUsage(), output: "", attempts: [] },
     joined: false,
   };
   const run: RunningRun = {
@@ -747,10 +733,8 @@ function formatResults(results: WorkerResult[]): string {
       }
     }
     const error = reason ? `\nerror: ${reason}` : "";
-    const cleanStderr = cleanTerminalOutput(result.stderr);
-    const stderr = cleanStderr ? `\nstderr:\n${cleanStderr}` : "";
-    const output = truncateOutput(result.output || reason || cleanStderr || "(no output)");
-    return `## ${result.name} ${status}${model}${usageLine}${error}${stderr}\n\n${output}`;
+    const output = truncateOutput(result.output || reason || "(no output)");
+    return `## ${result.name} ${status}${model}${usageLine}${error}\n\n${output}`;
   });
 
   return `subagents: ${succeeded}/${results.length} succeeded\n\n${sections.join("\n\n---\n\n")}`;
@@ -850,7 +834,7 @@ const SubagentsParams = Type.Object({
 const SubagentsRunsParams = Type.Object({
   action: Type.Union([Type.Literal("join"), Type.Literal("status"), Type.Literal("stop")], {
     description:
-      "join: block until the runs finish and return the same report as a synchronous subagents call. status: non-blocking snapshot. stop: SIGTERM live children; safe to repeat.",
+      "join: block until the runs finish and return the same report as a synchronous subagents call. status: non-blocking snapshot. stop aborts the live worker sessions; safe to repeat.",
   }),
   runIds: Type.Optional(
     Type.Array(Type.String(), {
@@ -913,7 +897,7 @@ export default function (pi: ExtensionAPI) {
     description: [
       "Spawn isolated workers using the host's global billing profile and role routes.",
       "Managed dstack agents must select role, never model. Panels require member or zero-based seat. Thinking overrides are rejected.",
-      "Claude subscription workers provide mapped built-in tools only, without Pi extensions or MCP. Unsupported tools block dispatch. Output is bounded to 50 KiB.",
+      "Workers run native Pi sessions with the route's exact provider, model and effort; the codemode tool is always available and output is bounded to 50 KiB.",
       describePolicy(),
       "Use this only when the user explicitly asks for subagents, delegation, orchestration, parallel workers, or a second model opinion.",
       "The current Pi session/model is the orchestrator; this tool runs child workers with their own models/tools/prompts and returns their outputs.",
@@ -939,7 +923,6 @@ export default function (pi: ExtensionAPI) {
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const policy = loadPolicy();
-      authorizeSessionPolicy(ctx.sessionManager, policy.profile);
       if (ctx.hasUI) fleetCtx = ctx;
       const config = readConfig(ctx.cwd, ctx.isProjectTrusted());
       const hasSingle = typeof params.task === "string" && params.task.trim().length > 0;
@@ -1140,7 +1123,7 @@ export default function (pi: ExtensionAPI) {
       "Manage background runs launched by the subagents tool with background=true.",
       "join blocks until the given runs (or all unjoined runs when runIds is omitted) reach a terminal state and returns the same per-worker report as a synchronous subagents call; interrupting a join detaches and the children keep running.",
       "status returns a non-blocking snapshot with live usage counters.",
-      "stop SIGTERMs the live children of the given runs (all live runs when runIds is omitted); it is idempotent and reports already-terminal runs.",
+      "stop aborts the live worker sessions of the given runs (all live runs when runIds is omitted); it is idempotent and reports already-terminal runs.",
     ].join("\n"),
     parameters: SubagentsRunsParams,
     renderCall(args, theme) {
@@ -1205,7 +1188,7 @@ export default function (pi: ExtensionAPI) {
         refreshFleetWidget();
         ensureFleetTimer();
         const lines = [
-          ...signaled.map((id) => `${id}: SIGTERM sent (was running).`),
+          ...signaled.map((id) => `${id}: stop requested (was running).`),
           ...alreadyTerminal.map((run) => `${run.id}: already terminal (${run.status}).`),
         ];
         return { content: [{ type: "text", text: lines.join("\n") }], details: { results: [] } };

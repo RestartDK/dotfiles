@@ -6,8 +6,6 @@ import {
   backendModel,
   loadPolicy,
   parsePolicy,
-  parseWorkerInvocation,
-  resolveWorkerInvocation,
   resolveRoute,
 } from "../../config/pi/agent/lib/model-policy";
 
@@ -16,13 +14,13 @@ const policy = (profile: string) =>
   parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
 
 describe("profile routing", () => {
-  test("work resolves Codex routes and ordered subscription-first fallback", () => {
+  test("work resolves Codex routes and keeps fable pi-only", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "precise-code" }).chain).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-5.6-sol", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6.1-sol", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
       {
@@ -33,8 +31,7 @@ describe("profile routing", () => {
       },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
-      { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" },
-      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
 
@@ -44,10 +41,9 @@ describe("profile routing", () => {
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
-      "claude-fable-5-1",
-      "openai-codex/gpt-6-astra",
+      "openai/gpt-6-astra",
     ]);
-    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
+    expect(() => resolveRoute(personal, { model: "openai/gpt-5.6-sol:xhigh" })).toThrow(
       "not allowed",
     );
   });
@@ -57,7 +53,7 @@ describe("profile routing", () => {
     expect(() => resolveRoute(work, { role: "arena-runners" })).toThrow("member or seat");
     expect(
       backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
-    ).toBe("openai-codex/gpt-5.6-sol");
+    ).toBe("openai/gpt-6.1-sol");
     expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
       "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
     );
@@ -113,16 +109,9 @@ describe("profile routing", () => {
 
   test("raw requests preserve declared chains and effort", () => {
     const work = policy("work");
-    expect(
-      resolveRoute(work, { model: "claude-cli/claude-fable-5-1:xhigh" }).chain.map(backendModel),
-    ).toEqual(["claude-fable-5-1", "openai-codex/gpt-6-astra"]);
-    expect(resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
-    expect(() => resolveRoute(work, { model: "openai-codex/undeclared:xhigh" })).toThrow(
-      "not allowed",
-    );
-    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:high" })).toThrow(
-      "not allowed",
-    );
+    expect(resolveRoute(work, { model: "openai/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
+    expect(() => resolveRoute(work, { model: "openai/undeclared:xhigh" })).toThrow("not allowed");
+    expect(() => resolveRoute(work, { model: "openai/gpt-6-astra:high" })).toThrow("not allowed");
   });
 
   test("global policy is reloaded and honors XDG_CONFIG_HOME", () => {
@@ -150,7 +139,7 @@ describe("profile routing", () => {
     for (const path of readdirSync(directory, { recursive: true, encoding: "utf8" })) {
       if (path.endsWith(".md"))
         expect(readFileSync(join(directory, path), "utf8")).not.toMatch(
-          /(?:anthropic|openai|openai-codex|openrouter|fireworks)\/(?:claude-|gpt-|deepseek\/|z-ai\/|accounts\/fireworks\/models\/)/,
+          /(?:anthropic|openai|openai|openrouter|fireworks)\/(?:claude-|gpt-|deepseek\/|z-ai\/|accounts\/fireworks\/models\/)/,
         );
     }
   });
@@ -176,8 +165,7 @@ describe("profile routing", () => {
     };
     const malformed = [
       { ...valid, version: 2 },
-      { ...valid, parent: "fable" },
-      { ...valid, parent: { kind: "claude-cli", model: "claude-fable-5-1", thinking: "xhigh" } },
+      { ...valid, parent: "missing-route" },
       { ...valid, fallback: "auto" },
       { ...valid, routes: { ...valid.routes, fable: [] } },
       {
@@ -185,8 +173,8 @@ describe("profile routing", () => {
         routes: {
           ...valid.routes,
           astra: [
-            { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
-            { thinking: "high", model: "openai-codex/gpt-6-astra", kind: "pi" },
+            { kind: "pi", model: "openai/gpt-6-astra", thinking: "xhigh" },
+            { thinking: "high", model: "openai/gpt-6-astra", kind: "pi" },
           ],
         },
       },
@@ -208,7 +196,7 @@ describe("profile routing", () => {
   });
 });
 
-test.each(["openai/gpt-6-astra", "anthropic/claude-fable-5-1"])(
+test.each(["mistral/mistral-large", "google/gemini-3-pro"])(
   "policy rejects unsupported provider in %s",
   (model) => {
     const input = JSON.parse(readFileSync(join(root, "personal.json"), "utf8"));
@@ -218,45 +206,3 @@ test.each(["openai/gpt-6-astra", "anthropic/claude-fable-5-1"])(
     );
   },
 );
-
-test("worker invocation parses once and resolves its exact native attempt", () => {
-  const input = {
-    profile: "work",
-    selection: { kind: "role", role: "precise-code", member: "sol" },
-    attempt: 0,
-  } as const;
-  const invocation = parseWorkerInvocation(input);
-  expect(invocation).toEqual(input);
-  expect(resolveWorkerInvocation(policy("work"), invocation)).toEqual({
-    kind: "pi",
-    provider: "openai-codex",
-    id: "gpt-5.6-sol",
-    thinking: "xhigh",
-  });
-  expect(() => resolveWorkerInvocation(policy("personal"), invocation)).toThrow(
-    "changed worker profile",
-  );
-  expect(() =>
-    resolveWorkerInvocation(policy("work"), {
-      ...invocation,
-      selection: { kind: "role", role: "review", member: "fable" },
-    }),
-  ).toThrow("native Pi target");
-});
-
-test("worker invocation rejects untyped extra fields and invalid attempts", () => {
-  const input = {
-    profile: "work",
-    selection: { kind: "role", role: "precise-code", member: "sol" },
-    attempt: 0,
-  } as const;
-  for (const invalid of [
-    { ...input, profile: "other" },
-    { ...input, attempt: -1 },
-    { ...input, attempt: 0.5 },
-    { ...input, model: "override" },
-    { ...input, selection: { ...input.selection, model: "override" } },
-    { ...input, selection: { kind: "unknown" } },
-  ])
-    expect(() => parseWorkerInvocation(invalid)).toThrow("AI policy");
-});
