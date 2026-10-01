@@ -223,4 +223,8 @@ test.each([
     backendModel(active.parent),
     ...[...active.providers].map((provider) => `${provider}/*`),
   ]);
+  expect(settings.defaultModel).toBe(backendModel(active.parent));
+  expect(settings.modelThinkingLevels).toEqual({
+    [backendModel(active.parent)]: profileName === "personal" ? "high" : "xhigh",
+  });
 });
