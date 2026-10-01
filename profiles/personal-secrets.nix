@@ -1,32 +1,20 @@
 { userName }:
 {
   config,
-  inputs,
-  lib,
-  pkgs,
   ...
 }:
-
 let
-  user = config.users.users.${userName};
-  secrets = config.services.onepassword-secrets;
+  home = config.users.users.${userName}.home;
 in
 {
-  services.onepassword-secrets = {
-    enable = true;
-    tokenFile = "/etc/opnix-token";
-    secrets.openrouterApiKey = {
+  imports = [ ../modules/secrets.nix ];
+
+  my.secrets = {
+    inherit userName;
+    keys.openrouterApiKey = {
       reference = "op://abdtxvj44nyypdbkbehdg4qbfq/jrx6q4cloqzx25ciits7qeipym/credential";
-      path = "${user.home}/.opnix-openrouter-api-key";
-      owner = userName;
-      group = if pkgs.stdenv.hostPlatform.isDarwin then "staff" else user.group;
-      mode = "0400";
+      path = "${home}/.opnix-openrouter-api-key";
+      consumers = [ "piKeyFile" ];
     };
   };
-
-  environment.systemPackages = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-    inputs.opnix.packages.${pkgs.stdenv.hostPlatform.system}.default
-  ];
-
-  home-manager.users.${userName}.my.ai.openrouterKeyFile = secrets.secretPaths.openrouterApiKey;
 }
