@@ -12,7 +12,8 @@ import {
   truncateToWidth,
   type TUI,
 } from "@earendil-works/pi-tui";
-import { renderStatusLine } from "./status-line.ts";
+import { renderBar, renderStatusLine } from "./status-line.ts";
+import { countdown, fetchUsageWindows, type UsageWindow } from "./usage.ts";
 
 type VimMode = "normal" | "insert";
 type PiEditorFactory = (
@@ -47,6 +48,54 @@ function modeChip(theme: Theme, mode: VimMode, branch: string | undefined): stri
   if (!branch) return modeSegment;
   const branchSegment = theme.bg("selectedBg", theme.fg("text", `  ${branch} `));
   return `${modeSegment}${branchSegment}`;
+}
+
+const USAGE_REFRESH_INTERVAL_MS = 5 * 60_000;
+const WINDOW_SEPARATOR = "\ue0b1";
+const PROVIDER_LABELS = new Map<string, string>([
+  ["anthropic", "claude"],
+  ["openai-codex", "gpt"],
+]);
+
+type UsageSnapshot = {
+  providerId: string;
+  label: string;
+  windows: UsageWindow[];
+};
+
+function usageColor(percent: number): "error" | "warning" | "success" {
+  if (percent >= 92) return "error";
+  if (percent >= 85) return "warning";
+  return "success";
+}
+
+function usageWindow(theme: Theme, window: UsageWindow, now: number): string {
+  const parts = [
+    theme.fg("dim", window.label),
+    renderBar(theme, window.percent, usageColor(window.percent)),
+    theme.fg("dim", `${Math.round(window.percent)}%`),
+  ];
+  const reset = countdown(window.resetAt, now);
+  if (reset !== undefined) parts.push(theme.fg("dim", reset));
+  return parts.join(" ");
+}
+
+function usageSegment(
+  theme: Theme,
+  snapshot: UsageSnapshot | undefined,
+  providerId: string | undefined,
+  now: number,
+): string {
+  if (
+    snapshot === undefined ||
+    snapshot.providerId !== providerId ||
+    snapshot.windows.length === 0
+  ) {
+    return "";
+  }
+  const separator = ` ${theme.fg("dim", WINDOW_SEPARATOR)} `;
+  const windows = snapshot.windows.map((window) => usageWindow(theme, window, now));
+  return ` ${theme.fg("accent", snapshot.label)} ${windows.join(separator)}`;
 }
 
 interface UsageTotals {
@@ -89,6 +138,24 @@ export default function piVim(pi: ExtensionAPI) {
   let previousFactory: PiEditorFactory | undefined;
   let activeFactory: PiEditorFactory | undefined;
   let restoreBindings: (() => void) | undefined;
+  let usageSnapshot: UsageSnapshot | undefined;
+  let usageTui: TUI | undefined;
+  let usageRefreshTimer: ReturnType<typeof setInterval> | undefined;
+  let usageFetchGeneration = 0;
+
+  async function refreshUsage(providerId: string | undefined): Promise<void> {
+    const generation = ++usageFetchGeneration;
+    const label = providerId === undefined ? undefined : PROVIDER_LABELS.get(providerId);
+    if (providerId === undefined || label === undefined) {
+      usageSnapshot = undefined;
+      usageTui?.requestRender();
+      return;
+    }
+    const windows = await fetchUsageWindows(providerId);
+    if (generation !== usageFetchGeneration) return;
+    usageSnapshot = { providerId, label, windows };
+    usageTui?.requestRender();
+  }
 
   pi.on("session_start", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
@@ -178,6 +245,7 @@ export default function piVim(pi: ExtensionAPI) {
     let footerDataRef: ReadonlyFooterDataProvider | undefined;
     ctx.ui.setEditorComponent(editorFactory);
     ctx.ui.setFooter((tui, _theme, footerData) => {
+      usageTui = tui;
       footerDataRef = footerData;
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
       return {
@@ -192,7 +260,9 @@ export default function piVim(pi: ExtensionAPI) {
           const extensionStatus = otherStatuses.length
             ? theme.fg("muted", ` ${otherStatuses.join(" ")}`)
             : "";
-          const vimStatus = `${modeChip(theme, mode, branch ?? undefined)}${extensionStatus}`;
+          const now = Math.floor(Date.now() / 1000);
+          const usage = usageSegment(theme, usageSnapshot, ctx.model?.provider, now);
+          const vimStatus = `${modeChip(theme, mode, branch ?? undefined)}${usage}${extensionStatus}`;
 
           return [truncateToWidth(vimStatus, width, "")];
         },
@@ -242,6 +312,7 @@ export default function piVim(pi: ExtensionAPI) {
                 thinkingLevel: ctx.thinkingLevel ?? "off",
                 cwd: ctx.sessionManager.getCwd(),
                 contextPercent: context?.percent ?? null,
+                contextTokens: context?.tokens ?? null,
                 contextWindow: context?.contextWindow ?? model?.contextWindow ?? 0,
                 cost: totals.cost,
                 netns: netns ? sanitizeStatus(netns) : undefined,
@@ -255,11 +326,25 @@ export default function piVim(pi: ExtensionAPI) {
       }),
       { placement: "aboveEditor" },
     );
+    if (usageRefreshTimer !== undefined) clearInterval(usageRefreshTimer);
+    usageRefreshTimer = setInterval(() => {
+      void refreshUsage(ctx.model?.provider);
+    }, USAGE_REFRESH_INTERVAL_MS);
+    void refreshUsage(ctx.model?.provider);
+  });
+
+  pi.on("model_select", (_event, ctx) => {
+    if (ctx.mode !== "tui") return;
+    void refreshUsage(ctx.model?.provider);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
     restoreBindings?.();
     restoreBindings = undefined;
+    if (usageRefreshTimer !== undefined) {
+      clearInterval(usageRefreshTimer);
+      usageRefreshTimer = undefined;
+    }
     if (ctx.mode !== "tui") return;
     ctx.ui.setWidget("pi-vim-status-line", undefined);
     ctx.ui.setFooter(undefined);
@@ -268,5 +353,6 @@ export default function piVim(pi: ExtensionAPI) {
     }
     activeFactory = undefined;
     previousFactory = undefined;
+    usageTui = undefined;
   });
 }
