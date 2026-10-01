@@ -37,15 +37,5 @@
     "openrouter/*",
     "openai/*",
     "ollama/*"
-  ],
-  "subagents": {
-    "maxParallel": 4,
-    "defaultTools": [
-      "read",
-      "grep",
-      "find",
-      "ls",
-      "bash"
-    ]
-  }
+  ]
 }

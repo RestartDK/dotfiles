@@ -5,16 +5,6 @@
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.99.1",
-  "subagents": {
-    "maxParallel": 4,
-    "defaultTools": [
-      "read",
-      "grep",
-      "find",
-      "ls",
-      "bash"
-    ]
-  },
   "packages": [
     "./packages/pi-web-access"
   ],
