@@ -3,7 +3,7 @@
 # Verdicts: MERGED | CLOSED | CONFLICT | CI_FAIL | THREADS | HUMAN_PENDING | WAITING | REVIEW | READY
 set -euo pipefail
 
-PR="" REPO="" ME="" MODE=drive PRETTY=0 INTERVAL=60
+PR="" REPO="" ME="" MODE=drive PRETTY=0 INTERVAL=60 MAX_POLL_FAILURES=10
 MARKER="Checking with the author before changing anything"
 FIXED_PREFIX="Fixed in "
 
@@ -146,11 +146,22 @@ terminal() {
   esac
 }
 
-s=$(snapshot)
-emit "$s"
-[ "$MODE" = status ] && exit 0
-while ! terminal "$(echo "$s" | jq -r .verdict)" "$(echo "$s" | jq -r .review)"; do
-  sleep "$INTERVAL"
-  s=$(snapshot)
+failures=0
+while :; do
+  if ! s=$(snapshot); then
+    failures=$((failures + 1))
+    if [ "$failures" -ge "$MAX_POLL_FAILURES" ]; then
+      echo "watch-pr: snapshot failed $failures times" >&2
+      exit 5
+    fi
+    sleep "$INTERVAL"
+    continue
+  fi
+  failures=0
   emit "$s"
+  [ "$MODE" = status ] && exit 0
+  if terminal "$(echo "$s" | jq -r .verdict)" "$(echo "$s" | jq -r .review)"; then
+    break
+  fi
+  sleep "$INTERVAL"
 done
