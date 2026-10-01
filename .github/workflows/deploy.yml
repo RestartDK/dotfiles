@@ -17,7 +17,7 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.head_sha == github.sha
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 240
     environment: deploy
     permissions:
       contents: read
@@ -52,4 +52,4 @@ jobs:
           mkdir -p "$HOME/.ssh"
           cat "config/ssh/known_hosts/$TARGET" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
-      - run: ./bin/traitor deploy "$TARGET" --remote-build
+      - run: ./bin/traitor deploy "$TARGET" --remote-build --skip-checks

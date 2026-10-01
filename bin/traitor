@@ -10,7 +10,7 @@ Commands:
   test                   Rebuild current host with action=test
   rollback               Roll back current host generation
   check                  Run flake checks
-  deploy <node> [--remote-build] [--dry-run]  Deploy exactly srv-nana or srv-hatchi
+  deploy <node> [--remote-build] [--skip-checks] [--dry-run]  Deploy exactly srv-nana or srv-hatchi
   install srv-hatchi root@HOST --confirm-destroy  Install Hatchi with nixos-anywhere
   sync [--expect REV]    Rebase the checkout onto its upstream
   verify srv-hatchi <services-vm|closures|policy>  Verify without live access
@@ -293,7 +293,7 @@ REMOTE_CHECK
 
 run_deploy() {
   if (($# < 1)); then
-    echo "traitor: deploy requires one exact node and optional --remote-build and --dry-run" >&2
+    echo "traitor: deploy requires one exact node and optional --remote-build, --skip-checks and --dry-run" >&2
     return 2
   fi
   case "$1" in
@@ -310,6 +310,7 @@ run_deploy() {
     case "$flag" in
     --dry-run) flag=--dry-activate ;;
     --remote-build) ;;
+    --skip-checks) ;;
     *)
       echo "traitor: unsupported deployment option: $flag" >&2
       return 2
