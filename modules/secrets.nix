@@ -93,6 +93,17 @@ in
       inputs.opnix.packages.${pkgs.stdenv.hostPlatform.system}.default
     ];
 
+    assertions = [
+      {
+        assertion = !(lib.hasPrefix "${builtins.storeDir}/" cfg.tokenFile);
+        message = "my.secrets.tokenFile must live outside the Nix store";
+      }
+    ]
+    ++ lib.mapAttrsToList (name: key: {
+      assertion = !(lib.hasPrefix "${builtins.storeDir}/" key.path);
+      message = "my.secrets.keys.${name}.path must live outside the Nix store";
+    }) cfg.keys;
+
     home-manager.users.${cfg.userName} = lib.mkMerge consumerConfig;
   };
 }
