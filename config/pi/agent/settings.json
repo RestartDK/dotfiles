@@ -38,5 +38,9 @@
     "openai/*",
     "openai-codex/*",
     "ollama/*"
-  ]
+  ],
+  "defaultModel": "openrouter/deepseek/deepseek-v4.1-flash",
+  "modelThinkingLevels": {
+    "openrouter/deepseek/deepseek-v4.1-flash": "high"
+  }
 }

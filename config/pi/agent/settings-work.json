@@ -41,5 +41,9 @@
     "openai-codex/*",
     "anthropic/*",
     "ollama/*"
-  ]
+  ],
+  "defaultModel": "openai-codex/gpt-6.1-sol",
+  "modelThinkingLevels": {
+    "openai-codex/gpt-6.1-sol": "xhigh"
+  }
 }
