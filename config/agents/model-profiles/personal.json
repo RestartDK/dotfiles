@@ -3,25 +3,11 @@
   "profile": "personal",
   "parent": "deepseek",
   "routes": {
-    "astra": [
-      {
-        "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
-        "thinking": "xhigh"
-      }
-    ],
     "deepseek": [
       {
         "kind": "pi",
         "model": "openrouter/deepseek/deepseek-v4.1-flash",
-        "thinking": "max"
-      }
-    ],
-    "fable": [
-      {
-        "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
-        "thinking": "xhigh"
+        "thinking": "high"
       }
     ],
     "sol": [
@@ -47,19 +33,19 @@
     },
     "bug-fix": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "perf-issue": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "hillclimb": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "reflect-tooling": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "fast-code": {
       "kind": "single",
@@ -71,43 +57,43 @@
     },
     "precise-code": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "prose": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "judgment": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "review": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "hardest": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "how-explainer": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "why-synthesizer": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "reflect-judgment": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "reflect-divergent": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "reflect-synthesizer": {
       "kind": "single",
-      "route": "fable"
+      "route": "sol"
     },
     "how-explorer": {
       "kind": "single",
@@ -116,38 +102,34 @@
     "how-critics": {
       "kind": "panel",
       "members": [
-        "fable"
+        "sol"
       ]
     },
     "arena-runners": {
       "kind": "panel",
       "members": [
-        "fable",
-        "astra",
+        "sol",
         "deepseek"
       ]
     },
     "arena-cross-judge": {
       "kind": "panel",
       "members": [
-        "fable",
-        "astra",
+        "sol",
         "deepseek"
       ]
     },
     "architect-runners": {
       "kind": "panel",
       "members": [
-        "fable",
-        "astra",
+        "sol",
         "deepseek"
       ]
     },
     "interrogate-reviewers": {
       "kind": "panel",
       "members": [
-        "fable",
-        "astra",
+        "sol",
         "deepseek"
       ]
     }

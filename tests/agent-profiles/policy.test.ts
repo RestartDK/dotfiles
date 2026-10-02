@@ -41,8 +41,11 @@ describe("profile routing", () => {
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
-      "openai-codex/gpt-6-astra",
+      "openai-codex/gpt-6.1-sol",
     ]);
+    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
+      "not allowed",
+    );
     expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
       "not allowed",
     );
@@ -75,22 +78,22 @@ describe("profile routing", () => {
       for (const role of roles.split(" ")) expected.set(role, route);
     };
     group("feature refactoring swarm-workers", work ? "astra" : "deepseek");
-    group("bug-fix perf-issue hillclimb reflect-tooling", "astra");
+    group("bug-fix perf-issue hillclimb reflect-tooling", work ? "astra" : "sol");
     group("how-explorer", "deepseek");
     group("why-investigators fast-code", work ? "glm" : "deepseek");
-    group("precise-code", work ? "sol" : "astra");
+    group("precise-code", "sol");
     group(
       "prose judgment review hardest how-explainer why-synthesizer reflect-judgment reflect-divergent reflect-synthesizer",
-      "fable",
+      work ? "fable" : "sol",
     );
     for (const [role, member] of expected)
       expect(resolveRoute(selected, { role }).selection).toEqual({ kind: "role", role, member });
     const panels: Record<string, [string, ...string[]]> = {
-      "how-critics": ["fable"],
-      "arena-runners": work ? ["fable", "sol", "deepseek"] : ["fable", "astra", "deepseek"],
-      "arena-cross-judge": work ? ["fable", "sol"] : ["fable", "astra", "deepseek"],
-      "architect-runners": work ? ["fable", "sol", "glm"] : ["fable", "astra", "deepseek"],
-      "interrogate-reviewers": work ? ["fable", "sol", "glm"] : ["fable", "astra", "deepseek"],
+      "how-critics": work ? ["fable"] : ["sol"],
+      "arena-runners": work ? ["fable", "sol", "deepseek"] : ["sol", "deepseek"],
+      "arena-cross-judge": work ? ["fable", "sol"] : ["sol", "deepseek"],
+      "architect-runners": work ? ["fable", "sol", "glm"] : ["sol", "deepseek"],
+      "interrogate-reviewers": work ? ["fable", "sol", "glm"] : ["sol", "deepseek"],
     };
     for (const [role, members] of Object.entries(panels)) {
       expect(selected.roles.get(role)).toEqual({ kind: "panel", members });
