@@ -211,6 +211,9 @@
           nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
           pi = inputs.llm-agents.packages.${system}.pi;
+          terminal-browser = pkgs.callPackage ./packages/terminal-browser {
+            terminalBrowser = inputs.llm-agents.packages.${system}.terminal-browser;
+          };
           pi-package-updater = piPackageUpdater;
           default = traitor;
         }
@@ -245,6 +248,7 @@
       checks = forAllSystems (
         system:
         {
+          terminal-browser-namespace = self.packages.${system}.terminal-browser.tests.namespace;
           fleet =
             (pkgsFor system).runCommand "fleet-tests"
               {
