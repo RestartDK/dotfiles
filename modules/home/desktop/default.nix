@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  osConfig ? null,
   pkgs,
   ...
 }:
@@ -31,9 +32,12 @@ in
         };
         # Hyprtoolkit/Hyprlauncher only search ~/.local/share/icons and
         # /usr/share/icons, not NixOS' /run/current-system/sw/share/icons.
+        # The hicolor fallback theme is the merged tree in the system profile,
+        # which carries every app's own icons; the package has only the theme
+        # skeleton and would drop them.
         home.file = {
           ".local/share/icons/hicolor" = {
-            source = "${pkgs.hicolor-icon-theme}/share/icons/hicolor";
+            source = "${osConfig.system.path}/share/icons/hicolor";
             force = true;
           };
           ".local/share/icons/Papirus" = {
