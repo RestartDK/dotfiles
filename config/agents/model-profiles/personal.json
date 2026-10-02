@@ -6,6 +6,11 @@
     "deepseek": [
       {
         "kind": "pi",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "thinking": "high"
+      },
+      {
+        "kind": "pi",
         "model": "openrouter/deepseek/deepseek-v4.1-flash",
         "thinking": "high"
       }
@@ -135,6 +140,7 @@
     }
   },
   "providers": [
+    "opencode-go",
     "openrouter",
     "openai",
     "openai-codex",

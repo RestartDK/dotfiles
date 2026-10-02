@@ -6,6 +6,7 @@ export type Effort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "
 export type NativeProvider =
   | "openai"
   | "openai-codex"
+  | "opencode-go"
   | "fireworks"
   | "openrouter"
   | "anthropic"
@@ -93,6 +94,7 @@ function parseNativeProvider(value: string): NativeProvider {
   switch (value) {
     case "openai":
     case "openai-codex":
+    case "opencode-go":
     case "fireworks":
     case "openrouter":
     case "anthropic":
@@ -187,8 +189,7 @@ export function parsePolicy(value: unknown): Policy {
   }
   for (const role of requiredRoles) if (!roles.has(role)) return invalid(`missing role ${role}`);
   const parentChain = routes.get(value.parent);
-  if (!parentChain || parentChain.length !== 1)
-    return invalid("parent must reference one native Pi target with no fallback chain");
+  if (!parentChain) return invalid("parent must reference a route");
   if (!providers.has(parentChain[0].provider)) return invalid("parent provider is not declared");
   return { profile, providers, parent: parentChain[0], routes, roles };
 }

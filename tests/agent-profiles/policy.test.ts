@@ -37,9 +37,12 @@ describe("profile routing", () => {
 
   test("personal dispatch uses declared routes and rejects undeclared raw targets", () => {
     const personal = policy("personal");
-    expect(backendModel(resolveRoute(personal, { role: "feature" }).chain[0])).toBe(
-      "openrouter/deepseek/deepseek-v4.1-flash",
-    );
+    const deepseek = resolveRoute(personal, { role: "feature" }).chain;
+    expect(deepseek).toEqual([
+      { kind: "pi", provider: "opencode-go", id: "deepseek-v4.1-flash", thinking: "high" },
+      { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "high" },
+    ]);
+    expect(personal.parent).toEqual(deepseek[0]);
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
       "openai-codex/gpt-6.1-sol",
     ]);
