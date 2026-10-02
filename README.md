@@ -1,170 +1,84 @@
 # RestartDK dotfiles
 
-Nix-native dotfiles and host configuration for Daniel's machines.
+One flake describes every machine I run, and the tool config those machines read.
 
-The canonical editable checkout is:
+```mermaid
+flowchart TB
+  subgraph repo["this repo, one flake"]
+    flake["flake.nix"]
+    modules["modules/<br/>NixOS and Home Manager"]
+    config["config/<br/>canonical tool config"]
+  end
 
-```text
-~/.config/dotfiles
+  generation["one generation per machine"]
+  flake --> generation
+  modules --> generation
+  config -->|"copied into the store at build time"| generation
+
+  generation --> server["server<br/>headless NixOS, deployed from CI"]
+  generation --> laptop["laptop I work on<br/>nix-darwin, rebuilt locally"]
+  generation --> managed["managed machine<br/>Home Manager only"]
+
+  subgraph layers["three layers on every machine"]
+    direction LR
+    canonical["canonical<br/>read-only, from the store"]
+    local["local<br/>mine, writable, untracked"]
+    state["state<br/>tool-written, never managed"]
+  end
+  server --> layers
+  laptop --> layers
+  managed --> layers
 ```
 
-Remote:
+## The three layers
+
+| Layer | Owned by | A change takes effect |
+| --- | --- | --- |
+| canonical | Nix, from `config/` | on rebuild or deploy |
+| local | me, on the machine, untracked | immediately |
+| state | the tool itself | never managed |
+
+Nix owns the canonical layer, and a path Nix owns is never writable. The tool owns the state layer, and a path a tool writes is never managed. The local layer sits between them, and it is where work in progress goes without a rebuild and without a pull request:
 
 ```text
-https://github.com/RestartDK/dotfiles
+~/.config/zsh/local.zsh             sourced last by the generated zshrc
+~/.config/nvim/lua/local/init.lua   loaded by config/nvim/init.lua
+~/.agents/skills/<name>/            a local skill beside the canonical ones
+<project>/.pi/settings.json         a project-scoped pi override
 ```
 
-## Hosts
+Directories are linked recursively, so a canonical directory is a real directory whose entries are store symlinks and a local file can sit beside them. `tests/live-checkout.sh` fails when delivered config reads the authoring checkout instead of the store, and its exception list can only shrink.
 
-```text
-hosts/srv-nana/                      # NixOS workstation
-hosts/twin/                          # reusable Home Manager dev profile
-hosts/dkumlin-macbook-pro/           # personal nix-darwin MacBook config
-hosts/dkumlin-twin-macbook-pro/      # work nix-darwin MacBook config
-```
-
-## Apply configs
-
-Use the `traitor` wrapper from the repo:
+## Changing something
 
 ```bash
-cd ~/.config/dotfiles
-./bin/traitor re
+./bin/traitor re                            # rebuild this machine
+./bin/traitor check                         # run the flake checks
+./bin/traitor deploy <host> --remote-build  # deploy a host from here
+./bin/traitor update                        # update the flake inputs
+./bin/traitor rollback                      # go back one generation
 ```
 
-Convenience commands:
+Raw rebuilds work when the wrapper is not available:
 
 ```bash
-traitor re          # rebuild current host
-traitor check       # run flake checks
-traitor sync        # rebase the checkout onto its upstream
-traitor update      # update flake inputs
-traitor upgrade     # update, then rebuild
-traitor rollback    # roll back current host generation
-traitor twin        # apply the Home Manager-only twin profile
-traitor nana        # rebuild srv-nana explicitly
-traitor mac         # rebuild dkumlin-macbook-pro explicitly
-traitor work-mac    # rebuild dkumlin-twin-macbook-pro explicitly
+sudo nixos-rebuild switch --flake .#<host>
+darwin-rebuild switch --flake .#<host>
 ```
 
-Raw commands still work when needed:
+`hosts/` composes each machine and `nix flake show` lists them. A machine that only consumes config needs no checkout. `traitor sync` keeps a checkout rebased on the machines that author it.
 
-```bash
-sudo nixos-rebuild switch --flake "path:$HOME/.config/dotfiles#srv-nana"
-darwin-rebuild switch --flake ~/.config/dotfiles#dkumlin-macbook-pro
-darwin-rebuild switch --flake ~/.config/dotfiles#dkumlin-twin-macbook-pro
-nix run github:nix-community/home-manager/release-26.05 -- switch --flake ~/.config/dotfiles#twin -b hm-backup
-```
+## Where the rest lives
 
-This repo is flake-only; there is intentionally no legacy `configuration.nix` entrypoint.
-
-## Layout
-
-```text
-flake.nix                            # flake outputs and inputs
-bin/traitor                          # local operations wrapper
-hosts/                               # machine-specific host composition
-profiles/home/                       # reusable Home Manager bridge profiles
-modules/nixos/                       # NixOS reusable modules
-modules/home/                        # shared Home Manager modules
-  shell/ editors/ terminal/ agents/ desktop/
-config/                              # source app dotfiles formerly in dotfiles/
-  agents/skills/                     # every agent skill, dstack included; one tree linked to every harness
-packages/                            # local package definitions
-```
-
-## Dotfile model
-
-The repo itself is the dotfiles checkout. App config source lives under `config/`:
-
-```text
-~/.config/dotfiles/config/ghostty
-~/.config/dotfiles/config/nvim
-~/.config/dotfiles/config/pi
-```
-
-Home Manager links selected files into their runtime locations, for example:
-
-```text
-~/.config/ghostty
-~/.config/nvim
-~/.pi/agent/settings.json
-```
-
-High-churn dev and agent config is still managed with explicit out-of-store symlinks:
-
-```nix
-config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
-```
-
-That keeps those files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `config/` can take effect immediately for live-symlinked apps; rebuilding is needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
-
-`traitor sync` fetches the current branch's configured remote and rebases local commits onto its upstream. It temporarily stores tracked and untracked edits, then restores them after the rebase. A preflight worktree checks both the rebase and the edit restoration before the live checkout moves. Conflicts leave the original branch and dirty files unchanged.
-
-Nana and both managed Macs run the same command at login or boot and every 15 minutes. An offline machine keeps its checkout unchanged and retries later without a notification. A Mac shows a notification when a Git conflict blocks synchronization. The systemd and launchd jobs only synchronize Git; they never rebuild a machine, commit files, push branches, or switch branches.
-
-## CI and deployment
-
-Every pull request and `main` push runs one `CI result` job. A single Nix command checks formatting, lint, personal secrets, and Hatchi deployment safeguards, then builds the Nana and Hatchi NixOS systems. This gate does not build Darwin or Twin, run VM tests, deploy, activate, reboot, or contact either host.
-
-`traitor verify srv-hatchi services-vm` remains a manual diagnostic. `traitor verify srv-hatchi policy` runs the same deployment safeguards checked by CI, including bootstrap validation and exact-node CLI behavior.
-
-`traitor deploy <node>` builds locally by default. For deployment from a Mac without a Linux builder, add `--remote-build` to build on the target instead. Both `srv-nana` and `srv-hatchi` accept the flag.
-
-```bash
-traitor deploy srv-hatchi --remote-build
-traitor deploy srv-hatchi --remote-build --dry-run
-```
-
-`--dry-run` builds the configuration and runs deploy-rs dry activation without switching the active system. The pinned deploy-rs can exit successfully after a failed dry-activation check; inspect its diagnostics rather than treating exit zero as a readiness gate. The flags can appear in any order after the node. Add `--skip-checks` to skip the deploy-rs pre-build checks. The deploy job passes it because CI already builds the flake checks on the runner.
-
-`deploy.yml` is separate from CI. It reacts to successful CI for a push to the current `main` revision, joins the tailnet as `tag:ci-deploy`, and deploys every host in its matrix with no approval step. The deploy builds on the target rather than on the runner, because a host's system closure is around 18 GiB and a stock runner has about 14 GB free. The cost is that CI no longer builds the artifact it deploys; the target builds from the same pinned flake, and the runner only evaluates it and orchestrates. The job allows 240 minutes, because the target compiles the closure itself when no cache holds it. The matrix lists the hosts that are ready to receive deploys, currently `srv-nana` and `srv-hatchi`. Add a host only when it carries its bootstrap files and answers the deployment account, since a host that cannot answer turns its job red. Prefix the job condition with `false &&` to stop automatic deploys. CI authenticates as the dedicated deployment account and builds from the runner's checkout, so no host-side synchronization step runs; Nana's own sync timer keeps its live checkout current.
-
-Before enabling deploys, configure one GitHub environment named `deploy` with required approval and these secrets:
-
-- `TS_OAUTH_CLIENT_ID` and `TS_AUDIENCE` for a Tailscale federated identity restricted to this repository, environment, and `tag:ci-deploy`.
-- `SSH_PRIVATE_KEY` for the configured deployment user.
-
-Host keys are committed under `config/ssh/known_hosts/`, reviewed in pull requests, and installed by the workflow, with strict host-key checking still on. Adding a machine means its host configuration, its `deploy.nodes` entry, a matrix entry in `deploy.yml`, and its host key file under `config/ssh/known_hosts/`.
-
-The tailnet policy must permit that tag to reach the selected host on SSH. The host must resolve by its deployment name and authorize the deployment account's key. That account, named by `my.deploy.userName` in `modules/nixos/deploy.nix`, is the only account with passwordless sudo; the interactive user keeps password sudo. It is also a Nix trusted user on the host, which a remote build and an unsigned closure copy both need. Its only authorized key is `config/ssh/public-keys/ci-deploy.pub`, whose private half is in the GitHub environment secret and in 1Password for manual runs. The account and its sudo rule arrive in the same generation that first uses them, so a host's first activation must come from a credential it already has, such as root over SSH running `nixos-rebuild switch --flake "path:/home/dkumlin/.config/dotfiles#<host>"`. The `path:` prefix is required, because Nix refuses to read a Git checkout owned by another user, and a root rebuild on a Linux host always evaluates as root. The workflow uses OpenSSH over Tailscale, not Tailscale SSH authentication. The Tailscale action removes its ephemeral runner when the job ends.
-
-Hatchi's physical profile puts EFI, NixOS, service state, and databases on the system SSD. The data HDD mounts at `/srv` for media and Nextcloud files. A missing data disk does not block NixOS or SSH, but it prevents the application stack from starting.
-
-Hatchi has one physical NixOS configuration for installation and deployment. Its stable disk IDs and generated hardware facts are committed. Follow [the Hatchi installation procedure](hosts/srv-hatchi/INSTALL.md) to run the guarded `nixos-anywhere` installation from a clean `main` checkout.
-
-Hatchi's production configuration enables runtime 1Password secrets and declares its LAN as `192.168.200.0/24`. SSH remains allowed on `tailscale0` independently of the LAN rules. Before deployment, [provision the SOPS bootstrap files](hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment). A native pre-switch check rejects missing or undecryptable bootstrap files before changing running services. Credential formats and verification limits are documented in [the secret integration guide](tests/srv-hatchi/onepassword.md).
-
-## Personal Pi secrets
-
-Both Macs and Nana use opnix to fetch the OpenRouter key from 1Password. Follow [the provisioning guide](tests/personal-secrets.md) to install each machine's service-account token and verify retrieval. Twin Linux and the Cobb bridge do not import this configuration.
-
-## Cobb bridge profile
-
-This flake exports a reusable Home Manager module for Cobb:
-
-```nix
-inputs.daniel-dotfiles.homeManagerModules.cobb-daniel
-```
-
-The module lives at:
-
-```text
-profiles/home/cobb-daniel.nix
-```
-
-It is intended for Cobb's `nix/hosts/profiles/daniel.nix` to import, while Cobb remains responsible for system users, services, networking, and host-level config. Cobb's NixOS Home Manager module remains the sole activator. The bridge contributes Daniel's development packages and network-namespace wrappers, and points high-churn config at:
-
-```text
-/home/daniel/.config/dotfiles
-```
-
-The package and live-config layers only enable on Cobb dev hosts (`monster`, `titan`, `titan-2`).
+| Topic | File |
+| --- | --- |
+| CI, the deploy workflow, and the deploy account | [docs/deployment.md](docs/deployment.md) |
+| Server install, disks, and runtime secrets | [hosts/srv-hatchi/INSTALL.md](hosts/srv-hatchi/INSTALL.md) |
+| Pi key provisioning on the personal machines | [tests/personal-secrets.md](tests/personal-secrets.md) |
+| The Home Manager bridge for a work repository | [docs/work-bridge.md](docs/work-bridge.md) |
 
 ## Rules
 
-- Commit Nix modules and portable dotfiles.
-- Do not commit secrets, auth files, tokens, SSH private keys, browser profiles, app databases, sessions, logs, caches, sockets, or generated state.
-- Use Home Manager for packages and explicit out-of-store symlink declarations.
-- Use NixOS / nix-darwin modules for host/system services.
+- Do not commit secrets, tokens, private keys, sessions, logs, caches, or generated state.
 - Add new Nix files with `git add` before rebuilding; flakes only see tracked files.
+- Put a machine-specific tweak in a local layer, never in a second copy of a tracked path.

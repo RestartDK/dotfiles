@@ -370,7 +370,9 @@ assert self.nixosConfigurations.srv-nana.config.virtualisation.docker.enable;
 assert home.home.username == cfg.my.host.userName;
 assert home.home.homeDirectory == cfg.my.host.homeDirectory;
 assert cfg.users.users.${cfg.my.host.userName}.home == home.home.homeDirectory;
-assert home.my.liveConfig.repoRoot == "${cfg.my.host.homeDirectory}/.config/dotfiles";
+assert home.my.liveConfig.sync.checkout == null;
+assert pkgs.lib.hasPrefix "/nix/store/" home.home.file.".agents/skills".source;
+assert home.home.file.".agents/skills".recursive;
 assert builtins.all (group: home.my.liveConfig.groups.${group}) [
   "shell"
   "git"
@@ -426,9 +428,6 @@ assert
 assert
   renamedUser.home-manager.users.hatchi-fixture.home.homeDirectory == "/srv/home/hatchi-fixture";
 assert renamedUser.users.users.hatchi-fixture.home == "/srv/home/hatchi-fixture";
-assert
-  renamedUser.home-manager.users.hatchi-fixture.my.liveConfig.repoRoot
-  == "/srv/home/hatchi-fixture/.config/dotfiles";
 assert cfg.my.hatchi.onepassword.references.glanceKey != null;
 assert privateMachine.my.hatchi.onepassword.references.glanceKey == null;
 assert privateMachine.my.hatchi.onepassword.references.grafanaKey == null;

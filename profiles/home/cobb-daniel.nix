@@ -1,5 +1,4 @@
 {
-  config,
   lib,
   osConfig ? null,
   ...
@@ -30,7 +29,6 @@ in
 
   my.liveConfig = {
     enable = isCobbDevHost;
-    repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
     piSkillsPath = "config/agents/skills";
     groups = {
       # Cobb's Daniel profile disables its generated shell and Neovim config

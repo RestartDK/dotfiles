@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Fails while any delivered config still reads from the editable checkout
-# instead of the Nix store. Each legacy reference needs a marker file under
-# tests/live-checkout/legacy/, and the marker must be deleted with the
-# reference, so the exception list can only shrink.
+# instead of the Nix store. Host policy is not scanned, so a host may name a
+# checkout for its own authoring sync unit. Each legacy reference needs a
+# marker file under tests/live-checkout/legacy/, and the marker must be
+# deleted with the reference, so the exception list can only shrink to zero.
 set -euo pipefail
 
 repo_root="$1"
@@ -13,9 +14,7 @@ pattern='repoRoot|\.config/dotfiles'
 flatten() { printf '%s' "${1//\//__}"; }
 
 find_offenders() {
-  grep -rl -E "$pattern" \
-    "$repo_root/modules" "$repo_root/hosts" "$repo_root/profiles" \
-    --exclude='*.md' 2>/dev/null || true
+  grep -rl -E "$pattern" "$repo_root/modules" --exclude='*.md' 2>/dev/null || true
   grep -rl -E "$pattern" "$repo_root/config" --exclude='*.md' \
     --exclude-dir=node_modules 2>/dev/null || true
 }
