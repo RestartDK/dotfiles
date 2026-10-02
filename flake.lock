@@ -273,6 +273,26 @@
     "lefthook-nix": {
       "inputs": {
         "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1770377107,
+        "narHash": "sha256-/QEXSDeAo5RK81PtM0yDhmt9k3v1/pse/jsrT1yXNhU=",
+        "owner": "sudosubin",
+        "repo": "lefthook.nix",
+        "rev": "9cdaf7ce95ae77cbabc5b556bdd35d3cf0b849f5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sudosubin",
+        "repo": "lefthook.nix",
+        "type": "github"
+      }
+    },
+    "lefthook-nix_2": {
+      "inputs": {
+        "nixpkgs": [
           "scatterer",
           "nixpkgs"
         ]
@@ -581,6 +601,7 @@
         "determinate": "determinate",
         "disko": "disko",
         "home-manager": "home-manager",
+        "lefthook-nix": "lefthook-nix",
         "llm-agents": "llm-agents",
         "nix-darwin": "nix-darwin",
         "nixos-anywhere": "nixos-anywhere",
@@ -594,7 +615,7 @@
     },
     "scatterer": {
       "inputs": {
-        "lefthook-nix": "lefthook-nix",
+        "lefthook-nix": "lefthook-nix_2",
         "nixpkgs": [
           "nixpkgs"
         ],

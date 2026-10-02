@@ -27,6 +27,11 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
 
+    lefthook-nix = {
+      url = "github:sudosubin/lefthook.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     scatterer = {
       url = "github:RestartDK/scatterer";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -62,6 +67,19 @@
         };
       treefmtEval = forAllSystems (
         system: inputs.treefmt-nix.lib.evalModule (pkgsFor system) ./treefmt.nix
+      );
+      lefthookEval = forAllSystems (
+        system:
+        inputs.lefthook-nix.lib.${system}.run {
+          src = self;
+          config = {
+            pre-commit.commands.treefmt = {
+              run = "${
+                nixpkgs.lib.getExe treefmtEval.${system}.config.build.wrapper
+              } --fail-on-change --no-cache {staged_files}";
+            };
+          };
+        }
       );
       sshSettings = (import ./modules/home/ssh.nix { inherit (home-manager) lib; }).programs.ssh.settings;
       fleetInventory = {
@@ -241,6 +259,24 @@
       });
 
       formatter = forAllSystems (system: treefmtEval.${system}.config.build.wrapper);
+
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = pkgs.mkShell {
+            inherit (lefthookEval.${system}) shellHook;
+            packages = [ treefmtEval.${system}.config.build.wrapper ];
+            LEFTHOOK_BIN = toString (
+              pkgs.writeShellScript "lefthook-dumb-term" ''
+                exec env TERM=dumb ${nixpkgs.lib.getExe pkgs.lefthook} "$@"
+              ''
+            );
+          };
+        }
+      );
 
       checks = forAllSystems (
         system:
