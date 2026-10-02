@@ -21,6 +21,10 @@ let
     else
       ../../../config/pi/agent/mcp.json;
   piPackages = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system};
+  # One store copy of the whole agent tree. Home Manager links each
+  # subdirectory separately, and the extensions import ../../lib/model-policy,
+  # which only resolves while lib stays a sibling inside the same copy.
+  piAgentRoot = pkgs.copyPathToStore ../../../config/pi/agent;
   piPackage = name: {
     source = "${piPackages.${name}}/lib/node_modules/${name}";
     recursive = false;
@@ -171,27 +175,27 @@ in
           force = true;
         };
         home.file.".pi/agent/extensions" = {
-          source = ../../../config/pi/agent/extensions;
+          source = "${piAgentRoot}/extensions";
           recursive = true;
           force = true;
         };
         home.file.".pi/agent/lib" = {
-          source = ../../../config/pi/agent/lib;
+          source = "${piAgentRoot}/lib";
           recursive = true;
           force = true;
         };
         home.file.".pi/agent/bin" = {
-          source = ../../../config/pi/agent/bin;
+          source = "${piAgentRoot}/bin";
           recursive = true;
           force = true;
         };
         home.file.".pi/agent/prompts" = {
-          source = ../../../config/pi/agent/prompts;
+          source = "${piAgentRoot}/prompts";
           recursive = true;
           force = true;
         };
         home.file.".pi/agent/themes" = {
-          source = ../../../config/pi/agent/themes;
+          source = "${piAgentRoot}/themes";
           recursive = true;
           force = true;
         };
