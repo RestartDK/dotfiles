@@ -12,6 +12,7 @@ result-*
 
 # generated app state inside live dotfiles
 node_modules/
+/lefthook.yml
 **/node_modules/
 **/sessions/
 **/cache/
