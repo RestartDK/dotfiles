@@ -11,6 +11,11 @@ let
       "ai"
       "openrouterKeyFile"
     ];
+    piOpencodeKeyFile = [
+      "my"
+      "ai"
+      "opencodeKeyFile"
+    ];
   };
   wiring = lib.concatMap (
     kind:
@@ -28,7 +33,7 @@ in
   options.my.secrets.consumers = lib.mkOption {
     type = lib.types.attrsOf lib.types.str;
     default = { };
-    description = "Consumers keyed by kind that read a declared key. piKeyFile points my.ai.openrouterKeyFile at the named key.";
+    description = "Consumers keyed by kind that read a declared key. piKeyFile and piOpencodeKeyFile point my.ai.openrouterKeyFile and my.ai.opencodeKeyFile at the named key.";
   };
 
   config = {

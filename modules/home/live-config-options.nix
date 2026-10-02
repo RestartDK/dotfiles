@@ -16,6 +16,12 @@
     description = "Runtime file that holds the OpenRouter key. Null links the repository model catalogue unchanged.";
   };
 
+  options.my.ai.opencodeKeyFile = lib.mkOption {
+    type = lib.types.nullOr (lib.types.strMatching "/.+");
+    default = null;
+    description = "Runtime file that holds the OpenCode Go key. Null leaves the opencode-go provider on its environment variable.";
+  };
+
   options.my.liveConfig = {
     enable = lib.mkEnableOption "the host's dotfiles configuration layers";
 

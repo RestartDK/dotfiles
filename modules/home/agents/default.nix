@@ -32,8 +32,12 @@ let
       value = piPackage name;
     }) piPackageNames
   );
+  keyedProviders = lib.filterAttrs (_: path: path != null) {
+    openrouter = config.my.ai.openrouterKeyFile;
+    "opencode-go" = config.my.ai.opencodeKeyFile;
+  };
   modelsFile =
-    if config.my.ai.openrouterKeyFile == null then
+    if keyedProviders == { } then
       {
         source = ../../../config/pi/agent/models.json;
         force = true;
@@ -41,12 +45,14 @@ let
     else
       let
         models = builtins.fromJSON (builtins.readFile ../../../config/pi/agent/models.json);
+        providerKeys = lib.mapAttrsToList (provider: path: {
+          name = provider;
+          value.apiKey = "!${pkgs.coreutils}/bin/cat ${lib.escapeShellArg path}";
+        }) keyedProviders;
       in
       {
         source = (pkgs.formats.json { }).generate "pi-models.json" (
-          lib.recursiveUpdate models {
-            providers.openrouter.apiKey = "!${pkgs.coreutils}/bin/cat ${lib.escapeShellArg config.my.ai.openrouterKeyFile}";
-          }
+          lib.recursiveUpdate models { providers = builtins.listToAttrs providerKeys; }
         );
         force = true;
       };
