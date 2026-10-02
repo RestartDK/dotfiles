@@ -108,7 +108,11 @@ assert builtins.all (
   && !(home.xdg.configFile ? "agents/skills")
   && !(home.xdg.configFile ? "agents/agents")
   && pkgs.lib.hasPrefix "/nix/store/" home.home.file.".pi/agent/lib".source
-  && home.home.file.".pi/agent/lib".source == ../config/pi/agent/lib
+  # The extensions import ../../lib, so lib has to be a sibling inside the same
+  # store copy rather than its own link.
+  &&
+    builtins.dirOf home.home.file.".pi/agent/lib".source
+    == builtins.dirOf home.home.file.".pi/agent/extensions".source
   && home.home.file.".pi/agent/lib".recursive == true
   && builtins.any (
     package:
