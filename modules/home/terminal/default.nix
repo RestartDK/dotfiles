@@ -11,7 +11,7 @@ let
   hasScattererInput = dotfilesInputs ? scatterer;
   herdrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.herdr;
   terminalBrowserPackage =
-    dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.terminal-browser;
+    dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system}.terminal-browser;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
   # Upstream's packages.plugin is a ready-to-link Herdr plugin root: the
   # store manifest invokes the built binary directly (no bash launcher, no
@@ -23,6 +23,16 @@ let
       null;
   scattererPluginRoot =
     if hasScattererInput then "${scattererPackage}/share/herdr/plugins/scatterer" else null;
+  link = path: config.lib.file.mkOutOfStoreSymlink "${cfg.repoRoot}/${path}";
+  file = path: {
+    source = link path;
+    force = true;
+  };
+  dir = path: {
+    source = link path;
+    recursive = false;
+    force = true;
+  };
 in
 {
   config = lib.mkIf cfg.enable (
@@ -34,27 +44,14 @@ in
         ];
         home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
         xdg.configFile = {
-          "btop/btop.conf" = {
-            source = ../../../config/btop/btop.conf;
-            force = true;
-          };
-          "thefuck/settings.py" = {
-            source = ../../../config/thefuck/settings.py;
-            force = true;
-          };
-          "tuicr/config.toml" = {
-            source = ../../../config/tuicr/config.toml;
-            force = true;
-          };
+          "btop/btop.conf" = file "config/btop/btop.conf";
+          "thefuck/settings.py" = file "config/thefuck/settings.py";
+          "tuicr/config.toml" = file "config/tuicr/config.toml";
         };
       })
 
       (lib.mkIf cfg.groups.ghostty {
-        xdg.configFile."ghostty" = {
-          source = ../../../config/ghostty;
-          recursive = true;
-          force = true;
-        };
+        xdg.configFile."ghostty" = dir "config/ghostty";
       })
 
       (lib.mkIf cfg.groups.multiplexer (
@@ -62,22 +59,12 @@ in
           {
             home.packages = [ herdrPackage ];
             xdg.configFile = {
-              "herdr/config.toml" = {
-                source = ../../../config/herdr/config.toml;
-                force = true;
-              };
-              "herdr/hostname-status.py" = {
-                source = ../../../config/herdr/hostname-status.py;
-                force = true;
-              };
-              "herdr/sounds/haki.mp3" = {
-                source = ../../../config/herdr/sounds/haki.mp3;
-                force = true;
-              };
-              "herdr/sounds/za-warudo.mp3" = {
-                source = ../../../config/herdr/sounds/za-warudo.mp3;
-                force = true;
-              };
+              "herdr/config.toml" = file "config/herdr/config.toml";
+              "herdr/open-terminal-browser.sh" = file "config/herdr/open-terminal-browser.sh";
+              "herdr/hostname-status.py" = file "config/herdr/hostname-status.py";
+              "herdr/usage-status.py" = file "config/herdr/usage-status.py";
+              "herdr/sounds/haki.mp3" = file "config/herdr/sounds/haki.mp3";
+              "herdr/sounds/za-warudo.mp3" = file "config/herdr/sounds/za-warudo.mp3";
             };
           }
 
