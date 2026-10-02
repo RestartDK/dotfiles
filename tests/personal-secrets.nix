@@ -86,9 +86,8 @@ assert builtins.all
     !(home.programs ? onepassword-secrets)
     && !(home.home.file ? ".pi/agent/auth.json")
     && !(home.home.sessionVariables ? OPENROUTER_API_KEY)
-    &&
-      home.home.file.".pi/agent/models.json".source
-      == home.lib.file.mkOutOfStoreSymlink "${home.my.liveConfig.repoRoot}/config/pi/agent/models.json"
+    && pkgs.lib.hasPrefix "/nix/store/" home.home.file.".pi/agent/models.json".source
+    && home.home.file.".pi/agent/models.json".source == ../config/pi/agent/models.json
   )
   [
     "titan"
