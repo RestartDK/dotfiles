@@ -333,6 +333,20 @@
                 TRAITOR=${./bin/traitor} bash ${./tests/traitor-sync.sh}
                 touch $out
               '';
+          live-checkout =
+            (pkgsFor system).runCommand "live-checkout-check"
+              {
+                nativeBuildInputs = [
+                  (pkgsFor system).bash
+                  (pkgsFor system).coreutils
+                  (pkgsFor system).findutils
+                  (pkgsFor system).gnugrep
+                ];
+              }
+              ''
+                bash ${./tests/live-checkout.sh} ${./.}
+                touch $out
+              '';
           agent-profiles = import ./tests/agent-profiles.nix {
             pkgs = pkgsFor system;
             inherit self inputs;
