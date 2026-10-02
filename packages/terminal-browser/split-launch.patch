@@ -1,0 +1,12 @@
+--- a/cli/dist/main.js
++++ b/cli/dist/main.js
+@@ -24325,4 +24325,9 @@
+ function clientLaunchCommand(argv) {
++  const launcher = process.env.TERMINAL_BROWSER_NAMESPACE_LAUNCHER;
++  const namespace = process.env.TERMINAL_BROWSER_NAMESPACE;
++  if (launcher && namespace) {
++    return [launcher, "--namespace", namespace, "open", ...argv];
++  }
+   const runner = DIST_ROOT2 ? [import_node_path10.default.join(DIST_ROOT2, "bin", "terminal-browser")] : [process.execPath, import_node_path10.default.resolve(__dirname, "main.js")];
+   return [...runner, "open", ...argv];
+ }

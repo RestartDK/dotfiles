@@ -78,7 +78,7 @@ description = "scatterer layout"
 [[keys.command]]
 key = "prefix+shift+b"
 type = "shell"
-command = 'TERMINAL_BROWSER_NO_TELEMETRY=1 HERDR_PANE_ID="$HERDR_ACTIVE_PANE_ID" HERDR_TAB_ID="$HERDR_ACTIVE_TAB_ID" HERDR_WORKSPACE_ID="$HERDR_ACTIVE_WORKSPACE_ID" terminal-browser open --split right'
+command = 'TERMINAL_BROWSER_NO_TELEMETRY=1 bash "$HOME/.config/herdr/open-terminal-browser.sh"'
 description = "open Terminal Browser"
 
 [[keys.command]]

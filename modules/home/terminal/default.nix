@@ -11,7 +11,7 @@ let
   hasScattererInput = dotfilesInputs ? scatterer;
   herdrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.herdr;
   terminalBrowserPackage =
-    dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.terminal-browser;
+    dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system}.terminal-browser;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
   # Upstream's packages.plugin is a ready-to-link Herdr plugin root: the
   # store manifest invokes the built binary directly (no bash launcher, no
@@ -60,6 +60,7 @@ in
             home.packages = [ herdrPackage ];
             xdg.configFile = {
               "herdr/config.toml" = file "config/herdr/config.toml";
+              "herdr/open-terminal-browser.sh" = file "config/herdr/open-terminal-browser.sh";
               "herdr/hostname-status.py" = file "config/herdr/hostname-status.py";
               "herdr/usage-status.py" = file "config/herdr/usage-status.py";
               "herdr/sounds/haki.mp3" = file "config/herdr/sounds/haki.mp3";
