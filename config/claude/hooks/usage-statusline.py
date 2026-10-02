@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 import json
 import math
-import os
 import sys
-import tempfile
-import time
 from pathlib import Path
-
-CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "herdr-usage"
 
 
 def percentage(value):
@@ -20,18 +15,6 @@ def text(value):
     if not isinstance(value, str):
         return ""
     return "".join(char for char in value if char.isprintable() and char != "\x1b").strip()[:60]
-
-
-def save_usage(value):
-    CACHE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=CACHE_DIR, delete=False) as file:
-        json.dump(value, file, separators=(",", ":"))
-        file.write("\n")
-        temporary = Path(file.name)
-    try:
-        temporary.replace(CACHE_DIR / "claude.json")
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def main():
@@ -52,8 +35,6 @@ def main():
     if remaining is not None:
         parts.append(f"{remaining:.0f}% left")
 
-    usage = {"at": int(time.time())}
-    resets = {}
     windows = []
     for key, label in (("five_hour", "5h"), ("seven_day", "7d")):
         window = limits.get(key)
@@ -62,17 +43,8 @@ def main():
         percent = percentage(window.get("used_percentage"))
         if percent is None:
             continue
-        usage[key] = percent
         windows.append(f"{label}:{percent:.0f}%")
-        reset_at = window.get("resets_at")
-        if isinstance(reset_at, (int, float)) and not isinstance(reset_at, bool) and math.isfinite(reset_at):
-            resets[key] = int(reset_at)
     if windows:
-        usage["resets_at"] = resets
-        try:
-            save_usage(usage)
-        except OSError:
-            pass
         parts.append(" ".join(windows))
     print(" · ".join(parts) if parts else "Claude")
 

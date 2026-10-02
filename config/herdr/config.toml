@@ -16,7 +16,6 @@ agent_panel_sort = "priority"
 show_agent_labels_on_pane_borders = false
 
 tab_bar_right = [
-  { type = "command", command = "python3 ~/.config/herdr/usage-status.py", interval_seconds = 60, timeout_seconds = 10 },
   { type = "zoom" },
   { type = "command", command = "python3 ~/.config/herdr/hostname-status.py", interval_seconds = 3600, timeout_seconds = 2 },
 ]
