@@ -29,8 +29,7 @@ in
     # sources the shared snippet so interactive shells, dev hosts, and this
     # file all run one implementation.
     programs.zsh.envExtra = ''
-      [[ -r "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh" ]] &&
-        source "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh"
+      source "${../../config/shell/agent-refresh.zsh}"
     '';
 
     # Keep Git identity, aliases, signing, and other host policy in the owning

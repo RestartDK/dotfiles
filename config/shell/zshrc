@@ -42,12 +42,6 @@ elif [[ -S "$HOME/.1password/agent.sock" ]]; then
   export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
 fi
 
-# Repoint the shared agent socket at the connection that just arrived. Lives in
-# the checkout so hosts pick it up without a rebuild; the system .zshenv sources
-# the same file, which covers non-interactive shells.
-[[ -r "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh" ]] &&
-  source "$HOME/.config/dotfiles/config/shell/agent-refresh.zsh"
-
 # Nix profiles. Prefer the NixOS/nix-darwin-managed user profile and retain a
 # standalone Home Manager profile only as a fallback. Remove both first so an
 # inherited PATH cannot preserve stale profile precedence. path_prepend adds to
@@ -96,11 +90,6 @@ fi
 # Do not prepend it to PATH globally, because it shadows the real CLIs
 # such as codex/claude. Invoke those wrappers explicitly if needed.
 # path_prepend "$HOME/.superset/bin"
-
-# Dotfiles checkout helpers. The canonical checkout is ~/.config/dotfiles.
-export DOTFILES="${DOTFILES:-$HOME/.config/dotfiles}"
-export DOTFILES_BIN="${DOTFILES_BIN:-$DOTFILES/bin}"
-path_prepend "$DOTFILES_BIN"
 
 # User-local tools
 path_append "$HOME/.lmstudio/bin"
