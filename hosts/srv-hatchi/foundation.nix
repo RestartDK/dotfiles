@@ -50,7 +50,10 @@ in
   services.tailscale = {
     enable = true;
     openFirewall = false;
-    extraSetFlags = [ "--netfilter-mode=off" ];
+    extraSetFlags = [
+      "--netfilter-mode=off"
+      "--advertise-routes=192.168.200.70/32"
+    ];
   };
   virtualisation.docker.enable = false;
   virtualisation.podman.enable = false;

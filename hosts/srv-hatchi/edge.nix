@@ -67,6 +67,7 @@ in
       certs.${domain} = {
         extraDomainNames = [ "*.${domain}" ];
         dnsProvider = "cloudflare";
+        dnsResolver = "1.1.1.1:53";
         environmentFile = config.my.hatchi.secretFiles.cloudflare;
         group = "caddy";
       };
@@ -113,13 +114,13 @@ in
         filtering = {
           protection_enabled = true;
           filtering_enabled = true;
-          rewrites = lib.optionals (cfg.network != null) (
-            map (name: {
-              domain = name;
+          rewrites = lib.optionals (cfg.network != null) [
+            {
+              domain = "*.${domain}";
               answer = cfg.network.dnsAnswer;
               enabled = true;
-            }) names
-          );
+            }
+          ];
         };
         filters = [ ];
       };
@@ -158,7 +159,12 @@ in
       trustedInterfaces = lib.mkForce [ "lo" ];
       allowedTCPPorts = lib.mkForce [ ];
       allowedUDPPorts = lib.mkForce [ ];
-      interfaces.tailscale0.allowedTCPPorts = [ 22 ];
+      interfaces.tailscale0.allowedTCPPorts = [
+        22
+        80
+        443
+      ];
+      interfaces.tailscale0.allowedUDPPorts = [ 53 ];
       extraInputRules = ''
         ${ingress networks.clientNetworks "tcp, udp" "53"}
         ${ingress networks.clientNetworks "tcp" "80, 443"}
