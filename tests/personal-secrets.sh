@@ -14,21 +14,30 @@ mkdir -p "$PI_CODING_AGENT_DIR"
 cd "$work"
 
 secret="$HOME/.opnix-openrouter-api-key"
-jq --arg source "$SECRET_PATH" --arg target "$secret" '
+opencode_secret="$HOME/.opnix-opencode-api-key"
+jq \
+  --arg source "$SECRET_PATH" --arg target "$secret" \
+  --arg opencodeSource "$OPENCODE_SECRET_PATH" --arg opencodeTarget "$opencode_secret" '
   .providers.openrouter.apiKey |= (split($source) | join($target))
+  | .providers["opencode-go"].apiKey |= (split($opencodeSource) | join($opencodeTarget))
 ' "$MODELS_FILE" >"$PI_CODING_AGENT_DIR/models.json"
 jq -e --slurpfile base "$BASE_MODELS" '
   del(.providers.openrouter.apiKey)
   | if .providers.openrouter == {} then del(.providers.openrouter) else . end
+  | del(.providers["opencode-go"].apiKey)
+  | if .providers["opencode-go"] == {} then del(.providers["opencode-go"]) else . end
   == $base[0]
 ' "$PI_CODING_AGENT_DIR/models.json" >/dev/null
 printf '%s\n' '{"anthropic":{"type":"api_key","key":"unrelated-fixture"}}' >"$PI_CODING_AGENT_DIR/auth.json"
 cp "$PI_CODING_AGENT_DIR/auth.json" "$work/auth-before.json"
 
 printf '%s\n' 'opnix-test-key-one' >"$secret"
-chmod 0400 "$secret"
+printf '%s\n' 'opnix-opencode-key-one' >"$opencode_secret"
+chmod 0400 "$secret" "$opencode_secret"
 pi auth print-api-key --provider openrouter >"$work/actual"
 cmp "$secret" "$work/actual"
+pi auth print-api-key --provider opencode-go >"$work/actual"
+cmp "$opencode_secret" "$work/actual"
 
 chmod 0600 "$secret"
 printf '%s\n' 'opnix-test-key-two' >"$secret"
@@ -54,4 +63,4 @@ if pi auth print-api-key --provider openrouter >"$work/actual" 2>"$work/error"; 
 fi
 cmp "$work/auth-before.json" "$PI_CODING_AGENT_DIR/auth.json"
 
-printf '%s\n' 'PASS: Pi reads file-backed keys, sees rotation, preserves logins, and rejects missing or empty keys'
+printf '%s\n' 'PASS: Pi reads both file-backed keys, sees rotation, preserves logins, and rejects missing or empty keys'

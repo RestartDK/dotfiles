@@ -56,21 +56,31 @@ assert builtins.all (
   }:
   let
     cfg = config.services.onepassword-secrets;
-    secret = cfg.secrets.openrouterApiKey;
+    openrouter = cfg.secrets.openrouterApiKey;
+    opencode = cfg.secrets.opencodeApiKey;
     home = config.home-manager.users.${userName};
+    homeDir = home.home.homeDirectory;
   in
   cfg.enable
   && cfg.tokenFile == "/etc/opnix-token"
   && cfg.users == [ ]
-  && builtins.attrNames cfg.secrets == [ "openrouterApiKey" ]
-  && secret.reference == "op://abdtxvj44nyypdbkbehdg4qbfq/jrx6q4cloqzx25ciits7qeipym/credential"
-  && secret.path == "${home.home.homeDirectory}/.opnix-openrouter-api-key"
-  && cfg.secretPaths.openrouterApiKey == secret.path
-  && secret.owner == userName
-  && secret.group == group
-  && secret.mode == "0400"
+  && builtins.attrNames cfg.secrets == [
+    "opencodeApiKey"
+    "openrouterApiKey"
+  ]
+  && openrouter.reference == "op://abdtxvj44nyypdbkbehdg4qbfq/7ggxn6axscim5f53op7helwztq/credential"
+  && openrouter.path == "${homeDir}/.opnix-openrouter-api-key"
+  && cfg.secretPaths.openrouterApiKey == openrouter.path
+  && opencode.reference == "op://abdtxvj44nyypdbkbehdg4qbfq/jrx6q4cloqzx25ciits7qeipym/credential"
+  && opencode.path == "${homeDir}/.opnix-opencode-api-key"
+  && cfg.secretPaths.opencodeApiKey == opencode.path
+  && builtins.all (secret: secret.owner == userName && secret.group == group && secret.mode == "0400") [
+    openrouter
+    opencode
+  ]
   && !(home.home.file ? ".pi/agent/auth.json")
   && !(home.home.sessionVariables ? OPENROUTER_API_KEY)
+  && !(home.home.sessionVariables ? OPENCODE_API_KEY)
 ) personalHosts;
 assert mac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
 assert twinMac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
@@ -86,6 +96,7 @@ assert builtins.all
     !(home.programs ? onepassword-secrets)
     && !(home.home.file ? ".pi/agent/auth.json")
     && !(home.home.sessionVariables ? OPENROUTER_API_KEY)
+    && !(home.home.sessionVariables ? OPENCODE_API_KEY)
     && pkgs.lib.hasPrefix "/nix/store/" home.home.file.".pi/agent/models.json".source
     && home.home.file.".pi/agent/models.json".source == ../config/pi/agent/models.json
   )
@@ -106,6 +117,7 @@ pkgs.runCommand "personal-secrets-tests"
     BASE_MODELS = ../config/pi/agent/models.json;
     MODEL_POLICY = ../config/agents/model-profiles/personal.json;
     SECRET_PATH = nativeHost.config.services.onepassword-secrets.secretPaths.openrouterApiKey;
+    OPENCODE_SECRET_PATH = nativeHost.config.services.onepassword-secrets.secretPaths.opencodeApiKey;
   }
   ''
     bash ${./personal-secrets.sh}
