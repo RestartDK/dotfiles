@@ -2,9 +2,8 @@
 
 let
   cfg = config.my.liveConfig;
-  link = path: config.lib.file.mkOutOfStoreSymlink "${cfg.repoRoot}/${path}";
-  file = path: {
-    source = link path;
+  file = source: {
+    inherit source;
     force = true;
   };
   goEnv = {
@@ -36,18 +35,24 @@ in
               [[ -d "$HOME/.local/share/zsh/site-functions" ]] && fpath=("$HOME/.local/share/zsh/site-functions" $fpath)
             '')
             (lib.mkOrder 1000 ''
-              source "${cfg.repoRoot}/config/shell/zshrc"
+              source "${../../../config/shell/zshrc}"
+            '')
+            (lib.mkOrder 1001 ''
+              source "${../../../config/shell/agent-refresh.zsh}"
+            '')
+            (lib.mkOrder 1100 ''
+              [[ -r "$HOME/.config/zsh/local.zsh" ]] && source "$HOME/.config/zsh/local.zsh"
             '')
           ];
         };
         xdg = {
           localBinInPath = true;
-          configFile."starship.toml" = file "config/shell/starship.toml";
+          configFile."starship.toml" = file ../../../config/shell/starship.toml;
         };
       })
 
       (lib.mkIf cfg.groups.git {
-        xdg.configFile."git/ignore" = file "config/git/ignore";
+        xdg.configFile."git/ignore" = file ../../../config/git/ignore;
       })
     ]
   );
