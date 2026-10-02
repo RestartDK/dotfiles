@@ -64,20 +64,23 @@ assert builtins.all (
   cfg.enable
   && cfg.tokenFile == "/etc/opnix-token"
   && cfg.users == [ ]
-  && builtins.attrNames cfg.secrets == [
-    "opencodeApiKey"
-    "openrouterApiKey"
-  ]
+  &&
+    builtins.attrNames cfg.secrets == [
+      "opencodeApiKey"
+      "openrouterApiKey"
+    ]
   && openrouter.reference == "op://abdtxvj44nyypdbkbehdg4qbfq/7ggxn6axscim5f53op7helwztq/credential"
   && openrouter.path == "${homeDir}/.opnix-openrouter-api-key"
   && cfg.secretPaths.openrouterApiKey == openrouter.path
   && opencode.reference == "op://abdtxvj44nyypdbkbehdg4qbfq/jrx6q4cloqzx25ciits7qeipym/credential"
   && opencode.path == "${homeDir}/.opnix-opencode-api-key"
   && cfg.secretPaths.opencodeApiKey == opencode.path
-  && builtins.all (secret: secret.owner == userName && secret.group == group && secret.mode == "0400") [
-    openrouter
-    opencode
-  ]
+  &&
+    builtins.all (secret: secret.owner == userName && secret.group == group && secret.mode == "0400")
+      [
+        openrouter
+        opencode
+      ]
   && !(home.home.file ? ".pi/agent/auth.json")
   && !(home.home.sessionVariables ? OPENROUTER_API_KEY)
   && !(home.home.sessionVariables ? OPENCODE_API_KEY)
