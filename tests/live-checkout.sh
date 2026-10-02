@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# Fails while any delivered config still reads from the editable checkout
-# instead of the Nix store. Host policy is not scanned, so a host may name a
-# checkout for its own authoring sync unit. Each legacy reference needs a
-# marker file under tests/live-checkout/legacy/, and the marker must be
-# deleted with the reference, so the exception list can only shrink to zero.
+# Fails when delivered config reads the editable checkout instead of the Nix
+# store, or reaches outside the store with an out-of-store symlink. Host policy
+# is not scanned, so a host may name a checkout for its own authoring sync unit.
+# A reference needs a marker file under tests/live-checkout/legacy/, and the
+# marker must be deleted with the reference, so the exception list can only
+# shrink to zero.
 set -euo pipefail
 
 repo_root="$1"
 legacy_dir="$repo_root/tests/live-checkout/legacy"
 
-pattern='repoRoot|\.config/dotfiles'
+pattern='repoRoot|\.config/dotfiles|mkOutOfStoreSymlink'
+# The module that unlinks the checkout names that path by design, so it reads
+# nothing from the checkout and is not an offender.
+not_a_reader='^modules/home/retire-checkout-links\.nix$'
 
 flatten() { printf '%s' "${1//\//__}"; }
 
@@ -24,6 +28,7 @@ offenders=()
 while read -r file; do
   [ -n "$file" ] || continue
   rel="${file#"$repo_root"/}"
+  if [[ "$rel" =~ $not_a_reader ]]; then continue; fi
   offenders+=("$rel")
   marker="$legacy_dir/$(flatten "$rel")"
   if [ ! -e "$marker" ]; then

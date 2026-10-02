@@ -397,7 +397,7 @@
           };
         in
         {
-          live-symlinks = withDotfilesInputs ./modules/home/live-symlinks.nix [ ];
+          groups = withDotfilesInputs ./modules/home/groups.nix [ ];
           cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
         };
 

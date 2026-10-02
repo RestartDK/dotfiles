@@ -4,7 +4,7 @@
   imports = [
     ../../modules/home/cobb-forwarding.nix
     ../../modules/home/dev-packages.nix
-    ../../modules/home/live-symlinks.nix
+    ../../modules/home/groups.nix
     ../../modules/home/ssh.nix
   ];
 

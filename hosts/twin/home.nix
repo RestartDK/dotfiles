@@ -5,7 +5,7 @@ let
 in
 {
   imports = [
-    ../../modules/home/live-symlinks.nix
+    ../../modules/home/groups.nix
     ../../modules/home/twin-dev-environment.nix
   ];
 

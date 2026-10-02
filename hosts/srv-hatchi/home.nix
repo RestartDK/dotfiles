@@ -2,7 +2,7 @@
 {
   imports = [
     ../../modules/home/dev-packages.nix
-    ../../modules/home/live-symlinks.nix
+    ../../modules/home/groups.nix
   ];
 
   home = {

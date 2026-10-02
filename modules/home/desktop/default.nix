@@ -1,4 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  osConfig ? null,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.liveConfig;
@@ -26,17 +32,20 @@ in
         };
         # Hyprtoolkit/Hyprlauncher only search ~/.local/share/icons and
         # /usr/share/icons, not NixOS' /run/current-system/sw/share/icons.
+        # The hicolor fallback theme is the merged tree in the system profile,
+        # which carries every app's own icons; the package has only the theme
+        # skeleton and would drop them.
         home.file = {
           ".local/share/icons/hicolor" = {
-            source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/hicolor";
+            source = "${osConfig.system.path}/share/icons/hicolor";
             force = true;
           };
           ".local/share/icons/Papirus" = {
-            source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/Papirus";
+            source = "${pkgs.papirus-icon-theme}/share/icons/Papirus";
             force = true;
           };
           ".local/share/icons/breeze" = {
-            source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/breeze";
+            source = "${pkgs.kdePackages."breeze-icons"}/share/icons/breeze";
             force = true;
           };
         };
