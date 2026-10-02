@@ -49,6 +49,8 @@ let
     export function parseFrontmatter() { throw new Error("pi-coding-agent is a resolution stub"); }
     EOF
   '';
+  personalMcp = builtins.fromJSON (builtins.readFile ../config/pi/agent/mcp.json);
+  workMcp = builtins.fromJSON (builtins.readFile ../config/pi/agent/mcp-work.json);
   owners = [
     {
       home = macHome "dkumlin-macbook-pro";
@@ -115,8 +117,13 @@ assert builtins.all (
       package.text or ""
     )
   ) home.home.packages
+  &&
+    home.home.file.".pi/agent/mcp.json".source
+    == (if profile == "work" then ../config/pi/agent/mcp-work.json else ../config/pi/agent/mcp.json)
   && !(home.home.file ? ".pi/agent/auth.json")
 ) owners;
+assert !(personalMcp.mcpServers ? figma);
+assert workMcp.mcpServers ? figma;
 pkgs.runCommand "agent-profile-tests"
   {
     nativeBuildInputs = [

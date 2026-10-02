@@ -15,6 +15,11 @@ let
   opencode = allAgents || cfg.groups.opencode;
   pi = allAgents || cfg.groups.pi;
   piPackageNames = import ../../../packages/pi-package-names.nix;
+  piMcpSource =
+    if config.my.ai.profile == "work" then
+      ../../../config/pi/agent/mcp-work.json
+    else
+      ../../../config/pi/agent/mcp.json;
   piPackages = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system};
   piPackage = name: {
     source = "${piPackages.${name}}/lib/node_modules/${name}";
@@ -156,7 +161,7 @@ in
         };
         home.file.".pi/agent/models.json" = modelsFile;
         home.file.".pi/agent/mcp.json" = {
-          source = ../../../config/pi/agent/mcp.json;
+          source = piMcpSource;
           force = true;
         };
         home.file.".pi/agent/extensions" = {
