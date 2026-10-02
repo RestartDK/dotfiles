@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.liveConfig;
@@ -28,15 +33,15 @@ in
         # /usr/share/icons, not NixOS' /run/current-system/sw/share/icons.
         home.file = {
           ".local/share/icons/hicolor" = {
-            source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/hicolor";
+            source = "${pkgs.hicolor-icon-theme}/share/icons/hicolor";
             force = true;
           };
           ".local/share/icons/Papirus" = {
-            source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/Papirus";
+            source = "${pkgs.papirus-icon-theme}/share/icons/Papirus";
             force = true;
           };
           ".local/share/icons/breeze" = {
-            source = config.lib.file.mkOutOfStoreSymlink "/run/current-system/sw/share/icons/breeze";
+            source = "${pkgs.kdePackages."breeze-icons"}/share/icons/breeze";
             force = true;
           };
         };

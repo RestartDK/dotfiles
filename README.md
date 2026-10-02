@@ -47,7 +47,7 @@ Nix owns the canonical layer, and a path Nix owns is never writable. The tool ow
 <project>/.pi/settings.json         a project-scoped pi override
 ```
 
-Directories are linked recursively, so a canonical directory is a real directory whose entries are store symlinks and a local file can sit beside them. `tests/live-checkout.sh` fails when delivered config reads the authoring checkout instead of the store, and its exception list can only shrink.
+Directories are linked recursively, so a canonical directory is a real directory whose entries are store symlinks and a local file can sit beside them. `tests/live-checkout.sh` fails when delivered config reads the authoring checkout or reaches outside the store with an out-of-store symlink, and its exception list can only shrink.
 
 ## Changing something
 
