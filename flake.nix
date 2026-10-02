@@ -75,6 +75,7 @@
         system:
         import nixpkgs {
           inherit system;
+          overlays = [ self.overlays.default ];
           config.allowUnfree = true;
         };
       treefmtEval = forAllSystems (
@@ -210,6 +211,7 @@
         };
       twinPkgs = import inputs.nixpkgs-unstable {
         system = linuxSystem;
+        overlays = [ self.overlays.default ];
         config.allowUnfree = true;
       };
       privateValues = import inputs.private;
@@ -224,6 +226,8 @@
       hatchiPhysicalPlatform = import ./hosts/srv-hatchi/physical-platform.nix { inherit inputs; };
     in
     {
+      overlays.default = import ./overlays { inherit inputs; };
+
       packages = forAllSystems (
         system:
         let
@@ -243,9 +247,7 @@
           nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
           pi = inputs.llm-agents.packages.${system}.pi;
-          terminal-browser = pkgs.callPackage ./packages/terminal-browser {
-            terminalBrowser = inputs.llm-agents.packages.${system}.terminal-browser;
-          };
+          terminal-browser = pkgs.terminal-browser;
           pi-package-updater = piPackageUpdater;
           default = traitor;
         }
@@ -299,6 +301,10 @@
         system:
         {
           terminal-browser-namespace = self.packages.${system}.terminal-browser.tests.namespace;
+          terminal-browser-overlay = import ./tests/terminal-browser-overlay.nix {
+            pkgs = pkgsFor system;
+            inherit self inputs;
+          };
           fleet =
             (pkgsFor system).runCommand "fleet-tests"
               {
