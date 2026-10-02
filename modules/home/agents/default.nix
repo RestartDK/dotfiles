@@ -10,23 +10,12 @@ let
   cfg = config.my.liveConfig;
   allAgents = cfg.groups.agents;
   agentSkillsEnabled = allAgents || cfg.groups.agentSkills;
-  agentSkillsPath = "config/agents/skills";
   codex = allAgents || cfg.groups.codex;
   claude = allAgents || cfg.groups.claude;
   opencode = allAgents || cfg.groups.opencode;
   pi = allAgents || cfg.groups.pi;
   piPackageNames = import ../../../packages/pi-package-names.nix;
   piPackages = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system};
-  link = path: config.lib.file.mkOutOfStoreSymlink "${cfg.repoRoot}/${path}";
-  file = path: {
-    source = link path;
-    force = true;
-  };
-  dir = path: {
-    source = link path;
-    recursive = false;
-    force = true;
-  };
   piPackage = name: {
     source = "${piPackages.${name}}/lib/node_modules/${name}";
     recursive = false;
@@ -40,7 +29,10 @@ let
   );
   modelsFile =
     if config.my.ai.openrouterKeyFile == null then
-      file "config/pi/agent/models.json"
+      {
+        source = ../../../config/pi/agent/models.json;
+        force = true;
+      }
     else
       let
         models = builtins.fromJSON (builtins.readFile ../../../config/pi/agent/models.json);
@@ -58,52 +50,140 @@ in
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       (lib.mkIf agentSkillsEnabled {
-        home.file.".agents/.skill-lock.json" = file "config/agents/.skill-lock.json";
-        home.file.".agents/skills" = dir agentSkillsPath;
-        home.file.".agents/agents" = dir "config/agents/agents";
+        home.file.".agents/.skill-lock.json" = {
+          source = ../../../config/agents/.skill-lock.json;
+          force = true;
+        };
+        home.file.".agents/skills" = {
+          source = ../../../config/agents/skills;
+          recursive = true;
+          force = true;
+        };
+        home.file.".agents/agents" = {
+          source = ../../../config/agents/agents;
+          recursive = true;
+          force = true;
+        };
       })
 
       (lib.mkIf (agentSkillsEnabled || pi) {
-        xdg.configFile."dstack/models.json" =
-          file "config/agents/model-profiles/${config.my.ai.profile}.json";
+        xdg.configFile."dstack/models.json" = {
+          source = ../../../config/agents/model-profiles/${config.my.ai.profile}.json;
+          force = true;
+        };
       })
 
       (lib.mkIf (pi && !agentSkillsEnabled) {
-        home.file.".agents/skills" = dir cfg.piSkillsPath;
-        home.file.".agents/agents" = dir "config/agents/agents";
+        home.file.".agents/skills" = {
+          source = "${../../../.}/${cfg.piSkillsPath}";
+          recursive = true;
+          force = true;
+        };
+        home.file.".agents/agents" = {
+          source = ../../../config/agents/agents;
+          recursive = true;
+          force = true;
+        };
       })
 
       (lib.mkIf codex {
-        home.file.".codex/AGENTS.md" = file "config/codex/AGENTS.md";
-        home.file.".codex/hooks.json" = file "config/codex/hooks.json";
-        home.file.".codex/herdr-agent-state.sh" = file "config/codex/herdr-agent-state.sh";
-        home.file.".codex/rules/default.rules" = file "config/codex/rules/default.rules";
+        home.file.".codex/AGENTS.md" = {
+          source = ../../../config/codex/AGENTS.md;
+          force = true;
+        };
+        home.file.".codex/hooks.json" = {
+          source = ../../../config/codex/hooks.json;
+          force = true;
+        };
+        home.file.".codex/herdr-agent-state.sh" = {
+          source = ../../../config/codex/herdr-agent-state.sh;
+          force = true;
+        };
+        home.file.".codex/rules/default.rules" = {
+          source = ../../../config/codex/rules/default.rules;
+          force = true;
+        };
       })
 
       (lib.mkIf claude {
-        home.file.".claude/settings.json" = file "config/claude/settings.json";
-        home.file.".claude/hooks/herdr-agent-state.sh" = file "config/claude/hooks/herdr-agent-state.sh";
-        home.file.".claude/hooks/usage-statusline.py" = file "config/claude/hooks/usage-statusline.py";
-        home.file.".claude/skills" = lib.mkIf agentSkillsEnabled (dir agentSkillsPath);
+        home.file.".claude/settings.json" = {
+          source = ../../../config/claude/settings.json;
+          force = true;
+        };
+        home.file.".claude/hooks/herdr-agent-state.sh" = {
+          source = ../../../config/claude/hooks/herdr-agent-state.sh;
+          force = true;
+        };
+        home.file.".claude/hooks/usage-statusline.py" = {
+          source = ../../../config/claude/hooks/usage-statusline.py;
+          force = true;
+        };
+        home.file.".claude/skills" = lib.mkIf agentSkillsEnabled {
+          source = ../../../config/agents/skills;
+          recursive = true;
+          force = true;
+        };
       })
 
       (lib.mkIf opencode {
-        xdg.configFile."opencode/opencode.json" = file "config/opencode/opencode.json";
-        xdg.configFile."opencode/package.json" = file "config/opencode/package.json";
-        xdg.configFile."opencode/plugins" = dir "config/opencode/plugins";
+        xdg.configFile."opencode/opencode.json" = {
+          source = ../../../config/opencode/opencode.json;
+          force = true;
+        };
+        xdg.configFile."opencode/package.json" = {
+          source = ../../../config/opencode/package.json;
+          force = true;
+        };
+        xdg.configFile."opencode/plugins" = {
+          source = ../../../config/opencode/plugins;
+          recursive = true;
+          force = true;
+        };
       })
 
       (lib.mkIf pi {
-        home.file.".pi/agent/AGENTS.md" = file "config/pi/agent/AGENTS.md";
-        home.file.".pi/agent/keybindings.json" = file "config/pi/agent/keybindings.json";
-        home.file.".pi/agent/settings.json" = file cfg.piSettingsFile;
+        home.file.".pi/agent/AGENTS.md" = {
+          source = ../../../config/pi/agent/AGENTS.md;
+          force = true;
+        };
+        home.file.".pi/agent/keybindings.json" = {
+          source = ../../../config/pi/agent/keybindings.json;
+          force = true;
+        };
+        home.file.".pi/agent/settings.json" = {
+          source = "${../../../.}/${cfg.piSettingsFile}";
+          force = true;
+        };
         home.file.".pi/agent/models.json" = modelsFile;
-        home.file.".pi/agent/mcp.json" = file "config/pi/agent/mcp.json";
-        home.file.".pi/agent/extensions" = dir "config/pi/agent/extensions";
-        home.file.".pi/agent/lib" = dir "config/pi/agent/lib";
-        home.file.".pi/agent/bin" = dir "config/pi/agent/bin";
-        home.file.".pi/agent/prompts" = dir "config/pi/agent/prompts";
-        home.file.".pi/agent/themes" = dir "config/pi/agent/themes";
+        home.file.".pi/agent/mcp.json" = {
+          source = ../../../config/pi/agent/mcp.json;
+          force = true;
+        };
+        home.file.".pi/agent/extensions" = {
+          source = ../../../config/pi/agent/extensions;
+          recursive = true;
+          force = true;
+        };
+        home.file.".pi/agent/lib" = {
+          source = ../../../config/pi/agent/lib;
+          recursive = true;
+          force = true;
+        };
+        home.file.".pi/agent/bin" = {
+          source = ../../../config/pi/agent/bin;
+          recursive = true;
+          force = true;
+        };
+        home.file.".pi/agent/prompts" = {
+          source = ../../../config/pi/agent/prompts;
+          recursive = true;
+          force = true;
+        };
+        home.file.".pi/agent/themes" = {
+          source = ../../../config/pi/agent/themes;
+          recursive = true;
+          force = true;
+        };
       })
 
       (lib.mkIf pi {
