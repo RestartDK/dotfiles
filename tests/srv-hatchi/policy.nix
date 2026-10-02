@@ -220,8 +220,18 @@ assert !storage.boot.loader.grub.enable;
 assert cfg.networking.firewall.allowedTCPPorts == [ ];
 assert cfg.networking.firewall.allowedUDPPorts == [ ];
 assert cfg.networking.firewall.trustedInterfaces == [ "lo" ];
-assert cfg.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 80 443 ];
-assert production.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 80 443 ];
+assert
+  cfg.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [
+    22
+    80
+    443
+  ];
+assert
+  production.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [
+    22
+    80
+    443
+  ];
 assert cfg.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
 assert production.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
 assert production.my.hatchi.network.dnsAnswer == "192.168.200.70";
