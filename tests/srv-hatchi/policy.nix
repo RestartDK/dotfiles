@@ -220,8 +220,20 @@ assert !storage.boot.loader.grub.enable;
 assert cfg.networking.firewall.allowedTCPPorts == [ ];
 assert cfg.networking.firewall.allowedUDPPorts == [ ];
 assert cfg.networking.firewall.trustedInterfaces == [ "lo" ];
-assert cfg.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 ];
-assert production.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [ 22 ];
+assert
+  cfg.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [
+    22
+    80
+    443
+  ];
+assert
+  production.networking.firewall.interfaces.tailscale0.allowedTCPPorts == [
+    22
+    80
+    443
+  ];
+assert cfg.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
+assert production.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
 assert production.my.hatchi.network.dnsAnswer == "192.168.200.70";
 assert
   production.my.hatchi.network.clientNetworks == [
@@ -237,6 +249,20 @@ assert
   production.services.adguardhome.settings.dns.upstream_dns == [
     "1.1.1.1"
     "9.9.9.9"
+  ];
+assert
+  production.services.adguardhome.settings.filtering.rewrites == [
+    {
+      domain = "*.chateauducipieres.com";
+      answer = "192.168.200.70";
+      enabled = true;
+    }
+  ];
+assert production.security.acme.certs."chateauducipieres.com".dnsResolver == "1.1.1.1:53";
+assert
+  production.services.tailscale.extraSetFlags == [
+    "--netfilter-mode=off"
+    "--advertise-routes=192.168.200.70/32"
   ];
 assert lib.hasInfix "ip saddr 192.168.200.0/24 meta l4proto { tcp } th dport { 22 } accept"
   production.networking.firewall.extraInputRules;
