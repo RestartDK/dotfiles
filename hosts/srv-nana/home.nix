@@ -128,15 +128,6 @@
       icon = "system-shutdown";
       categories = [ "Settings" ];
     };
-
-    settings-nixos-config = {
-      name = "NixOS Config";
-      genericName = "NixOS Configuration";
-      comment = "Open the NixOS configuration repository";
-      exec = "xdg-open /home/dkumlin/.config/dotfiles";
-      icon = "folder";
-      categories = [ "Settings" ];
-    };
   };
 
   xdg.dataFile = builtins.listToAttrs (
@@ -169,8 +160,10 @@
 
   my.liveConfig = {
     enable = true;
-    repoRoot = "/home/dkumlin/.config/dotfiles";
-    sync.enable = true;
+    sync = {
+      enable = true;
+      checkout = "/home/dkumlin/.config/dotfiles";
+    };
     groups = {
       shell = true;
       git = true;

@@ -17,12 +17,7 @@
   };
 
   options.my.liveConfig = {
-    enable = lib.mkEnableOption "live out-of-store dotfile symlinks";
-
-    repoRoot = lib.mkOption {
-      type = lib.types.str;
-      description = "Absolute path to the editable dotfiles checkout on this host.";
-    };
+    enable = lib.mkEnableOption "the host's dotfiles configuration layers";
 
     piSettingsFile = lib.mkOption {
       type = lib.types.str;
@@ -38,6 +33,12 @@
 
     sync = {
       enable = lib.mkEnableOption "automatic synchronization of the editable dotfiles checkout";
+
+      checkout = lib.mkOption {
+        type = lib.types.nullOr (lib.types.strMatching "/.+");
+        default = null;
+        description = "Absolute path to the authoring checkout this host keeps rebased. Only hosts that author the config need one.";
+      };
 
       intervalSeconds = lib.mkOption {
         type = lib.types.ints.positive;

@@ -1,4 +1,4 @@
-{ config, osConfig, ... }:
+{ osConfig, ... }:
 {
   imports = [
     ../../modules/home/dev-packages.nix
@@ -13,7 +13,6 @@
 
   my.liveConfig = {
     enable = true;
-    repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
     groups = {
       shell = true;
       git = true;

@@ -19,10 +19,12 @@ let
     ]
     ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.util-linux ];
     text = ''
-      output="$(DOTFILES=${lib.escapeShellArg cfg.repoRoot} ${traitorExe} sync "$@" 2>&1)" || {
+      output="$(DOTFILES=${lib.escapeShellArg cfg.sync.checkout} ${traitorExe} sync "$@" 2>&1)" || {
         printf '%s\n' "$output" >&2
         if [[ $(uname -s) == Darwin && $output == *conflict* ]]; then
           /usr/bin/osascript -e 'display notification "Run traitor sync to inspect the conflict." with title "Dotfiles sync blocked"' >/dev/null 2>&1 || true
+        elif command -v notify-send >/dev/null 2>&1; then
+          notify-send "Dotfiles sync failed" "$output" >/dev/null 2>&1 || true
         fi
         exit 1
       }
@@ -31,9 +33,15 @@ let
   };
 in
 {
-  config = lib.mkIf (cfg.enable && cfg.sync.enable) (
+  config = lib.mkIf (cfg.enable && cfg.sync.enable && cfg.sync.checkout != null) (
     lib.mkMerge [
       {
+        assertions = [
+          {
+            assertion = lib.mod cfg.sync.intervalSeconds 60 == 0;
+            message = "my.liveConfig.sync.intervalSeconds must be a whole number of minutes";
+          }
+        ];
         home.packages = [ sync ];
       }
 
@@ -43,7 +51,7 @@ in
           Service = {
             Type = "oneshot";
             ExecStart = lib.getExe sync;
-            WorkingDirectory = cfg.repoRoot;
+            WorkingDirectory = cfg.sync.checkout;
           };
         };
 
@@ -51,7 +59,7 @@ in
           Unit.Description = "Synchronize the editable dotfiles checkout";
           Timer = {
             OnBootSec = "2m";
-            OnUnitActiveSec = "${toString cfg.sync.intervalSeconds}s";
+            OnCalendar = "*:0/${toString (cfg.sync.intervalSeconds / 60)}";
             Persistent = true;
           };
           Install.WantedBy = [ "timers.target" ];
@@ -66,7 +74,7 @@ in
             ProcessType = "Background";
             RunAtLoad = true;
             StartInterval = cfg.sync.intervalSeconds;
-            WorkingDirectory = cfg.repoRoot;
+            WorkingDirectory = cfg.sync.checkout;
             StandardOutPath = "${config.home.homeDirectory}/Library/Logs/traitor-sync.log";
             StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/traitor-sync-error.log";
           };
