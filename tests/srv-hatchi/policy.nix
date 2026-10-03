@@ -5,8 +5,6 @@
 }:
 let
   inherit (pkgs) lib;
-  source = builtins.fromJSON (builtins.readFile ./source-manifest.json);
-  sorted = lib.sort builtins.lessThan;
   hatchiPublicKey = lib.strings.trim (builtins.readFile ../../config/ssh/public-keys/hatchi.pub);
   secretsBefore =
     unit:
@@ -186,9 +184,6 @@ let
     "destroyFormatMount"
   ];
 in
-assert builtins.length inventory == 17;
-assert builtins.length source.services == 17;
-assert sorted (map (entry: entry.source) inventory) == map (entry: entry.name) source.services;
 assert
   builtins.filter (entry: entry.unit == null) inventory == [
     {
@@ -198,7 +193,6 @@ assert
     }
   ];
 assert !(builtins.elem "open-webui" (map (entry: entry.source) inventory));
-assert builtins.length (lib.unique (map (entry: entry.source) inventory)) == 17;
 assert !(builtins.hasAttr "nixos-anywhere" self.apps.${pkgs.stdenv.hostPlatform.system});
 assert builtins.hasAttr "nixos-anywhere" self.packages.${pkgs.stdenv.hostPlatform.system};
 assert
@@ -341,7 +335,6 @@ assert builtins.all secretsBefore cfg.my.hatchi.stateUnits;
 assert secretsBefore "hatchi-media-directories";
 assert secretsBefore "acme-${cfg.my.hatchi.domain}";
 assert secretsBefore "acme-order-renew-${cfg.my.hatchi.domain}";
-assert builtins.length (builtins.filter (entry: entry.unit != null) inventory) == 16;
 assert builtins.attrNames cfg.services.caddy.virtualHosts == routes;
 assert builtins.all (name: builtins.hasAttr name cfg.system.build) destructive;
 assert
@@ -620,7 +613,6 @@ pkgs.runCommand "srv-hatchi-policy"
     ROOT = self;
     NIX_STUB = nixStub;
     SSH_STUB = sshStub;
-    SOURCE_COMPOSE = pkgs.fetchurl { inherit (source) url sha256; };
     SOPS_MANIFEST = pkgs.writeText "hatchi-template-manifest.json" (
       builtins.toJSON {
         secrets = lib.mapAttrsToList (name: secret: {

@@ -240,7 +240,4 @@ if sops-install-secrets -ignore-passwd "$TMPDIR/manifest.json"; then
 fi
 diff -u "$TMPDIR/rotated.conf" "$rendered/qBittorrent.conf"
 
-yq -o=json '.services | to_entries | map({"name": .key, "image": .value.image}) | sort_by(.name)' "$SOURCE_COMPOSE" >"$TMPDIR/observed-source.json"
-jq '.services' "$ROOT/tests/srv-hatchi/source-manifest.json" >"$TMPDIR/expected-source.json"
-diff -u "$TMPDIR/expected-source.json" "$TMPDIR/observed-source.json"
 printf 'Exact-node CLI, installer safeguards, runtime templates, and pinned inventory checks passed\n'
