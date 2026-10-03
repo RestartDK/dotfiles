@@ -13,5 +13,6 @@
     ./services/couchdb.nix
     ./services/monitoring.nix
     ./services/remote-nana.nix
+    ./runner.nix
   ];
 }

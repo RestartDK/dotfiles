@@ -35,3 +35,14 @@ Hatchi's physical profile puts EFI, NixOS, service state, and databases on the s
 Hatchi has one physical NixOS configuration for installation and deployment. Its stable disk IDs and generated hardware facts are committed. Follow [the Hatchi installation procedure](../hosts/srv-hatchi/INSTALL.md) to run the guarded `nixos-anywhere` installation from a clean `main` checkout.
 
 Hatchi's production configuration enables runtime 1Password secrets and declares its LAN as `192.168.200.0/24`. SSH remains allowed on `tailscale0` independently of the LAN rules. Before deployment, [provision the SOPS bootstrap files](../hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment). A native pre-switch check rejects missing or undecryptable bootstrap files before changing running services. Credential formats and verification limits are documented in [the secret integration guide](../tests/srv-hatchi/onepassword.md).
+
+## LAN runner
+
+`deploy.yml` is meant to run on the self-hosted runner declared in `hosts/srv-hatchi/runner.nix`, labelled `lan-deploy`. Orchestrating a deploy from GitHub's cloud crosses a Tailscale relay, and that latency, not compilation, is what makes the current deploys take 45 to 85 minutes against a closure of 1818 paths. From the LAN the round trip is about 6 ms.
+
+Two pieces are provisioned once on the host and are deliberately not in the store:
+
+- `/var/lib/gh-runner/token` holds a fine-grained personal access token with `Administration: read and write` on `RestartDK/dotfiles`. The runner is ephemeral, so it re-registers for every job, which a one hour registration token cannot do.
+- `/var/lib/nix-cache/secret` is the binary cache key, generated once with `nix-store --generate-binary-cache-key hatchi-cache-1 /var/lib/nix-cache/secret /var/lib/nix-cache/public`. Hatchi signs what it builds with it, and the public half belongs in the consumers' `extra-trusted-public-keys`.
+
+Only the Deploy workflow targets `lan-deploy`, and it triggers on `workflow_run` after CI on `main`, so a pull request from a fork cannot reach the runner. The deploy key itself stays in the GitHub `deploy` environment behind its approval gate rather than on the runner.
