@@ -41,7 +41,10 @@ in
     inherit tokenFile;
     user = runnerUser;
     group = runnerUser;
-    extraLabels = [ "lan-deploy" ];
+    extraLabels = [
+      "lan-deploy"
+      "lan-ci"
+    ];
     replace = true;
     ephemeral = true;
     workDir = runnerDir;
