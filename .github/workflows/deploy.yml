@@ -14,9 +14,8 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_sha == github.sha
-    runs-on: ubuntu-latest
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, lan-deploy]
     timeout-minutes: 240
     environment: deploy
     permissions:
@@ -24,8 +23,9 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
-        host: [srv-nana, srv-hatchi]
+        host: [srv-hatchi, srv-nana]
     concurrency:
       group: "deploy-${{ matrix.host }}"
       cancel-in-progress: false
@@ -36,20 +36,3 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
-      - uses: DeterminateSystems/determinate-nix-action@v3.21.9
-      - uses: DeterminateSystems/flakehub-cache-action@v3.21.9
-      - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          audience: ${{ secrets.TS_AUDIENCE }}
-          tags: tag:ci-deploy
-          ping: ${{ env.TARGET }}
-      - uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Install the committed SSH host keys
-        run: |
-          mkdir -p "$HOME/.ssh"
-          cat "config/ssh/known_hosts/$TARGET" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-      - run: ./bin/traitor deploy "$TARGET" --remote-build --skip-checks
