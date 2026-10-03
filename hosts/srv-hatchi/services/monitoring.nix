@@ -28,8 +28,8 @@
       server = {
         http_addr = "127.0.0.1";
         http_port = 3001;
-        domain = "grafana.${config.my.hatchi.domain}";
-        root_url = "https://grafana.${config.my.hatchi.domain}";
+        domain = "grafana.${config.my.domain}";
+        root_url = "https://grafana.${config.my.domain}";
       };
       security = {
         cookie_secure = true;
@@ -64,7 +64,7 @@
     owner = "grafana";
     restartUnits = [ "grafana.service" ];
   };
-  services.caddy.virtualHosts."grafana.${config.my.hatchi.domain}".extraConfig =
+  services.caddy.virtualHosts."grafana.${config.my.domain}".extraConfig =
     "reverse_proxy 127.0.0.1:${toString config.services.grafana.settings.server.http_port}";
   my.hatchi.stateUnits = [
     "prometheus"

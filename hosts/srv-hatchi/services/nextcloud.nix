@@ -5,7 +5,7 @@
   ...
 }:
 let
-  name = "nextcloud.${config.my.hatchi.domain}";
+  name = "nextcloud.${config.my.domain}";
 in
 {
   services.nextcloud = {

@@ -20,9 +20,9 @@
     };
   };
   services.caddy.virtualHosts = {
-    "komga.${config.my.hatchi.domain}".extraConfig =
+    "komga.${config.my.domain}".extraConfig =
       "reverse_proxy 127.0.0.1:${toString config.services.komga.settings.server.port}";
-    "suwayomi.${config.my.hatchi.domain}".extraConfig =
+    "suwayomi.${config.my.domain}".extraConfig =
       "reverse_proxy 127.0.0.1:${toString config.services.suwayomi-server.settings.server.port}";
   };
   my.hatchi = {
