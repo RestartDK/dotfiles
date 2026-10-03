@@ -598,11 +598,11 @@
     "private": {
       "flake": false,
       "locked": {
-        "lastModified": 1791061829,
-        "narHash": "sha256-/CxL/VeXMSQ08y6M8PAgM13PItdaEtFyiNMboPjoK/I=",
+        "lastModified": 1791067612,
+        "narHash": "sha256-1v4G+zT3JE7Gs6hXxo761hmGTKl654vJz/+P3v8XY2U=",
         "owner": "RestartDK",
         "repo": "dotfiles-private",
-        "rev": "2b4135fec49545b0b55f51af512fe615ca568ef9",
+        "rev": "a7d508bc2e1d8b6cba9024338f8fbf032f58dfe9",
         "type": "github"
       },
       "original": {

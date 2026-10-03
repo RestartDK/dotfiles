@@ -17,6 +17,7 @@ let
     grafanaPassword = null;
     nextcloudPassword = null;
     qbittorrentPasswordHash = null;
+    runnerAccessToken = null;
   };
   adguardConfig = pkgs.writeText "AdGuardHome.yaml" (
     builtins.toJSON (
