@@ -13,6 +13,7 @@ in
     inputs.home-manager.nixosModules.home-manager
     ../../modules/nixos/host-options.nix
     ../../modules/nixos/network.nix
+    ../../modules/nixos/private.nix
     ../../modules/nixos/deploy.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/numtide-cache.nix
@@ -37,6 +38,7 @@ in
     extraSpecialArgs = {
       inherit inputs;
       dotfilesInputs = inputs;
+      network = config.my.private;
     };
     users.${config.my.host.userName} = import ./home.nix;
   };

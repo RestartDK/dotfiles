@@ -4,6 +4,7 @@
   inputs,
 }:
 let
+  privateValues = import inputs.private;
   mac = self.darwinConfigurations.dkumlin-macbook-pro.config;
   nana = self.nixosConfigurations.srv-nana.config;
   twinMac = self.darwinConfigurations.dkumlin-twin-macbook-pro.config;
@@ -69,10 +70,10 @@ assert builtins.all (
       "opencodeApiKey"
       "openrouterApiKey"
     ]
-  && openrouter.reference == "op://abdtxvj44nyypdbkbehdg4qbfq/7ggxn6axscim5f53op7helwztq/credential"
+  && openrouter.reference == privateValues.personalSecretReferences.openrouterApiKey
   && openrouter.path == "${homeDir}/.opnix-openrouter-api-key"
   && cfg.secretPaths.openrouterApiKey == openrouter.path
-  && opencode.reference == "op://abdtxvj44nyypdbkbehdg4qbfq/jrx6q4cloqzx25ciits7qeipym/credential"
+  && opencode.reference == privateValues.personalSecretReferences.opencodeApiKey
   && opencode.path == "${homeDir}/.opnix-opencode-api-key"
   && cfg.secretPaths.opencodeApiKey == opencode.path
   &&

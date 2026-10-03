@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ lib, network, ... }:
 
 {
   programs.ssh = {
@@ -6,17 +6,17 @@
     enableDefaultConfig = false;
     settings = {
       nana-lan = lib.hm.dag.entryBefore [ "nana" ] {
-        header = "Match host nana,srv-nana exec \"ping -c 1 -n -W 1 192.168.200.182 >/dev/null 2>&1\"";
-        HostName = "192.168.200.182";
+        header = "Match host nana,srv-nana exec \"ping -c 1 -n -W 1 ${network.hosts.nana.lan} >/dev/null 2>&1\"";
+        HostName = network.hosts.nana.lan;
       };
       hatchi-lan = lib.hm.dag.entryBefore [ "hatchi" ] {
-        header = "Match host hatchi,srv-hatchi exec \"ping -c 1 -n -W 1 192.168.200.70 >/dev/null 2>&1\"";
-        HostName = "192.168.200.70";
+        header = "Match host hatchi,srv-hatchi exec \"ping -c 1 -n -W 1 ${network.hosts.hatchi.lan} >/dev/null 2>&1\"";
+        HostName = network.hosts.hatchi.lan;
       };
 
       nana = {
         header = "Host nana srv-nana";
-        HostName = "100.111.97.20";
+        HostName = network.hosts.nana.tailnet;
         User = "dkumlin";
         IdentityFile = [
           "~/.ssh/nana.pub"
@@ -27,7 +27,7 @@
 
       hatchi = {
         header = "Host hatchi srv-hatchi";
-        HostName = "100.85.39.42";
+        HostName = network.hosts.hatchi.tailnet;
         User = "dkumlin";
         IdentityFile = [
           "~/.ssh/hatchi.pub"

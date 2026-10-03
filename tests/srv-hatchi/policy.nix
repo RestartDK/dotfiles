@@ -329,7 +329,7 @@ assert
   cfg.virtualisation.docker.enable == false
   && cfg.virtualisation.podman.enable == false
   && cfg.services.cockpit.enable == false;
-assert cfg.my.network == null && cfg.my.hatchi.remoteNana == null;
+assert cfg.my.hatchi.remoteNana == null;
 assert lib.versions.major cfg.services.nextcloud.package.version == "33";
 assert cfg.services.nextcloud.datadir == "/srv/nextcloud";
 assert cfg.my.host.uid == 1000;
@@ -435,11 +435,12 @@ assert
 assert
   renamedUser.home-manager.users.hatchi-fixture.home.homeDirectory == "/srv/home/hatchi-fixture";
 assert renamedUser.users.users.hatchi-fixture.home == "/srv/home/hatchi-fixture";
-assert cfg.my.hatchi.onepassword.references.glanceKey != null;
+assert cfg.my.hatchi.onepassword.references.glanceKey == null;
 assert privateMachine.my.hatchi.onepassword.references.glanceKey == null;
 assert privateMachine.my.hatchi.onepassword.references.grafanaKey == null;
-assert
-  cfg.my.hatchi.onepassword.references.glancePassword == "op://Homelab/Chateau glance/password";
+assert lib.all (reference: lib.hasPrefix "op://" reference) (
+  builtins.attrValues production.my.hatchi.onepassword.references
+);
 assert
   withAppSecrets.services.glance.settings.auth.users.daniel.password._secret
   == "/run/hatchi-onepassword/glancePassword";

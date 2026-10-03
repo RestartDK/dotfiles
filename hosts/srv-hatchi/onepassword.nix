@@ -11,11 +11,11 @@ let
     cloudflare = null;
     adguardPasswordHash = null;
     couchdbAdmin = null;
-    glanceKey = "op://Homelab/Chateau glance/add more/secret password";
-    glancePassword = "op://Homelab/Chateau glance/password";
+    glanceKey = null;
+    glancePassword = null;
     grafanaKey = null;
-    grafanaPassword = "op://Homelab/Chateau grafana/password";
-    nextcloudPassword = "op://Homelab/Chateau nextcloud admin/password";
+    grafanaPassword = null;
+    nextcloudPassword = null;
     qbittorrentPasswordHash = null;
   };
   adguardConfig = pkgs.writeText "AdGuardHome.yaml" (

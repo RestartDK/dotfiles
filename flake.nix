@@ -205,9 +205,11 @@
         system = linuxSystem;
         config.allowUnfree = true;
       };
+      privateValues = import inputs.private;
       homeSpecialArgs = {
         inherit inputs;
         dotfilesInputs = inputs;
+        network = privateValues;
       };
       hatchiPkgsModule = {
         nixpkgs.pkgs = pkgsFor linuxSystem;
@@ -529,7 +531,10 @@
       nixosModules.srv-hatchi = import ./hosts/srv-hatchi;
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           hatchiPkgsModule
           self.nixosModules.srv-hatchi
@@ -540,7 +545,10 @@
 
       nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           ./hosts/srv-nana
           home-manager.nixosModules.home-manager
@@ -567,7 +575,10 @@
 
       darwinConfigurations."dkumlin-macbook-pro" = nix-darwin.lib.darwinSystem {
         system = darwinSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           ./hosts/dkumlin-macbook-pro
           home-manager.darwinModules.home-manager
@@ -585,7 +596,10 @@
 
       darwinConfigurations."dkumlin-twin-macbook-pro" = nix-darwin.lib.darwinSystem {
         system = darwinSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           ./hosts/dkumlin-twin-macbook-pro
           home-manager.darwinModules.home-manager

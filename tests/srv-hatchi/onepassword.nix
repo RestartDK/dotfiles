@@ -41,6 +41,7 @@ pkgs.testers.runNixOSTest {
         message = "The credential-file VM must mount disposable media";
       }
     ];
+    my.domain = "example.invalid";
     my.hatchi.onepassword = {
       tokenFile = "/run/test-opnix-token";
       references = lib.mapAttrs (name: _: "op://fixture/credentials/${name}") fields;
@@ -94,9 +95,9 @@ pkgs.testers.runNixOSTest {
         hatchi.succeed("curl -fsS -u daniel:fixture-password http://127.0.0.1:3001/api/user | jq -e '.login == \"daniel\"'")
         hatchi.succeed("curl -fsS -u daniel:fixture-password http://127.0.0.1:5984/_session | jq -e '.userCtx.roles | index(\"_admin\")'")
         hatchi.succeed("curl -fsS -D /tmp/glance-headers -o /dev/null -H 'Content-Type: application/json' --data '{\"username\":\"daniel\",\"password\":\"fixture-password\"}' http://127.0.0.1:8081/api/authenticate && grep -qi '^set-cookie:' /tmp/glance-headers")
-        hatchi.succeed("curl -fsS -c /tmp/qb-cookies -H 'Host: qbittorrent.chateauducipieres.com' -H 'Origin: http://qbittorrent.chateauducipieres.com' --data 'username=daniel&password=fixture-password' http://127.0.0.1:8080/api/v2/auth/login")
-        hatchi.succeed("curl -fsS -b /tmp/qb-cookies -H 'Host: qbittorrent.chateauducipieres.com' http://127.0.0.1:8080/api/v2/app/version | grep '^v'")
-        assert hatchi.succeed("curl -fsS -o /dev/null -w '%{http_code}' -u daniel:fixture-password -H 'Host: nextcloud.chateauducipieres.com' -H 'X-Forwarded-Proto: https' -H 'Depth: 0' -X PROPFIND http://127.0.0.1:11000/remote.php/dav/files/daniel/").strip() == "207"
+        hatchi.succeed("curl -fsS -c /tmp/qb-cookies -H 'Host: qbittorrent.example.invalid' -H 'Origin: http://qbittorrent.example.invalid' --data 'username=daniel&password=fixture-password' http://127.0.0.1:8080/api/v2/auth/login")
+        hatchi.succeed("curl -fsS -b /tmp/qb-cookies -H 'Host: qbittorrent.example.invalid' http://127.0.0.1:8080/api/v2/app/version | grep '^v'")
+        assert hatchi.succeed("curl -fsS -o /dev/null -w '%{http_code}' -u daniel:fixture-password -H 'Host: nextcloud.example.invalid' -H 'X-Forwarded-Proto: https' -H 'Depth: 0' -X PROPFIND http://127.0.0.1:11000/remote.php/dav/files/daniel/").strip() == "207"
         assert "admin" in json.loads(hatchi.succeed("nextcloud-occ user:info daniel --output=json"))["groups"]
 
     hatchi.wait_for_unit("srv-media.mount")

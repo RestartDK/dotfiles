@@ -8,6 +8,18 @@ in
     default = "example.invalid";
     description = "Public domain the house serves from. Shared by every host that terminates TLS for it. The real value comes from the private input, so the public tree carries only this placeholder.";
   };
+  options.my.hosts = mkOption {
+    default = { };
+    description = "Addresses of the house hosts, by name, with a lan and a tailnet address each. From the private input.";
+    type = types.attrsOf (
+      types.submodule {
+        options = {
+          lan = mkOption { type = types.strMatching "[0-9.]+"; };
+          tailnet = mkOption { type = types.strMatching "[0-9.]+"; };
+        };
+      }
+    );
+  };
   options.my.network = mkOption {
     default = null;
     description = "The house network: the addressing and firewall zones every host shares.";

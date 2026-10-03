@@ -4,7 +4,7 @@ This configuration enables opnix on both the personal Mac and Twin Mac, plus Nan
 
 ## Provision each personal machine
 
-1. Create a separate read-only 1Password service account for each machine. Grant access to the `Developer` vault, `abdtxvj44nyypdbkbehdg4qbfq`. Service accounts have vault-wide access, not item-level access. If that scope is too broad, move the OpenRouter item into a dedicated vault and update its reference in `profiles/personal-secrets.nix`.
+1. Create a separate read-only 1Password service account for each machine. Grant access to the `Developer` vault. Service accounts have vault-wide access, not item-level access. If that scope is too broad, move the OpenRouter item into a dedicated vault and update its reference in the private input.
 2. Save each service-account token in 1Password. Do not put a token or the OpenRouter key in Git, a Nix expression, or a shell command argument.
 3. Apply the configuration with `traitor mac` on the personal Mac, `traitor work-mac` on Twin Mac, or `traitor nana` on Nana. A missing token fails the opnix service instead of printing a warning, so the switch reports a failed unit and OpenRouter stays unavailable until retrieval succeeds.
 4. Prime sudo with `sudo -v`. Read the machine's token into opnix through a pipe. Replace the example reference with the service-account token field, not the OpenRouter key:
