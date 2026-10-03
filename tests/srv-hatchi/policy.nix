@@ -166,12 +166,12 @@ let
   };
   inventory = builtins.fromJSON (builtins.readFile ./inventory.json);
   routes = lib.sort builtins.lessThan (
-    (map (entry: "${entry.route}.${cfg.my.hatchi.domain}") (
+    (map (entry: "${entry.route}.${cfg.my.domain}") (
       builtins.filter (entry: entry.route != null) inventory
     ))
     ++ [
-      "ollama.${cfg.my.hatchi.domain}"
-      "opencode.${cfg.my.hatchi.domain}"
+      "ollama.${cfg.my.domain}"
+      "opencode.${cfg.my.domain}"
     ]
   );
   destructive = [
@@ -234,14 +234,14 @@ assert
   ];
 assert cfg.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
 assert production.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
-assert production.my.hatchi.network.dnsAnswer == "192.168.200.70";
+assert production.my.network.dnsAnswer == "192.168.200.70";
 assert
-  production.my.hatchi.network.clientNetworks == [
+  production.my.network.clientNetworks == [
     "192.168.200.0/24"
     "192.168.205.0/24"
   ];
 assert
-  production.my.hatchi.network.adminNetworks == [
+  production.my.network.adminNetworks == [
     "192.168.200.0/24"
     "192.168.205.0/24"
   ];
@@ -339,8 +339,8 @@ assert builtins.all (
 ) (cfg.my.hatchi.stateUnits ++ cfg.my.hatchi.mediaUnits ++ [ "hatchi-media-directories" ]);
 assert builtins.all secretsBefore cfg.my.hatchi.stateUnits;
 assert secretsBefore "hatchi-media-directories";
-assert secretsBefore "acme-${cfg.my.hatchi.domain}";
-assert secretsBefore "acme-order-renew-${cfg.my.hatchi.domain}";
+assert secretsBefore "acme-${cfg.my.domain}";
+assert secretsBefore "acme-order-renew-${cfg.my.domain}";
 assert builtins.length (builtins.filter (entry: entry.unit != null) inventory) == 16;
 assert builtins.attrNames cfg.services.caddy.virtualHosts == routes;
 assert builtins.all (name: builtins.hasAttr name cfg.system.build) destructive;
@@ -348,7 +348,7 @@ assert
   cfg.virtualisation.docker.enable == false
   && cfg.virtualisation.podman.enable == false
   && cfg.services.cockpit.enable == false;
-assert cfg.my.hatchi.network == null && cfg.my.hatchi.remoteNana == null;
+assert cfg.my.network == null && cfg.my.hatchi.remoteNana == null;
 assert lib.versions.major cfg.services.nextcloud.package.version == "33";
 assert cfg.services.nextcloud.datadir == "/srv/nextcloud";
 assert cfg.my.host.uid == 1000;

@@ -61,7 +61,7 @@ in
     glance-key.restartUnits = [ "glance.service" ];
     glance-password.restartUnits = [ "glance.service" ];
   };
-  services.caddy.virtualHosts."dashboard.${config.my.hatchi.domain}".extraConfig =
+  services.caddy.virtualHosts."dashboard.${config.my.domain}".extraConfig =
     "reverse_proxy 127.0.0.1:${toString config.services.glance.settings.server.port}";
   my.hatchi.stateUnits = [ "glance" ];
 }

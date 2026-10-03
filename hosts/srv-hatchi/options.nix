@@ -5,23 +5,6 @@ let
 in
 {
   options.my.hatchi = {
-    domain = mkOption {
-      type = types.strMatching "[a-z0-9.-]+\\.[a-z]+";
-      default = "chateauducipieres.com";
-    };
-    network = mkOption {
-      default = null;
-      type = types.nullOr (
-        types.submodule {
-          options = {
-            dnsAnswer = mkOption { type = types.strMatching "[0-9.]+"; };
-            clientNetworks = mkOption { type = types.listOf (types.strMatching "[0-9a-fA-F:./]+"); };
-            adminNetworks = mkOption { type = types.listOf (types.strMatching "[0-9a-fA-F:./]+"); };
-            upstreamDNS = mkOption { type = types.listOf types.str; };
-          };
-        }
-      );
-    };
     remoteNana = mkOption {
       default = null;
       type = types.nullOr (

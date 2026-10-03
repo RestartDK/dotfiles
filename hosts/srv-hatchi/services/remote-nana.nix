@@ -4,12 +4,12 @@ let
 in
 {
   services.caddy.virtualHosts = {
-    "ollama.${config.my.hatchi.domain}".extraConfig =
+    "ollama.${config.my.domain}".extraConfig =
       if remote == null then
         ''respond "Nana endpoint deferred" 503''
       else
         "reverse_proxy ${remote.ollama}";
-    "opencode.${config.my.hatchi.domain}".extraConfig =
+    "opencode.${config.my.domain}".extraConfig =
       if remote == null then
         ''respond "Nana endpoint deferred" 503''
       else
