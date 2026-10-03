@@ -37,6 +37,9 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
       - uses: DeterminateSystems/determinate-nix-action@v3.21.9
+        with:
+          extra-conf: |
+            access-tokens = github.com=${{ secrets.DOTFILES_PRIVATE_TOKEN }}
       - uses: DeterminateSystems/flakehub-cache-action@v3.21.9
       - uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
         with:

@@ -234,42 +234,30 @@ assert
   ];
 assert cfg.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
 assert production.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
-assert production.my.network.dnsAnswer == "192.168.200.70";
 assert
-  production.my.network.clientNetworks == [
-    "192.168.200.0/24"
-    "192.168.205.0/24"
-  ];
-assert
-  production.my.network.adminNetworks == [
-    "192.168.200.0/24"
-    "192.168.205.0/24"
-  ];
-assert
-  production.services.adguardhome.settings.dns.upstream_dns == [
-    "1.1.1.1"
-    "9.9.9.9"
-  ];
+  production.services.adguardhome.settings.dns.upstream_dns == production.my.network.upstreamDNS;
 assert
   production.services.adguardhome.settings.filtering.rewrites == [
     {
-      domain = "*.chateauducipieres.com";
-      answer = "192.168.200.70";
+      domain = "*.${production.my.domain}";
+      answer = production.my.network.dnsAnswer;
       enabled = true;
     }
   ];
-assert production.security.acme.certs."chateauducipieres.com".dnsResolver == "1.1.1.1:53";
+assert production.security.acme.certs.${production.my.domain}.dnsResolver == "1.1.1.1:53";
 assert
   production.services.tailscale.extraSetFlags == [
     "--netfilter-mode=off"
-    "--advertise-routes=192.168.200.70/32"
+    "--advertise-routes=${production.my.network.dnsAnswer}/32"
   ];
-assert lib.hasInfix "ip saddr 192.168.200.0/24 meta l4proto { tcp } th dport { 22 } accept"
-  production.networking.firewall.extraInputRules;
-assert lib.hasInfix "ip saddr 192.168.205.0/24 meta l4proto { tcp, udp } th dport { 53 } accept"
-  production.networking.firewall.extraInputRules;
-assert lib.hasInfix "ip saddr 192.168.205.0/24 meta l4proto { tcp } th dport { 22 } accept"
-  production.networking.firewall.extraInputRules;
+assert lib.all (
+  range:
+  lib.hasInfix "ip saddr ${range} meta l4proto { tcp, udp } th dport { 53 } accept" production.networking.firewall.extraInputRules
+) production.my.network.clientNetworks;
+assert lib.all (
+  range:
+  lib.hasInfix "ip saddr ${range} meta l4proto { tcp } th dport { 22 } accept" production.networking.firewall.extraInputRules
+) production.my.network.adminNetworks;
 assert production.my.hatchi.onepassword.enable;
 assert builtins.all (reference: reference != null) (
   builtins.attrValues production.my.hatchi.onepassword.references

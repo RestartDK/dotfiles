@@ -595,6 +595,22 @@
         "type": "github"
       }
     },
+    "private": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791042007,
+        "narHash": "sha256-SqjMYzId2jL/NrQ2LChepgpHEX3122OMC2I0GSKjm24=",
+        "owner": "RestartDK",
+        "repo": "dotfiles-private",
+        "rev": "e44b78cd9e883ca28c4d8c01d7b39110dba7e812",
+        "type": "github"
+      },
+      "original": {
+        "owner": "RestartDK",
+        "repo": "dotfiles-private",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "deploy-rs": "deploy-rs",
@@ -608,6 +624,7 @@
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "opnix": "opnix",
+        "private": "private",
         "scatterer": "scatterer",
         "sops-nix": "sops-nix",
         "treefmt-nix": "treefmt-nix_4"
