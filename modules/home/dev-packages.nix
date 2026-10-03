@@ -12,6 +12,7 @@
     enable = true;
     ignores = [ "**/.claude/settings.local.json" ];
     settings = {
+      core.hooksPath = "${../../config/git/hooks}";
       user = {
         name = "Daniel Kumlin";
         email = "danielkumlinwork@gmail.com";
