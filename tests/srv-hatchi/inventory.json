@@ -83,5 +83,10 @@
     "source": "prometheus",
     "unit": "prometheus",
     "route": null
+  },
+  {
+    "source": "harmonia",
+    "unit": "harmonia",
+    "route": "cache"
   }
 ]

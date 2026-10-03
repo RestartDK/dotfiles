@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./cache.nix
     inputs.opnix.nixosModules.default
     (import ../../profiles/personal-secrets.nix { userName = "dkumlin"; })
     ./hardware-configuration.nix

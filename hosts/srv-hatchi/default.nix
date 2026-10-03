@@ -1,6 +1,7 @@
 { ... }:
 {
   imports = [
+    ./cache.nix
     ./foundation.nix
     ./options.nix
     ./secrets.nix

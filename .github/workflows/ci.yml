@@ -15,13 +15,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: CI result
-    runs-on: ubuntu-latest
+  checks:
+    name: checks
+    runs-on: ${{ github.event_name == 'push' && fromJSON('["self-hosted","lan-ci"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7.0.1
 
       - name: Free disk space
+        if: runner.environment != 'self-hosted'
         run: |
           df -h
           sudo rm -rf \
@@ -34,16 +35,14 @@ jobs:
           df -h
 
       - name: Install Determinate Nix
+        if: runner.environment != 'self-hosted'
         uses: DeterminateSystems/determinate-nix-action@v3.21.9
         with:
           extra-conf: |
             extra-substituters = https://cache.numtide.com
             extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
-      - name: Enable FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@v3.21.9
-
-      - name: Build Nana and Hatchi
+      - name: Flake checks
         run: |
           nix build --no-link --print-build-logs \
             .#checks.x86_64-linux.quality \
@@ -52,6 +51,51 @@ jobs:
             .#checks.x86_64-linux.skills \
             .#checks.x86_64-linux.personal-secrets \
             .#checks.x86_64-linux.agent-profiles \
-            .#checks.x86_64-linux.srv-hatchi-policy \
-            .#nixosConfigurations.srv-nana.config.system.build.toplevel \
-            .#nixosConfigurations.srv-hatchi.config.system.build.toplevel
+            .#checks.x86_64-linux.srv-hatchi-policy
+
+  systems:
+    name: build
+    needs: [checks]
+    runs-on: ${{ github.event_name == 'push' && fromJSON('["self-hosted","lan-ci"]') || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        host: [srv-nana, srv-hatchi]
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Free disk space
+        if: runner.environment != 'self-hosted'
+        run: |
+          df -h
+          sudo rm -rf \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/.ghcup \
+            /usr/local/lib/android \
+            /usr/local/share/boost \
+            /usr/share/dotnet
+          df -h
+
+      - name: Install Determinate Nix
+        if: runner.environment != 'self-hosted'
+        uses: DeterminateSystems/determinate-nix-action@v3.21.9
+        with:
+          extra-conf: |
+            extra-substituters = https://cache.numtide.com
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
+
+      - name: Build
+        run: nix build --no-link --print-build-logs ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+
+  result:
+    name: CI result
+    needs: [checks, systems]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every stage
+        run: |
+          [ "${{ needs.checks.result }}" = success ]
+          [ "${{ needs.systems.result }}" = success ]
