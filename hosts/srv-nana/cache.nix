@@ -10,8 +10,6 @@
     ];
   };
 
-  # The cache answers on the tailnet address, so name resolution has to work
-  # here; a public resolver stays as the fallback.
   networking.nameservers = [
     "100.85.39.42"
     "1.1.1.1"
