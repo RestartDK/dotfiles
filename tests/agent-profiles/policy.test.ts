@@ -14,7 +14,7 @@ const policy = (profile: string) =>
   parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
 
 describe("profile routing", () => {
-  test("work resolves Codex routes and keeps fable pi-only", () => {
+  test("work resolves Codex, Anthropic and OpenRouter routes", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
       { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
@@ -23,15 +23,10 @@ describe("profile routing", () => {
       { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
-      {
-        kind: "pi",
-        provider: "fireworks",
-        id: "accounts/fireworks/models/deepseek-v4p1-flash",
-        thinking: "max",
-      },
+      { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "max" },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "anthropic", id: "claude-opus-5-5", thinking: "xhigh" },
     ]);
   });
 
@@ -44,7 +39,7 @@ describe("profile routing", () => {
     ]);
     expect(personal.parent).toEqual(deepseek[0]);
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
-      "openai-codex/gpt-6.1-sol",
+      "opencode-go/glm-5.3-flash",
     ]);
     expect(() => resolveRoute(personal, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
       "not allowed",
@@ -61,7 +56,7 @@ describe("profile routing", () => {
       backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
     ).toBe("openai-codex/gpt-6.1-sol");
     expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
-      "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
+      "openrouter/deepseek/deepseek-v4.1-flash",
     );
     for (const input of [
       { role: "review", model: "x" },
@@ -81,22 +76,21 @@ describe("profile routing", () => {
       for (const role of roles.split(" ")) expected.set(role, route);
     };
     group("feature refactoring swarm-workers", work ? "astra" : "deepseek");
-    group("bug-fix perf-issue hillclimb reflect-tooling", work ? "astra" : "sol");
-    group("how-explorer", "deepseek");
-    group("why-investigators fast-code", work ? "glm" : "deepseek");
-    group("precise-code", "sol");
+    group("bug-fix perf-issue hillclimb reflect-tooling precise-code", work ? "sol" : "deepseek");
+    group("why-investigators fast-code how-explorer", "deepseek");
+    group("prose review", work ? "opus" : "glm");
     group(
-      "prose judgment review hardest how-explainer why-synthesizer reflect-judgment reflect-divergent reflect-synthesizer",
-      work ? "fable" : "sol",
+      "judgment hardest how-explainer why-synthesizer reflect-judgment reflect-divergent reflect-synthesizer",
+      work ? "opus" : "deepseek",
     );
     for (const [role, member] of expected)
       expect(resolveRoute(selected, { role }).selection).toEqual({ kind: "role", role, member });
     const panels: Record<string, [string, ...string[]]> = {
-      "how-critics": work ? ["fable"] : ["sol"],
-      "arena-runners": work ? ["fable", "sol", "deepseek"] : ["sol", "deepseek"],
-      "arena-cross-judge": work ? ["fable", "sol"] : ["sol", "deepseek"],
-      "architect-runners": work ? ["fable", "sol", "glm"] : ["sol", "deepseek"],
-      "interrogate-reviewers": work ? ["fable", "sol", "glm"] : ["sol", "deepseek"],
+      "how-critics": work ? ["opus"] : ["glm", "muse"],
+      "arena-runners": work ? ["opus", "sol", "deepseek"] : ["deepseek", "muse", "mimo"],
+      "arena-cross-judge": work ? ["opus", "sol"] : ["glm", "muse"],
+      "architect-runners": work ? ["opus", "sol", "glm"] : ["deepseek", "muse", "mimo"],
+      "interrogate-reviewers": work ? ["opus", "sol", "glm"] : ["glm", "muse", "mimo"],
     };
     for (const [role, members] of Object.entries(panels)) {
       expect(selected.roles.get(role)).toEqual({ kind: "panel", members });
@@ -111,6 +105,15 @@ describe("profile routing", () => {
     expect([...selected.roles.keys()].sort()).toEqual(
       [...expected.keys(), ...Object.keys(panels)].sort(),
     );
+  });
+
+  test("personal never declares max effort", () => {
+    const offenders = [...policy("personal").routes].flatMap(([route, chain]) =>
+      chain
+        .filter((backend) => backend.thinking === "max")
+        .map((backend) => `${route}:${backendModel(backend)}`),
+    );
+    expect(offenders).toEqual([]);
   });
 
   test("raw requests preserve declared chains and effort", () => {

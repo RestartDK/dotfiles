@@ -13,14 +13,21 @@
     "deepseek": [
       {
         "kind": "pi",
-        "model": "fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
         "thinking": "max"
       }
     ],
-    "fable": [
+    "glm": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
+        "model": "openrouter/z-ai/glm-5.3-flash",
+        "thinking": "max"
+      }
+    ],
+    "opus": [
+      {
+        "kind": "pi",
+        "model": "anthropic/claude-opus-5-5",
         "thinking": "xhigh"
       }
     ],
@@ -28,13 +35,6 @@
       {
         "kind": "pi",
         "model": "openai-codex/gpt-6.1-sol",
-        "thinking": "xhigh"
-      }
-    ],
-    "glm": [
-      {
-        "kind": "pi",
-        "model": "openrouter/z-ai/glm-5.3-flash",
         "thinking": "xhigh"
       }
     ]
@@ -54,27 +54,27 @@
     },
     "bug-fix": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "perf-issue": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "hillclimb": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "reflect-tooling": {
       "kind": "single",
-      "route": "astra"
+      "route": "sol"
     },
     "fast-code": {
       "kind": "single",
-      "route": "glm"
+      "route": "deepseek"
     },
     "why-investigators": {
       "kind": "single",
-      "route": "glm"
+      "route": "deepseek"
     },
     "precise-code": {
       "kind": "single",
@@ -82,39 +82,39 @@
     },
     "prose": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "judgment": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "review": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "hardest": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "how-explainer": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "why-synthesizer": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "reflect-judgment": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "reflect-divergent": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "reflect-synthesizer": {
       "kind": "single",
-      "route": "fable"
+      "route": "opus"
     },
     "how-explorer": {
       "kind": "single",
@@ -123,13 +123,13 @@
     "how-critics": {
       "kind": "panel",
       "members": [
-        "fable"
+        "opus"
       ]
     },
     "arena-runners": {
       "kind": "panel",
       "members": [
-        "fable",
+        "opus",
         "sol",
         "deepseek"
       ]
@@ -137,14 +137,14 @@
     "arena-cross-judge": {
       "kind": "panel",
       "members": [
-        "fable",
+        "opus",
         "sol"
       ]
     },
     "architect-runners": {
       "kind": "panel",
       "members": [
-        "fable",
+        "opus",
         "sol",
         "glm"
       ]
@@ -152,14 +152,13 @@
     "interrogate-reviewers": {
       "kind": "panel",
       "members": [
-        "fable",
+        "opus",
         "sol",
         "glm"
       ]
     }
   },
   "providers": [
-    "fireworks",
     "openrouter",
     "openai",
     "openai-codex",
