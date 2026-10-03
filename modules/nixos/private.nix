@@ -14,7 +14,5 @@ in
     my.domain = lib.mkDefault values.domain;
     my.hosts = lib.mkDefault values.hosts;
     my.network = lib.mkDefault values.network;
-    my.host.authorizedKeys = lib.mkDefault values.authorizedKeys.user;
-    my.host.rootAuthorizedKeys = lib.mkDefault values.authorizedKeys.root;
   };
 }
