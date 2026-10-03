@@ -64,25 +64,23 @@ pkgs.testers.runNixOSTest {
           message = "The Hatchi service VM must use its disposable data image";
         }
       ];
-      my.hatchi = {
-        network = {
-          dnsAnswer = "192.168.1.10";
-          clientNetworks = [
-            "192.168.1.20/32"
-            "fd00:1::20/128"
-          ];
-          adminNetworks = [
-            "192.168.1.50/32"
-            "fd00:1::50/128"
-          ];
-          upstreamDNS = [ "192.168.1.40:53" ];
-        };
-        remoteNana = {
-          ollama = "192.168.1.40:8000";
-          opencode = "192.168.1.40:8001";
-          nodeExporter = "192.168.1.40:9100";
-          glanceAgent = "192.168.1.40:8002";
-        };
+      my.network = {
+        dnsAnswer = "192.168.1.10";
+        clientNetworks = [
+          "192.168.1.20/32"
+          "fd00:1::20/128"
+        ];
+        adminNetworks = [
+          "192.168.1.50/32"
+          "fd00:1::50/128"
+        ];
+        upstreamDNS = [ "192.168.1.40:53" ];
+      };
+      my.hatchi.remoteNana = {
+        ollama = "192.168.1.40:8000";
+        opencode = "192.168.1.40:8001";
+        nodeExporter = "192.168.1.40:9100";
+        glanceAgent = "192.168.1.40:8002";
       };
       sops = {
         defaultSopsFile = lib.mkForce "/run/hatchi-test-secrets.yaml";

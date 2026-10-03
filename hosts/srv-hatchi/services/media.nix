@@ -46,7 +46,7 @@
               "@hatchi-qbittorrent-hash@"
             else
               config.sops.placeholder.qbittorrent-password;
-          "WebUI\\ServerDomains" = "qbittorrent.${config.my.hatchi.domain}";
+          "WebUI\\ServerDomains" = "qbittorrent.${config.my.domain}";
           "WebUI\\LocalHostAuth" = true;
           "WebUI\\AuthSubnetWhitelistEnabled" = false;
           "WebUI\\CSRFProtection" = true;
@@ -56,16 +56,16 @@
       };
     };
     caddy.virtualHosts = {
-      "jellyfin.${config.my.hatchi.domain}".extraConfig = "reverse_proxy 127.0.0.1:8096";
-      "seerr.${config.my.hatchi.domain}".extraConfig =
+      "jellyfin.${config.my.domain}".extraConfig = "reverse_proxy 127.0.0.1:8096";
+      "seerr.${config.my.domain}".extraConfig =
         "reverse_proxy 127.0.0.1:${toString config.services.seerr.port}";
-      "radarr.${config.my.hatchi.domain}".extraConfig =
+      "radarr.${config.my.domain}".extraConfig =
         "reverse_proxy 127.0.0.1:${toString config.services.radarr.settings.server.port}";
-      "sonarr.${config.my.hatchi.domain}".extraConfig =
+      "sonarr.${config.my.domain}".extraConfig =
         "reverse_proxy 127.0.0.1:${toString config.services.sonarr.settings.server.port}";
-      "prowlarr.${config.my.hatchi.domain}".extraConfig =
+      "prowlarr.${config.my.domain}".extraConfig =
         "reverse_proxy 127.0.0.1:${toString config.services.prowlarr.settings.server.port}";
-      "qbittorrent.${config.my.hatchi.domain}".extraConfig =
+      "qbittorrent.${config.my.domain}".extraConfig =
         "reverse_proxy 127.0.0.1:${toString config.services.qbittorrent.webuiPort}";
     };
   };

@@ -5,8 +5,8 @@
   ...
 }:
 let
-  cfg = config.my.hatchi;
-  inherit (cfg) domain;
+  network = config.my.network;
+  domain = config.my.domain;
   names = lib.concatMap (host: [ host.hostName ] ++ host.serverAliases) (
     builtins.attrValues config.services.caddy.virtualHosts
   );
@@ -18,13 +18,13 @@ let
       lib.splitString "." name
     );
   networks =
-    if cfg.network == null then
+    if network == null then
       {
         clientNetworks = [ ];
         adminNetworks = [ ];
       }
     else
-      cfg.network;
+      network;
   ingress =
     ranges: protocols: ports:
     lib.concatMapStringsSep "\n" (
@@ -107,17 +107,17 @@ in
             "::"
           ];
           port = 53;
-          upstream_dns = if cfg.network == null then [ ] else cfg.network.upstreamDNS;
+          upstream_dns = if network == null then [ ] else network.upstreamDNS;
           bootstrap_dns = [ ];
           use_private_ptr_resolvers = false;
         };
         filtering = {
           protection_enabled = true;
           filtering_enabled = true;
-          rewrites = lib.optionals (cfg.network != null) [
+          rewrites = lib.optionals (network != null) [
             {
               domain = "*.${domain}";
-              answer = cfg.network.dnsAnswer;
+              answer = network.dnsAnswer;
               enabled = true;
             }
           ];
