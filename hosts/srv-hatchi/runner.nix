@@ -11,17 +11,20 @@ let
   cacheKeyDir = "/var/lib/nix-cache";
 in
 {
-  # Hatchi is the binary cache the other hosts substitute from, so it signs
-  # what it builds. Generate the key pair once, then declare the public half on
-  # the consumers:
-  #   nix-store --generate-binary-cache-key hatchi-cache-1 \
-  #     /var/lib/nix-cache/secret /var/lib/nix-cache/public
   nix.settings = {
     secret-key-files = [ "${cacheKeyDir}/secret" ];
     trusted-users = [
       "root"
       "deploy"
     ];
+  };
+
+  users.groups.${runnerUser} = { };
+
+  users.users.${runnerUser} = {
+    isSystemUser = true;
+    group = runnerUser;
+    home = runnerDir;
   };
 
   systemd.tmpfiles.rules = [
@@ -31,14 +34,13 @@ in
     "f ${tokenFile} 0640 ${runnerUser} ${runnerUser} -"
   ];
 
-  # The registration token is a fine-grained PAT with Administration read and
-  # write on the repository, written into ${tokenFile} once. Ephemeral runners
-  # re-register for every job, which a one hour registration token cannot do.
   services.github-runners.${runnerName} = {
     enable = true;
     name = runnerName;
     url = "https://github.com/RestartDK/dotfiles";
-    tokenFile = tokenFile;
+    inherit tokenFile;
+    user = runnerUser;
+    group = runnerUser;
     extraLabels = [ "lan-deploy" ];
     replace = true;
     ephemeral = true;
