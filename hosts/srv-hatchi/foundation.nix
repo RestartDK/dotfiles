@@ -2,6 +2,7 @@
   config,
   inputs,
   lib,
+  network,
   pkgs,
   ...
 }:
@@ -12,6 +13,8 @@ in
   imports = [
     inputs.home-manager.nixosModules.home-manager
     ../../modules/nixos/host-options.nix
+    ../../modules/nixos/network.nix
+    ../../modules/nixos/private.nix
     ../../modules/nixos/deploy.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/numtide-cache.nix
@@ -36,6 +39,7 @@ in
     extraSpecialArgs = {
       inherit inputs;
       dotfilesInputs = inputs;
+      inherit network;
     };
     users.${config.my.host.userName} = import ./home.nix;
   };
@@ -52,8 +56,8 @@ in
     openFirewall = false;
     extraSetFlags = [
       "--netfilter-mode=off"
-      "--advertise-routes=192.168.200.70/32"
-    ];
+    ]
+    ++ lib.optional (config.my.network != null) "--advertise-routes=${config.my.network.dnsAnswer}/32";
   };
   virtualisation.docker.enable = false;
   virtualisation.podman.enable = false;

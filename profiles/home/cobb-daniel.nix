@@ -1,5 +1,6 @@
 {
   lib,
+  network ? null,
   osConfig ? null,
   ...
 }:
@@ -53,8 +54,10 @@ in
     };
   };
 
-  programs.git.settings.user = lib.mkDefault {
-    name = "Daniel Kumlin";
-    email = "danielkumlinwork@gmail.com";
-  };
+  programs.git.settings.user = lib.mkDefault (
+    lib.optionalAttrs (network != null) {
+      name = network.fullName;
+      email = network.workEmail;
+    }
+  );
 }

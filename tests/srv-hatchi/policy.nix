@@ -164,12 +164,12 @@ let
   };
   inventory = builtins.fromJSON (builtins.readFile ./inventory.json);
   routes = lib.sort builtins.lessThan (
-    (map (entry: "${entry.route}.${cfg.my.hatchi.domain}") (
+    (map (entry: "${entry.route}.${cfg.my.domain}") (
       builtins.filter (entry: entry.route != null) inventory
     ))
     ++ [
-      "ollama.${cfg.my.hatchi.domain}"
-      "opencode.${cfg.my.hatchi.domain}"
+      "ollama.${cfg.my.domain}"
+      "opencode.${cfg.my.domain}"
     ]
   );
   destructive = [
@@ -228,42 +228,30 @@ assert
   ];
 assert cfg.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
 assert production.networking.firewall.interfaces.tailscale0.allowedUDPPorts == [ 53 ];
-assert production.my.hatchi.network.dnsAnswer == "192.168.200.70";
 assert
-  production.my.hatchi.network.clientNetworks == [
-    "192.168.200.0/24"
-    "192.168.205.0/24"
-  ];
-assert
-  production.my.hatchi.network.adminNetworks == [
-    "192.168.200.0/24"
-    "192.168.205.0/24"
-  ];
-assert
-  production.services.adguardhome.settings.dns.upstream_dns == [
-    "1.1.1.1"
-    "9.9.9.9"
-  ];
+  production.services.adguardhome.settings.dns.upstream_dns == production.my.network.upstreamDNS;
 assert
   production.services.adguardhome.settings.filtering.rewrites == [
     {
-      domain = "*.chateauducipieres.com";
-      answer = "192.168.200.70";
+      domain = "*.${production.my.domain}";
+      answer = production.my.network.dnsAnswer;
       enabled = true;
     }
   ];
-assert production.security.acme.certs."chateauducipieres.com".dnsResolver == "1.1.1.1:53";
+assert production.security.acme.certs.${production.my.domain}.dnsResolver == "1.1.1.1:53";
 assert
   production.services.tailscale.extraSetFlags == [
     "--netfilter-mode=off"
-    "--advertise-routes=192.168.200.70/32"
+    "--advertise-routes=${production.my.network.dnsAnswer}/32"
   ];
-assert lib.hasInfix "ip saddr 192.168.200.0/24 meta l4proto { tcp } th dport { 22 } accept"
-  production.networking.firewall.extraInputRules;
-assert lib.hasInfix "ip saddr 192.168.205.0/24 meta l4proto { tcp, udp } th dport { 53 } accept"
-  production.networking.firewall.extraInputRules;
-assert lib.hasInfix "ip saddr 192.168.205.0/24 meta l4proto { tcp } th dport { 22 } accept"
-  production.networking.firewall.extraInputRules;
+assert lib.all (
+  range:
+  lib.hasInfix "ip saddr ${range} meta l4proto { tcp, udp } th dport { 53 } accept" production.networking.firewall.extraInputRules
+) production.my.network.clientNetworks;
+assert lib.all (
+  range:
+  lib.hasInfix "ip saddr ${range} meta l4proto { tcp } th dport { 22 } accept" production.networking.firewall.extraInputRules
+) production.my.network.adminNetworks;
 assert production.my.hatchi.onepassword.enable;
 assert builtins.all (reference: reference != null) (
   builtins.attrValues production.my.hatchi.onepassword.references
@@ -333,15 +321,15 @@ assert builtins.all (
 ) (cfg.my.hatchi.stateUnits ++ cfg.my.hatchi.mediaUnits ++ [ "hatchi-media-directories" ]);
 assert builtins.all secretsBefore cfg.my.hatchi.stateUnits;
 assert secretsBefore "hatchi-media-directories";
-assert secretsBefore "acme-${cfg.my.hatchi.domain}";
-assert secretsBefore "acme-order-renew-${cfg.my.hatchi.domain}";
+assert secretsBefore "acme-${cfg.my.domain}";
+assert secretsBefore "acme-order-renew-${cfg.my.domain}";
 assert builtins.attrNames cfg.services.caddy.virtualHosts == routes;
 assert builtins.all (name: builtins.hasAttr name cfg.system.build) destructive;
 assert
   cfg.virtualisation.docker.enable == false
   && cfg.virtualisation.podman.enable == false
   && cfg.services.cockpit.enable == false;
-assert cfg.my.hatchi.network == null && cfg.my.hatchi.remoteNana == null;
+assert cfg.my.hatchi.remoteNana == null;
 assert lib.versions.major cfg.services.nextcloud.package.version == "33";
 assert cfg.services.nextcloud.datadir == "/srv/nextcloud";
 assert cfg.my.host.uid == 1000;
@@ -447,11 +435,12 @@ assert
 assert
   renamedUser.home-manager.users.hatchi-fixture.home.homeDirectory == "/srv/home/hatchi-fixture";
 assert renamedUser.users.users.hatchi-fixture.home == "/srv/home/hatchi-fixture";
-assert cfg.my.hatchi.onepassword.references.glanceKey != null;
+assert cfg.my.hatchi.onepassword.references.glanceKey == null;
 assert privateMachine.my.hatchi.onepassword.references.glanceKey == null;
 assert privateMachine.my.hatchi.onepassword.references.grafanaKey == null;
-assert
-  cfg.my.hatchi.onepassword.references.glancePassword == "op://Homelab/Chateau glance/password";
+assert lib.all (reference: lib.hasPrefix "op://" reference) (
+  builtins.attrValues production.my.hatchi.onepassword.references
+);
 assert
   withAppSecrets.services.glance.settings.auth.users.daniel.password._secret
   == "/run/hatchi-onepassword/glancePassword";

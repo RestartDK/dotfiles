@@ -73,7 +73,7 @@ Use these new commands instead:
 | `dokploy database mariadb ...` | `dokploy mariadb ...` |
 | Generic env pull/push | Use service-specific `save-environment` / `update --env`, or inspect via `one --json` |
 
-## Daniel Kumlin defaults
+## Personal defaults
 
 Assume these defaults unless Daniel explicitly asks otherwise:
 

@@ -64,25 +64,24 @@ pkgs.testers.runNixOSTest {
           message = "The Hatchi service VM must use its disposable data image";
         }
       ];
-      my.hatchi = {
-        network = {
-          dnsAnswer = "192.168.1.10";
-          clientNetworks = [
-            "192.168.1.20/32"
-            "fd00:1::20/128"
-          ];
-          adminNetworks = [
-            "192.168.1.50/32"
-            "fd00:1::50/128"
-          ];
-          upstreamDNS = [ "192.168.1.40:53" ];
-        };
-        remoteNana = {
-          ollama = "192.168.1.40:8000";
-          opencode = "192.168.1.40:8001";
-          nodeExporter = "192.168.1.40:9100";
-          glanceAgent = "192.168.1.40:8002";
-        };
+      my.domain = "example.invalid";
+      my.network = {
+        dnsAnswer = "192.168.1.10";
+        clientNetworks = [
+          "192.168.1.20/32"
+          "fd00:1::20/128"
+        ];
+        adminNetworks = [
+          "192.168.1.50/32"
+          "fd00:1::50/128"
+        ];
+        upstreamDNS = [ "192.168.1.40:53" ];
+      };
+      my.hatchi.remoteNana = {
+        ollama = "192.168.1.40:8000";
+        opencode = "192.168.1.40:8001";
+        nodeExporter = "192.168.1.40:9100";
+        glanceAgent = "192.168.1.40:8002";
       };
       sops = {
         defaultSopsFile = lib.mkForce "/run/hatchi-test-secrets.yaml";
@@ -212,7 +211,7 @@ pkgs.testers.runNixOSTest {
         settings = {
           no-resolv = true;
           address = [ "/fixture-upstream.test/192.0.2.99" ];
-          local = [ "/chateauducipieres.com/" ];
+          local = [ "/example.invalid/" ];
         };
       };
       services.nginx = {
@@ -303,7 +302,7 @@ pkgs.testers.runNixOSTest {
             assert hatchi.succeed(f"systemctl show {entry['unit']} -p LoadState --value").strip() == "loaded"
     checked_routes = set()
 
-    domain = "chateauducipieres.com"
+    domain = "example.invalid"
     for name in names:
         for protocol in ["", "+tcp"]:
             answer = client.succeed(f"dig @192.168.1.10 {name}.{domain} A +short {protocol}").strip()
@@ -420,8 +419,8 @@ pkgs.testers.runNixOSTest {
         hatchi.fail(f"runuser -u radarr -- cat {state}")
     for name in ["AdGuardHome.yaml", "qBittorrent.conf"]:
         hatchi.succeed(f"test $(stat -Lc %U:%G:%a /run/secrets/rendered/{name}) = root:root:400")
-    hatchi.succeed("install -d -m700 /var/lib/acme/chateauducipieres.com")
-    hatchi.succeed("openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=*.chateauducipieres.com' -keyout /var/lib/acme/chateauducipieres.com/key.pem -out /var/lib/acme/chateauducipieres.com/cert.pem 2>/dev/null")
+    hatchi.succeed("install -d -m700 /var/lib/acme/example.invalid")
+    hatchi.succeed("openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=*.example.invalid' -keyout /var/lib/acme/example.invalid/key.pem -out /var/lib/acme/example.invalid/cert.pem 2>/dev/null")
     hatchi.succeed("caddy validate --config /etc/hatchi-production.Caddyfile --adapter caddyfile")
     hatchi.succeed("caddy validate --config /etc/caddy/caddy_config --adapter caddyfile")
     hatchi.succeed("promtool check config /etc/prometheus/prometheus.yaml")

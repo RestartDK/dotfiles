@@ -7,6 +7,8 @@
     (import ../../profiles/personal-secrets.nix { userName = "dkumlin"; })
     ./hardware-configuration.nix
     ../../modules/nixos/base.nix
+    ../../modules/nixos/network.nix
+    ../../modules/nixos/private.nix
     ../../modules/nixos/deploy.nix
     ../../modules/nixos/secrets.nix
     ../../modules/nixos/numtide-cache.nix

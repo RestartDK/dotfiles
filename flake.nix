@@ -40,6 +40,11 @@
     nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
 
+    private = {
+      url = "github:RestartDK/dotfiles-private";
+      flake = false;
+    };
+
   };
 
   outputs =
@@ -200,9 +205,11 @@
         system = linuxSystem;
         config.allowUnfree = true;
       };
+      privateValues = import inputs.private;
       homeSpecialArgs = {
         inherit inputs;
         dotfilesInputs = inputs;
+        network = privateValues;
       };
       hatchiPkgsModule = {
         nixpkgs.pkgs = pkgsFor linuxSystem;
@@ -399,7 +406,7 @@
           };
           personal-secrets = import ./tests/personal-secrets.nix {
             pkgs = pkgsFor system;
-            inherit self inputs;
+            inherit self inputs privateValues;
           };
           quality = treefmtEval.${system}.config.build.check self;
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {
@@ -524,7 +531,10 @@
       nixosModules.srv-hatchi = import ./hosts/srv-hatchi;
       nixosConfigurations.srv-hatchi = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           hatchiPkgsModule
           self.nixosModules.srv-hatchi
@@ -535,7 +545,10 @@
 
       nixosConfigurations.srv-nana = nixpkgs.lib.nixosSystem {
         system = linuxSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           ./hosts/srv-nana
           home-manager.nixosModules.home-manager
@@ -562,7 +575,10 @@
 
       darwinConfigurations."dkumlin-macbook-pro" = nix-darwin.lib.darwinSystem {
         system = darwinSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           ./hosts/dkumlin-macbook-pro
           home-manager.darwinModules.home-manager
@@ -580,7 +596,10 @@
 
       darwinConfigurations."dkumlin-twin-macbook-pro" = nix-darwin.lib.darwinSystem {
         system = darwinSystem;
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
         modules = [
           ./hosts/dkumlin-twin-macbook-pro
           home-manager.darwinModules.home-manager

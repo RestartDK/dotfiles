@@ -9,6 +9,6 @@
     signKeyPaths = [ "/var/lib/nix-cache/secret" ];
   };
 
-  services.caddy.virtualHosts."cache.${config.my.hatchi.domain}".extraConfig =
+  services.caddy.virtualHosts."cache.${config.my.domain}".extraConfig =
     "reverse_proxy localhost:5000";
 }

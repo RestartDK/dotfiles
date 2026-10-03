@@ -28,7 +28,7 @@
   sops.secrets.couchdb-admin = lib.mkIf (!config.my.hatchi.onepassword.enable) {
     restartUnits = [ "couchdb.service" ];
   };
-  services.caddy.virtualHosts."couchdb.${config.my.hatchi.domain}".extraConfig =
+  services.caddy.virtualHosts."couchdb.${config.my.domain}".extraConfig =
     "reverse_proxy 127.0.0.1:${toString config.services.couchdb.port}";
   systemd.services.couchdb.preStart = lib.mkBefore ''
     ${pkgs.coreutils}/bin/install -m600 "$CREDENTIALS_DIRECTORY/admin" ${config.services.couchdb.configFile}

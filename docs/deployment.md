@@ -34,7 +34,7 @@ Hatchi's physical profile puts EFI, NixOS, service state, and databases on the s
 
 Hatchi has one physical NixOS configuration for installation and deployment. Its stable disk IDs and generated hardware facts are committed. Follow [the Hatchi installation procedure](../hosts/srv-hatchi/INSTALL.md) to run the guarded `nixos-anywhere` installation from a clean `main` checkout.
 
-Hatchi's production configuration enables runtime 1Password secrets and declares its LAN as `192.168.200.0/24`. SSH remains allowed on `tailscale0` independently of the LAN rules. Before deployment, [provision the SOPS bootstrap files](../hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment). A native pre-switch check rejects missing or undecryptable bootstrap files before changing running services. Credential formats and verification limits are documented in [the secret integration guide](../tests/srv-hatchi/onepassword.md).
+Hatchi's production configuration enables runtime 1Password secrets and receives its LAN zones from the private input. SSH remains allowed on `tailscale0` independently of the LAN rules. Before deployment, [provision the SOPS bootstrap files](../hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment). A native pre-switch check rejects missing or undecryptable bootstrap files before changing running services. Credential formats and verification limits are documented in [the secret integration guide](../tests/srv-hatchi/onepassword.md).
 
 ## LAN runner
 

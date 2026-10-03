@@ -1,4 +1,9 @@
-{ dotfilesInputs, pkgs, ... }:
+{
+  dotfilesInputs,
+  network,
+  pkgs,
+  ...
+}:
 
 {
   xdg.enable = true;
@@ -14,8 +19,8 @@
     settings = {
       core.hooksPath = "${../../config/git/hooks}";
       user = {
-        name = "Daniel Kumlin";
-        email = "danielkumlinwork@gmail.com";
+        name = network.fullName;
+        email = network.workEmail;
       };
       credential = {
         "https://github.com".helper = "!gh auth git-credential";
