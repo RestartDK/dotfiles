@@ -27,6 +27,14 @@ in
   # Referenced by the tmpfiles rules and by the runner service, so declare it.
   users.groups.${runnerUser} = { };
 
+  # The module names an existing account rather than creating one, so declare
+  # the service user the tmpfiles rules and the token file belong to.
+  users.users.${runnerUser} = {
+    isSystemUser = true;
+    group = runnerUser;
+    home = runnerDir;
+  };
+
   systemd.tmpfiles.rules = [
     "d ${cacheKeyDir} 0700 root root -"
     "d /var/lib/gh-runner 0750 ${runnerUser} ${runnerUser} -"
