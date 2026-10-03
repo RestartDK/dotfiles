@@ -28,7 +28,7 @@ The Hatchi configuration identifies these disks:
 
 ## Install NixOS
 
-Before erasing disks, prepare the private bundle at `~/.local/state/hatchi-bootstrap/var/lib/sops` with `srv-hatchi.yaml` and `age/keys.txt`. The installer refuses missing or empty files. The bundle must contain the encrypted production service-account token and its age key, not the public test fixtures.
+Before erasing disks, prepare the private bundle at `~/.local/state/hatchi-bootstrap/var/lib/sops` with `srv-hatchi.yaml` and `age/keys.txt`. The installer refuses missing or empty files. The bundle must contain the encrypted production service-account token and its age key, not the public test fixtures. The bundle must contain the encrypted production service-account token and its age key, not the public test fixtures.
 
 From the clean `main` checkout on the Mac, run:
 
@@ -105,6 +105,14 @@ sudo install -o root -g root -m600 ~/hatchi-bootstrap/sops/age/keys.txt /var/lib
 ```
 
 Remove the temporary upload after confirming both files were installed. Retain the protected backup in 1Password. Never display the token or age private key in terminal logs or paste them into chat.
+
+## The runner's access token
+
+The GitHub runner on Hatchi evaluates this flake, and the flake reads a private input, so the runner needs a read-only token for `dotfiles-private`. It is a 1Password item, delivered by opnix like the application secrets, and never stored in the bootstrap bundle or in Git.
+
+At activation, `hatchi-runner-credential` renders it into `/etc/nix/runner-access-tokens.conf`, mode `0640`, group `github-runner`, and `nix.extraOptions` pulls that file in with `!include`. The `!` matters: plain `include` treats a missing file as an error, which would stop every Nix command on the host, including the rebuild that would restore it.
+
+Rotation is an edit to the 1Password item followed by a re-activation. The unit fails loudly when the secret is empty, and it refuses to start the runner without it.
 
 From the Mac, check the deployment before switching:
 

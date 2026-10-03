@@ -259,6 +259,10 @@ assert builtins.all (reference: reference != null) (
 assert production.services.onepassword-secrets.enable;
 assert builtins.attrNames production.sops.secrets == [ "opnix-token" ];
 assert lib.hasInfix "hatchi-check-secrets" production.system.preSwitchChecks.hatchi-secrets;
+assert lib.hasInfix "!include /etc/nix/runner-access-tokens.conf" production.nix.extraOptions;
+assert lib.hasInfix "runnerAccessToken" production.systemd.services.hatchi-runner-credential.script;
+assert lib.elem "hatchi-runner-credential.service"
+  production.services.github-runners.hatchi-deploy.serviceOverrides.after;
 assert lib.hasInfix "/var/lib/sops/srv-hatchi.yaml"
   production.system.preSwitchChecks.hatchi-secrets;
 assert lib.hasInfix "/var/lib/sops/age/keys.txt" production.system.preSwitchChecks.hatchi-secrets;
@@ -458,7 +462,8 @@ assert lib.hasInfix "--password-from-env" cfg.systemd.services.nextcloud-admin.s
 assert withAppSecrets.services.onepassword-secrets.tokenFile == "/run/test-opnix-token";
 assert !withAppSecrets.services.onepassword-secrets.systemdIntegration.enable;
 assert
-  builtins.length (builtins.attrNames withAppSecrets.services.onepassword-secrets.secrets) == 9;
+  builtins.length (builtins.attrNames withAppSecrets.services.onepassword-secrets.secrets)
+  == builtins.length (builtins.attrNames withAppSecrets.my.hatchi.onepassword.references);
 assert builtins.all (secret: secret.mode == "0400") (
   builtins.attrValues withAppSecrets.services.onepassword-secrets.secrets
 );
