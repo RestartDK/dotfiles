@@ -33,14 +33,15 @@
   "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen",
   "enabledModels": [
+    "opencode-go/*",
     "openrouter/deepseek/deepseek-v4.1-flash",
     "openrouter/*",
     "openai/*",
     "openai-codex/*",
     "ollama/*"
   ],
-  "defaultModel": "openrouter/deepseek/deepseek-v4.1-flash",
+  "defaultModel": "opencode-go/deepseek-v4.1-flash",
   "modelThinkingLevels": {
-    "openrouter/deepseek/deepseek-v4.1-flash": "high"
+    "opencode-go/deepseek-v4.1-flash": "high"
   }
 }

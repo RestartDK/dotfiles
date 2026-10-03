@@ -70,10 +70,6 @@ in
                 source = ../../../config/herdr/hostname-status.py;
                 force = true;
               };
-              "herdr/usage-status.py" = {
-                source = ../../../config/herdr/usage-status.py;
-                force = true;
-              };
               "herdr/sounds/haki.mp3" = {
                 source = ../../../config/herdr/sounds/haki.mp3;
                 force = true;

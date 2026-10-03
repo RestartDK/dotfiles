@@ -330,6 +330,16 @@
                 bun test ${./config/pi/agent/extensions/pi-no-offers}
                 touch $out
               '';
+          pi-vim =
+            (pkgsFor system).runCommand "pi-vim-tests"
+              {
+                nativeBuildInputs = [ (pkgsFor system).bun ];
+              }
+              ''
+                export HOME=$TMPDIR
+                bun test ${./config/pi/agent/extensions/pi-vim}
+                touch $out
+              '';
           pi-coordination =
             (pkgsFor system).runCommand "pi-coordination-tests"
               {

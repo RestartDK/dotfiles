@@ -1,6 +1,7 @@
 import {
   CustomEditor,
   type ExtensionAPI,
+  type ExtensionContext,
   type KeybindingsManager,
   type ReadonlyFooterDataProvider,
   type Theme,
@@ -13,7 +14,15 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 import { renderBar, renderStatusLine } from "./status-line.ts";
-import { countdown, fetchUsageWindows, type UsageWindow } from "./usage.ts";
+import {
+  countdown,
+  fetchUsageWindows,
+  USAGE_SOURCES,
+  usageProviderId,
+  type UsageLayout,
+  type UsageSource,
+  type UsageWindow,
+} from "./usage.ts";
 
 type VimMode = "normal" | "insert";
 type PiEditorFactory = (
@@ -52,14 +61,10 @@ function modeChip(theme: Theme, mode: VimMode, branch: string | undefined): stri
 
 const USAGE_REFRESH_INTERVAL_MS = 5 * 60_000;
 const WINDOW_SEPARATOR = "\ue0b1";
-const PROVIDER_LABELS = new Map<string, string>([
-  ["anthropic", "claude"],
-  ["openai-codex", "gpt"],
-]);
 
 type UsageSnapshot = {
   providerId: string;
-  label: string;
+  source: UsageSource;
   windows: UsageWindow[];
 };
 
@@ -69,12 +74,11 @@ function usageColor(percent: number): "error" | "warning" | "success" {
   return "success";
 }
 
-function usageWindow(theme: Theme, window: UsageWindow, now: number): string {
-  const parts = [
-    theme.fg("dim", window.label),
-    renderBar(theme, window.percent, usageColor(window.percent)),
-    theme.fg("dim", `${Math.round(window.percent)}%`),
-  ];
+function usageWindow(theme: Theme, window: UsageWindow, now: number, layout: UsageLayout): string {
+  const color = usageColor(window.percent);
+  const parts = [theme.fg("dim", window.label)];
+  if (layout === "bars") parts.push(renderBar(theme, window.percent, color));
+  parts.push(theme.fg(layout === "compact" ? color : "dim", `${Math.round(window.percent)}%`));
   const reset = countdown(window.resetAt, now);
   if (reset !== undefined) parts.push(theme.fg("dim", reset));
   return parts.join(" ");
@@ -94,8 +98,10 @@ function usageSegment(
     return "";
   }
   const separator = ` ${theme.fg("dim", WINDOW_SEPARATOR)} `;
-  const windows = snapshot.windows.map((window) => usageWindow(theme, window, now));
-  return ` ${theme.fg("accent", snapshot.label)} ${windows.join(separator)}`;
+  const windows = snapshot.windows.map((window) =>
+    usageWindow(theme, window, now, snapshot.source.layout),
+  );
+  return ` ${theme.fg("accent", snapshot.source.label)} ${windows.join(separator)}`;
 }
 
 interface UsageTotals {
@@ -143,17 +149,20 @@ export default function piVim(pi: ExtensionAPI) {
   let usageRefreshTimer: ReturnType<typeof setInterval> | undefined;
   let usageFetchGeneration = 0;
 
-  async function refreshUsage(providerId: string | undefined): Promise<void> {
+  async function refreshUsage(ctx: ExtensionContext): Promise<void> {
     const generation = ++usageFetchGeneration;
-    const label = providerId === undefined ? undefined : PROVIDER_LABELS.get(providerId);
-    if (providerId === undefined || label === undefined) {
+    const providerId = usageProviderId(ctx.model);
+    const source = providerId === undefined ? undefined : USAGE_SOURCES.get(providerId);
+    if (providerId === undefined || source === undefined) {
       usageSnapshot = undefined;
       usageTui?.requestRender();
       return;
     }
-    const windows = await fetchUsageWindows(providerId);
+    const windows = await fetchUsageWindows(providerId, () =>
+      ctx.modelRegistry.getApiKeyForProvider(providerId),
+    );
     if (generation !== usageFetchGeneration) return;
-    usageSnapshot = { providerId, label, windows };
+    usageSnapshot = { providerId, source, windows };
     usageTui?.requestRender();
   }
 
@@ -261,7 +270,7 @@ export default function piVim(pi: ExtensionAPI) {
             ? theme.fg("muted", ` ${otherStatuses.join(" ")}`)
             : "";
           const now = Math.floor(Date.now() / 1000);
-          const usage = usageSegment(theme, usageSnapshot, ctx.model?.provider, now);
+          const usage = usageSegment(theme, usageSnapshot, usageProviderId(ctx.model), now);
           const vimStatus = `${modeChip(theme, mode, branch ?? undefined)}${usage}${extensionStatus}`;
 
           return [truncateToWidth(vimStatus, width, "")];
@@ -328,17 +337,19 @@ export default function piVim(pi: ExtensionAPI) {
     );
     if (usageRefreshTimer !== undefined) clearInterval(usageRefreshTimer);
     usageRefreshTimer = setInterval(() => {
-      void refreshUsage(ctx.model?.provider);
+      void refreshUsage(ctx);
     }, USAGE_REFRESH_INTERVAL_MS);
-    void refreshUsage(ctx.model?.provider);
+    void refreshUsage(ctx);
   });
 
   pi.on("model_select", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
-    void refreshUsage(ctx.model?.provider);
+    void refreshUsage(ctx);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
+    usageSnapshot = undefined;
+    usageFetchGeneration++;
     restoreBindings?.();
     restoreBindings = undefined;
     if (usageRefreshTimer !== undefined) {

@@ -181,7 +181,7 @@ describe("typed backend sessions", () => {
     ]);
     expect(sessions.map((session) => session.options.target)).toEqual([
       { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
-      { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "high" },
+      { kind: "pi", provider: "opencode-go", id: "deepseek-v4.1-flash", thinking: "high" },
     ]);
   });
 
@@ -455,8 +455,8 @@ function assistant(over: Record<string, unknown> = {}): AgentSessionEvent {
     type: "message_end",
     message: {
       role: "assistant",
-      provider: "openrouter",
-      model: "deepseek/deepseek-v4.1-flash",
+      provider: "opencode-go",
+      model: "deepseek-v4.1-flash",
       api: "openai-completions",
       content: [{ type: "text", text: "answer" }],
       stopReason: "stop",
@@ -523,7 +523,7 @@ describe("session event mapping", () => {
       events: [assistant()],
       state: {
         output: "answer",
-        actualModel: "openrouter/deepseek/deepseek-v4.1-flash",
+        actualModel: "opencode-go/deepseek-v4.1-flash",
         outcome: { kind: "success" },
         usage: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, cost: 0.5, turns: 1 },
       },
@@ -561,7 +561,7 @@ describe("session event mapping", () => {
     },
     {
       name: "a substituted response model fails the attempt",
-      events: [assistant({ responseModel: "deepseek/deepseek-v4.1-flash-preview" })],
+      events: [assistant({ responseModel: "deepseek-v4.1-flash-preview" })],
       state: {
         outcome: {
           kind: "failed",

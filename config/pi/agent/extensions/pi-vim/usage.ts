@@ -1,13 +1,20 @@
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 const FETCH_TIMEOUT_MS = 5_000;
 const AUTH_PATH = join(homedir(), ".pi", "agent", "auth.json");
-const CLAUDE_WINDOWS = [
-  { key: "five_hour", label: "5h" },
-  { key: "seven_day", label: "7d" },
-];
+
+export type UsageLayout = "bars" | "compact";
+export type ApiKeyResolver = () => Promise<string | undefined>;
+export type UsageModel = Pick<Model<Api>, "provider" | "cost">;
+export type UsageSource = {
+  label: string;
+  layout: UsageLayout;
+  fetch: (getApiKey: ApiKeyResolver) => Promise<unknown>;
+  decode: (body: unknown) => UsageWindow[];
+};
 
 export type UsageWindow = {
   label: string;
@@ -101,24 +108,16 @@ async function requestBody(url: string, init: RequestInit): Promise<unknown> {
   }
 }
 
-async function fetchClaudeWindows(): Promise<UsageWindow[]> {
+async function fetchClaudeUsage(): Promise<unknown> {
   const token = claudeToken();
-  if (token === undefined) return [];
-  const body = await requestBody("https://api.anthropic.com/api/oauth/usage", {
+  if (token === undefined) return undefined;
+  return requestBody("https://api.anthropic.com/api/oauth/usage", {
     headers: {
       Authorization: `Bearer ${token}`,
       "anthropic-beta": "oauth-2025-04-20",
       "User-Agent": "claude-code/2.1.282",
     },
   });
-  const windows: UsageWindow[] = [];
-  for (const { key, label } of CLAUDE_WINDOWS) {
-    const entry = field(body, key);
-    const percent = normalizePercent(field(entry, "utilization"));
-    if (percent === undefined) continue;
-    windows.push({ label, percent, resetAt: isoEpochSeconds(field(entry, "resets_at")) });
-  }
-  return windows;
 }
 
 function codexWindow(entry: unknown): UsageWindow | undefined {
@@ -131,32 +130,122 @@ function codexWindow(entry: unknown): UsageWindow | undefined {
   };
 }
 
-async function fetchCodexWindows(): Promise<UsageWindow[]> {
+async function fetchCodexUsage(): Promise<unknown> {
   const credentials = codexCredentials();
-  if (credentials === undefined) return [];
+  if (credentials === undefined) return undefined;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${credentials.token}`,
     Accept: "application/json",
     "User-Agent": "pi-agent",
   };
   if (credentials.accountId !== undefined) headers["ChatGPT-Account-Id"] = credentials.accountId;
-  const body = await requestBody("https://chatgpt.com/backend-api/wham/usage", { headers });
-  const rateLimit = field(body, "rate_limit");
-  const windows: UsageWindow[] = [];
-  for (const entry of [field(rateLimit, "primary_window"), field(rateLimit, "secondary_window")]) {
-    const window = codexWindow(entry);
-    if (window !== undefined) windows.push(window);
-  }
-  return windows;
+  return requestBody("https://chatgpt.com/backend-api/wham/usage", { headers });
 }
 
-const USAGE_FETCHERS = new Map<string, () => Promise<UsageWindow[]>>([
-  ["anthropic", fetchClaudeWindows],
-  ["openai-codex", fetchCodexWindows],
+async function fetchGoUsage(getApiKey: ApiKeyResolver): Promise<unknown> {
+  const key = await getApiKey();
+  if (!key) return undefined;
+  return requestBody("https://opencode.ai/zen/go/v1/usage", {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+}
+
+export const USAGE_SOURCES: ReadonlyMap<string, UsageSource> = new Map<string, UsageSource>([
+  [
+    "anthropic",
+    {
+      label: "claude",
+      layout: "bars",
+      fetch: fetchClaudeUsage,
+      decode(body) {
+        const windows: UsageWindow[] = [];
+        for (const { key, label } of [
+          { key: "five_hour", label: "5h" },
+          { key: "seven_day", label: "7d" },
+        ]) {
+          const entry = field(body, key);
+          const percent = normalizePercent(field(entry, "utilization"));
+          if (percent === undefined) continue;
+          windows.push({ label, percent, resetAt: isoEpochSeconds(field(entry, "resets_at")) });
+        }
+        return windows;
+      },
+    },
+  ],
+  [
+    "openai-codex",
+    {
+      label: "gpt",
+      layout: "bars",
+      fetch: fetchCodexUsage,
+      decode(body) {
+        const rateLimit = field(body, "rate_limit");
+        const windows: UsageWindow[] = [];
+        for (const entry of [
+          field(rateLimit, "primary_window"),
+          field(rateLimit, "secondary_window"),
+        ]) {
+          const window = codexWindow(entry);
+          if (window !== undefined) windows.push(window);
+        }
+        return windows;
+      },
+    },
+  ],
+  [
+    "opencode-go",
+    {
+      label: "go",
+      layout: "compact",
+      fetch: fetchGoUsage,
+      decode(body) {
+        const usage = field(body, "usage");
+        const windows: UsageWindow[] = [];
+        for (const { key, label } of [
+          { key: "rolling", label: "5h" },
+          { key: "weekly", label: "wk" },
+          { key: "monthly", label: "mo" },
+        ]) {
+          const entry = field(usage, key);
+          const status = field(entry, "status");
+          const percent = number(field(entry, "percent"));
+          const resetAt = isoEpochSeconds(field(entry, "resetsAt"));
+          if (
+            (status !== "ok" && status !== "rate-limited") ||
+            percent === undefined ||
+            !Number.isInteger(percent) ||
+            percent < 0 ||
+            percent > 100 ||
+            resetAt === undefined
+          ) {
+            continue;
+          }
+          windows.push({ label, percent: clampPercent(percent), resetAt });
+        }
+        return windows;
+      },
+    },
+  ],
 ]);
 
-export async function fetchUsageWindows(providerId: string): Promise<UsageWindow[]> {
-  const fetchWindows = USAGE_FETCHERS.get(providerId);
-  if (fetchWindows === undefined) return [];
-  return await fetchWindows().catch(() => []);
+export async function fetchUsageWindows(
+  providerId: string,
+  getApiKey: ApiKeyResolver,
+): Promise<UsageWindow[]> {
+  const source = USAGE_SOURCES.get(providerId);
+  if (source === undefined) return [];
+  try {
+    return source.decode(await source.fetch(getApiKey));
+  } catch {
+    return [];
+  }
+}
+
+export function usageProviderId(model: UsageModel | undefined): string | undefined {
+  if (model === undefined || !USAGE_SOURCES.has(model.provider)) return undefined;
+  const unlimited = [model.cost, ...(model.cost.tiers ?? [])].every(
+    (cost) =>
+      cost.input === 0 && cost.output === 0 && cost.cacheRead === 0 && cost.cacheWrite === 0,
+  );
+  return unlimited ? undefined : model.provider;
 }
