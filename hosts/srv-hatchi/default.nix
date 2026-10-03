@@ -14,6 +14,7 @@
     ./services/couchdb.nix
     ./services/monitoring.nix
     ./services/remote-nana.nix
+    ./services/home-assistant.nix
     ./runner.nix
   ];
 }

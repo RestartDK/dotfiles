@@ -168,6 +168,7 @@ let
       builtins.filter (entry: entry.route != null) inventory
     ))
     ++ [
+      "homeassistant.${cfg.my.domain}"
       "ollama.${cfg.my.domain}"
       "opencode.${cfg.my.domain}"
     ]
