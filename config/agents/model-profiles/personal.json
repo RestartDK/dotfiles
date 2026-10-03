@@ -15,10 +15,24 @@
         "thinking": "high"
       }
     ],
-    "sol": [
+    "glm": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-6.1-sol",
+        "model": "opencode-go/glm-5.3-flash",
+        "thinking": "high"
+      }
+    ],
+    "muse": [
+      {
+        "kind": "pi",
+        "model": "opencode-go/muse-spark-1.3-contributor",
+        "thinking": "xhigh"
+      }
+    ],
+    "mimo": [
+      {
+        "kind": "pi",
+        "model": "opencode-go/mimo-v2.6-flash",
         "thinking": "xhigh"
       }
     ]
@@ -38,19 +52,19 @@
     },
     "bug-fix": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "perf-issue": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "hillclimb": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "reflect-tooling": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "fast-code": {
       "kind": "single",
@@ -62,43 +76,43 @@
     },
     "precise-code": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "prose": {
       "kind": "single",
-      "route": "sol"
+      "route": "glm"
     },
     "judgment": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "review": {
       "kind": "single",
-      "route": "sol"
+      "route": "glm"
     },
     "hardest": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "how-explainer": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "why-synthesizer": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "reflect-judgment": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "reflect-divergent": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "reflect-synthesizer": {
       "kind": "single",
-      "route": "sol"
+      "route": "deepseek"
     },
     "how-explorer": {
       "kind": "single",
@@ -107,35 +121,39 @@
     "how-critics": {
       "kind": "panel",
       "members": [
-        "sol"
+        "glm",
+        "muse"
       ]
     },
     "arena-runners": {
       "kind": "panel",
       "members": [
-        "sol",
-        "deepseek"
+        "deepseek",
+        "muse",
+        "mimo"
       ]
     },
     "arena-cross-judge": {
       "kind": "panel",
       "members": [
-        "sol",
-        "deepseek"
+        "glm",
+        "muse"
       ]
     },
     "architect-runners": {
       "kind": "panel",
       "members": [
-        "sol",
-        "deepseek"
+        "deepseek",
+        "muse",
+        "mimo"
       ]
     },
     "interrogate-reviewers": {
       "kind": "panel",
       "members": [
-        "sol",
-        "deepseek"
+        "glm",
+        "muse",
+        "mimo"
       ]
     }
   },
@@ -143,7 +161,6 @@
     "opencode-go",
     "openrouter",
     "openai",
-    "openai-codex",
     "ollama"
   ]
 }

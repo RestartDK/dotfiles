@@ -45,7 +45,7 @@ function profilePolicy(profile: string): Record<string, unknown> {
   const roles = policy.roles as Record<string, unknown>;
   routes.fallback = [
     { kind: "pi", model: "openrouter/z-ai/glm-5.3-flash", thinking: "max" },
-    { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
+    { kind: "pi", model: "openrouter/meta/muse-spark-1.3-contributor", thinking: "xhigh" },
   ];
   roles["fallback-role"] = { kind: "single", route: "fallback" };
   return policy;
@@ -121,7 +121,7 @@ describe("typed backend sessions", () => {
     script(
       result({
         output: "done",
-        actualModel: "openai-codex/gpt-6.1-sol",
+        actualModel: "opencode-go/glm-5.3-flash",
         usage: {
           input: 5,
           output: 8,
@@ -141,7 +141,7 @@ describe("typed backend sessions", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.options).toMatchObject({
       cwd: task.cwd,
-      target: { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
+      target: { kind: "pi", provider: "opencode-go", id: "glm-5.3-flash", thinking: "high" },
       systemPrompt: "preset instruction",
       tools: ["read", "grep", "codemode"],
     });
@@ -149,7 +149,7 @@ describe("typed backend sessions", () => {
     expect(sessions[0]?.options.signal?.aborted).toBe(false);
     expect(sessions[0]?.text).toBe("Delegated task:\n\nReport once");
     expect(execution.outcome).toEqual({ kind: "success" });
-    expect(execution.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6.1-sol" });
+    expect(execution.actual).toEqual({ backend: "pi", model: "opencode-go/glm-5.3-flash" });
     expect(execution.usage).toMatchObject({
       input: 5,
       output: 8,
@@ -171,17 +171,17 @@ describe("typed backend sessions", () => {
   });
 
   test("concurrent workers keep their own route targets", async () => {
-    const { runtime, task, sessions, script, policy } = setup();
+    const { runtime, task, sessions, script, policy } = setup("work");
     const review = { ...task, route: resolveRoute(policy, { role: "review" }) };
-    const deepseek = { ...task, route: resolveRoute(policy, { role: "feature" }) };
+    const feature = { ...task, route: resolveRoute(policy, { role: "feature" }) };
     script(result({ output: "a" }), result({ output: "b" }));
     await Promise.all([
       new BackendRunner(runtime).run(review),
-      new BackendRunner(runtime).run(deepseek),
+      new BackendRunner(runtime).run(feature),
     ]);
     expect(sessions.map((session) => session.options.target)).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
-      { kind: "pi", provider: "opencode-go", id: "deepseek-v4.1-flash", thinking: "high" },
+      { kind: "pi", provider: "anthropic", id: "claude-opus-5-5", thinking: "xhigh" },
+      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
 
@@ -210,7 +210,7 @@ describe("typed backend sessions", () => {
             },
             output: "streaming",
             toolUsed: true,
-            actualModel: "openai-codex/gpt-6.1-sol",
+            actualModel: "opencode-go/glm-5.3-flash",
           });
           resolve(result());
         }),
@@ -225,7 +225,7 @@ describe("typed backend sessions", () => {
           execution.output === "streaming" &&
           execution.toolUsed &&
           execution.usage.input === 7 &&
-          execution.actual?.model === "openai-codex/gpt-6.1-sol",
+          execution.actual?.model === "opencode-go/glm-5.3-flash",
       ),
     ).toBe(true);
   });
@@ -249,7 +249,7 @@ describe("typed backend sessions", () => {
       }),
       result({
         output: "recovered",
-        actualModel: "openai-codex/gpt-6-astra",
+        actualModel: "openrouter/meta/muse-spark-1.3-contributor",
         usage: {
           input: 5,
           output: 6,
@@ -265,7 +265,7 @@ describe("typed backend sessions", () => {
     expect(sessions).toHaveLength(2);
     expect(sessions.map((call) => call.options.target.id)).toEqual([
       "z-ai/glm-5.3-flash",
-      "gpt-6-astra",
+      "meta/muse-spark-1.3-contributor",
     ]);
     expect(execution.attempts.map((attempt) => attempt.kind)).toEqual([
       "provider-failure",
@@ -277,7 +277,10 @@ describe("typed backend sessions", () => {
     });
     expect(execution.outcome).toEqual({ kind: "success" });
     expect(execution.output).toBe("recovered");
-    expect(execution.actual).toEqual({ backend: "pi", model: "openai-codex/gpt-6-astra" });
+    expect(execution.actual).toEqual({
+      backend: "pi",
+      model: "openrouter/meta/muse-spark-1.3-contributor",
+    });
     expect(execution.usage).toMatchObject({
       input: 6,
       output: 8,
