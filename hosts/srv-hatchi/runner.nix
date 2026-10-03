@@ -24,6 +24,9 @@ in
     ];
   };
 
+  # Referenced by the tmpfiles rules and by the runner service, so declare it.
+  users.groups.${runnerUser} = { };
+
   systemd.tmpfiles.rules = [
     "d ${cacheKeyDir} 0700 root root -"
     "d /var/lib/gh-runner 0750 ${runnerUser} ${runnerUser} -"
@@ -38,7 +41,12 @@ in
     enable = true;
     name = runnerName;
     url = "https://github.com/RestartDK/dotfiles";
-    tokenFile = tokenFile;
+    inherit tokenFile;
+    # The module defaults user and group to null, which runs the service as a
+    # dynamically allocated user. The tmpfiles rules and the token file belong
+    # to a real account, so name it explicitly.
+    user = runnerUser;
+    group = runnerUser;
     extraLabels = [ "lan-deploy" ];
     replace = true;
     ephemeral = true;
