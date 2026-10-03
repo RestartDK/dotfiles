@@ -19,7 +19,7 @@
     settings = {
       core.hooksPath = "${../../config/git/hooks}";
       user = {
-        name = "Daniel Kumlin";
+        name = network.fullName;
         email = network.workEmail;
       };
       credential = {

@@ -2,9 +2,9 @@
   pkgs,
   self,
   inputs,
+  privateValues,
 }:
 let
-  privateValues = import inputs.private;
   mac = self.darwinConfigurations.dkumlin-macbook-pro.config;
   nana = self.nixosConfigurations.srv-nana.config;
   twinMac = self.darwinConfigurations.dkumlin-twin-macbook-pro.config;

@@ -406,7 +406,7 @@
           };
           personal-secrets = import ./tests/personal-secrets.nix {
             pkgs = pkgsFor system;
-            inherit self inputs;
+            inherit self inputs privateValues;
           };
           quality = treefmtEval.${system}.config.build.check self;
           srv-hatchi-policy = import ./tests/srv-hatchi/policy.nix {

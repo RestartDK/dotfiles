@@ -1,10 +1,7 @@
-{ config, inputs, ... }:
-let
-  values = import inputs.private;
-in
+{ config, network, ... }:
 {
   my.hatchi.onepassword.enable = true;
-  my.hatchi.onepassword.references = values.hatchiOnepasswordReferences;
+  my.hatchi.onepassword.references = network.hatchiOnepasswordReferences;
 
   assertions = [
     {

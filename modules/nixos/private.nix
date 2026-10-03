@@ -1,18 +1,9 @@
-{ inputs, lib, ... }:
-let
-  values = import inputs.private;
-in
+{ network, lib, ... }:
 {
-  options.my.private = lib.mkOption {
-    type = lib.types.attrs;
-    internal = true;
-    default = values;
-    description = "The raw private values, for handing to Home Manager through extraSpecialArgs.";
-  };
-
-  config = {
-    my.domain = lib.mkDefault values.domain;
-    my.hosts = lib.mkDefault values.hosts;
-    my.network = lib.mkDefault values.network;
-  };
+  my.domain = lib.mkDefault network.domain;
+  my.hosts = lib.mkDefault network.hosts;
+  my.network = lib.mkDefault network.network;
+  my.host.fullName = lib.mkDefault network.fullName;
+  my.host.authorizedKeys = lib.mkDefault network.authorizedKeys.user;
+  my.host.rootAuthorizedKeys = lib.mkDefault network.authorizedKeys.root;
 }

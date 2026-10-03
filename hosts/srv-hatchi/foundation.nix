@@ -2,6 +2,7 @@
   config,
   inputs,
   lib,
+  network,
   pkgs,
   ...
 }:
@@ -38,7 +39,7 @@ in
     extraSpecialArgs = {
       inherit inputs;
       dotfilesInputs = inputs;
-      network = config.my.private;
+      inherit network;
     };
     users.${config.my.host.userName} = import ./home.nix;
   };

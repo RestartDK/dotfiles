@@ -55,6 +55,9 @@ in
   };
 
   programs.git.settings.user = lib.mkDefault (
-    { name = "Daniel Kumlin"; } // lib.optionalAttrs (network != null) { email = network.workEmail; }
+    lib.optionalAttrs (network != null) {
+      name = network.fullName;
+      email = network.workEmail;
+    }
   );
 }
