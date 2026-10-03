@@ -53,8 +53,8 @@ in
     openFirewall = false;
     extraSetFlags = [
       "--netfilter-mode=off"
-      "--advertise-routes=192.168.200.70/32"
-    ];
+    ]
+    ++ lib.optional (config.my.network != null) "--advertise-routes=${config.my.network.dnsAnswer}/32";
   };
   virtualisation.docker.enable = false;
   virtualisation.podman.enable = false;

@@ -5,8 +5,8 @@ in
 {
   options.my.domain = mkOption {
     type = types.strMatching "[a-z0-9.-]+\\.[a-z]+";
-    default = "chateauducipieres.com";
-    description = "Public domain the house serves from. Shared by every host that terminates TLS for it.";
+    default = "example.invalid";
+    description = "Public domain the house serves from. Shared by every host that terminates TLS for it. The real value comes from the private input, so the public tree carries only this placeholder.";
   };
   options.my.network = mkOption {
     default = null;
