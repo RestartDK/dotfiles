@@ -170,6 +170,7 @@ let
       builtins.filter (entry: entry.route != null) inventory
     ))
     ++ [
+      "homeassistant.${cfg.my.hatchi.domain}"
       "ollama.${cfg.my.hatchi.domain}"
       "opencode.${cfg.my.hatchi.domain}"
     ]
