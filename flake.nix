@@ -37,6 +37,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Private repo: the git fetcher uses git credentials instead of the
+    # anonymous API.
+    mangy = {
+      url = "git+https://github.com/RestartDK/mangy?ref=main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
 

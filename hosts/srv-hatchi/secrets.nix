@@ -17,6 +17,7 @@ let
     grafanaKey = "grafana-key";
     grafanaPassword = "grafana-password";
     nextcloudPassword = "nextcloud-admin";
+    mangyEnv = "mangy-env";
   };
   templateNames = {
     adguardConfig = "AdGuardHome.yaml";

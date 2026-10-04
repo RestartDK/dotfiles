@@ -20,9 +20,9 @@
     "route": "komga"
   },
   {
-    "source": "suwayomi",
-    "unit": "suwayomi-server",
-    "route": "suwayomi"
+    "source": "mangy",
+    "unit": "mangy-server",
+    "route": "mangy"
   },
   {
     "source": "jellyfin",
