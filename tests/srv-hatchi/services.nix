@@ -278,7 +278,7 @@ pkgs.testers.runNixOSTest {
     hatchi.succeed("systemctl reset-failed; systemctl start srv.mount")
     hatchi.wait_for_unit("srv.mount")
     assert hatchi.succeed("findmnt -n -o LABEL,FSTYPE --mountpoint /srv").split() == ["hatchi-data", "ext4"]
-    units = ["adguardhome", "caddy", "glance", "komga", "mangy-migrate", "mangy-server", "mangy-worker", "jellyfin", "seerr", "radarr", "sonarr", "prowlarr", "qbittorrent", "nextcloud-admin", "nextcloud-setup", "nextcloud-cron", "nextcloud-update-db", "phpfpm-nextcloud", "nginx", "postgresql", "postgresql-setup", "redis-nextcloud", "couchdb", "prometheus", "grafana"]
+    units = ["adguardhome", "caddy", "glance", "komga", "mangy-db-setup", "mangy-migrate", "mangy-server", "mangy-worker", "jellyfin", "seerr", "radarr", "sonarr", "prowlarr", "qbittorrent", "nextcloud-admin", "nextcloud-setup", "nextcloud-cron", "nextcloud-update-db", "phpfpm-nextcloud", "nginx", "postgresql", "postgresql-setup", "redis-nextcloud", "couchdb", "prometheus", "grafana"]
     hatchi.succeed("systemctl reset-failed; systemctl start " + " ".join(unit + ".service" for unit in units if unit not in ["nextcloud-cron", "nextcloud-update-db"]))
     for unit in units:
         if unit in ["nextcloud-setup", "postgresql-setup", "nextcloud-update-db", "nextcloud-cron"]:
@@ -289,6 +289,7 @@ pkgs.testers.runNixOSTest {
     for port in [53, 80, 443, 2019, 3000, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100]:
         hatchi.wait_for_open_port(port, "127.0.0.1", timeout=600)
     hatchi.succeed("test $(systemctl show nextcloud-setup.service -p ExecMainStatus --value) = 0")
+    hatchi.succeed("test $(systemctl show mangy-migrate.service -p ExecMainStatus --value) = 0")
 
     inventory = json.loads(r'${builtins.toJSON (builtins.fromJSON (builtins.readFile ./inventory.json))}')
     assert len(inventory) == 17
