@@ -1,6 +1,6 @@
 ---
 name: update-config
-description: Use whenever Daniel asks to edit, add, refactor, validate, rebuild, update, or make a PR for this computer's configuration or any other computer/host configuration in Daniel's dotfiles/Nix setup. Covers RestartDK/dotfiles, NixOS, nix-darwin, Home Manager, Cobb bridge profile usage, live dotfile symlinks, packages, app config, agent config, and the traitor CLI workflow.
+description: Use whenever Daniel asks to edit, add, refactor, validate, rebuild, update, or make a PR for this computer's configuration or any other computer/host configuration in Daniel's dotfiles/Nix setup, including fleet-wide and "homelab" changes that touch multiple hosts. Covers RestartDK/dotfiles, NixOS, nix-darwin, Home Manager, Cobb bridge profile usage, live dotfile symlinks, packages, app config, agent config, and the traitor CLI workflow.
 ---
 
 # Update Config Skill
