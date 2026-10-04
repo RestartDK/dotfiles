@@ -234,10 +234,15 @@
           fleet = mkFleetPackage pkgs;
           piPackageUpdater = mkPiPackageUpdater pkgs;
           traitor = mkTraitorPackage pkgs;
+          tailnetDns = pkgs.callPackage ./packages/tailnet-dns {
+            domain = "chateauducipieres.com";
+            nameserver = "100.85.39.42";
+          };
         in
         piPackages
         // {
-          inherit fleet traitor;
+          inherit fleet traitor tailnetDns;
+          tailnet-dns = tailnetDns;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
           nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
@@ -268,6 +273,10 @@
         update-pi-packages = {
           type = "app";
           program = "${self.packages.${system}.pi-package-updater}/bin/update-pi-packages";
+        };
+        tailnet-dns = {
+          type = "app";
+          program = "${self.packages.${system}.tailnet-dns}/bin/tailnet-dns";
         };
         default = self.apps.${system}.traitor;
       });

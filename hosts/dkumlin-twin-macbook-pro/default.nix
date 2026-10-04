@@ -6,6 +6,7 @@
     (import ../../profiles/personal-secrets.nix { userName = "danielkumlin"; })
     ../../modules/darwin/determinate-nix.nix
     ../../modules/darwin/spotlight-hotkeys.nix
+    ../../modules/darwin/tailscale.nix
   ];
 
   my.darwin.spotlightHotkeys.enable = true;
