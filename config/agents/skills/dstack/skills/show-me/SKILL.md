@@ -122,7 +122,7 @@ function expandSkill(command: string): string {
 
 - For a visual UI, layout, state comparison, or concept too dense for Mermaid, write one focused HTML file — a diagram, an infographic, or a short slide deck, whichever fits the point. Match the product's colors, type, spacing, and components; use real labels and data; support desktop and mobile. Then open it for the user.
 
-In Herdr, follow the **browser** skill (`~/.agents/skills/browser/SKILL.md`) to open and inspect the HTML in Terminal Browser. Reuse its dedicated preview work tab and exercise any controls before presenting the artifact.
+In Herdr, follow the **browser** skill (`~/.agents/skills/browser/SKILL.md`) to open and inspect the HTML in Terminal Browser. Reuse its preview split beside Pi and exercise any controls before presenting the artifact.
 
 Outside Herdr, or when Terminal Browser is unavailable, keep the existing browser workflow:
 

@@ -18,16 +18,17 @@ The bundled `~/.agents/skills/terminal-browser/SKILL.md`, when present, holds th
 
 ## Open and reuse a preview
 
-1. Create a dedicated Herdr preview work tab with a control pane. Do not split Pi's tab. Reuse the task's existing preview work tab when available.
-2. From the control pane, run this through `herdr.run` with `wait: true`, using an absolute HTML path or the application's URL:
+Open the preview as a split beside Pi, in Pi's own tab. Do not create a separate work tab. Reuse the existing preview pane in Pi's tab when one is already open.
+
+1. Split Pi's own pane to the right with the bash tool, using an absolute HTML path or the application's URL:
 
    ```sh
    TERMINAL_BROWSER_NO_TELEMETRY=1 terminal-browser open --split right /absolute/path/to/explanation.html
    ```
 
-3. Run `terminal-browser ls --json` in that control pane. Record the browser key and tab id before interacting. Do not reuse an unrelated browser or authenticated tab.
-4. Open later artifacts from the same control pane. The default merge behavior opens them in the neighboring browser instead of creating another split. Refresh the recorded tab id after navigation or a new tab.
-5. Keep focus unchanged on updates unless the user asks to view the preview.
+2. Run `terminal-browser ls --json` and record the browser key and tab id before interacting. Do not reuse an unrelated browser or authenticated tab.
+3. Open later artifacts from Pi's pane. The default merge behavior opens them in the neighboring browser instead of creating another split. Refresh the recorded tab id after navigation or a new tab.
+4. Keep focus unchanged on updates unless the user asks to view the preview.
 
 ## Inspect and exercise the real page
 
@@ -47,7 +48,7 @@ Run `terminal-browser action done` after the final action to clear the visible a
 
 ## Own the lifecycle
 
-Close only browser panes and preview work tabs created for the task. Follow the caller's cleanup policy. If the user requests a viewer left open, name it and provide its close action.
+Close only browser panes and preview splits created for the task. Follow the caller's cleanup policy. If the user requests a viewer left open, name it and provide its close action.
 
 `terminal-browser shutdown` closes all browser sessions. Do not use it when another task or the user owns any open browser.
 

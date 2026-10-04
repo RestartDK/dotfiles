@@ -897,14 +897,14 @@ export default function (pi: ExtensionAPI) {
       "Actions: list panes, manage workspaces, Git worktrees, and tabs, split panes in dedicated work tabs, submit lines atomically, detect command completion with exit codes and output tails, watch readiness, wait for one or more agent panes to reach target statuses, send raw text or keys, focus contexts, and stop panes.",
     promptGuidelines: [
       "Use `herdr` run for long-running processes in other panes instead of `bash`.",
-      "Keep the tab containing Pi dedicated to the interactive Pi session. For tests, builds, servers, watchers, or other background work in the current project, first use `tab_create` with a descriptive label and a friendly `pane` alias for its root pane, then run work there.",
-      "Group related processes in one dedicated work tab. If that workflow needs more panes, use `pane_split` on the root pane alias or another pane in that work tab; never split a pane in Pi's own tab.",
+      "Keep the tab containing Pi dedicated to the interactive Pi session, except a browser preview split beside it. For tests, builds, servers, watchers, or other background work in the current project, first use `tab_create` with a descriptive label and a friendly `pane` alias for its root pane, then run work there.",
+      "Group related processes in one dedicated work tab. If that workflow needs more panes, use `pane_split` on the root pane alias or another pane in that work tab; never split a pane in Pi's own tab, except a browser preview opened by the browser skill, which belongs beside Pi.",
       "Remember every transient work tab and process you create. Before finishing the task, terminate processes you started and use `tab_close` to tear down their dedicated tabs, unless the user explicitly asked to leave a service or agent running.",
       "Use a new workspace instead of a tab when the work needs a separate Git worktree or broader isolation.",
       "When you want to submit a line or prompt to a pane, prefer `run` over `send` + `Enter` so text and Enter happen atomically.",
       "Use `send` only for low-level literal text or key injection when you do not want command-style submission semantics.",
       "Preserve the current UI focus by default. Create work tabs and panes with focus disabled unless the user explicitly asks to view them or the workflow truly requires visible interaction there.",
-      "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab.",
+      "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab, or Pi's own pane for a browser preview with `allowPiTab`.",
       "Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
       "Use `worktree_create` to create a Git worktree checkout and open it as a Herdr workspace.",
       "Use `worktree_remove` to delete a Herdr-managed worktree checkout; identify by workspace id or label, or by path or branch; never the workspace pi runs in. It runs git worktree remove and does not delete the branch.",
@@ -916,7 +916,7 @@ export default function (pi: ExtensionAPI) {
       "For agent panes, background finished panes usually become `done` while focused finished panes usually become `idle`.",
       "Use `recent-unwrapped` when you need log matching or reads that ignore soft wrapping. Giving `lines` switches any read or watch to the visible screen, because herdr's recent sources exclude text that has not scrolled off yet.",
       "Pane references can be either friendly aliases you created earlier or real herdr pane ids from `list`.",
-      "Use `tab_create` with `pane` set to a friendly root-pane alias as the default way to establish a target for current-project background work. `pane_split` requires an existing pane alias/id outside Pi's tab and defaults its direction to right. `run` only works with an existing pane alias or pane id.",
+      "Use `tab_create` with `pane` set to a friendly root-pane alias as the default way to establish a target for current-project background work. `pane_split` requires an existing pane alias/id outside Pi's tab, unless `allowPiTab` is set for a browser preview, and defaults its direction to right. `run` only works with an existing pane alias or pane id.",
       "When PI_NETNS_SELECTED is set, newly split panes automatically enter that network namespace before later commands are run in them.",
       "Use friendly pane aliases like `server`, `reviewer`, or `tests` so later reads, watches, sends, and cleanup can reuse them across the session.",
       "When starting a fresh pi instance in another pane and the model matters, either specify `--model` explicitly or ask the user which model/provider they want.",
@@ -926,7 +926,7 @@ export default function (pi: ExtensionAPI) {
       pane: Type.Optional(
         Type.String({
           description:
-            "Friendly pane alias or explicit pane id. For tab/workspace/worktree creation, an alias to assign to the new root pane. For pane_split, a required source pane outside Pi's tab.",
+            "Friendly pane alias or explicit pane id. For tab/workspace/worktree creation, an alias to assign to the new root pane. For pane_split, a required source pane outside Pi's tab, or Pi's own pane when `allowPiTab` is set for a browser preview.",
         }),
       ),
       panes: Type.Optional(
@@ -957,6 +957,12 @@ export default function (pi: ExtensionAPI) {
         Type.String({ description: "Alias to remember for the pane created by pane_split" }),
       ),
       direction: Type.Optional(DirectionEnum),
+      allowPiTab: Type.Optional(
+        Type.Boolean({
+          description:
+            "Allow pane_split to target Pi's own tab. For a browser preview opened beside Pi.",
+        }),
+      ),
       command: Type.Optional(
         Type.String({ description: "Line to submit atomically with Enter (for run action)" }),
       ),
@@ -1426,9 +1432,9 @@ export default function (pi: ExtensionAPI) {
           const direction = params.direction ?? "right";
 
           const sourcePane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
-          if (sourcePane.pane.tab_id === currentPane.tab_id) {
+          if (sourcePane.pane.tab_id === currentPane.tab_id && params.allowPiTab !== true) {
             throw new Error(
-              "Refusing to split a pane in Pi's tab. Create a dedicated work tab with tab_create, then split its root pane alias.",
+              "Refusing to split a pane in Pi's tab. Create a dedicated work tab with tab_create, then split its root pane alias, or set allowPiTab for a browser preview.",
             );
           }
           const splitPane = expectResult(
