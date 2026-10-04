@@ -21,6 +21,7 @@ in
       "google_translate"
       "image_upload"
       "ipp"
+      "matter"
       "met"
       "mobile_app"
       "recorder"
