@@ -2,7 +2,6 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
-  keyText,
   truncateTail,
 } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -14,7 +13,7 @@ import { basename, resolve } from "node:path";
 
 import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import { registerTabTitle } from "./tab-title.ts";
-import { registerWorktreeHandoff } from "./worktree-handoff.ts";
+import { createPreparedShell, preparedCommand } from "./shell-ready.ts";
 import type {
   AgentStatus,
   PaneInfo,
@@ -110,29 +109,6 @@ export default function (pi: ExtensionAPI) {
   const currentPaneTarget = currentPaneTargetEnv;
   const herdr = new HerdrClient(socketPath);
   registerTabTitle(pi, herdr, currentPaneTarget);
-  registerWorktreeHandoff(pi, { herdr, currentPaneTarget, resolveWorktreeParent });
-
-  // Background completions arrive as custom messages. Render them as a one-line summary and keep
-  // the captured output tail behind the expand hint so they do not flood the transcript.
-  pi.registerMessageRenderer("herdr-run-finished", (message, { expanded, outputPad }, theme) => {
-    const content = Array.isArray(message.content)
-      ? message.content.map((part) => (part.type === "text" ? part.text : "")).join("\n")
-      : message.content;
-    const [summary = "", ...tailLines] = content.split("\n");
-    const tail = tailLines.join("\n").trim();
-    const exitCode = (message.details as { exitCode?: number | null } | undefined)?.exitCode;
-    const settled = typeof exitCode === "number";
-    const icon = !settled ? "◌" : exitCode === 0 ? "✓" : "✗";
-    const color = !settled ? "warning" : exitCode === 0 ? "success" : "error";
-
-    let text = theme.fg(color, `${icon} ${summary}`);
-    if (tail) {
-      text += expanded
-        ? "\n" + theme.fg("dim", tail)
-        : theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
-    }
-    return new Text(text, outputPad, 0);
-  });
   const lifecycleSource = `pi-herdr:${process.pid}:${Date.now()}`;
   let lifecycleSeq = 0;
   let lifecycleErrorLogged = false;
@@ -311,34 +287,27 @@ export default function (pi: ExtensionAPI) {
     return value ? value : null;
   }
 
-  function piRunDevNetns(): string {
-    const value = process.env.PI_NETNS_RUN_DEV_NETNS?.trim();
-    return value || "/run/current-system/sw/bin/run-dev-netns";
-  }
-
-  function buildEnterPiNetnsCommand(namespace: string): string {
-    const runDevNetns = piRunDevNetns();
-    return [
-      `export PI_NETNS=${shellQuote(namespace)}`,
-      `export PI_NETNS_SELECTED=${shellQuote(namespace)}`,
-      `export PI_NETNS_RUN_DEV_NETNS=${shellQuote(runDevNetns)}`,
-      `exec /run/wrappers/bin/sudo -n -E ${shellQuote(runDevNetns)} ${shellQuote(namespace)} "\${SHELL:-/bin/sh}" -l`,
-    ].join("; ");
-  }
-
-  async function enterPiNetnsInPane(paneId: string, signal?: AbortSignal): Promise<string | null> {
-    const namespace = selectedPiNetns();
-    if (!namespace) return null;
-    expectResult(
-      await herdr.call(
-        "pane.send_input",
-        { pane_id: paneId, text: buildEnterPiNetnsCommand(namespace), keys: ["Enter"] },
-        { signal },
-      ),
-      "ok",
+  async function prepareWorktreeRoot(
+    workspaceId: string,
+    cwd: string,
+    initialTabId: string,
+    signal?: AbortSignal,
+  ) {
+    const prepared = await createPreparedShell(
+      process.env,
+      async (env) =>
+        expectResult(
+          await herdr.call(
+            "tab.create",
+            { workspace_id: workspaceId, cwd, label: "shell", focus: false, env },
+            { signal },
+          ),
+          "tab_created",
+        ),
+      signal,
     );
-    await sleep(800, signal);
-    return namespace;
+    expectResult(await herdr.call("tab.close", { tab_id: initialTabId }, { signal }), "ok");
+    return { tab: prepared.tab, root_pane: prepared.root_pane };
   }
 
   async function getCurrentPaneInfo(signal?: AbortSignal): Promise<PaneInfo> {
@@ -1066,17 +1035,23 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "workspace_create": {
-          const created = expectResult(
-            await herdr.call(
-              "workspace.create",
-              {
-                cwd: absolutePath(params.cwd, requestCwd),
-                label: params.label,
-                focus: params.focus === true,
-              },
-              { signal },
-            ),
-            "workspace_created",
+          const created = await createPreparedShell(
+            process.env,
+            async (env) =>
+              expectResult(
+                await herdr.call(
+                  "workspace.create",
+                  {
+                    cwd: absolutePath(params.cwd, requestCwd),
+                    label: params.label,
+                    focus: params.focus === true,
+                    env,
+                  },
+                  { signal },
+                ),
+                "workspace_created",
+              ),
+            signal,
           );
           const workspace = created.workspace;
           const rootPane = created.root_pane;
@@ -1153,7 +1128,7 @@ export default function (pi: ExtensionAPI) {
             currentWorkspaceId,
             signal,
           );
-          const created = expectResult(
+          let created = expectResult(
             await herdr.call(
               "worktree.create",
               {
@@ -1169,6 +1144,15 @@ export default function (pi: ExtensionAPI) {
             ),
             "worktree_created",
           );
+          created = {
+            ...created,
+            ...(await prepareWorktreeRoot(
+              created.workspace.workspace_id,
+              created.worktree.path,
+              created.tab.tab_id,
+              signal,
+            )),
+          };
           const { workspace, worktree, root_pane: rootPane } = created;
           if (params.pane && rootPane && workspace)
             recordAlias(params.pane, rootPane.pane_id, workspace.workspace_id);
@@ -1200,7 +1184,7 @@ export default function (pi: ExtensionAPI) {
             currentWorkspaceId,
             signal,
           );
-          const opened = expectResult(
+          let opened = expectResult(
             await herdr.call(
               "worktree.open",
               {
@@ -1215,6 +1199,17 @@ export default function (pi: ExtensionAPI) {
             ),
             "worktree_opened",
           );
+          if (!opened.already_open) {
+            opened = {
+              ...opened,
+              ...(await prepareWorktreeRoot(
+                opened.workspace.workspace_id,
+                opened.worktree.path,
+                opened.tab.tab_id,
+                signal,
+              )),
+            };
+          }
           const { workspace, root_pane: rootPane } = opened;
           if (params.pane && rootPane && workspace)
             recordAlias(params.pane, rootPane.pane_id, workspace.workspace_id);
@@ -1304,18 +1299,24 @@ export default function (pi: ExtensionAPI) {
           const workspaceId =
             (await resolveWorkspaceRef(params.workspace, currentWorkspaceId, signal)) ??
             currentWorkspaceId;
-          const created = expectResult(
-            await herdr.call(
-              "tab.create",
-              {
-                workspace_id: workspaceId,
-                cwd: absolutePath(params.cwd, requestCwd),
-                label: params.label,
-                focus: params.focus === true,
-              },
-              { signal },
-            ),
-            "tab_created",
+          const created = await createPreparedShell(
+            process.env,
+            async (env) =>
+              expectResult(
+                await herdr.call(
+                  "tab.create",
+                  {
+                    workspace_id: workspaceId,
+                    cwd: absolutePath(params.cwd, requestCwd),
+                    label: params.label,
+                    focus: params.focus === true,
+                    env,
+                  },
+                  { signal },
+                ),
+                "tab_created",
+              ),
+            signal,
           );
           const { tab, root_pane: rootPane } = created;
           if (params.pane && rootPane) {
@@ -1431,23 +1432,31 @@ export default function (pi: ExtensionAPI) {
               "Refusing to split a pane in Pi's tab. Create a dedicated work tab with tab_create, then split its root pane alias.",
             );
           }
-          const splitPane = expectResult(
-            await herdr.call(
-              "pane.split",
-              {
-                target_pane_id: sourcePane.pane.pane_id,
-                direction,
-                cwd: absolutePath(params.cwd, requestCwd),
-                focus: params.focus === true,
-              },
-              { signal },
-            ),
-            "pane_info",
+          const splitPane = (
+            await createPreparedShell(
+              process.env,
+              async (env) =>
+                expectResult(
+                  await herdr.call(
+                    "pane.split",
+                    {
+                      target_pane_id: sourcePane.pane.pane_id,
+                      direction,
+                      cwd: absolutePath(params.cwd, requestCwd),
+                      focus: params.focus === true,
+                      env,
+                    },
+                    { signal },
+                  ),
+                  "pane_info",
+                ),
+              signal,
+            )
           ).pane;
           if (params.newPane) {
             recordAlias(params.newPane, splitPane.pane_id, splitPane.workspace_id);
           }
-          const enteredNetns = await enterPiNetnsInPane(splitPane.pane_id, signal);
+          const enteredNetns = selectedPiNetns();
 
           const sourceLabel = sourcePane.alias || paneRef;
           const aliasText = params.newPane ? `, aliased as '${params.newPane}'` : "";
@@ -1475,13 +1484,14 @@ export default function (pi: ExtensionAPI) {
         case "run": {
           rejectUnexpectedParams("run", params, ["workspace", "tab"]);
           const paneRef = params.pane;
-          const command = params.command;
+          let command = params.command;
           if (!paneRef) throw new Error("'pane' is required for run");
           if (!command) throw new Error("'command' is required for run");
 
           const targetPane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
           const paneId = targetPane.pane.pane_id;
           const paneLabel = targetPane.alias || paneRef;
+          if (!targetPane.pane.agent) command = preparedCommand(command);
           abortPendingRun(paneId);
 
           if (params.wait !== true && params.notify !== true) {
