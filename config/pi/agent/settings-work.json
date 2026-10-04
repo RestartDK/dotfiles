@@ -40,7 +40,8 @@
     "openai-codex/gpt-6-astra",
     "openrouter/**"
   ],
-  "defaultModel": "openai-codex/gpt-6.1-sol",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6.1-sol",
   "modelThinkingLevels": {
     "openai-codex/gpt-6.1-sol": "xhigh"
   }

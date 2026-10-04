@@ -40,7 +40,8 @@
     "openai-codex/*",
     "ollama/*"
   ],
-  "defaultModel": "opencode-go/deepseek-v4.1-flash",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "deepseek-v4.1-flash",
   "modelThinkingLevels": {
     "opencode-go/deepseek-v4.1-flash": "high"
   }
