@@ -9,6 +9,12 @@ Use `fleet` to target the current computer and SSH aliases declared by the dotfi
 
 Fleet owns target selection, reachability checks, and command transport. The matched dstack playbook owns planning, implementation, validation, and delivery. Use the command chosen by that playbook as Fleet's payload.
 
+## Lexicon
+
+"Homelab" is Daniel's word for the whole fleet: every machine declared in the dotfiles flake (`fleet list` targets and the `hosts/` directory of `RestartDK/dotfiles`). The legacy `RestartDK/homelab` repo is old Fedora/Podman-compose config, not live state.
+
+Config changes route to the **update-config** skill, including fleet-wide ones. Fleet only selects targets and transports commands.
+
 ## Required sequence
 
 1. Run `fleet list --json` and inspect the declared inventory.
