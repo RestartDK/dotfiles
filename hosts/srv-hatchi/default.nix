@@ -15,6 +15,7 @@
     ./services/monitoring.nix
     ./services/remote-nana.nix
     ./services/home-assistant.nix
+    ./services/matter-server.nix
     ./runner.nix
   ];
 }
