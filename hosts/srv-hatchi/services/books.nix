@@ -26,6 +26,8 @@ in
   services.mangy = {
     enable = true;
     group = "media";
+    # AdGuard Home already listens on 127.0.0.1:3000.
+    server.port = 3002;
     environmentFile = config.my.hatchi.secretFiles.mangyEnv;
   };
 
