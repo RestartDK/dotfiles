@@ -47,15 +47,14 @@ in
     after = [ "postgresql.service" ];
     before = [ "mangy-migrate.service" ];
     requiredBy = [ "mangy-migrate.service" ];
+    path = [ config.services.postgresql.package ];
     serviceConfig = {
       Type = "oneshot";
-      User = "root";
+      User = "postgres";
     };
     script = ''
-      ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='mangy'" | ${pkgs.gnugrep}/bin/grep -q 1 || \
-        ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/psql -c "CREATE ROLE mangy LOGIN"
-      ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/psql -tAc "SELECT 1 FROM pg_database WHERE datname='mangy'" | ${pkgs.gnugrep}/bin/grep -q 1 || \
-        ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/createdb -O mangy mangy
+      psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='mangy'" | grep -q 1 || psql -c "CREATE ROLE mangy LOGIN"
+      psql -tAc "SELECT 1 FROM pg_database WHERE datname='mangy'" | grep -q 1 || createdb -O mangy mangy
     '';
   };
 
