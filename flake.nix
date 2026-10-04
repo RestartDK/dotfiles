@@ -38,9 +38,9 @@
     };
 
     # Private repo: the git fetcher uses git credentials instead of the
-    # anonymous API. Repoint to main after the mangy flake merges.
+    # anonymous API.
     mangy = {
-      url = "git+https://github.com/RestartDK/mangy?ref=nix-flake";
+      url = "git+https://github.com/RestartDK/mangy?ref=main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
