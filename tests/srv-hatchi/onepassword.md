@@ -16,6 +16,7 @@ Set each `my.hatchi.onepassword.references` option to a field containing the fol
 | `grafanaKey` | Grafana's encryption key |
 | `grafanaPassword` | The initial Grafana administrator password |
 | `nextcloudPassword` | The initial Nextcloud administrator password |
+| `mangyEnv` | An environment file with `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` |
 | `qbittorrentPasswordHash` | The complete qBittorrent `@ByteArray(base64-salt:base64-digest)` value for `daniel`, using PBKDF2-HMAC-SHA512 with 100000 iterations |
 
 Production references point to the `nixos-acme-environment`, `nixos-admin-config`, `nixos-password-hash`, and `nixos-secret-key` fields in the existing Homelab items. These fields were prepared for a fresh installation. Do not point the formatted credential options at plain-token or plain-password fields. Store only credentials and their required wrappers, not entire application configurations.

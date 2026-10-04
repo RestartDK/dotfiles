@@ -269,9 +269,9 @@ assert lib.hasInfix "/var/lib/sops/srv-hatchi.yaml"
 assert lib.hasInfix "/var/lib/sops/age/keys.txt" production.system.preSwitchChecks.hatchi-secrets;
 assert cfg.systemd.services.sonarr.serviceConfig.StateDirectory == "sonarr";
 assert cfg.services.qbittorrent.serverConfig != { };
-assert !cfg.services.suwayomi-server.settings.server.basicAuthEnabled;
-assert cfg.services.suwayomi-server.settings.server.basicAuthPasswordFile == null;
-assert !(cfg.sops.secrets ? suwayomi-password);
+assert cfg.services.mangy.enable;
+assert cfg.services.mangy.group == "media";
+assert cfg.services.mangy.server.listenAddress == "127.0.0.1";
 assert cfg.sops.templates ? "AdGuardHome.yaml";
 assert cfg.sops.templates ? "qBittorrent.conf";
 assert !cfg.services.adguardhome.mutableSettings;
