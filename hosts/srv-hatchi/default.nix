@@ -10,7 +10,6 @@
     ./services/dashboard.nix
     ./services/books.nix
     ./services/media.nix
-    ./services/mangy.nix
     ./services/nextcloud.nix
     ./services/couchdb.nix
     ./services/monitoring.nix
