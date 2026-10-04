@@ -1,7 +1,9 @@
 { config, network, ... }:
 {
-  my.hatchi.onepassword.enable = true;
-  my.hatchi.onepassword.references = network.hatchiOnepasswordReferences;
+  my.hatchi.onepassword = {
+    tokenFile = "/var/lib/opnix/token";
+    references = network.hatchiOnepasswordReferences;
+  };
 
   assertions = [
     {

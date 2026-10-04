@@ -1,7 +1,6 @@
 {
   config,
   inputs,
-  lib,
   pkgs,
   ...
 }:
@@ -91,11 +90,4 @@ in
     Environment = "JAVA_TOOL_OPTIONS=-Xmx512m";
   };
 
-  sops.secrets."mangy-env" = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-    restartUnits = [
-      "mangy-server.service"
-      "mangy-worker.service"
-    ];
-    mode = "0400";
-  };
 }

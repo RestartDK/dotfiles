@@ -201,7 +201,7 @@ run_install() (
     return 2
   fi
   local target="$2" flake_dir branch revision upstream remote_url staging_root checkout
-  local system_disk data_disk remote_command bootstrap_dir bootstrap_file
+  local system_disk data_disk remote_command bootstrap_file
   if [[ ! $target =~ ^root@[A-Za-z0-9._:-]+$ ]]; then
     echo "traitor: Hatchi installer target must have the form root@HOST" >&2
     return 2
@@ -234,13 +234,11 @@ run_install() (
     echo "traitor: Hatchi hardware configuration is missing" >&2
     return 1
   fi
-  bootstrap_dir="$HOME/.local/state/hatchi-bootstrap/var/lib/sops"
-  for bootstrap_file in srv-hatchi.yaml age/keys.txt; do
-    if [[ ! -s $bootstrap_dir/$bootstrap_file ]]; then
-      echo "traitor: provision $bootstrap_dir/$bootstrap_file before installing Hatchi" >&2
-      return 1
-    fi
-  done
+  bootstrap_file="$HOME/.local/state/hatchi-bootstrap/var/lib/opnix/token"
+  if [[ ! -s $bootstrap_file ]]; then
+    echo "traitor: provision $bootstrap_file before installing Hatchi" >&2
+    return 1
+  fi
   remote_url="$(git -C "$flake_dir" remote get-url origin)"
   system_disk="$(nix eval --raw "$flake_dir#nixosConfigurations.srv-hatchi.config.disko.devices.disk.system.device")"
   data_disk="$(nix eval --raw "$flake_dir#nixosConfigurations.srv-hatchi.config.disko.devices.disk.data.device")"
@@ -272,9 +270,8 @@ REMOTE_CHECK
 
   staging_root="$(mktemp -d)"
   trap 'rm -rf "$staging_root"' EXIT
-  install -d -m700 "$staging_root/var/lib/sops/age"
-  install -m600 "$bootstrap_dir/srv-hatchi.yaml" "$staging_root/var/lib/sops/srv-hatchi.yaml"
-  install -m600 "$bootstrap_dir/age/keys.txt" "$staging_root/var/lib/sops/age/keys.txt"
+  install -d -m700 "$staging_root/var/lib/opnix"
+  install -m600 "$bootstrap_file" "$staging_root/var/lib/opnix/token"
   checkout="$staging_root/home/dkumlin/.config/dotfiles"
   mkdir -p "$(dirname "$checkout")"
   git clone --quiet --no-local --branch main "$flake_dir" "$checkout"

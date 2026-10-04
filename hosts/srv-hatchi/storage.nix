@@ -10,7 +10,7 @@
     (lib.genAttrs config.my.hatchi.stateUnits (_: {
       requires = [ config.my.hatchi.secretService ];
       after = [ config.my.hatchi.secretService ];
-      partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
+      partOf = [ config.my.hatchi.secretService ];
       unitConfig = {
         RequiresMountsFor = [ "/srv" ];
         AssertPathIsMountPoint = "/srv";
@@ -24,7 +24,7 @@
       hatchi-media-directories = {
         requires = [ config.my.hatchi.secretService ];
         after = [ config.my.hatchi.secretService ];
-        partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
+        partOf = [ config.my.hatchi.secretService ];
         unitConfig = {
           RequiresMountsFor = [ "/srv" ];
           AssertPathIsMountPoint = "/srv";

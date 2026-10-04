@@ -4,17 +4,7 @@
   inputs,
 }:
 let
-  fields = {
-    cloudflare = "cloudflare";
-    adguardPasswordHash = "adguard-password";
-    couchdbAdmin = "couchdb-admin";
-    glanceKey = "glance-key";
-    glancePassword = "glance-password";
-    grafanaKey = "grafana-key";
-    grafanaPassword = "grafana-password";
-    nextcloudPassword = "nextcloud-admin";
-    qbittorrentPasswordHash = "qbittorrent-password";
-  };
+  fields = builtins.fromJSON (builtins.readFile ./fixtures/synthetic-secrets.json);
 in
 pkgs.testers.runNixOSTest {
   name = "srv-hatchi-onepassword";
@@ -53,13 +43,10 @@ pkgs.testers.runNixOSTest {
       pkgs.writeShellScript "opnix-fixture" ''
         set -eu
         umask 077
-        export SOPS_AGE_KEY_FILE=${./fixtures/age-key.txt}
         install -d -m751 /run/hatchi-onepassword
         ${lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (name: field: ''
-            ${pkgs.sops}/bin/sops decrypt --extract '${builtins.toJSON [ field ]}' ${./fixtures/synthetic-secrets.sops.yaml} > ${
-              config.services.onepassword-secrets.secretPaths.${name}
-            }
+          lib.mapAttrsToList (name: value: ''
+            printf '%s' ${lib.escapeShellArg value} > ${config.services.onepassword-secrets.secretPaths.${name}}
             chmod ${config.services.onepassword-secrets.secrets.${name}.mode} ${
               config.services.onepassword-secrets.secretPaths.${name}
             }

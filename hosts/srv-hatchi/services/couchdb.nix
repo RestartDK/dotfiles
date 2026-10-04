@@ -25,9 +25,6 @@
       };
     };
   };
-  sops.secrets.couchdb-admin = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-    restartUnits = [ "couchdb.service" ];
-  };
   services.caddy.virtualHosts."couchdb.${config.my.domain}".extraConfig =
     "reverse_proxy 127.0.0.1:${toString config.services.couchdb.port}";
   systemd.services.couchdb.preStart = lib.mkBefore ''

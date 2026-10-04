@@ -63,9 +63,6 @@ in
   };
   services.postgresql.enableTCPIP = false;
   services.caddy.virtualHosts.${name}.extraConfig = "reverse_proxy 127.0.0.1:11000";
-  sops.secrets.nextcloud-admin = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-    restartUnits = [ "nextcloud-admin.service" ];
-  };
   my.hatchi.stateUnits = [
     "nextcloud-admin"
     "nextcloud-setup"
