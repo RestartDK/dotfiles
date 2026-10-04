@@ -7,12 +7,31 @@ in
   services.home-assistant = {
     enable = true;
     extraComponents = [
+      "assist_pipeline"
+      "bluetooth"
+      "camera"
+      "cloud"
+      "conversation"
       "default_config"
+      "dhcp"
       "esphome"
+      "ffmpeg"
+      "file"
+      "go2rtc"
+      "google_translate"
+      "image_upload"
       "ipp"
       "met"
+      "mobile_app"
+      "recorder"
       "samsungtv"
       "sonos"
+      "spotify"
+      "ssdp"
+      "stream"
+      "tts"
+      "usb"
+      "zeroconf"
     ];
     config.http = {
       server_host = "127.0.0.1";
