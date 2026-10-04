@@ -228,7 +228,8 @@ test.each([
     readFileSync(join(import.meta.dir, "../../config/pi/agent", settingsFile), "utf8"),
   );
   const active = policy(profileName);
-  expect(settings.defaultModel).toBe(backendModel(active.parent));
+  expect(settings.defaultProvider).toBe(active.parent.provider);
+  expect(settings.defaultModel).toBe(active.parent.id);
   expect(settings.modelThinkingLevels).toEqual({
     [backendModel(active.parent)]: profileName === "personal" ? "high" : "xhigh",
   });
