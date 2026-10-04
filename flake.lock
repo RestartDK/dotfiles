@@ -341,11 +341,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1791106274,
-        "narHash": "sha256-MS5yheA+CNp+vkcIlYovDK+GZSD4ymi+bd+g+DRv+No=",
+        "lastModified": 1791107638,
+        "narHash": "sha256-zl+lPu54LgaQ8KzAFl6E/nGL9X6Cz3GviHclxwWyB1w=",
         "ref": "nix-flake",
-        "rev": "9ec2a8322fb8976dd3e60498757e2b8bded2eb74",
-        "revCount": 22,
+        "rev": "edeb553fa7fc082430f3253890772624fac854e6",
+        "revCount": 24,
         "type": "git",
         "url": "https://github.com/RestartDK/mangy"
       },
