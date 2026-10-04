@@ -92,11 +92,16 @@ jobs:
 
       - name: Point Nix at the Hatchi cache
         id: cache
-        if: steps.tailnet.outcome == 'success'
+        if: always()
         continue-on-error: true
         env:
           CACHE_HOST: ${{ secrets.CACHE_HOST }}
+          TAILNET_OUTCOME: ${{ steps.tailnet.outcome }}
         run: |
+          if [ "$TAILNET_OUTCOME" != success ]; then
+            echo "Hatchi cache is not in use. The tailnet join reported '$TAILNET_OUTCOME'." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           address=""
           for _ in $(seq 1 12); do
             address=$(sudo tailscale status --json | jq -r '
