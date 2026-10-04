@@ -1,11 +1,19 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 let
   inherit (config.my) domain;
   port = 8123;
+  python3Packages = pkgs.home-assistant.python3Packages;
+  pyaarlo = python3Packages.callPackage ../../../packages/pyaarlo/package.nix { };
+  aarlo = pkgs.callPackage ../../../packages/aarlo/package.nix {
+    inherit pyaarlo;
+    aiofiles = python3Packages.aiofiles;
+    unidecode = python3Packages.unidecode;
+  };
 in
 {
   services.home-assistant = {
     enable = true;
+    customComponents = [ aarlo ];
     extraComponents = [
       "assist_pipeline"
       "bluetooth"
