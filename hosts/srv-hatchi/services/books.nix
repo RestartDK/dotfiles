@@ -39,6 +39,26 @@ in
     ];
   };
 
+  # ensureDatabases/ensureUsers only apply to freshly initialized clusters;
+  # hatchi's cluster predates mangy, so create the role and database
+  # idempotently before the migrations run.
+  systemd.services.mangy-db-setup = {
+    description = "Create the mangy database role and database";
+    after = [ "postgresql.service" ];
+    before = [ "mangy-migrate.service" ];
+    requiredBy = [ "mangy-migrate.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+    };
+    script = ''
+      ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='mangy'" | ${pkgs.gnugrep}/bin/grep -q 1 || \
+        ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/psql -c "CREATE ROLE mangy LOGIN"
+      ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/psql -tAc "SELECT 1 FROM pg_database WHERE datname='mangy'" | ${pkgs.gnugrep}/bin/grep -q 1 || \
+        ${pkgs.coreutils}/bin/runuser -u postgres -- ${config.services.postgresql.package}/bin/createdb -O mangy mangy
+    '';
+  };
+
   services.caddy.virtualHosts."mangy.${config.my.domain}".extraConfig = ''
     handle /api/* {
       reverse_proxy 127.0.0.1:${toString config.services.mangy.server.port}
