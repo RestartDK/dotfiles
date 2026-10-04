@@ -60,6 +60,13 @@ in
     '';
   };
 
+  # The runner deploys this host, so its own unit must survive the activation it
+  # triggers. restartIfChanged=false puts it in switch-to-configuration's skip
+  # list, so a deploy that edits this file no longer stops the runner mid-job and
+  # rolls itself back. The ephemeral runner restarts with the new definition once
+  # the current job ends.
+  systemd.services."github-runner-${runnerName}".restartIfChanged = false;
+
   users.groups.${runnerUser} = { };
 
   users.users.${runnerUser} = {

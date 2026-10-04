@@ -36,3 +36,12 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
+      - uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Install the committed SSH host keys
+        run: |
+          mkdir -p "$HOME/.ssh"
+          cat "config/ssh/known_hosts/$TARGET" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+      - run: ./bin/traitor deploy "$TARGET" --remote-build --skip-checks
