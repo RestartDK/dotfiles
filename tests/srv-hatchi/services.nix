@@ -286,7 +286,7 @@ pkgs.testers.runNixOSTest {
         hatchi.wait_for_unit(unit + ".service", timeout=600)
     hatchi.wait_for_unit("prometheus-node-exporter.service")
     hatchi.succeed("test $(stat -c %U:%G:%a /var/lib/sonarr) = sonarr:media:700")
-    for port in [53, 80, 443, 2019, 3000, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100]:
+    for port in [53, 80, 443, 2019, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100]:
         hatchi.wait_for_open_port(port, "127.0.0.1", timeout=600)
     hatchi.succeed("test $(systemctl show nextcloud-setup.service -p ExecMainStatus --value) = 0")
     hatchi.succeed("test $(systemctl show mangy-migrate.service -p ExecMainStatus --value) = 0")
@@ -358,11 +358,11 @@ pkgs.testers.runNixOSTest {
     for address in ["192.168.1.10", "fd00:1::10"]:
         for port in [53, 80, 443]:
             client.succeed(f"nc -z -w 2 {address} {port}")
-        for port in [22, 2019, 4369, 5986, 9101, 3000, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100, 5432, 6379, 6881]:
+        for port in [22, 2019, 4369, 5986, 9101, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100, 5432, 6379, 6881]:
             client.fail(f"nc -z -w 1 {address} {port}")
     for address in ["192.168.1.10", "fd00:1::10"]:
         admin.succeed(f"ssh-keyscan -T 3 {address} 2>/dev/null | grep -q ssh-ed25519")
-        for port in [53, 80, 443, 2019, 3000, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100, 5432, 6379]:
+        for port in [53, 80, 443, 2019, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100, 5432, 6379]:
             admin.fail(f"nc -z -w 1 {address} {port}")
         admin.fail(f"dig @{address} dashboard.{domain} +time=1 +tries=1")
     for address in ["192.168.2.10", "fd00:2::10"]:
@@ -371,7 +371,7 @@ pkgs.testers.runNixOSTest {
         outsider.fail(f"dig @{address} dashboard.{domain} +time=1 +tries=1")
     client.succeed(f"dig @fd00:1::10 dashboard.{domain} +short | grep -Fx 192.168.1.10")
     listeners = [line.split()[3].rsplit(":", 1) for line in hatchi.succeed("ss -H -ltn").splitlines()]
-    for port in [3000, 8081, 25600, 7878, 8989, 9696, 8080, 11000, 5984, 3001, 9090, 9100]:
+    for port in [3000, 3002, 8081, 25600, 7878, 8989, 9696, 8080, 11000, 5984, 3001, 9090, 9100]:
         addresses = [host.strip("[]") for host, number in listeners if number == str(port)]
         assert addresses, (port, listeners)
         for host in addresses:

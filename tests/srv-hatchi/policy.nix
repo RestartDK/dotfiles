@@ -272,6 +272,7 @@ assert cfg.services.qbittorrent.serverConfig != { };
 assert cfg.services.mangy.enable;
 assert cfg.services.mangy.group == "media";
 assert cfg.services.mangy.server.listenAddress == "127.0.0.1";
+assert cfg.services.mangy.server.port == 3002;
 assert cfg.sops.templates ? "AdGuardHome.yaml";
 assert cfg.sops.templates ? "qBittorrent.conf";
 assert !cfg.services.adguardhome.mutableSettings;
