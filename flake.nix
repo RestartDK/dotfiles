@@ -418,6 +418,10 @@
             pkgs = pkgsFor system;
             inherit self inputs;
           };
+          home-sources-outside-flake-tree = import ./tests/home-sources-outside-flake-tree.nix {
+            pkgs = pkgsFor system;
+            inherit self;
+          };
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) (
           nixpkgs.lib.concatMapAttrs (

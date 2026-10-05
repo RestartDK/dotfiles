@@ -70,14 +70,14 @@ let
       home = self.homeConfigurations.twin.config;
       profile = "work";
       system = "x86_64-linux";
-      skillsSource = "${../.}/config/pi/agent/skills-twin";
+      skillsSource = ../config/pi/agent/skills-twin;
       claude = false;
     }
     {
       home = cobb;
       profile = "work";
       system = "x86_64-linux";
-      skillsSource = "${../.}/config/agents/skills";
+      skillsSource = ../config/agents/skills;
       claude = false;
     }
   ];

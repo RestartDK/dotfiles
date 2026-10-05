@@ -25,6 +25,11 @@ let
   # subdirectory separately, and the extensions import ../../lib/model-policy,
   # which only resolves while lib stays a sibling inside the same copy.
   piAgentRoot = pkgs.copyPathToStore ../../../config/pi/agent;
+  # Keep the result a path. Home Manager copies paths into their own store
+  # paths, but interpolating the flake root into a string instead makes the
+  # whole tree an input to the produced derivation, which uncaches every host
+  # on every commit.
+  configPath = relative: ../../../. + "/${relative}";
   piPackage = name: {
     source = "${piPackages.${name}}/lib/node_modules/${name}";
     recursive = false;
@@ -90,7 +95,7 @@ in
 
       (lib.mkIf (pi && !agentSkillsEnabled) {
         home.file.".agents/skills" = {
-          source = "${../../../.}/${cfg.piSkillsPath}";
+          source = configPath cfg.piSkillsPath;
           recursive = true;
           force = true;
         };
@@ -166,7 +171,7 @@ in
           force = true;
         };
         home.file.".pi/agent/settings.json" = {
-          source = "${../../../.}/${cfg.piSettingsFile}";
+          source = configPath cfg.piSettingsFile;
           force = true;
         };
         home.file.".pi/agent/models.json" = modelsFile;
