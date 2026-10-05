@@ -57,6 +57,7 @@ jobs:
   systems:
     name: build
     needs: [checks]
+    environment: ci-cache
     runs-on: ${{ github.event_name == 'push' && fromJSON('["self-hosted","lan-ci"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -79,13 +80,67 @@ jobs:
             /usr/share/dotnet
           df -h
 
+      - name: Join the tailnet
+        id: tailnet
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci-cache
+
+      - name: Point Nix at the Hatchi cache
+        id: cache
+        if: always()
+        continue-on-error: true
+        env:
+          CACHE_HOST: ${{ secrets.CACHE_HOST }}
+          TAILNET_OUTCOME: ${{ steps.tailnet.outcome }}
+        run: |
+          if [ "$TAILNET_OUTCOME" != success ]; then
+            echo "Hatchi cache is not in use. The tailnet join reported '$TAILNET_OUTCOME'." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Reach hatchi at its own tailnet address and bind the cache host
+          # name there: the certificate is issued for the house name, so SNI
+          # must stay intact. MagicDNS resolves the peer name; the status
+          # lookup covers resolvers that ignore tailnet DNS.
+          suffix=$(sudo tailscale status --json | jq -r '."MagicDNSSuffix"')
+          address=$(getent hosts "srv-hatchi.$suffix" 2>/dev/null | awk '{print $1}' | head -n1)
+          if [ -z "$address" ]; then
+            address=$(sudo tailscale status --json | jq -r --arg name "srv-hatchi.$suffix" '
+              .Peer // {}
+              | to_entries[].value
+              | select((.DNSName // "") == $name or (.HostName // "") == "srv-hatchi")
+              | .TailscaleIPs[]?
+              | select(test("^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$"))
+            ' | head -n1)
+          fi
+          if [ -z "$address" ]; then
+            echo "srv-hatchi did not resolve to a tailnet address; building without the Hatchi substituter" >&2
+            echo "Hatchi cache is not in use." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          printf '%s %s\n' "$address" "$CACHE_HOST" | sudo tee -a /etc/hosts > /dev/null
+          if ! curl --fail --silent --show-error --max-time 15 "https://$CACHE_HOST/nix-cache-info" > /dev/null; then
+            echo "https://$CACHE_HOST/nix-cache-info did not respond; building without the Hatchi substituter" >&2
+            echo "Hatchi cache is not in use." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          {
+            echo "extraSubstituters=https://$CACHE_HOST"
+            echo "extraKeys=hatchi-cache-1:LrCQUUSFDL/+vRytC8mskDaygp91ALVrqAZ8jPwweJI="
+          } >> "$GITHUB_OUTPUT"
+          echo "Hatchi cache is in use at https://$CACHE_HOST." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Install Determinate Nix
         if: runner.environment != 'self-hosted'
         uses: DeterminateSystems/determinate-nix-action@v3.21.9
         with:
           extra-conf: |
-            extra-substituters = https://cache.numtide.com
-            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
+            extra-substituters = https://cache.numtide.com ${{ steps.cache.outputs.extraSubstituters }}
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g= ${{ steps.cache.outputs.extraKeys }}
             access-tokens = github.com=${{ secrets.DOTFILES_PRIVATE_TOKEN }}
 
       - name: Build
