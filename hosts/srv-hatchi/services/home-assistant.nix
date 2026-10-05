@@ -42,6 +42,7 @@ in
       "usb"
       "zeroconf"
     ];
+    config.default_config = { };
     config.http = {
       server_host = "127.0.0.1";
       server_port = port;
