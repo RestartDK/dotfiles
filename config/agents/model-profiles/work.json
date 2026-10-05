@@ -24,10 +24,10 @@
         "thinking": "max"
       }
     ],
-    "opus": [
+    "mimo": [
       {
         "kind": "pi",
-        "model": "anthropic/claude-opus-5-5",
+        "model": "openrouter/xiaomi/mimo-v2.6-flash",
         "thinking": "xhigh"
       }
     ],
@@ -82,39 +82,39 @@
     },
     "prose": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "judgment": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "review": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "hardest": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "how-explainer": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "why-synthesizer": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "reflect-judgment": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "reflect-divergent": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "reflect-synthesizer": {
       "kind": "single",
-      "route": "opus"
+      "route": "mimo"
     },
     "how-explorer": {
       "kind": "single",
@@ -123,13 +123,13 @@
     "how-critics": {
       "kind": "panel",
       "members": [
-        "opus"
+        "mimo"
       ]
     },
     "arena-runners": {
       "kind": "panel",
       "members": [
-        "opus",
+        "mimo",
         "sol",
         "deepseek"
       ]
@@ -137,14 +137,14 @@
     "arena-cross-judge": {
       "kind": "panel",
       "members": [
-        "opus",
+        "mimo",
         "sol"
       ]
     },
     "architect-runners": {
       "kind": "panel",
       "members": [
-        "opus",
+        "mimo",
         "sol",
         "glm"
       ]
@@ -152,7 +152,7 @@
     "interrogate-reviewers": {
       "kind": "panel",
       "members": [
-        "opus",
+        "mimo",
         "sol",
         "glm"
       ]
@@ -162,7 +162,6 @@
     "openrouter",
     "openai",
     "openai-codex",
-    "anthropic",
     "ollama"
   ]
 }
