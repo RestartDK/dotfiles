@@ -61,7 +61,7 @@ jobs:
     runs-on: ${{ github.event_name == 'push' && fromJSON('["self-hosted","lan-ci"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         host: [srv-nana, srv-hatchi]
     steps:
