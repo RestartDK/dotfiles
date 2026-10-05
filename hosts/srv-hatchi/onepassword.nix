@@ -20,6 +20,7 @@ let
     qbittorrentPasswordHash = null;
     runnerAccessToken = null;
     mangyEnv = null;
+    wifiPsk = null;
   };
   adguardConfig = pkgs.writeText "AdGuardHome.yaml" (
     builtins.toJSON (
@@ -32,6 +33,7 @@ let
   qbittorrentConfig = pkgs.writeText "qBittorrent.conf" (
     lib.generators.toINI { } config.services.qbittorrent.serverConfig
   );
+  wifiSecrets = pkgs.writeText "wpa-secrets.conf" "wifi_psk=@hatchi-wifi-psk@\n";
 in
 {
   options.my.hatchi.onepassword = {
@@ -106,6 +108,8 @@ in
           ${pkgs.replace-secret}/bin/replace-secret '@hatchi-adguard-hash@' ${paths.adguardPasswordHash} /run/hatchi-secrets/AdGuardHome.yaml
           ${pkgs.coreutils}/bin/install -m400 ${qbittorrentConfig} /run/hatchi-secrets/qBittorrent.conf
           ${pkgs.replace-secret}/bin/replace-secret '@hatchi-qbittorrent-hash@' ${paths.qbittorrentPasswordHash} /run/hatchi-secrets/qBittorrent.conf
+          ${pkgs.coreutils}/bin/install -m400 ${wifiSecrets} /run/hatchi-secrets/wpa-secrets.conf
+          ${pkgs.replace-secret}/bin/replace-secret '@hatchi-wifi-psk@' ${paths.wifiPsk} /run/hatchi-secrets/wpa-secrets.conf
         '';
       };
     })

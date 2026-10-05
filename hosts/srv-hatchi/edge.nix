@@ -152,6 +152,7 @@ in
         ${ingress networks.clientNetworks "tcp, udp" "53"}
         ${ingress networks.clientNetworks "tcp" "80, 443"}
         ${ingress networks.clientNetworks "udp" "443"}
+        ${ingress networks.clientNetworks "tcp" "1400-1500"}
         ${ingress networks.adminNetworks "tcp" "22"}
         udp dport ${toString config.services.tailscale.port} accept
       '';
