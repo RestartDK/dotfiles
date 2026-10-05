@@ -33,11 +33,17 @@ in
           terminalBrowserPackage
         ];
         home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
-        xdg.configFile = {
-          "btop/btop.conf" = {
-            source = ../../../config/btop/btop.conf;
-            force = true;
+        programs.btop = {
+          enable = true;
+          settings = {
+            vim_keys = true;
+            proc_sorting = "memory";
+            # Stylix overrides both on hosts that enable it.
+            color_theme = lib.mkDefault "TTY";
+            shown_boxes = lib.mkDefault "cpu mem proc";
           };
+        };
+        xdg.configFile = {
           "thefuck/settings.py" = {
             source = ../../../config/thefuck/settings.py;
             force = true;
@@ -50,10 +56,27 @@ in
       })
 
       (lib.mkIf cfg.groups.ghostty {
-        xdg.configFile."ghostty" = {
-          source = ../../../config/ghostty;
-          recursive = true;
-          force = true;
+        programs.ghostty = {
+          enable = true;
+          settings = {
+            shell-integration = "zsh";
+            desktop-notifications = true;
+            clipboard-read = "allow";
+            clipboard-write = "allow";
+            cursor-style-blink = false;
+            window-padding-x = 8;
+            window-padding-y = 6;
+            window-padding-balance = true;
+            window-save-state = "always";
+            keybind = [
+              "super+r=reload_config"
+              "command+shift+p=toggle_command_palette"
+            ];
+            # Stylix replaces the theme and font on hosts that enable it.
+            theme = lib.mkDefault "dark:TokyoNight,light:TokyoNight Day";
+            font-family = lib.mkDefault "JetBrainsMono Nerd Font Mono";
+            font-size = lib.mkDefault 14;
+          };
         };
       })
 
