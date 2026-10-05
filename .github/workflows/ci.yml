@@ -102,26 +102,10 @@ jobs:
             echo "Hatchi cache is not in use. The tailnet join reported '$TAILNET_OUTCOME'." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          address=""
-          for _ in $(seq 1 12); do
-            address=$(sudo tailscale status --json | jq -r '
-              .Peer // {}
-              | to_entries[].value
-              | select((.HostName // "") == "srv-hatchi" or ((.DNSName // "") | startswith("srv-hatchi.")))
-              | .TailscaleIPs[]?
-              | select(test("^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$"))
-            ' | head -n1)
-            if [ -n "$address" ]; then
-              break
-            fi
-            sleep 5
-          done
-          if [ -z "$address" ]; then
-            echo "srv-hatchi never appeared in tailscale status; building without the Hatchi substituter" >&2
-            echo "Hatchi cache is not in use." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          printf '%s %s\n' "$address" "$CACHE_HOST" | sudo tee -a /etc/hosts > /dev/null
+          # The tailnet resolves the cache host through split DNS and reaches
+          # the house address through the advertised route; both flags are off
+          # by default on a fresh tailnet join.
+          sudo tailscale set --accept-routes=true --accept-dns=true
           if ! curl --fail --silent --show-error --max-time 15 "https://$CACHE_HOST/nix-cache-info" > /dev/null; then
             echo "https://$CACHE_HOST/nix-cache-info did not respond; building without the Hatchi substituter" >&2
             echo "Hatchi cache is not in use." >> "$GITHUB_STEP_SUMMARY"
