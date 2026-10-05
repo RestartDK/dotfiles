@@ -4,6 +4,8 @@
   imports = [
     ../../modules/home/dev-packages.nix
     ../../modules/home/groups.nix
+    ../../modules/home/desktop/hyprland.nix
+    ../../modules/home/desktop/stylix.nix
   ];
 
   home.username = "dkumlin";

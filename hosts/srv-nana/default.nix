@@ -14,6 +14,7 @@
     ../../modules/nixos/numtide-cache.nix
     ../../modules/nixos/desktop.nix
     ../../modules/nixos/hyprland.nix
+    ../../modules/nixos/stylix.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/tailscale.nix
     ../../modules/nixos/docker.nix

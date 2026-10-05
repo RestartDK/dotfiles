@@ -14,8 +14,25 @@ in
     lib.mkMerge [
       (lib.mkIf cfg.groups.wayland {
         xdg.configFile = {
-          "hypr" = {
-            source = ../../../config/hypr;
+          "hypr/hypridle.conf" = {
+            source = ../../../config/hypr/hypridle.conf;
+            force = true;
+          };
+          "hypr/hyprlauncher.conf" = {
+            source = ../../../config/hypr/hyprlauncher.conf;
+            force = true;
+          };
+          "hypr/hyprtoolkit.conf" = {
+            source = ../../../config/hypr/hyprtoolkit.conf;
+            force = true;
+          };
+          "hypr/scripts" = {
+            source = ../../../config/hypr/scripts;
+            recursive = true;
+            force = true;
+          };
+          "hypr/wallpapers" = {
+            source = ../../../config/hypr/wallpapers;
             recursive = true;
             force = true;
           };
