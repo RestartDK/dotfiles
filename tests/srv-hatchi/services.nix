@@ -3,6 +3,9 @@
   self,
   inputs,
 }:
+let
+  fields = builtins.fromJSON (builtins.readFile ./fixtures/synthetic-secrets.json);
+in
 pkgs.testers.runNixOSTest {
   name = "srv-hatchi-services";
   globalTimeout = 1800;
@@ -83,16 +86,34 @@ pkgs.testers.runNixOSTest {
         nodeExporter = "192.168.1.40:9100";
         glanceAgent = "192.168.1.40:8002";
       };
-      sops = {
-        defaultSopsFile = lib.mkForce "/run/hatchi-test-secrets.yaml";
-        validateSopsFiles = lib.mkForce false;
-        age.keyFile = lib.mkForce "/run/hatchi-test-age-key";
+      my.hatchi.onepassword = {
+        tokenFile = "/run/test-opnix-token";
+        references = lib.mapAttrs (name: _: "op://fixture/credentials/${name}") fields;
       };
-      system.activationScripts.hatchi-test-key.text = ''
-        install -m600 ${./fixtures/age-key.txt} /run/hatchi-test-age-key
-        install -m600 ${./fixtures/synthetic-secrets.sops.yaml} /run/hatchi-test-secrets.yaml
+      system.activationScripts.test-token.text = ''
+        install -m400 ${pkgs.writeText "fixture-token" "synthetic-token"} /run/test-opnix-token
       '';
-      environment.etc."hatchi-test-sops-manifest.json".source = config.system.build.sops-nix-manifest;
+      systemd.services.opnix-secrets.serviceConfig.ExecStart = lib.mkForce (
+        pkgs.writeShellScript "opnix-fixture" ''
+          set -eu
+          umask 077
+          install -d -m751 /run/hatchi-onepassword
+          ${lib.concatStringsSep "\n" (
+            lib.mapAttrsToList (name: value: ''
+              printf '%s' ${lib.escapeShellArg value} > ${config.services.onepassword-secrets.secretPaths.${name}}
+              chmod ${config.services.onepassword-secrets.secrets.${name}.mode} ${
+                config.services.onepassword-secrets.secretPaths.${name}
+              }
+              chown ${config.services.onepassword-secrets.secrets.${name}.owner}:${
+                config.services.onepassword-secrets.secrets.${name}.group
+              } ${config.services.onepassword-secrets.secretPaths.${name}}
+            '') fields
+          )}
+          if test -e /run/empty-adguard-hash; then
+            truncate -s0 /run/hatchi-onepassword/adguardPasswordHash
+          fi
+        ''
+      );
       security.acme.certs = lib.mkForce { };
       services.caddy.virtualHosts =
         lib.genAttrs
@@ -112,8 +133,6 @@ pkgs.testers.runNixOSTest {
         pkgs.e2fsprogs
         pkgs.prometheus.cli
         pkgs.caddy
-        pkgs.sops
-        config.sops.package
       ];
     };
     client = { lib, ... }: {
@@ -265,7 +284,7 @@ pkgs.testers.runNixOSTest {
     nana.wait_for_unit("nginx.service")
     for port in [8000, 8001, 8002, 9100]:
         nana.wait_for_open_port(port)
-    hatchi.wait_for_unit("sops-install-secrets.service")
+    hatchi.wait_for_unit("hatchi-secret-files.service")
     hatchi.fail("mountpoint -q /srv")
     hatchi.fail("systemctl start nextcloud-setup.service")
     hatchi.fail("systemctl start hatchi-media-directories.service")
@@ -415,11 +434,11 @@ pkgs.testers.runNixOSTest {
     for unit, path in [("jellyfin", "movies"), ("komga", "books")]:
         pid = hatchi.succeed(f"systemctl show {unit} -p MainPID --value").strip()
         hatchi.fail(f"nsenter -t {pid} -m -- touch /srv/media/{path}/forbidden")
-    hatchi.fail("runuser -u nobody -- cat /run/secrets/nextcloud-admin")
-    for state in ["/run/couchdb/local.ini", "/var/lib/qBittorrent/qBittorrent/config/qBittorrent.conf", "/var/lib/AdGuardHome/AdGuardHome.yaml", "/run/secrets/rendered/AdGuardHome.yaml", "/run/secrets/rendered/qBittorrent.conf"]:
+    hatchi.fail("runuser -u nobody -- cat /run/hatchi-onepassword/nextcloudPassword")
+    for state in ["/run/couchdb/local.ini", "/var/lib/qBittorrent/qBittorrent/config/qBittorrent.conf", "/var/lib/AdGuardHome/AdGuardHome.yaml", "/run/hatchi-secrets/AdGuardHome.yaml", "/run/hatchi-secrets/qBittorrent.conf"]:
         hatchi.fail(f"runuser -u radarr -- cat {state}")
     for name in ["AdGuardHome.yaml", "qBittorrent.conf"]:
-        hatchi.succeed(f"test $(stat -Lc %U:%G:%a /run/secrets/rendered/{name}) = root:root:400")
+        hatchi.succeed(f"test $(stat -Lc %U:%G:%a /run/hatchi-secrets/{name}) = root:root:400")
     hatchi.succeed("install -d -m700 /var/lib/acme/example.invalid")
     hatchi.succeed("openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=*.example.invalid' -keyout /var/lib/acme/example.invalid/key.pem -out /var/lib/acme/example.invalid/cert.pem 2>/dev/null")
     hatchi.succeed("caddy validate --config /etc/hatchi-production.Caddyfile --adapter caddyfile")
@@ -465,27 +484,27 @@ pkgs.testers.runNixOSTest {
 
     def rotate_secret(name, value, unit):
         invocation = hatchi.succeed(f"systemctl show {unit} -p InvocationID --value").strip()
-        hatchi.succeed("SOPS_AGE_KEY_FILE=/run/hatchi-test-age-key sops set /run/hatchi-test-secrets.yaml " + shlex.quote(json.dumps([name])) + " " + shlex.quote(json.dumps(value)))
-        hatchi.succeed("SOPS_RESTART_UNITS_VIA_SYSTEMCTL=1 sops-install-secrets /etc/hatchi-test-sops-manifest.json")
+        hatchi.succeed(f"printf '%s' {shlex.quote(value)} > /run/hatchi-onepassword/{name}")
+        hatchi.succeed("systemctl restart hatchi-secret-files.service")
         hatchi.wait_until_succeeds(f"test -n \"$(systemctl show {unit} -p InvocationID --value)\" && test \"$(systemctl show {unit} -p InvocationID --value)\" != {shlex.quote(invocation)}")
 
 
     adguard_password = hatchi.succeed("caddy hash-password --plaintext rotated-fixture").strip()
-    rotate_secret("adguard-password", adguard_password, "adguardhome")
+    rotate_secret("adguardPasswordHash", adguard_password, "adguardhome")
     client.wait_until_succeeds(curl("adguard", "/control/status", "-f -u daniel:rotated-fixture"))
     assert response("adguard", "/control/status", "-u daniel:fixture-password -o /dev/null -w '%{http_code}'").strip() == "401"
     assert "dns_addresses" in json.loads(response("adguard", "/control/status", "-f -u daniel:rotated-fixture"))
     salt = b"fixture-rotated-salt"
     key = hashlib.pbkdf2_hmac("sha512", b"rotated-fixture", salt, 100000)
     password = "@ByteArray(" + base64.b64encode(salt).decode() + ":" + base64.b64encode(key).decode() + ")"
-    rotate_secret("qbittorrent-password", password, "qbittorrent")
+    rotate_secret("qbittorrentPasswordHash", password, "qbittorrent")
     client.wait_until_succeeds(curl("qbittorrent", "/api/v2/auth/login", "-f -c /tmp/qb-cookies -o /dev/null -w '%{http_code}' --data 'username=daniel&password=rotated-fixture'") + " | grep -Fx 204")
     assert response("qbittorrent", "/api/v2/auth/login", "-o /dev/null -w '%{http_code}' --data 'username=daniel&password=fixture-password'").strip() == "401"
     assert json.loads(response("qbittorrent", "/api/v2/app/preferences", "-f -b /tmp/qb-cookies"))["max_ratio"] == declared_ratio
     assert_torrent_present()
     hatchi.fail(f"grep -Fx 'Retained=restored-setting' {qb_config}")
     hatchi.wait_until_succeeds("grep -Eq 'daniel\\s*=\\s*-pbkdf2' /run/couchdb/local.ini")
-    rotate_secret("couchdb-admin", "[admins]\ndaniel = rotated-fixture\n", "couchdb")
+    rotate_secret("couchdbAdmin", "[admins]\ndaniel = rotated-fixture\n", "couchdb")
     client.wait_until_succeeds(curl("couchdb", "/_session", "-f -u daniel:rotated-fixture"))
     assert response("couchdb", "/_session", "-u daniel:fixture-password -o /dev/null -w '%{http_code}'").strip() == "401"
     assert json.loads(response("couchdb", "/_session", "-f -u daniel:rotated-fixture"))["userCtx"]["name"] == "daniel"

@@ -1,6 +1,6 @@
 # Hatchi 1Password secrets
 
-Nix owns application configuration. The physical Hatchi configuration enables opnix in `hosts/srv-hatchi/production.nix` and fetches service-ready credentials into runtime files. The reusable service module retains SOPS as its default for isolated tests.
+Nix owns application configuration. The physical Hatchi configuration enables opnix in `hosts/srv-hatchi/production.nix` and fetches service-ready credentials into runtime files. opnix is the only secret delivery path.
 
 ## Credential contract
 
@@ -29,14 +29,14 @@ A fresh CouchDB administrator login does not prove access to a restored database
 
 ## Bootstrap and runtime
 
-The physical configuration sets `my.hatchi.onepassword.enable = true`. Missing references fail evaluation. Glance, AdGuard, Grafana, Nextcloud, and qBittorrent use `daniel` for their fresh login accounts; the corresponding 1Password usernames match. CouchDB uses the administrator in its INI credential.
+Missing references fail evaluation. Glance, AdGuard, Grafana, Nextcloud, and qBittorrent use `daniel` for their fresh login accounts; the corresponding 1Password usernames match. CouchDB uses the administrator in its INI credential.
 
-SOPS decrypts the `opnix-token` entry from `/var/lib/sops/srv-hatchi.yaml` using `/var/lib/sops/age/keys.txt`. Provision both files out of band, root-owned with mode `0600`. The `srv-hatchi-production` service account has read-only access to Homelab. Its token and age key are backed up in the `Hatchi production bootstrap` item. Neither belongs in Git or the Nix store. `my.hatchi.onepassword.tokenFile` can instead select a separately provisioned token file outside the Nix store.
+`my.hatchi.onepassword.tokenFile` selects the 1Password service-account token file, provisioned out of band and outside the Nix store. Production uses `/var/lib/opnix/token`. The `srv-hatchi-production` service account has read-only access to Homelab. Its token is backed up in the `Hatchi production bootstrap` item and never belongs in Git or the Nix store.
 
-NixOS's native pre-switch check validates the SOPS manifest and decrypts the ciphertext to `/dev/null` before changing the bootloader or restarting services. Missing files, a wrong age key, or invalid ciphertext stop the switch. This does not prove 1Password is reachable from Hatchi or that every application can start. See [the provisioning procedure](../../hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment).
+NixOS's native pre-switch check rejects a missing or empty token file before changing the bootloader or restarting services. This does not prove 1Password is reachable from Hatchi or that every application can start. See [the provisioning procedure](../../hosts/srv-hatchi/INSTALL.md#provision-secrets-before-deployment).
 
 ```text
-SOPS bootstrap token
+1Password service-account token
   → opnix-secrets.service fetches nine credential files
   → hatchi-secret-files.service substitutes two stored hashes
   → dependent services start
@@ -57,7 +57,7 @@ traitor check --print-build-logs
 nix build --no-link --print-build-logs .#checks.x86_64-linux.srv-hatchi-onepassword
 ```
 
-The second command requires x86 Linux with KVM. It uses the standard NixOS VM test driver and public synthetic SOPS fixtures. A test-only fetch command replaces the 1Password network call, but the provider unit, runtime substitutions, credentials, and real services are exercised. The test checks six logins, permissions, provider restart propagation, missing-token and empty-file failures, and reboot. VM tests are manual, not part of the default CI job.
+The second command requires x86 Linux with KVM. It uses the standard NixOS VM test driver and public synthetic fixtures. A test-only fetch command replaces the 1Password network call, but the provider unit, runtime substitutions, credentials, and real services are exercised. The test checks six logins, permissions, provider restart propagation, missing-token and empty-file failures, and reboot. VM tests are manual, not part of the default CI job.
 
 The VM test does not authenticate to 1Password or validate production field references. A private check on the Mac used the pinned opnix binary and the production service account to fetch all nine declared references and compare their contents with 1Password. That verifies credential delivery from the Mac, not Hatchi's live services.
 

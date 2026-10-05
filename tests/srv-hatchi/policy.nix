@@ -8,9 +8,9 @@ let
   hatchiPublicKey = lib.strings.trim (builtins.readFile ../../config/ssh/public-keys/hatchi.pub);
   secretsBefore =
     unit:
-    builtins.elem "sops-install-secrets.service" cfg.systemd.services.${unit}.requires
-    && builtins.elem "sops-install-secrets.service" cfg.systemd.services.${unit}.after
-    && lib.hasInfix "sops-install-secrets.service" cfg.systemd.units."${unit}.service".text;
+    builtins.elem "hatchi-secret-files.service" cfg.systemd.services.${unit}.requires
+    && builtins.elem "hatchi-secret-files.service" cfg.systemd.services.${unit}.after
+    && lib.hasInfix "hatchi-secret-files.service" cfg.systemd.units."${unit}.service".text;
   nixStub = pkgs.writeShellScriptBin "nix" ''
     printf '%s\n' "$@" >> "$NIX_CALLS"
     if [[ $1 == eval ]]; then
@@ -33,10 +33,8 @@ let
       checkout="$staging_root/home/dkumlin/.config/dotfiles"
       test -d "$checkout/.git"
       test -f "$checkout/hosts/srv-hatchi/hardware-configuration.nix"
-      for file in srv-hatchi.yaml age/keys.txt; do
-        cmp "$HOME/.local/state/hatchi-bootstrap/var/lib/sops/$file" "$staging_root/var/lib/sops/$file"
-        test "$(stat -c %a "$staging_root/var/lib/sops/$file")" = 600
-      done
+      cmp "$HOME/.local/state/hatchi-bootstrap/var/lib/opnix/token" "$staging_root/var/lib/opnix/token"
+      test "$(stat -c %a "$staging_root/var/lib/opnix/token")" = 600
       git -C "$checkout" rev-parse HEAD > "$NIX_STUB_INSPECT_EXTRA_FILES"
     fi
   '';
@@ -104,7 +102,6 @@ let
   withOnePassword = configured onePasswordFixture;
   withAppSecrets = configured {
     my.hatchi.onepassword = {
-      enable = true;
       tokenFile = "/run/test-opnix-token";
       references = lib.genAttrs (builtins.attrNames cfg.my.hatchi.onepassword.references) (
         name: "op://fixture/credentials/${name}"
@@ -116,27 +113,17 @@ let
     import ./onepassword-machine.nix { inherit lib pkgs self; }
   );
   missingAppKeys = configured {
-    my.hatchi.onepassword = {
-      enable = true;
-      references = {
-        glanceKey = null;
-        grafanaKey = null;
-      };
+    my.hatchi.onepassword.references = {
+      glanceKey = null;
+      grafanaKey = null;
     };
   };
   storeToken = configured {
-    my.hatchi.onepassword = {
-      enable = true;
-      tokenFile = "${builtins.storeDir}/must-not-be-a-token";
-    };
+    my.hatchi.onepassword.tokenFile = "${builtins.storeDir}/must-not-be-a-token";
   };
   disabledOnePassword = configured {
     imports = [ onePasswordFixture ];
     services.onepassword-secrets.enable = false;
-  };
-  withPolling = configured {
-    imports = [ onePasswordFixture ];
-    services.onepassword-secrets.systemdIntegration.polling.enable = true;
   };
   withoutIntegration = configured {
     imports = [ onePasswordFixture ];
@@ -253,60 +240,40 @@ assert lib.all (
   range:
   lib.hasInfix "ip saddr ${range} meta l4proto { tcp } th dport { 22 } accept" production.networking.firewall.extraInputRules
 ) production.my.network.adminNetworks;
-assert production.my.hatchi.onepassword.enable;
+assert production.my.hatchi.onepassword.tokenFile == "/var/lib/opnix/token";
 assert builtins.all (reference: reference != null) (
   builtins.attrValues production.my.hatchi.onepassword.references
 );
 assert production.services.onepassword-secrets.enable;
-assert builtins.attrNames production.sops.secrets == [ "opnix-token" ];
-assert lib.hasInfix "hatchi-check-secrets" production.system.preSwitchChecks.hatchi-secrets;
+assert lib.hasInfix "/var/lib/opnix/token" production.system.preSwitchChecks.hatchi-secrets;
 assert lib.hasInfix "!include /etc/nix/runner-access-tokens.conf" production.nix.extraOptions;
 assert lib.hasInfix "runnerAccessToken" production.systemd.services.hatchi-runner-credential.script;
 assert lib.elem "hatchi-runner-credential.service"
   production.services.github-runners.hatchi-deploy.serviceOverrides.after;
-assert lib.hasInfix "/var/lib/sops/srv-hatchi.yaml"
-  production.system.preSwitchChecks.hatchi-secrets;
-assert lib.hasInfix "/var/lib/sops/age/keys.txt" production.system.preSwitchChecks.hatchi-secrets;
 assert cfg.systemd.services.sonarr.serviceConfig.StateDirectory == "sonarr";
 assert cfg.services.qbittorrent.serverConfig != { };
 assert cfg.services.mangy.enable;
 assert cfg.services.mangy.group == "media";
 assert cfg.services.mangy.server.listenAddress == "127.0.0.1";
 assert cfg.services.mangy.server.port == 3002;
-assert cfg.sops.templates ? "AdGuardHome.yaml";
-assert cfg.sops.templates ? "qBittorrent.conf";
 assert !cfg.services.adguardhome.mutableSettings;
 assert
   cfg.services.adguardhome.settings.users == [
     {
       name = "daniel";
-      password = cfg.sops.placeholder.adguard-password;
+      password = "@hatchi-adguard-hash@";
     }
   ];
 assert
   cfg.services.qbittorrent.serverConfig.Preferences."WebUI\\Password_PBKDF2"
-  == cfg.sops.placeholder.qbittorrent-password;
-assert builtins.all
-  (
-    entry:
-    let
-      template = cfg.sops.templates.${entry.name};
-    in
-    template.mode == "0400"
-    && template.uid == 0
-    && template.gid == 0
-    && template.restartUnits == [ "${entry.unit}.service" ]
-    && cfg.systemd.services.${entry.unit}.serviceConfig.LoadCredential == [ "config:${template.path}" ]
-  )
-  [
-    {
-      name = "AdGuardHome.yaml";
-      unit = "adguardhome";
-    }
-    {
-      name = "qBittorrent.conf";
-      unit = "qbittorrent";
-    }
+  == "@hatchi-qbittorrent-hash@";
+assert
+  cfg.systemd.services.adguardhome.serviceConfig.LoadCredential == [
+    "config:/run/hatchi-secrets/AdGuardHome.yaml"
+  ];
+assert
+  cfg.systemd.services.qbittorrent.serviceConfig.LoadCredential == [
+    "config:/run/hatchi-secrets/qBittorrent.conf"
   ];
 assert cfg.systemd.services.adguardhome.serviceConfig.DynamicUser;
 assert lib.hasInfix "install -m600" cfg.systemd.services.adguardhome.preStart;
@@ -450,13 +417,11 @@ assert lib.all (reference: lib.hasPrefix "op://" reference) (
 assert
   withAppSecrets.services.glance.settings.auth.users.daniel.password._secret
   == "/run/hatchi-onepassword/glancePassword";
-assert withAppSecrets.sops.secrets == { };
-assert withAppSecrets.sops.templates == { };
 assert withAppSecrets.my.hatchi.secretService == "hatchi-secret-files.service";
 assert cfg.services.nextcloud.config.adminpassFile == null;
 assert cfg.services.nextcloud.config.adminuser == null;
 assert builtins.elem "nextcloud-admin.service" cfg.systemd.services.nginx.requires;
-assert builtins.elem "adminpass:/run/secrets/nextcloud-admin"
+assert builtins.elem "adminpass:/run/hatchi-onepassword/nextcloudPassword"
   cfg.systemd.services.nextcloud-admin.serviceConfig.LoadCredential;
 assert builtins.elem "adminpass:/run/hatchi-onepassword/nextcloudPassword"
   withAppSecrets.systemd.services.nextcloud-admin.serviceConfig.LoadCredential;
@@ -515,8 +480,6 @@ assert lib.hasInfix "replace-secret" withAppSecrets.systemd.services.hatchi-secr
 assert !(lib.hasInfix "render-secrets" withAppSecrets.systemd.services.hatchi-secret-files.script);
 assert withAppSecrets.systemd.services.hatchi-secret-files.requires == [ "opnix-secrets.service" ];
 assert withAppSecrets.systemd.services.hatchi-secret-files.partOf == [ "opnix-secrets.service" ];
-assert
-  !(builtins.elem "sops-install-secrets.service" withAppSecrets.systemd.services.opnix-secrets.requires);
 assert builtins.all (
   unit:
   builtins.elem "hatchi-secret-files.service" withAppSecrets.systemd.services.${unit}.requires
@@ -547,38 +510,15 @@ assert builtins.any (
   check.message == "Hatchi's 1Password token must be provisioned outside the Nix store"
   && !check.assertion
 ) storeToken.assertions;
-assert cfg.sops.useSystemdActivation;
-assert !cfg.services.onepassword-secrets.enable && !(cfg.sops.secrets ? opnix-token);
+assert !cfg.services.onepassword-secrets.enable;
 assert !(cfg.systemd.services ? opnix-secrets);
 assert !disabledOnePassword.services.onepassword-secrets.enable;
-assert !(disabledOnePassword.sops.secrets ? opnix-token);
 assert !(disabledOnePassword.systemd.services ? opnix-secrets);
 assert withConfigFile.services.onepassword-secrets.enable;
 assert withOnePassword.services.onepassword-secrets.enable;
 assert withOnePassword.services.onepassword-secrets.users == [ ];
 assert withOnePassword.services.onepassword-secrets.secrets.integrationProbe.mode == "0600";
 assert withOnePassword.services.onepassword-secrets.secrets.integrationProbe.owner == "root";
-assert
-  withOnePassword.services.onepassword-secrets.tokenFile
-  == withOnePassword.sops.secrets.opnix-token.path;
-assert withOnePassword.sops.secrets.opnix-token.path == "/run/secrets/opnix-token";
-assert withOnePassword.sops.secrets.opnix-token.mode == "0640";
-assert withOnePassword.sops.secrets.opnix-token.group == "onepassword-secrets";
-assert withOnePassword.sops.secrets.opnix-token.restartUnits == [ "opnix-secrets.service" ];
-assert builtins.all
-  (
-    unit:
-    builtins.elem "sops-install-secrets.service" withPolling.systemd.services.${unit}.after
-    && builtins.elem "sops-install-secrets.service" withPolling.systemd.services.${unit}.requires
-    &&
-      lib.hasInfix "Requires=sops-install-secrets.service"
-        withPolling.systemd.units."${unit}.service".text
-  )
-  [
-    "opnix-secrets"
-    "opnix-secrets-restart"
-    "opnix-secrets-poll"
-  ];
 assert !(withOnePassword.systemd.services ? opnix-secrets-poll);
 assert !(withoutIntegration.systemd.services ? opnix-secrets-restart);
 assert !(withoutIntegration.systemd.services ? opnix-secrets-poll);
@@ -587,41 +527,21 @@ assert builtins.elem "opnix-secrets.service" withOnePassword.systemd.services.ra
 assert
   withOnePassword.services.onepassword-secrets.secretPaths.integrationProbe
   == "/var/lib/opnix/secrets/integrationProbe";
-assert cfg.sops.defaultSopsFile == withOnePassword.sops.defaultSopsFile;
-assert cfg.sops.secrets.nextcloud-admin.path == withOnePassword.sops.secrets.nextcloud-admin.path;
 pkgs.runCommand "srv-hatchi-policy"
   {
     nativeBuildInputs = [
       pkgs.bash
       pkgs.git
-      pkgs.jq
-      pkgs.yq-go
-      pkgs.sops
-      pkgs.age
       pkgs.coreutils
       pkgs.diffutils
       pkgs.gnugrep
       pkgs.findutils
       pkgs.getconf
       self.packages.${pkgs.stdenv.hostPlatform.system}.opnix
-      self.inputs.sops-nix.packages.${pkgs.stdenv.hostPlatform.system}.sops-install-secrets
     ];
     ROOT = self;
     NIX_STUB = nixStub;
     SSH_STUB = sshStub;
-    SOPS_MANIFEST = pkgs.writeText "hatchi-template-manifest.json" (
-      builtins.toJSON {
-        secrets = lib.mapAttrsToList (name: secret: {
-          inherit name;
-          inherit (secret) key mode format;
-        }) cfg.sops.secrets;
-        templates = lib.mapAttrsToList (name: template: {
-          inherit name;
-          inherit (template) content mode;
-        }) cfg.sops.templates;
-        placeholderBySecretName = cfg.sops.placeholder;
-      }
-    );
   }
   ''
     bash ${./policy.sh}

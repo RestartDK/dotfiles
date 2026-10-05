@@ -6,6 +6,7 @@
 }:
 let
   cfg = config.my.hatchi.onepassword;
+  enabled = lib.any (reference: reference != null) (builtins.attrValues cfg.references);
   paths = config.services.onepassword-secrets.secretPaths;
   references = {
     cloudflare = null;
@@ -34,11 +35,10 @@ let
 in
 {
   options.my.hatchi.onepassword = {
-    enable = lib.mkEnableOption "1Password delivery of Hatchi application secrets";
     tokenFile = lib.mkOption {
       type = lib.types.nullOr (lib.types.strMatching "/[a-zA-Z0-9._/-]+");
       default = null;
-      description = "Runtime service-account token file. Null uses the SOPS bootstrap token.";
+      description = "Runtime service-account token file.";
     };
     references = lib.mapAttrs (
       _: reference:
@@ -50,61 +50,64 @@ in
     ) references;
   };
 
-  config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = cfg.tokenFile == null || !(lib.hasPrefix "${builtins.storeDir}/" cfg.tokenFile);
-        message = "Hatchi's 1Password token must be provisioned outside the Nix store";
-      }
-    ]
-    ++ lib.mapAttrsToList (name: reference: {
-      assertion = reference != null;
-      message = "Hatchi 1Password reference ${name} must be provisioned before enabling this provider";
-    }) cfg.references;
-
-    services.onepassword-secrets = {
-      enable = true;
-      outputDir = "/run/hatchi-onepassword";
-      systemdIntegration.enable = false;
-      secrets = lib.mapAttrs (name: reference: {
-        inherit reference;
-        mode = "0400";
-        owner = if lib.hasPrefix "grafana" name then "grafana" else "root";
-        group = if lib.hasPrefix "grafana" name then "grafana" else "root";
-      }) (lib.filterAttrs (_: reference: reference != null) cfg.references);
-    };
-    systemd.services.opnix-secrets = {
-      preStart = ''
-        test -s ${lib.escapeShellArg config.services.onepassword-secrets.tokenFile}
-      '';
-      postStart = lib.concatMapStringsSep "\n" (path: "test -s ${lib.escapeShellArg path}") (
-        builtins.attrValues paths
-      );
-    };
-    systemd.services.hatchi-secret-files = {
-      description = "Substitute Hatchi password hashes into declared configuration";
-      wantedBy = [ "multi-user.target" ];
-      requires = [ "opnix-secrets.service" ];
-      after = [ "opnix-secrets.service" ];
-      partOf = [ "opnix-secrets.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        RuntimeDirectory = "hatchi-secrets";
-        RuntimeDirectoryMode = "0700";
-        UMask = "0077";
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ReadWritePaths = [ "/run/hatchi-secrets" ];
-        NoNewPrivileges = true;
+  config = lib.mkMerge [
+    {
+      assertions = [
+        {
+          assertion = cfg.tokenFile == null || !(lib.hasPrefix "${builtins.storeDir}/" cfg.tokenFile);
+          message = "Hatchi's 1Password token must be provisioned outside the Nix store";
+        }
+      ]
+      ++ lib.mapAttrsToList (name: reference: {
+        assertion = reference != null;
+        message = "Hatchi 1Password reference ${name} must be provisioned before enabling this provider";
+      }) cfg.references;
+    }
+    (lib.mkIf enabled {
+      services.onepassword-secrets = {
+        enable = true;
+        outputDir = "/run/hatchi-onepassword";
+        systemdIntegration.enable = false;
+        secrets = lib.mapAttrs (name: reference: {
+          inherit reference;
+          mode = "0400";
+          owner = if lib.hasPrefix "grafana" name then "grafana" else "root";
+          group = if lib.hasPrefix "grafana" name then "grafana" else "root";
+        }) (lib.filterAttrs (_: reference: reference != null) cfg.references);
       };
-      script = ''
-        ${pkgs.coreutils}/bin/install -m400 ${adguardConfig} /run/hatchi-secrets/AdGuardHome.yaml
-        ${pkgs.replace-secret}/bin/replace-secret '@hatchi-adguard-hash@' ${paths.adguardPasswordHash} /run/hatchi-secrets/AdGuardHome.yaml
-        ${pkgs.coreutils}/bin/install -m400 ${qbittorrentConfig} /run/hatchi-secrets/qBittorrent.conf
-        ${pkgs.replace-secret}/bin/replace-secret '@hatchi-qbittorrent-hash@' ${paths.qbittorrentPasswordHash} /run/hatchi-secrets/qBittorrent.conf
-      '';
-    };
-  };
+      systemd.services.opnix-secrets = {
+        preStart = ''
+          test -s ${lib.escapeShellArg config.services.onepassword-secrets.tokenFile}
+        '';
+        postStart = lib.concatMapStringsSep "\n" (path: "test -s ${lib.escapeShellArg path}") (
+          builtins.attrValues paths
+        );
+      };
+      systemd.services.hatchi-secret-files = {
+        description = "Substitute Hatchi password hashes into declared configuration";
+        wantedBy = [ "multi-user.target" ];
+        requires = [ "opnix-secrets.service" ];
+        after = [ "opnix-secrets.service" ];
+        partOf = [ "opnix-secrets.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          RuntimeDirectory = "hatchi-secrets";
+          RuntimeDirectoryMode = "0700";
+          UMask = "0077";
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          ReadWritePaths = [ "/run/hatchi-secrets" ];
+          NoNewPrivileges = true;
+        };
+        script = ''
+          ${pkgs.coreutils}/bin/install -m400 ${adguardConfig} /run/hatchi-secrets/AdGuardHome.yaml
+          ${pkgs.replace-secret}/bin/replace-secret '@hatchi-adguard-hash@' ${paths.adguardPasswordHash} /run/hatchi-secrets/AdGuardHome.yaml
+          ${pkgs.coreutils}/bin/install -m400 ${qbittorrentConfig} /run/hatchi-secrets/qBittorrent.conf
+          ${pkgs.replace-secret}/bin/replace-secret '@hatchi-qbittorrent-hash@' ${paths.qbittorrentPasswordHash} /run/hatchi-secrets/qBittorrent.conf
+        '';
+      };
+    })
+  ];
 }

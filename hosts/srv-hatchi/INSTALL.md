@@ -28,7 +28,7 @@ The Hatchi configuration identifies these disks:
 
 ## Install NixOS
 
-Before erasing disks, prepare the private bundle at `~/.local/state/hatchi-bootstrap/var/lib/sops` with `srv-hatchi.yaml` and `age/keys.txt`. The installer refuses missing or empty files. The bundle must contain the encrypted production service-account token and its age key, not the public test fixtures. The bundle must contain the encrypted production service-account token and its age key, not the public test fixtures.
+Before erasing disks, prepare the private bootstrap bundle at `~/.local/state/hatchi-bootstrap`. The installer refuses missing or empty files. The bundle must contain the production 1Password service-account token, not the public test fixtures.
 
 From the clean `main` checkout on the Mac, run:
 
@@ -36,7 +36,7 @@ From the clean `main` checkout on the Mac, run:
 traitor install srv-hatchi root@<HATCHI_IP> --confirm-destroy
 ```
 
-`traitor install` accepts no additional installer options. It checks the configured disk identifiers, branch, upstream revision, hardware facts, working tree, and presence of the bootstrap files. It stages the clone at `/home/dkumlin/.config/dotfiles` and the bootstrap at `/var/lib/sops`, with secret files at mode `0600`. It invokes the pinned `nixos-anywhere` with `#srv-hatchi` and copies both through `--extra-files`. Bootstrap files remain root-owned; the `.config` tree uses UID 1000 and GID 100. The pre-switch check validates decryption before bootloader installation, after disk formatting. Invalid nonempty bootstrap files can therefore leave an erased machine without a bootable system.
+`traitor install` accepts no additional installer options. It checks the configured disk identifiers, branch, upstream revision, hardware facts, working tree, and presence of the bootstrap files. It stages the clone at `/home/dkumlin/.config/dotfiles` and the bootstrap at `/var/lib/opnix`, with secret files at mode `0600`. It invokes the pinned `nixos-anywhere` with `#srv-hatchi` and copies both through `--extra-files`. Bootstrap files remain root-owned; the `.config` tree uses UID 1000 and GID 100. The pre-switch check rejects a missing or empty token before bootloader installation, after disk formatting. A rejected token can therefore leave an erased machine without a bootable system.
 
 Disko creates a 1 GiB EFI partition and an ext4 root filesystem on the SSD. It formats the HDD as ext4 and mounts it at `/srv`.
 
@@ -84,27 +84,26 @@ ssh -o StrictHostKeyChecking=yes srv-hatchi hostname
 
 ## Provision secrets before deployment
 
-The production configuration uses 1Password. It requires an encrypted service-account token and the corresponding age key on Hatchi before activation.
+The production configuration uses 1Password. It requires the service-account token on Hatchi before activation.
 
-The prepared bundle is under `~/.local/state/hatchi-bootstrap/var/lib/sops` on the Mac. The token and age key are also backed up in the Homelab item `Hatchi production bootstrap`. Keep the bundle private and outside the repository.
+The prepared token is under `~/.local/state/hatchi-bootstrap` on the Mac. It is also backed up in the Homelab item `Hatchi production bootstrap`. Keep it private and outside the repository.
 
-After recovering SSH, copy the bundle into a private staging directory:
+After recovering SSH, copy the token into a private staging directory:
 
 ```bash
 ssh srv-hatchi 'install -d -m700 ~/hatchi-bootstrap'
-scp -r ~/.local/state/hatchi-bootstrap/var/lib/sops srv-hatchi:~/hatchi-bootstrap/
+scp ~/.local/state/hatchi-bootstrap/token srv-hatchi:~/hatchi-bootstrap/token
 ssh -t srv-hatchi
 ```
 
-On Hatchi, install the files with root ownership:
+On Hatchi, install the token with root ownership:
 
 ```bash
-sudo install -d -m700 /var/lib/sops/age
-sudo install -o root -g root -m600 ~/hatchi-bootstrap/sops/srv-hatchi.yaml /var/lib/sops/srv-hatchi.yaml
-sudo install -o root -g root -m600 ~/hatchi-bootstrap/sops/age/keys.txt /var/lib/sops/age/keys.txt
+sudo install -d -m700 /var/lib/opnix
+sudo install -o root -g root -m600 ~/hatchi-bootstrap/token /var/lib/opnix/token
 ```
 
-Remove the temporary upload after confirming both files were installed. Retain the protected backup in 1Password. Never display the token or age private key in terminal logs or paste them into chat.
+Remove the temporary upload after confirming the installed file. Retain the protected backup in 1Password. Never display the token in terminal logs or paste it into chat.
 
 ## The runner's access token
 
@@ -120,7 +119,7 @@ From the Mac, check the deployment before switching:
 traitor deploy srv-hatchi --remote-build --dry-run
 ```
 
-The pre-switch check reads the manifest and decrypts the bootstrap without installing secrets. The pinned deploy-rs ignores the activation script's failure status in dry-activation mode, so exit zero does not prove these checks passed. Inspect the diagnostics and resolve any reported failure before a real deployment. Real activation still rejects failed pre-switch checks.
+The pre-switch check reads the token file without installing secrets. The pinned deploy-rs ignores the activation script's failure status in dry-activation mode, so exit zero does not prove these checks passed. Inspect the diagnostics and resolve any reported failure before a real deployment. Real activation still rejects failed pre-switch checks.
 
 A dry run does not prove application startup or automatic rollback. Confirm that Hatchi actually receives the address the private input declares as the DNS answer; that answer does not assign the address to an interface. Keep console access available during the first real deployment, particularly when the previous generation was not installed with deploy-rs.
 

@@ -15,6 +15,7 @@ let
   accessTokensTemplate = pkgs.writeText "runner-access-tokens.conf" ''
     access-tokens = github.com=@runner-access-token@
   '';
+  runnerAccessToken = config.my.hatchi.onepassword.references.runnerAccessToken;
 in
 {
   nix.settings = {
@@ -35,7 +36,7 @@ in
   # the token readable only by root and the runner.
   nix.extraOptions = "!include ${accessTokensFile}";
 
-  systemd.services.hatchi-runner-credential = lib.mkIf config.my.hatchi.onepassword.enable {
+  systemd.services.hatchi-runner-credential = lib.mkIf (runnerAccessToken != null) {
     description = "Render the CI runner's access token for private flake inputs";
     wantedBy = [ "multi-user.target" ];
     requires = [ "opnix-secrets.service" ];
