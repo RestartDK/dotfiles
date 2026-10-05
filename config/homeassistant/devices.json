@@ -1,0 +1,24 @@
+{
+  "devices": [
+    {
+      "name": "Canon printer",
+      "handler": "ipp",
+      "fields": {
+        "host": "192.168.205.25",
+        "port": 631,
+        "base_path": "/ipp/print",
+        "ssl": false,
+        "verify_ssl": false
+      }
+    },
+    {
+      "name": "Arlo cameras",
+      "handler": "aarlo",
+      "fields": {
+        "username": "op://Personal/Arlo/username",
+        "password": "op://Personal/Arlo/password",
+        "tfa_type": "NONE"
+      }
+    }
+  ]
+}

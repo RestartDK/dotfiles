@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+"""Reconcile Home Assistant config entries with a device manifest.
+
+Home Assistant stores integrations in its own config-entry storage, so this tool
+drives the documented config-flow REST API instead of hand-editing storage.
+
+    HA_URL=https://homeassistant.example.com HA_USERNAME=... HA_PASSWORD=... \
+        ha-devices list
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Credentials:
+    url: str
+    username: str
+    password: str
+
+
+class HaError(RuntimeError):
+    pass
+
+
+class Ha:
+    def __init__(self, creds: Credentials) -> None:
+        self._creds = creds
+        self._token = self._login()
+
+    def _request(
+        self,
+        path: str,
+        payload: dict[str, object] | None = None,
+        *,
+        token: str | None = None,
+        form: bool = False,
+        method: str | None = None,
+    ) -> dict[str, object]:
+        url = f"{self._creds.url.rstrip('/')}{path}"
+        timeout = float(os.environ.get("HA_TIMEOUT", "120"))
+        data: bytes | None = None
+        headers = {"Accept": "application/json"}
+        if payload is not None:
+            if form:
+                data = urllib.parse.urlencode(payload).encode()
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+            else:
+                data = json.dumps(payload).encode()
+                headers["Content-Type"] = "application/json"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                body = response.read()
+        except urllib.error.HTTPError as error:
+            body = error.read()
+        if not body:
+            return {}
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError as error:
+            raise HaError(f"{path} returned non-JSON: {body[:200]!r}") from error
+
+    def _login(self) -> str:
+        flow = self._request(
+            "/auth/login_flow",
+            {
+                "client_id": f"{self._creds.url}/",
+                "handler": ["homeassistant", None],
+                "redirect_uri": f"{self._creds.url}/",
+            },
+        )
+        flow_id = flow.get("flow_id")
+        if not isinstance(flow_id, str):
+            raise HaError(f"no login flow: {flow}")
+        result = self._request(
+            f"/auth/login_flow/{flow_id}",
+            {
+                "client_id": f"{self._creds.url}/",
+                "username": self._creds.username,
+                "password": self._creds.password,
+            },
+        )
+        if result.get("type") != "create_entry":
+            raise HaError(f"login needs more than a password: {result}")
+        code = result.get("result")
+        tokens = self._request(
+            "/auth/token",
+            {
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": f"{self._creds.url}/",
+            },
+            form=True,
+        )
+        token = tokens.get("access_token")
+        if not isinstance(token, str):
+            raise HaError(f"no access token: {tokens}")
+        return token
+
+    def entries(self) -> list[dict[str, object]]:
+        response = self._request("/api/config/config_entries/entry", token=self._token)
+        if not isinstance(response, list):
+            raise HaError(f"unexpected entry list: {response}")
+        return response
+
+    def flow_handlers(self) -> list[str]:
+        response = self._request(
+            "/api/config/config_entries/flow_handlers", token=self._token
+        )
+        if not isinstance(response, list):
+            raise HaError(f"unexpected handler list: {response}")
+        return [str(handler) for handler in response]
+
+    def start_flow(self, handler: str, fields: dict[str, object] | None = None) -> dict:
+        flow = self._request(
+            "/api/config/config_entries/flow",
+            {"handler": handler, "show_advanced_options": True},
+            token=self._token,
+        )
+        return self.submit_flow(str(flow["flow_id"]), fields or {})
+
+    def submit_flow(self, flow_id: str, fields: dict[str, object]) -> dict:
+        return self._request(
+            f"/api/config/config_entries/flow/{flow_id}",
+            fields,
+            token=self._token,
+        )
+
+    def delete_entry(self, entry_id: str) -> None:
+        self._request(
+            f"/api/config/config_entries/entry/{entry_id}",
+            token=self._token,
+            method="DELETE",
+        )
+
+    def has_entry(self, handler: str, host: str | None) -> bool:
+        for entry in self.entries():
+            if entry.get("domain") != handler:
+                continue
+            if host is None:
+                return True
+            data = entry.get("data") or {}
+            if isinstance(data, dict) and data.get("host") == host:
+                return True
+            title = str(entry.get("title") or "")
+            if host in title:
+                return True
+        return False
+
+
+def credentials() -> Credentials:
+    url = os.environ.get("HA_URL")
+    username = os.environ.get("HA_USERNAME")
+    password = os.environ.get("HA_PASSWORD")
+    missing = [
+        name
+        for name, value in (
+            ("HA_URL", url),
+            ("HA_USERNAME", username),
+            ("HA_PASSWORD", password),
+        )
+        if not value
+    ]
+    if missing:
+        raise HaError(f"missing environment: {', '.join(missing)}")
+    assert url and username and password
+    return Credentials(url, username, password)
+
+
+def describe(flow: dict) -> str:
+    kind = flow.get("type")
+    if kind == "create_entry":
+        return f"created entry for {flow.get('handler') or flow.get('title')}"
+    if kind == "abort":
+        return f"aborted: {flow.get('reason')}"
+    if kind == "form":
+        schema = (flow.get("data_schema") or []) if isinstance(flow.get("data_schema"), list) else []
+        fields = [field.get("name") for field in schema if isinstance(field, dict)]
+        return f"needs input at step {flow.get('step_id')}: {fields} {flow.get('errors') or ''}".strip()
+    return json.dumps(flow)
+
+
+def resolve(value: str) -> str:
+    """Resolve op:// references through the 1Password CLI so manifests hold no secrets."""
+    if not value.startswith("op://"):
+        return value
+    completed = subprocess.run(
+        ["op", "read", value], capture_output=True, text=True, check=False
+    )
+    if completed.returncode != 0:
+        raise HaError(f"op read {value} failed: {completed.stderr.strip()}")
+    return completed.stdout.strip()
+
+
+def parse_fields(pairs: list[str]) -> dict[str, object]:
+    fields: dict[str, object] = {}
+    for pair in pairs:
+        key, separator, value = pair.partition("=")
+        if not separator:
+            raise HaError(f"field {pair!r} is not key=value")
+        fields[key] = coerce(resolve(value))
+    return fields
+
+
+def coerce(value: str) -> object:
+    if value.lower() in {"true", "false"}:
+        return value.lower() == "true"
+    if value.isdigit():
+        return int(value)
+    return value
+
+
+def command_list(ha: Ha) -> int:
+    for entry in sorted(ha.entries(), key=lambda item: str(item.get("domain"))):
+        print(f"{entry.get('domain')}\t{entry.get('title')}\t{entry.get('state')}")
+    return 0
+
+
+def command_handlers(ha: Ha, needle: str) -> int:
+    for handler in sorted(ha.flow_handlers()):
+        if needle in handler:
+            print(handler)
+    return 0
+
+
+def command_add(ha: Ha, handler: str, fields: dict[str, object]) -> int:
+    print(f"{handler}: {describe(ha.start_flow(handler, fields))}")
+    return 0
+
+
+def command_remove(ha: Ha, target: str) -> int:
+    matches = [
+        entry
+        for entry in ha.entries()
+        if entry.get("domain") == target or entry.get("entry_id") == target
+    ]
+    if not matches:
+        print(f"no config entry matches {target}")
+        return 1
+    for entry in matches:
+        ha.delete_entry(str(entry["entry_id"]))
+        print(f"removed {entry.get('domain')} {entry.get('title')}")
+    return 0
+
+
+def command_reconcile(ha: Ha, manifest_path: str, dry_run: bool) -> int:
+    with open(manifest_path) as manifest_file:
+        manifest = json.load(manifest_file)
+    failed = 0
+    for device in manifest["devices"]:
+        handler = device["handler"]
+        fields = {
+            key: coerce(resolve(str(value)))
+            for key, value in (device.get("fields") or {}).items()
+        }
+        host = str(fields["host"]) if "host" in fields else None
+        name = device.get("name") or host or handler
+        if ha.has_entry(handler, host):
+            print(f"skip {name}: {handler} already configured")
+            continue
+        if dry_run:
+            print(f"would add {name}: {handler}")
+            continue
+        flow = ha.start_flow(handler, fields)
+        print(f"{name}: {describe(flow)}")
+        if flow.get("type") not in {"create_entry"}:
+            failed += 1
+    return 1 if failed else 0
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("list", help="configured config entries")
+
+    handlers = subparsers.add_parser("handlers", help="search available integrations")
+    handlers.add_argument("needle", nargs="?", default="")
+
+    add = subparsers.add_parser("add", help="start a config flow")
+    add.add_argument("handler")
+    add.add_argument("fields", nargs="*", help="key=value pairs, host=… for IP devices")
+
+    remove = subparsers.add_parser("remove", help="delete config entries by domain or id")
+    remove.add_argument("target")
+
+    reconcile = subparsers.add_parser("reconcile", help="converge on a manifest")
+    reconcile.add_argument("manifest")
+    reconcile.add_argument("--dry-run", action="store_true")
+
+    args = parser.parse_args(argv)
+    ha = Ha(credentials())
+    match args.command:
+        case "list":
+            return command_list(ha)
+        case "handlers":
+            return command_handlers(ha, args.needle)
+        case "add":
+            return command_add(ha, args.handler, parse_fields(args.fields))
+        case "remove":
+            return command_remove(ha, args.target)
+        case "reconcile":
+            return command_reconcile(ha, args.manifest, args.dry_run)
+    raise HaError(f"unknown command {args.command}")
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except HaError as error:
+        print(f"error: {error}", file=sys.stderr)
+        sys.exit(2)
