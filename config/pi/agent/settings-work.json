@@ -36,7 +36,6 @@
   "enabledModels": [
     "openai-codex/gpt-6.1-sol",
     "anthropic/claude-fable-5-1",
-    "anthropic/claude-opus-5-5",
     "openai-codex/gpt-6-astra",
     "openrouter/**"
   ],

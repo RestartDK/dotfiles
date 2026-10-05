@@ -14,7 +14,7 @@ const policy = (profile: string) =>
   parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
 
 describe("profile routing", () => {
-  test("work resolves Codex, Anthropic and OpenRouter routes", () => {
+  test("work resolves Codex and OpenRouter routes", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
       { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
@@ -26,7 +26,7 @@ describe("profile routing", () => {
       { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "max" },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
-      { kind: "pi", provider: "anthropic", id: "claude-opus-5-5", thinking: "xhigh" },
+      { kind: "pi", provider: "openrouter", id: "xiaomi/mimo-v2.6-flash", thinking: "xhigh" },
     ]);
   });
 
@@ -78,19 +78,19 @@ describe("profile routing", () => {
     group("feature refactoring swarm-workers", work ? "astra" : "deepseek");
     group("bug-fix perf-issue hillclimb reflect-tooling precise-code", work ? "sol" : "deepseek");
     group("why-investigators fast-code how-explorer", "deepseek");
-    group("prose review", work ? "opus" : "glm");
+    group("prose review", work ? "mimo" : "glm");
     group(
       "judgment hardest how-explainer why-synthesizer reflect-judgment reflect-divergent reflect-synthesizer",
-      work ? "opus" : "deepseek",
+      work ? "mimo" : "deepseek",
     );
     for (const [role, member] of expected)
       expect(resolveRoute(selected, { role }).selection).toEqual({ kind: "role", role, member });
     const panels: Record<string, [string, ...string[]]> = {
-      "how-critics": work ? ["opus"] : ["glm", "muse"],
-      "arena-runners": work ? ["opus", "sol", "deepseek"] : ["deepseek", "muse", "mimo"],
-      "arena-cross-judge": work ? ["opus", "sol"] : ["glm", "muse"],
-      "architect-runners": work ? ["opus", "sol", "glm"] : ["deepseek", "muse", "mimo"],
-      "interrogate-reviewers": work ? ["opus", "sol", "glm"] : ["glm", "muse", "mimo"],
+      "how-critics": work ? ["mimo"] : ["glm", "muse"],
+      "arena-runners": work ? ["mimo", "sol", "deepseek"] : ["deepseek", "muse", "mimo"],
+      "arena-cross-judge": work ? ["mimo", "sol"] : ["glm", "muse"],
+      "architect-runners": work ? ["mimo", "sol", "glm"] : ["deepseek", "muse", "mimo"],
+      "interrogate-reviewers": work ? ["mimo", "sol", "glm"] : ["glm", "muse", "mimo"],
     };
     for (const [role, members] of Object.entries(panels)) {
       expect(selected.roles.get(role)).toEqual({ kind: "panel", members });
@@ -104,6 +104,23 @@ describe("profile routing", () => {
     }
     expect([...selected.roles.keys()].sort()).toEqual(
       [...expected.keys(), ...Object.keys(panels)].sort(),
+    );
+  });
+
+  test.each(["work", "personal"])("%s rejects Opus dispatch", (profile) => {
+    const selected = policy(profile);
+    expect(selected.providers.has("anthropic")).toBe(false);
+    for (const chain of selected.routes.values()) {
+      for (const backend of chain) expect(backend.id).not.toMatch(/claude-opus/i);
+    }
+    expect(() => resolveRoute(selected, { model: "anthropic/claude-opus-5-5:xhigh" })).toThrow(
+      "not allowed",
+    );
+    expect(() =>
+      resolveRoute(selected, { model: "openrouter/anthropic/claude-opus-5-5:xhigh" }),
+    ).toThrow("not allowed");
+    expect(() => resolveRoute(selected, { role: "arena-runners", member: "opus" })).toThrow(
+      "member or seat",
     );
   });
 
