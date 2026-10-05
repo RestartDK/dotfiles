@@ -45,9 +45,14 @@ in
             '')
           ];
         };
+        programs.starship = {
+          enable = true;
+          # The live zshrc runs `starship init zsh` itself.
+          enableZshIntegration = false;
+          settings = builtins.fromTOML (builtins.readFile ../../../config/shell/starship.toml);
+        };
         xdg = {
           localBinInPath = true;
-          configFile."starship.toml" = file ../../../config/shell/starship.toml;
         };
       })
 
