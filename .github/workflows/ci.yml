@@ -102,10 +102,27 @@ jobs:
             echo "Hatchi cache is not in use. The tailnet join reported '$TAILNET_OUTCOME'." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # The tailnet resolves the cache host through split DNS and reaches
-          # the house address through the advertised route; both flags are off
-          # by default on a fresh tailnet join.
-          sudo tailscale set --accept-routes=true --accept-dns=true
+          # Reach hatchi at its own tailnet address and bind the cache host
+          # name there: the certificate is issued for the house name, so SNI
+          # must stay intact. MagicDNS resolves the peer name; the status
+          # lookup covers resolvers that ignore tailnet DNS.
+          suffix=$(sudo tailscale status --json | jq -r '."MagicDNSSuffix"')
+          address=$(getent hosts "srv-hatchi.$suffix" 2>/dev/null | awk '{print $1}' | head -n1)
+          if [ -z "$address" ]; then
+            address=$(sudo tailscale status --json | jq -r --arg name "srv-hatchi.$suffix" '
+              .Peer // {}
+              | to_entries[].value
+              | select((.DNSName // "") == $name or (.HostName // "") == "srv-hatchi")
+              | .TailscaleIPs[]?
+              | select(test("^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$"))
+            ' | head -n1)
+          fi
+          if [ -z "$address" ]; then
+            echo "srv-hatchi did not resolve to a tailnet address; building without the Hatchi substituter" >&2
+            echo "Hatchi cache is not in use." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          printf '%s %s\n' "$address" "$CACHE_HOST" | sudo tee -a /etc/hosts > /dev/null
           if ! curl --fail --silent --show-error --max-time 15 "https://$CACHE_HOST/nix-cache-info" > /dev/null; then
             echo "https://$CACHE_HOST/nix-cache-info did not respond; building without the Hatchi substituter" >&2
             echo "Hatchi cache is not in use." >> "$GITHUB_STEP_SUMMARY"
