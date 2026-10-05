@@ -1,6 +1,6 @@
 export type Verdict =
-  | { nudge: true; closer: string }
-  | { nudge: false; reason: "no-closer" | "irreversible" | "question-turn" | "already-nudged" };
+  | { kind: "warning"; closer: string }
+  | { kind: "skip"; reason: "no-closer" | "irreversible" | "question-turn" | "already-warned" };
 
 const TAIL_LENGTH = 600;
 const SENTENCE_BOUNDARY_RE = /[.!?\n]+/g;
@@ -32,7 +32,7 @@ const QUESTION_RE = new RegExp(`^(?:${QUESTION_PREFIXES.join("|")})\\b`, "i");
 const NO_CHANGES_RE = /no changes yet/i;
 
 const IRREVERSIBLE_RE =
-  /\b(?:merge[sd]?|merging|force[- ]push(?:es|ed|ing)?|deploy(?:s|ed|ing)?|delete[sd]?|deleting|drop(?:s|ped|ping)?|rm\s+-rf|prod|production|customer|payment|billing|revert(?:s|ed|ing)?|reset\s+--hard)\b/i;
+  /\b(?:merge[sd]?|merging|force[- ]push(?:es|ed|ing)?|deploy(?:s|ed|ing)?|delete[sd]?|deleting|drop(?:s|ped|ping)?|rm\s+-rf|prod|production|customer|payment|billing|commit(?:s|ted|ting)?|push(?:es|ed|ing)?|pull request|open (?:a |the )?pr|revert(?:s|ed|ing)?|reset\s+--hard)\b/i;
 
 type CloserMatch = { closer: string; index: number };
 
@@ -79,14 +79,14 @@ export function isQuestionTurn(prompt: string): boolean {
 export function classify(input: {
   assistantText: string;
   userPrompt: string;
-  nudgedThisTurn: boolean;
+  warnedThisTurn: boolean;
 }): Verdict {
-  if (input.nudgedThisTurn) return { nudge: false, reason: "already-nudged" };
-  if (isQuestionTurn(input.userPrompt)) return { nudge: false, reason: "question-turn" };
+  if (input.warnedThisTurn) return { kind: "skip", reason: "already-warned" };
+  if (isQuestionTurn(input.userPrompt)) return { kind: "skip", reason: "question-turn" };
   const match = findCloserMatch(input.assistantText);
-  if (match === null) return { nudge: false, reason: "no-closer" };
+  if (match === null) return { kind: "skip", reason: "no-closer" };
   if (isIrreversible(sentenceContaining(tailOf(input.assistantText), match.index))) {
-    return { nudge: false, reason: "irreversible" };
+    return { kind: "skip", reason: "irreversible" };
   }
-  return { nudge: true, closer: match.closer };
+  return { kind: "warning", closer: match.closer };
 }

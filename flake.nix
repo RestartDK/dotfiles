@@ -339,7 +339,17 @@
               }
               ''
                 export HOME=$TMPDIR
-                bun test ${./config/pi/agent/extensions/pi-no-offers}
+                bun test ${./config/pi/agent/extensions/pi-no-offers} ${./config/pi/agent/lib}
+                touch $out
+              '';
+          pi-todos =
+            (pkgsFor system).runCommand "pi-todos-tests"
+              {
+                nativeBuildInputs = [ (pkgsFor system).bun ];
+              }
+              ''
+                export HOME=$TMPDIR
+                bun test ${./config/pi/agent/extensions/pi-todos}/model.test.ts
                 touch $out
               '';
           pi-vim =
