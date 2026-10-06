@@ -1,4 +1,8 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  createLocalBashOperations,
+  type ExtensionAPI,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { Type } from "typebox";
 import {
@@ -14,7 +18,6 @@ import {
 } from "./core.ts";
 
 const gate = new WriterGate();
-const writers = new Set(["write", "edit", "bash", "powershell"]);
 export default function claudeTask(pi: ExtensionAPI): void {
   const runner = new TaskRunner(gate, {
     query,
@@ -32,34 +35,36 @@ export default function claudeTask(pi: ExtensionAPI): void {
       if (binding) runner.bindings.set(binding.sessionId, binding);
     }
   };
-  pi.on("session_start", restore);
+  let shellGuard: (() => void) | undefined;
+  pi.on("session_start", (event, ctx) => {
+    restore(event, ctx);
+    shellGuard ??= pi.on("user_bash", () => ({
+      operations: gate.guardShell(
+        createLocalBashOperations({ shellPath: pi.getSettings().shellPath }),
+      ),
+    }));
+  });
   pi.on("session_tree", restore);
   pi.on("session_before_switch", () => runner.stop());
   pi.on("session_before_tree", () => runner.stop());
   pi.on("session_before_fork", () => runner.stop());
   pi.on("session_shutdown", () => runner.stop());
   pi.on("tool_call", (event) => {
-    if (!writers.has(event.toolName)) return;
+    const tool = pi.getAllTools().find((candidate) => candidate.name === event.toolName);
     try {
-      gate.beginLocal(event.toolCallId);
+      gate.beginTool(event.toolName, event.toolCallId, tool?.annotations?.readOnlyHint);
     } catch (error) {
       return { block: true, reason: String(error) };
     }
   });
   pi.on("tool_execution_end", (event) => {
-    if (writers.has(event.toolName)) gate.endLocal(event.toolCallId);
-  });
-  pi.on("user_bash", () => {
-    if (gate.busy)
-      throw new Error(
-        "Claude owns the checkout. Cancel claude_task before running a local shell command.",
-      );
+    gate.endLocal(event.toolCallId);
   });
   pi.registerTool({
     name: "claude_task",
     label: "Claude Code task",
     description:
-      "Delegate a whole task to the installed Claude Code agent using its own claude.ai login. Runs synchronously in an absolute Git checkout. Shell and file writes require human approval. Do not schedule Pi writers alongside it. Resume only with a session id returned on this Pi branch for the same checkout. Limits: 30 turns, $5 estimated spend, 15 minutes. No background tasks.",
+      "Delegate a whole task to the installed Claude Code agent using its own claude.ai login. Runs synchronously in an absolute Git checkout. Shell and file writes require human approval. Do not schedule Pi writers alongside it. Resume only with a session id returned on this Pi branch for the same checkout. Per invocation: 30 turns, $5 estimated spend, 15 minutes. Include repository instructions in the task. No background tasks.",
     parameters: Type.Object({
       task: Type.String({ minLength: 1, maxLength: 32_000 }),
       cwd: Type.String({ minLength: 1 }),

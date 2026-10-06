@@ -114,6 +114,7 @@ test("permission policy ignores inherited settings and forces destructive tools 
   const callback = async () => ({ behavior: "deny" as const, message: "no" });
   const options = taskOptions("/repo", "/bin/claude", {}, abort, callback);
   assert.equal(options.permissionMode, "default");
+  assert.deepEqual(options.systemPrompt, { type: "preset", preset: "claude_code" });
   assert.deepEqual(options.settingSources, []);
   assert.equal(options.allowDangerouslySkipPermissions, undefined);
   assert.deepEqual(
@@ -186,6 +187,54 @@ test("writer lease rejects overlapping Claude and local/nested writers in both o
   gate.endClaude("task");
   gate.beginLocal("write");
   gate.endLocal("write");
+});
+
+test("unknown extension writers are leased; read-only tools and the trusted dispatcher remain available", () => {
+  const gate = new WriterGate();
+  gate.beginTool("mcp_filesystem_write", "mcp/1", undefined);
+  assert.throws(() => gate.beginClaude("task"));
+  gate.endLocal("mcp/1");
+  gate.beginClaude("task");
+  assert.throws(() => gate.beginTool("mcp_filesystem_write", "mcp/2", undefined));
+  assert.throws(() => gate.beginTool("write", "write/1", false));
+  assert.doesNotThrow(() => gate.beginTool("read", "read/1", true));
+  assert.doesNotThrow(() => gate.beginTool("codemode", "parent", undefined));
+  gate.endClaude("task");
+  gate.beginTool("codemode", "parent", undefined);
+  assert.doesNotThrow(() => gate.beginClaude("parent/0"));
+  gate.endClaude("parent/0");
+});
+
+test("user shells hold their lease through cancellation and cannot start during Claude ownership", async () => {
+  const gate = new WriterGate();
+  const started = deferred<void>(),
+    closed = deferred<void>();
+  const abort = new AbortController();
+  const options = { signal: abort.signal, onData() {} };
+  let calls = 0;
+  const shell = gate.guardShell({
+    async exec(command, cwd, received) {
+      calls += 1;
+      assert.equal(command, "fixture");
+      assert.equal(cwd, "/repo");
+      assert.equal(received, options);
+      started.resolve();
+      await closed.promise;
+      received.signal?.throwIfAborted();
+      return { exitCode: 0 };
+    },
+  });
+  const running = shell.exec("fixture", "/repo", options);
+  await started.promise;
+  assert.throws(() => gate.beginClaude("task"));
+  abort.abort();
+  assert.throws(() => gate.beginClaude("task"));
+  closed.resolve();
+  await assert.rejects(running);
+  gate.beginClaude("task");
+  await assert.rejects(shell.exec("fixture", "/repo", options));
+  assert.equal(calls, 1);
+  gate.endClaude("task");
 });
 
 test("resume rejects another canonical checkout or a session absent from the active branch", () => {
@@ -466,6 +515,8 @@ test("cleanup failure is visible and retains the lease, even when query.close th
   assert.equal(fixture.errors.length, 1);
   assert.ok(result.text.includes("query cleanup failed"));
   assert.ok(result.text.includes("worker cleanup failed"));
+  assert.ok(result.text.includes("done"));
+  assert.equal(result.usage?.cost.total, 0.1);
   assert.equal(fixture.gate.busy, true);
 });
 

@@ -39,7 +39,7 @@ let
     map (name: {
       name = ".pi/agent/packages/${name}";
       value = piPackage name;
-    }) piPackageNames
+    }) (piPackageNames ++ [ "pi-claude-task" ])
   );
   keyedProviders = lib.filterAttrs (_: path: path != null) {
     openrouter = config.my.ai.openrouterKeyFile;

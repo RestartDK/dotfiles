@@ -11,6 +11,7 @@ let
     "config/pi/agent/extensions/*.ts"
     "config/pi/agent/extensions/**/*.mjs"
     "config/pi/agent/extensions/**/*.ts"
+    "config/pi/packages/*/*.ts"
   ];
   oxfmtIncludes = oxlintIncludes ++ [
     ".oxfmtrc.json"
@@ -18,6 +19,7 @@ let
     "config/karabiner/package.json"
     "config/opencode/package.json"
     "config/pi/agent/extensions/*/package.json"
+    "config/pi/packages/*/package.json"
   ];
   generatedExcludes = [ "**/generated/**" ];
   upstreamManagedFormatExcludes = generatedExcludes ++ [

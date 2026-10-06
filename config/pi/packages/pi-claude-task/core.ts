@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { access, realpath, stat } from "node:fs/promises";
 import { constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
@@ -12,7 +13,7 @@ import type {
   SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Usage } from "@earendil-works/pi-ai";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { BashOperations, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const exec = promisify(execFile);
 export const OUTPUT_LIMIT = 16_000;
@@ -223,6 +224,23 @@ export class WriterGate {
   endLocal(id: string): void {
     this.local.delete(id);
   }
+  beginTool(name: string, id: string, readOnlyHint: boolean | undefined): void {
+    if (name === "claude_task" || name === "codemode" || readOnlyHint === true) return;
+    this.beginLocal(id);
+  }
+  guardShell(operations: BashOperations): BashOperations {
+    return {
+      exec: async (command, cwd, options) => {
+        const id = `user-bash/${randomUUID()}`;
+        this.beginLocal(id);
+        try {
+          return await operations.exec(command, cwd, options);
+        } finally {
+          this.endLocal(id);
+        }
+      },
+    };
+  }
   get busy(): boolean {
     return this.claude !== undefined;
   }
@@ -282,6 +300,7 @@ export function taskOptions(
     abortController: abort,
     resume,
     permissionMode: "default",
+    systemPrompt: { type: "preset", preset: "claude_code" },
     settingSources: [],
     settings: {
       forceLoginMethod: "claudeai",
@@ -527,7 +546,12 @@ export class TaskRunner {
     let worker: ReturnType<typeof ownedProcess> | undefined;
     let task: TaskQuery | undefined;
     let phase: "auth" | "execution" = "execution";
-    let result: TaskResult;
+    let result: TaskResult = {
+      status: "error",
+      reason: "execution",
+      cwd,
+      text: "Claude task did not complete.",
+    };
     try {
       cwd = await this.services.canonicalCheckout(params.cwd);
       this.gate.bind(toolCallId, cwd);
@@ -607,7 +631,12 @@ export class TaskRunner {
       try {
         if (cleanupErrors.length) {
           const text = cleanupErrors.map(String).join("\n");
-          result = { status: "error", reason: "cleanup", cwd, sessionId: observed, text };
+          result = {
+            ...result,
+            status: "error",
+            reason: "cleanup",
+            text: `${result.text}\nClaude cleanup failed: ${text}`.slice(-OUTPUT_LIMIT),
+          };
           request.cleanupError(`Claude cleanup failed; checkout lease retained. ${text}`);
         }
       } finally {
