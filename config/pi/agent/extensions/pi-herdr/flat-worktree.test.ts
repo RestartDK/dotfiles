@@ -7,7 +7,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import type { HerdrClient } from "./client.ts";
 import type { PaneInfo, TabInfo, WorkspaceInfo } from "./generated/success-response.ts";
-import { presentWorktree, validateCheckoutPath } from "./flat-worktree.ts";
+import { ensureWorktree, presentWorktree, validateCheckoutPath } from "./flat-worktree.ts";
 
 const exec = promisify(execFile);
 const workspace: WorkspaceInfo = {
@@ -72,6 +72,23 @@ function client(options: { cwd?: string; grouped?: boolean; fail?: boolean } = {
         if (options.fail) throw new Error("socket refused");
         return { type: "workspace_created", workspace, tab, root_pane: pane };
       }
+      if (method === "worktree.open")
+        return {
+          type: "worktree_opened",
+          already_open: true,
+          workspace,
+          tab,
+          root_pane: pane,
+          worktree: {
+            path: "/grouped",
+            branch: "daniel/grouped",
+            is_bare: false,
+            is_detached: false,
+            is_linked_worktree: true,
+            is_prunable: false,
+            label: "grouped",
+          },
+        };
       if (method === "worktree.create")
         return {
           type: "worktree_created",
@@ -143,9 +160,42 @@ test("create adds a real Git checkout and only a plain workspace; open reuses it
   await presentWorktree(grouped.herdr, { action: "open", cwd: repo, path });
   assert.deepEqual(grouped.calls, ["workspace.list", "workspace.create"]);
 });
-test("native grouped creation is opt-in only", async () => {
-  const fake = client();
-  const result = await presentWorktree(fake.herdr, {
+test("default and checkout-relative bases resolve against the requested linked checkout", async (t) => {
+  const { dir, repo } = await repository(t);
+  const linked = join(dir, "linked");
+  await exec("git", ["-C", repo, "worktree", "add", "-b", "daniel/source", linked]);
+  for (const message of ["linked one", "linked two"])
+    await exec("git", [
+      "-C",
+      linked,
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "--allow-empty",
+      "-m",
+      message,
+    ]);
+  const bases = [undefined, "HEAD", "HEAD~1"];
+  for (const [index, base] of bases.entries()) {
+    const path = join(dir, `derived-${index}`);
+    await presentWorktree(client().herdr, {
+      action: "create",
+      cwd: linked,
+      branch: `daniel/derived-${index}`,
+      base,
+      path,
+    });
+    const expected = (await exec("git", ["-C", linked, "rev-parse", base ?? "HEAD"])).stdout.trim();
+    const actual = (await exec("git", ["-C", path, "rev-parse", "HEAD"])).stdout.trim();
+    assert.equal(actual, expected);
+  }
+});
+
+test("native grouped creation is opt-in and sends exactly one parent target", async () => {
+  const grouped = client();
+  const result = await presentWorktree(grouped.herdr, {
     action: "create",
     presentation: "grouped",
     cwd: "/repo",
@@ -153,7 +203,30 @@ test("native grouped creation is opt-in only", async () => {
     branch: "daniel/grouped",
   });
   assert.equal(result.worktree.path, "/grouped");
-  assert.deepEqual(fake.calls, ["worktree.create"]);
+  assert.deepEqual(grouped.calls, ["worktree.create"]);
+  assert.deepEqual(grouped.requests[0], {
+    workspace_id: "parent",
+    branch: "daniel/grouped",
+    path: undefined,
+    label: undefined,
+    focus: false,
+    base: undefined,
+  });
+  const byCwd = client();
+  await presentWorktree(byCwd.herdr, {
+    action: "open",
+    presentation: "grouped",
+    cwd: "/repo",
+    branch: "daniel/grouped",
+  });
+  assert.deepEqual(byCwd.calls, ["worktree.open"]);
+  assert.deepEqual(byCwd.requests[0], {
+    cwd: "/repo",
+    branch: "daniel/grouped",
+    path: undefined,
+    label: undefined,
+    focus: false,
+  });
 });
 test("workspace failure preserves checkout and branch for explicit open recovery", async (t) => {
   const { dir, repo } = await repository(t);
@@ -169,6 +242,13 @@ test("workspace failure preserves checkout and branch for explicit open recovery
     "daniel/task",
   );
   assert.ok(!fake.calls.some((method) => method.includes("remove") || method.includes("close")));
+  const recovered = await ensureWorktree(client().herdr, { cwd: repo, branch: "daniel/task" });
+  assert.equal(recovered.worktree.path, await realpath(path));
+  const reused = await ensureWorktree(client({ cwd: path }).herdr, {
+    cwd: repo,
+    branch: "daniel/task",
+  });
+  assert.equal(reused.already_open, true);
 });
 test("invalid branch, overlong or symlink-expanded path, and occupied directory fail before creation", async (t) => {
   const { dir, repo } = await repository(t);

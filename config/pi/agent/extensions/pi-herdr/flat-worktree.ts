@@ -28,9 +28,14 @@ export type FlatWorkspace = Pick<
   already_open: boolean;
 };
 
-async function git(cwd: string, args: string[], signal?: AbortSignal): Promise<string> {
+async function git(
+  cwd: string,
+  args: string[],
+  signal?: AbortSignal,
+  timeout?: number,
+): Promise<string> {
   return (
-    await exec("git", ["-C", cwd, ...args], { signal, maxBuffer: 1024 * 1024 })
+    await exec("git", ["-C", cwd, ...args], { signal, timeout, maxBuffer: 1024 * 1024 })
   ).stdout.trim();
 }
 
@@ -74,7 +79,9 @@ async function openFlat(
       if (!cwd) continue;
       let checkout: string;
       try {
-        checkout = await realpath(await git(cwd, ["rev-parse", "--show-toplevel"], request.signal));
+        checkout = await realpath(
+          await git(cwd, ["rev-parse", "--show-toplevel"], request.signal, 5000),
+        );
       } catch {
         continue;
       }
@@ -113,14 +120,28 @@ async function openFlat(
   return { ...created, worktree: { path, branch: request.branch }, already_open: false };
 }
 
+export async function ensureWorktree(
+  herdr: Client,
+  request: Omit<WorktreeRequest, "action" | "presentation"> & { branch: string },
+): Promise<FlatWorkspace> {
+  const fields = (
+    await git(request.cwd, ["worktree", "list", "--porcelain", "-z"], request.signal)
+  ).split("\0");
+  return presentWorktree(herdr, {
+    ...request,
+    action: fields.includes(`branch refs/heads/${request.branch}`) ? "open" : "create",
+  });
+}
+
 export async function presentWorktree(
   herdr: Client,
   request: WorktreeRequest,
 ): Promise<FlatWorkspace> {
   if (request.presentation === "grouped") {
     const params = {
-      workspace_id: request.workspaceId,
-      cwd: request.cwd,
+      ...(request.workspaceId === undefined
+        ? { cwd: request.cwd }
+        : { workspace_id: request.workspaceId }),
       branch: request.branch,
       path: request.path,
       label: request.label,
@@ -162,12 +183,6 @@ export async function presentWorktree(
     if (request.branch.startsWith("-")) throw new Error("Branch cannot start with '-'.");
     await git(root, ["check-ref-format", "--branch", request.branch], request.signal);
   }
-  if (request.base)
-    await git(
-      root,
-      ["rev-parse", "--verify", "--end-of-options", `${request.base}^{commit}`],
-      request.signal,
-    );
   let path: string;
   if (request.action === "open") {
     const listing = (await git(root, ["worktree", "list", "--porcelain", "-z"], request.signal))
@@ -206,11 +221,12 @@ export async function presentWorktree(
     }
     await mkdir(dirname(path), { recursive: true });
     await validateCheckoutPath(path);
-    await git(
-      root,
-      ["worktree", "add", "-b", request.branch, path, request.base ?? "HEAD"],
+    const base = await git(
+      request.cwd,
+      ["rev-parse", "--verify", "--end-of-options", `${request.base ?? "HEAD"}^{commit}`],
       request.signal,
     );
+    await git(root, ["worktree", "add", "-b", request.branch, path, base], request.signal);
     path = await realpath(path);
   }
   try {

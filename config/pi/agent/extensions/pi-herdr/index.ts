@@ -16,6 +16,7 @@ import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import { registerTabTitle } from "./tab-title.ts";
 import { parseCommandExit } from "./command-exit.ts";
 import { registerWorktreeHandoff } from "./worktree-handoff.ts";
+import { presentWorktree } from "./flat-worktree.ts";
 import {
   CompletionReceipts,
   completionOrigin,
@@ -410,7 +411,11 @@ export default function (pi: ExtensionAPI) {
     requestCwd: string,
     currentWorkspaceId: string,
     signal?: AbortSignal,
-  ): Promise<{ workspaceId: string | undefined; cwd: string | undefined }> {
+  ): Promise<{
+    workspaceId: string | undefined;
+    cwd: string | undefined;
+    checkoutCwd?: string;
+  }> {
     if (explicitCwd !== undefined) {
       return { workspaceId: undefined, cwd: absolutePath(explicitCwd, requestCwd) };
     }
@@ -421,7 +426,10 @@ export default function (pi: ExtensionAPI) {
       (candidate) => candidate.workspace_id === workspaceId,
     );
     if (workspace?.worktree?.is_linked_worktree !== true) {
-      return { workspaceId, cwd: undefined };
+      if (workspaceRef === undefined) return { workspaceId, cwd: requestCwd };
+      const panes = await getWorkspacePanes(workspaceId, signal);
+      const pane = panes.find((candidate) => candidate.focused) ?? panes[0];
+      return { workspaceId, cwd: pane?.foreground_cwd ?? pane?.cwd ?? requestCwd };
     }
 
     const source = expectResult(
@@ -432,9 +440,11 @@ export default function (pi: ExtensionAPI) {
       ),
       "worktree_list",
     ).source;
-    return source.source_workspace_id != null
-      ? { workspaceId: source.source_workspace_id, cwd: undefined }
-      : { workspaceId: undefined, cwd: source.repo_root };
+    return {
+      workspaceId: source.source_workspace_id ?? undefined,
+      cwd: source.repo_root,
+      checkoutCwd: workspaceRef === undefined ? requestCwd : workspace.worktree.checkout_path,
+    };
   }
 
   async function getWorkspacePanes(workspaceId: string, signal?: AbortSignal): Promise<PaneInfo[]> {
@@ -936,7 +946,7 @@ export default function (pi: ExtensionAPI) {
       "Preserve the current UI focus by default. Create work tabs and panes with focus disabled unless the user explicitly asks to view them or the workflow truly requires visible interaction there.",
       "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab, or Pi's own pane for a browser preview with `allowPiTab`.",
       "Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
-      "Use `worktree_create` to create a Git worktree checkout and open it as a Herdr workspace.",
+      "Use `worktree_create` for a Git checkout in a flat workspace (default). Use presentation: grouped only when explicitly requested. worktree_open also defaults to flat; worktree_remove only supports native managed workspaces.",
       "Use `worktree_remove` to delete a Herdr-managed worktree checkout; identify by workspace id or label, or by path or branch; never the workspace pi runs in. It runs git worktree remove and does not delete the branch.",
       "For any command that finishes (tests, builds, clippy, scripts, CI suites), use `run` with `wait: true` (blocks up to `timeout`, default 10 minutes, returns exit code and tail) or `notify: true` (returns at once; a message arrives when it exits). Never poll with bash `sleep`. Never re-arm a timed-out watch.",
       "`watch` is for readiness patterns only, such as a server's listen line. Do not watch for sentinel echoes like `CI_EXIT=`; the shell echoes your command line and the match fires before the command runs.",
@@ -979,6 +989,7 @@ export default function (pi: ExtensionAPI) {
       branch: Type.Optional(
         Type.String({ description: "Git branch name for worktree_create or worktree_open" }),
       ),
+      presentation: Type.Optional(StringEnum(["flat", "grouped"] as const)),
       base: Type.Optional(Type.String({ description: "Base ref for worktree_create" })),
       path: Type.Optional(
         Type.String({ description: "Filesystem path for worktree_create or worktree_open" }),
@@ -1189,22 +1200,21 @@ export default function (pi: ExtensionAPI) {
             currentWorkspaceId,
             signal,
           );
-          const created = expectResult(
-            await herdr.call(
-              "worktree.create",
-              {
-                workspace_id: parent.workspaceId,
-                cwd: parent.cwd,
-                branch: params.branch,
-                base: params.base,
-                path: absolutePath(params.path, requestCwd),
-                label: params.label,
-                focus: params.focus === true,
-              },
-              { signal },
-            ),
-            "worktree_created",
-          );
+          const created = await presentWorktree(herdr, {
+            action: "create",
+            presentation: params.presentation,
+            workspaceId: parent.workspaceId,
+            cwd:
+              params.presentation === "grouped"
+                ? (parent.cwd ?? requestCwd)
+                : (parent.checkoutCwd ?? parent.cwd ?? requestCwd),
+            branch: params.branch,
+            base: params.base,
+            path: absolutePath(params.path, requestCwd),
+            label: params.label,
+            focus: params.focus === true,
+            signal,
+          });
           const { workspace, worktree, root_pane: rootPane } = created;
           if (params.pane && rootPane && workspace)
             recordAlias(params.pane, rootPane.pane_id, workspace.workspace_id);
@@ -1236,21 +1246,20 @@ export default function (pi: ExtensionAPI) {
             currentWorkspaceId,
             signal,
           );
-          const opened = expectResult(
-            await herdr.call(
-              "worktree.open",
-              {
-                workspace_id: parent.workspaceId,
-                cwd: parent.cwd,
-                path: absolutePath(params.path, requestCwd),
-                branch: params.branch,
-                label: params.label,
-                focus: params.focus === true,
-              },
-              { signal },
-            ),
-            "worktree_opened",
-          );
+          const opened = await presentWorktree(herdr, {
+            action: "open",
+            presentation: params.presentation,
+            workspaceId: parent.workspaceId,
+            cwd:
+              params.presentation === "grouped"
+                ? (parent.cwd ?? requestCwd)
+                : (parent.checkoutCwd ?? parent.cwd ?? requestCwd),
+            path: absolutePath(params.path, requestCwd),
+            branch: params.branch,
+            label: params.label,
+            focus: params.focus === true,
+            signal,
+          });
           const { workspace, root_pane: rootPane } = opened;
           if (params.pane && rootPane && workspace)
             recordAlias(params.pane, rootPane.pane_id, workspace.workspace_id);
