@@ -125,6 +125,15 @@
             chmod +x $out/bin/traitor
           '';
         };
+      mkHaDevicesPackage =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "ha-devices";
+          runtimeInputs = [ pkgs.python3 ];
+          text = ''
+            exec python3 ${./bin/ha-devices} "$@"
+          '';
+        };
       mkPiPackageUpdater =
         pkgs:
         pkgs.writeShellApplication {
@@ -236,6 +245,7 @@
         piPackages
         // {
           inherit fleet traitor;
+          ha-devices = mkHaDevicesPackage pkgs;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
           nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
@@ -250,6 +260,10 @@
         fleet = {
           type = "app";
           program = "${self.packages.${system}.fleet}/bin/fleet";
+        };
+        ha-devices = {
+          type = "app";
+          program = "${self.packages.${system}."ha-devices"}/bin/ha-devices";
         };
         traitor = {
           type = "app";

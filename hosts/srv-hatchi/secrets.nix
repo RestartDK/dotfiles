@@ -10,6 +10,7 @@ let
   templateNames = {
     adguardConfig = "AdGuardHome.yaml";
     qbittorrentConfig = "qBittorrent.conf";
+    wifiSecrets = "wpa-secrets.conf";
   };
 in
 {

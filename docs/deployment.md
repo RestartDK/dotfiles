@@ -40,10 +40,11 @@ Hatchi's production configuration enables runtime 1Password secrets and receives
 
 `deploy.yml` is meant to run on the self-hosted runner declared in `hosts/srv-hatchi/runner.nix`, labelled `lan-deploy`. Orchestrating a deploy from GitHub's cloud crosses a Tailscale relay, and that latency, not compilation, is what makes the current deploys take 45 to 85 minutes against a closure of 1818 paths. From the LAN the round trip is about 6 ms.
 
-Two pieces are provisioned once on the host and are deliberately not in the store:
+Three pieces are provisioned once on the host and are deliberately not in the store:
 
 - `/var/lib/gh-runner/token` holds a fine-grained personal access token with `Administration: read and write` on `RestartDK/dotfiles`. The runner is ephemeral, so it re-registers for every job, which a one hour registration token cannot do.
 - `/var/lib/nix-cache/secret` is the binary cache key, generated once with `nix-store --generate-binary-cache-key hatchi-cache-1 /var/lib/nix-cache/secret /var/lib/nix-cache/public`. Hatchi signs what it builds with it, and the public half belongs in the consumers' `extra-trusted-public-keys`.
+- `/var/lib/wifi/secrets.conf` holds the wireless pre-shared key as `wifi_psk=<password>`, read through `networking.wireless.secretsFile` so the key never enters the store. It carries Hatchi's second network leg onto the wireless network the smart home devices use.
 
 Place the token before the first deploy. The runner's unit starts during activation, and without a token it exits non-zero, which deploy-rs reports as a failed activation and rolls back. The runner cannot be provisioned by the deploy that installs it.
 
