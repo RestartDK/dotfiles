@@ -418,6 +418,12 @@ assert
   withAppSecrets.services.glance.settings.auth.users.daniel.password._secret
   == "/run/hatchi-onepassword/glancePassword";
 assert withAppSecrets.my.hatchi.secretService == "hatchi-secret-files.service";
+assert builtins.elem "hatchi-secret-files.service"
+  withAppSecrets.systemd.services.wpa_supplicant.requires;
+assert builtins.elem "hatchi-secret-files.service"
+  withAppSecrets.systemd.services.wpa_supplicant.after;
+assert builtins.elem "hatchi-secret-files.service"
+  withAppSecrets.systemd.services.wpa_supplicant.partOf;
 assert cfg.services.nextcloud.config.adminpassFile == null;
 assert cfg.services.nextcloud.config.adminuser == null;
 assert builtins.elem "nextcloud-admin.service" cfg.systemd.services.nginx.requires;

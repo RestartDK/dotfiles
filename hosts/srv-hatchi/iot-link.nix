@@ -13,4 +13,9 @@ in
     interface wlp69s0
       metric 2000
   '';
+  systemd.services.wpa_supplicant = {
+    requires = [ config.my.hatchi.secretService ];
+    after = [ config.my.hatchi.secretService ];
+    partOf = [ config.my.hatchi.secretService ];
+  };
 }
