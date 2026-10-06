@@ -7,7 +7,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import type { HerdrClient } from "./client.ts";
 import type { PaneInfo, TabInfo, WorkspaceInfo } from "./generated/success-response.ts";
-import { ensureWorktree, presentWorktree, validateCheckoutPath } from "./flat-worktree.ts";
+import { ensureWorktree, presentWorktree, validateCheckoutPath } from "./worktree.ts";
 
 const exec = promisify(execFile);
 const workspace: WorkspaceInfo = {
@@ -197,7 +197,7 @@ test("native grouped creation is opt-in and sends exactly one parent target", as
   const grouped = client();
   const result = await presentWorktree(grouped.herdr, {
     action: "create",
-    presentation: "grouped",
+    grouped: true,
     cwd: "/repo",
     workspaceId: "parent",
     branch: "daniel/grouped",
@@ -215,7 +215,7 @@ test("native grouped creation is opt-in and sends exactly one parent target", as
   const byCwd = client();
   await presentWorktree(byCwd.herdr, {
     action: "open",
-    presentation: "grouped",
+    grouped: true,
     cwd: "/repo",
     branch: "daniel/grouped",
   });

@@ -16,7 +16,7 @@ import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import { registerTabTitle } from "./tab-title.ts";
 import { parseCommandExit } from "./command-exit.ts";
 import { registerWorktreeHandoff } from "./worktree-handoff.ts";
-import { presentWorktree } from "./flat-worktree.ts";
+import { presentWorktree } from "./worktree.ts";
 import {
   CompletionReceipts,
   completionOrigin,
@@ -946,7 +946,7 @@ export default function (pi: ExtensionAPI) {
       "Preserve the current UI focus by default. Create work tabs and panes with focus disabled unless the user explicitly asks to view them or the workflow truly requires visible interaction there.",
       "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab, or Pi's own pane for a browser preview with `allowPiTab`.",
       "Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
-      "Use `worktree_create` for a Git checkout in a flat workspace (default). Use presentation: grouped only when explicitly requested. worktree_open also defaults to flat; worktree_remove only supports native managed workspaces.",
+      "Use `worktree_create` to create a Git checkout and open a plain workspace at its path. Use grouped: true to opt into Herdr's native worktree grouping. worktree_open behaves the same. worktree_remove only supports native managed workspaces.",
       "Use `worktree_remove` to delete a Herdr-managed worktree checkout; identify by workspace id or label, or by path or branch; never the workspace pi runs in. It runs git worktree remove and does not delete the branch.",
       "For any command that finishes (tests, builds, clippy, scripts, CI suites), use `run` with `wait: true` (blocks up to `timeout`, default 10 minutes, returns exit code and tail) or `notify: true` (returns at once; a message arrives when it exits). Never poll with bash `sleep`. Never re-arm a timed-out watch.",
       "`watch` is for readiness patterns only, such as a server's listen line. Do not watch for sentinel echoes like `CI_EXIT=`; the shell echoes your command line and the match fires before the command runs.",
@@ -989,7 +989,11 @@ export default function (pi: ExtensionAPI) {
       branch: Type.Optional(
         Type.String({ description: "Git branch name for worktree_create or worktree_open" }),
       ),
-      presentation: Type.Optional(StringEnum(["flat", "grouped"] as const)),
+      grouped: Type.Optional(
+        Type.Boolean({
+          description: "Use Herdr's native worktree grouping instead of a plain workspace",
+        }),
+      ),
       base: Type.Optional(Type.String({ description: "Base ref for worktree_create" })),
       path: Type.Optional(
         Type.String({ description: "Filesystem path for worktree_create or worktree_open" }),
@@ -1202,12 +1206,10 @@ export default function (pi: ExtensionAPI) {
           );
           const created = await presentWorktree(herdr, {
             action: "create",
-            presentation: params.presentation,
+            grouped: params.grouped === true,
             workspaceId: parent.workspaceId,
-            cwd:
-              params.presentation === "grouped"
-                ? (parent.cwd ?? requestCwd)
-                : (parent.checkoutCwd ?? parent.cwd ?? requestCwd),
+            cwd: parent.cwd ?? requestCwd,
+            checkoutCwd: parent.checkoutCwd,
             branch: params.branch,
             base: params.base,
             path: absolutePath(params.path, requestCwd),
@@ -1248,12 +1250,10 @@ export default function (pi: ExtensionAPI) {
           );
           const opened = await presentWorktree(herdr, {
             action: "open",
-            presentation: params.presentation,
+            grouped: params.grouped === true,
             workspaceId: parent.workspaceId,
-            cwd:
-              params.presentation === "grouped"
-                ? (parent.cwd ?? requestCwd)
-                : (parent.checkoutCwd ?? parent.cwd ?? requestCwd),
+            cwd: parent.cwd ?? requestCwd,
+            checkoutCwd: parent.checkoutCwd,
             path: absolutePath(params.path, requestCwd),
             branch: params.branch,
             label: params.label,

@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { HerdrClient } from "./client.ts";
-import type { FlatWorkspace } from "./flat-worktree.ts";
+import type { WorktreeWorkspace } from "./worktree.ts";
 import { buildPiHandoffCommand, handoffPane, worktreeBranchFromArg } from "./worktree-handoff.ts";
 
-const checkout: FlatWorkspace = {
+const checkout: WorktreeWorkspace = {
   workspace: {
     workspace_id: "w1",
     active_tab_id: "w1:t1",

@@ -10,8 +10,9 @@ const exec = promisify(execFile);
 type Client = Pick<HerdrClient, "call">;
 export interface WorktreeRequest {
   action: "create" | "open";
-  presentation?: "flat" | "grouped";
+  grouped?: boolean;
   cwd: string;
+  checkoutCwd?: string;
   workspaceId?: string;
   branch?: string;
   base?: string;
@@ -20,7 +21,7 @@ export interface WorktreeRequest {
   focus?: boolean;
   signal?: AbortSignal;
 }
-export type FlatWorkspace = Pick<
+export type WorktreeWorkspace = Pick<
   ResultOfType<"workspace_created">,
   "workspace" | "root_pane" | "tab"
 > & {
@@ -56,11 +57,11 @@ export async function validateCheckoutPath(path: string): Promise<void> {
       throw new Error(`Checkout path exceeds 60 bytes: ${candidate}`);
 }
 
-async function openFlat(
+async function openWorkspace(
   herdr: Client,
   request: WorktreeRequest,
   path: string,
-): Promise<FlatWorkspace> {
+): Promise<WorktreeWorkspace> {
   const workspaces = expectResult(
     await herdr.call("workspace.list", {}, { signal: request.signal }),
     "workspace_list",
@@ -122,11 +123,12 @@ async function openFlat(
 
 export async function ensureWorktree(
   herdr: Client,
-  request: Omit<WorktreeRequest, "action" | "presentation"> & { branch: string },
-): Promise<FlatWorkspace> {
-  const fields = (
-    await git(request.cwd, ["worktree", "list", "--porcelain", "-z"], request.signal)
-  ).split("\0");
+  request: Omit<WorktreeRequest, "action" | "grouped"> & { branch: string },
+): Promise<WorktreeWorkspace> {
+  const cwd = request.checkoutCwd ?? request.cwd;
+  const fields = (await git(cwd, ["worktree", "list", "--porcelain", "-z"], request.signal)).split(
+    "\0",
+  );
   return presentWorktree(herdr, {
     ...request,
     action: fields.includes(`branch refs/heads/${request.branch}`) ? "open" : "create",
@@ -136,8 +138,9 @@ export async function ensureWorktree(
 export async function presentWorktree(
   herdr: Client,
   request: WorktreeRequest,
-): Promise<FlatWorkspace> {
-  if (request.presentation === "grouped") {
+): Promise<WorktreeWorkspace> {
+  const cwd = request.grouped ? request.cwd : (request.checkoutCwd ?? request.cwd);
+  if (request.grouped) {
     const params = {
       ...(request.workspaceId === undefined
         ? { cwd: request.cwd }
@@ -172,11 +175,7 @@ export async function presentWorktree(
     };
   }
   const common = await realpath(
-    await git(
-      request.cwd,
-      ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-      request.signal,
-    ),
+    await git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"], request.signal),
   );
   const root = basename(common) === ".git" ? dirname(common) : common;
   if (request.branch) {
@@ -190,7 +189,7 @@ export async function presentWorktree(
       .map((record) => record.split("\0"));
     const match = listing.find((fields) =>
       request.path
-        ? fields.includes(`worktree ${resolve(request.cwd, request.path)}`)
+        ? fields.includes(`worktree ${resolve(cwd, request.path)}`)
         : fields.includes(`branch refs/heads/${request.branch}`),
     );
     const checkout = match?.find((field) => field.startsWith("worktree "))?.slice(9);
@@ -198,7 +197,7 @@ export async function presentWorktree(
       throw new Error("No matching Git checkout. Supply a registered worktree path or branch.");
     path = await realpath(checkout);
   } else {
-    if (!request.branch) throw new Error("branch is required to create a flat worktree.");
+    if (!request.branch) throw new Error("branch is required to create a worktree.");
     const slug =
       request.branch
         .split("/")
@@ -208,7 +207,7 @@ export async function presentWorktree(
         .replace(/^-+/, "")
         .slice(0, 13) || "task";
     path = request.path
-      ? resolve(request.cwd, request.path)
+      ? resolve(cwd, request.path)
       : join(homedir(), ".herdr", "worktrees", basename(root), slug);
     await validateCheckoutPath(path);
     try {
@@ -222,7 +221,7 @@ export async function presentWorktree(
     await mkdir(dirname(path), { recursive: true });
     await validateCheckoutPath(path);
     const base = await git(
-      request.cwd,
+      cwd,
       ["rev-parse", "--verify", "--end-of-options", `${request.base ?? "HEAD"}^{commit}`],
       request.signal,
     );
@@ -230,7 +229,7 @@ export async function presentWorktree(
     path = await realpath(path);
   }
   try {
-    return await openFlat(herdr, request, path);
+    return await openWorkspace(herdr, request, path);
   } catch (error) {
     throw new Error(
       `Checkout preserved at ${path}, but its plain workspace could not open. Retry worktree_open with path ${path}. ${error instanceof Error ? error.message : String(error)}`,

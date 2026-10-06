@@ -3,7 +3,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { statSync } from "node:fs";
 
 import { expectResult, type HerdrClient } from "./client.ts";
-import { ensureWorktree, type FlatWorkspace } from "./flat-worktree.ts";
+import { ensureWorktree, type WorktreeWorkspace } from "./worktree.ts";
 
 // The successor Pi closes this tab once it is up. Carrying the tab id in the
 // environment means the old tab only disappears after a working replacement
@@ -108,7 +108,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
   });
 
   pi.registerCommand("worktree", {
-    description: "Create a flat Git worktree workspace and move this Pi session into it",
+    description: "Create a Git worktree workspace and move this Pi session into it",
     handler: async (args, ctx) => {
       await runWorktreeHandoff(args, pi.getSessionName(), ctx, deps);
     },
@@ -117,9 +117,9 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
 
 export async function handoffPane(
   herdr: Pick<HerdrClient, "call">,
-  checkout: FlatWorkspace,
+  checkout: WorktreeWorkspace,
   sourcePaneId: string,
-): Promise<FlatWorkspace["root_pane"]> {
+): Promise<WorktreeWorkspace["root_pane"]> {
   if (!checkout.already_open) return checkout.root_pane;
   const panes = expectResult(
     await herdr.call("pane.list", { workspace_id: checkout.workspace.workspace_id }),
@@ -183,7 +183,8 @@ async function runWorktreeHandoff(
       currentPane.workspace_id,
     );
     const created = await ensureWorktree(herdr, {
-      cwd: parent.checkoutCwd ?? parent.cwd ?? ctx.cwd,
+      cwd: parent.cwd ?? ctx.cwd,
+      checkoutCwd: parent.checkoutCwd,
       branch,
       label: branch,
       focus: false,
