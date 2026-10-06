@@ -332,14 +332,14 @@
                 WATCH_PR_BIN=${./config/agents/skills/dstack/dstack-mode/scripts/watch-pr} bash ${./tests/watch-pr.sh}
                 touch $out
               '';
-          pi-no-offers =
-            (pkgsFor system).runCommand "pi-no-offers-tests"
+          completion-delivery =
+            (pkgsFor system).runCommand "completion-delivery-tests"
               {
                 nativeBuildInputs = [ (pkgsFor system).bun ];
               }
               ''
                 export HOME=$TMPDIR
-                bun test ${./config/pi/agent/extensions/pi-no-offers} ${./config/pi/agent/lib}
+                bun test ${./config/pi/agent/lib}
                 touch $out
               '';
           pi-todos =
