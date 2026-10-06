@@ -292,6 +292,7 @@ assert builtins.all (
   builtins.elem "/srv" (cfg.systemd.services.${unit}.unitConfig.RequiresMountsFor or [ ])
   && cfg.systemd.services.${unit}.unitConfig.AssertPathIsMountPoint == "/srv"
 ) (cfg.my.hatchi.stateUnits ++ cfg.my.hatchi.mediaUnits ++ [ "hatchi-media-directories" ]);
+assert !(builtins.elem "hatchi-secret-files.service" (cfg.systemd.services.caddy.partOf or [ ]));
 assert builtins.all secretsBefore cfg.my.hatchi.stateUnits;
 assert secretsBefore "hatchi-media-directories";
 assert secretsBefore "acme-${cfg.my.domain}";
