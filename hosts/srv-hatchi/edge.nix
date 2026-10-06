@@ -132,10 +132,7 @@ in
           '';
         };
       };
-    my.hatchi.stateUnits = [
-      "adguardhome"
-      "caddy"
-    ];
+    my.hatchi.stateUnits = [ "adguardhome" ];
     networking.nftables.enable = true;
     networking.firewall = {
       enable = true;
