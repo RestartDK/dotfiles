@@ -144,7 +144,29 @@ jobs:
             extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g= ${{ steps.cache.outputs.extraKeys }}
             access-tokens = github.com=${{ secrets.DOTFILES_PRIVATE_TOKEN }}
 
+      - name: Check the Hatchi cache for this host
+        id: cache-check
+        if: steps.cache.outputs.extraSubstituters != ''
+        env:
+          CACHE_HOST: ${{ secrets.CACHE_HOST }}
+        run: |
+          toplevel=$(nix eval --raw ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel" 2>/dev/null) || toplevel=""
+          if [ -z "$toplevel" ]; then
+            echo "Building ${{ matrix.host }}: the toplevel path could not be evaluated." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          store_hash=$(basename "$toplevel")
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 \
+            "https://$CACHE_HOST/${store_hash:0:32}.narinfo" 2>/dev/null) || status=""
+          if [ "$status" = 200 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping ${{ matrix.host }}: the Hatchi cache holds $toplevel." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Building ${{ matrix.host }}: no narinfo for $toplevel (HTTP ${status:-unreachable})." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build
+        if: steps.cache-check.outputs.skip != 'true'
         run: nix build --no-link --print-build-logs ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
 
   result:
