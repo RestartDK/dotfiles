@@ -69,6 +69,7 @@ pkgs.testers.runNixOSTest {
       ];
       my.domain = "example.invalid";
       my.network = {
+        ssid = "fixture-network";
         dnsAnswer = "192.168.1.10";
         clientNetworks = [
           "192.168.1.20/32"

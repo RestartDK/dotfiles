@@ -26,6 +26,7 @@ in
     type = types.nullOr (
       types.submodule {
         options = {
+          ssid = mkOption { type = types.str; };
           dnsAnswer = mkOption { type = types.strMatching "[0-9.]+"; };
           clientNetworks = mkOption { type = types.listOf (types.strMatching "[0-9a-fA-F:./]+"); };
           adminNetworks = mkOption { type = types.listOf (types.strMatching "[0-9a-fA-F:./]+"); };
