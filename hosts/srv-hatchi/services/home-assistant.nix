@@ -9,11 +9,15 @@ let
     aiofiles = python3Packages.aiofiles;
     unidecode = python3Packages.unidecode;
   };
+  sonoff = pkgs.callPackage ../../../packages/sonoff/package.nix { };
 in
 {
   services.home-assistant = {
     enable = true;
-    customComponents = [ aarlo ];
+    customComponents = [
+      aarlo
+      sonoff
+    ];
     extraComponents = [
       "assist_pipeline"
       "bluetooth"
