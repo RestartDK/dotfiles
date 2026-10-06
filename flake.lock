@@ -708,11 +708,11 @@
         "treefmt-nix": "treefmt-nix_5"
       },
       "locked": {
-        "lastModified": 1790754977,
-        "narHash": "sha256-EGaO9zA4RT6skdywGEIvJgavTN7XtoKAfG4XoADK/zg=",
+        "lastModified": 1790777947,
+        "narHash": "sha256-4fhrYmlcifToncxhEMuIKlxpbXe6Qqy/QPFZVP839qk=",
         "owner": "RestartDK",
         "repo": "scatterer",
-        "rev": "0263e3750febc5d2941e09ace43a8c9bab70f568",
+        "rev": "3344cb9f6f99239bf966c9bd7424560cf68121a9",
         "type": "github"
       },
       "original": {
