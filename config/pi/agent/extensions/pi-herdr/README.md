@@ -18,6 +18,10 @@ npm run typecheck
 npm test
 ```
 
+Tracked command completions carry a receipt. A synchronous wait or read of a confirmed exit consumes the result, so the background observer cannot announce it again. Reading an echoed shell command is not confirmation. A fresh result wakes its originating request once; an older request’s result is recorded without starting another turn. Receipts restore from the active session branch.
+
+This does not make monitoring durable. The existing six-hour observation limit and shutdown behavior remain unchanged.
+
 Requires Pi 0.84.2 or later. Run `/reload` after editing the extension.
 
 `herdr-agent-state.ts` remains a separate Herdr-managed extension at the parent `extensions/` level. It reports Pi lifecycle and session state to Herdr; this package controls Herdr from Pi.

@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { resolve } from "node:path";
+import { CompletionReceipts, completionOrigin } from "../../lib/completion-delivery.ts";
 import {
   cancelAttempt,
   describe,
@@ -10,7 +11,6 @@ import {
   listAttempts,
   listLeases,
   POLL_MS,
-  readAttempt,
   resolveBlocked,
   startDetached,
   stateDirectory,
@@ -21,51 +21,87 @@ import {
 
 export default function coordination(pi: ExtensionAPI): void {
   const watching = new Map<string, AbortController>();
+  const receipts = new CompletionReceipts("coordination");
+  const root = stateDirectory();
   let active = true;
+  let activeContext: ExtensionContext | undefined;
 
-  function status(root: string): string {
-    const leases = listLeases(root).map(describeLease);
-    const attempts = listAttempts(root, 10).map(describe);
-    return [...leases, ...attempts].join("\n") || "No retained attempts";
+  pi.on("session_start", (_event, ctx) => {
+    activeContext = ctx;
+    receipts.restore(ctx.sessionManager.getBranch());
+  });
+  pi.on("session_tree", (_event, ctx) => {
+    activeContext = ctx;
+    receipts.restore(ctx.sessionManager.getBranch());
+  });
+
+  function status(root: string) {
+    const leases = listLeases(root);
+    const attempts = listAttempts(root, 10);
+    for (const attempt of attempts) receipts.consume({ ...attempt, kind: "coordination" });
+    return {
+      content:
+        [...leases.map(describeLease), ...attempts.map(describe)].join("\n") ||
+        "No retained attempts",
+      leases,
+      attempts,
+    };
   }
 
   function watchAttempt(root: string, id: string, ctx: ExtensionContext): void {
     if (watching.has(id)) return;
     const controller = new AbortController();
     watching.set(id, controller);
-    const owner = ctx.sessionManager.getSessionId();
+    activeContext = ctx;
+    const origin = completionOrigin(ctx.sessionManager);
+    const owner = origin.sessionId;
     ctx.ui.setStatus("coordination", `coord: ${watching.size} waiting`);
     const poll = async (): Promise<void> => {
       while (!controller.signal.aborted) {
         const state = watch(root, id);
         if (state.kind === "settled") {
-          if (!active || controller.signal.aborted) return;
-          pi.sendMessage(
-            {
-              customType: "coordination-result",
-              display: true,
-              content: `Coordinator result for ${id}:\n${describe(state.attempt)}\n${state.attempt.state === "blocked" ? (state.attempt.reason ?? "The key is still held") : "Use the coordinate tool with this id to read the log tail."}`,
-              details: { id, owner, attempt: state.attempt },
+          if (!active || controller.signal.aborted || !activeContext) return;
+          receipts.deliver({
+            receipt: { ...state.attempt, kind: "coordination" },
+            origin,
+            current: completionOrigin(activeContext.sessionManager),
+            publish(delivery) {
+              pi.sendMessage(
+                {
+                  customType: "coordination-result",
+                  display: true,
+                  content: `Coordinator result for ${id}:\n${describe(state.attempt)}\n${state.attempt.state === "blocked" ? (state.attempt.reason ?? "The key is still held") : "Use the coordinate tool with this id to read the log tail."}`,
+                  details: { id, owner, attempt: state.attempt },
+                },
+                { triggerTurn: delivery === "wake", deliverAs: "followUp" },
+              );
             },
-            { triggerTurn: true, deliverAs: "followUp" },
-          );
+          });
           return;
         }
         if (state.kind === "missing") {
-          ctx.ui.notify(`Attempt ${id} is not present in ${root}`, "warning");
+          activeContext?.ui.notify(`Attempt ${id} is not present in ${root}`, "warning");
           return;
         }
         await new Promise((done) => setTimeout(done, POLL_MS));
       }
     };
-    void poll().finally(() => {
-      watching.delete(id);
-      if (active)
-        ctx.ui.setStatus(
-          "coordination",
-          watching.size ? `coord: ${watching.size} waiting` : undefined,
-        );
-    });
+    void poll()
+      .catch((error: unknown) => {
+        if (active && !controller.signal.aborted && activeContext)
+          activeContext.ui.notify(
+            `Coordinator watch ${id} failed: ${error instanceof Error ? error.message : String(error)}`,
+            "error",
+          );
+      })
+      .finally(() => {
+        if (watching.get(id) === controller) watching.delete(id);
+        if (active && activeContext)
+          activeContext.ui.setStatus(
+            "coordination",
+            watching.size ? `coord: ${watching.size} waiting` : undefined,
+          );
+      });
   }
 
   pi.on("session_shutdown", () => {
@@ -77,7 +113,6 @@ export default function coordination(pi: ExtensionAPI): void {
   pi.registerCommand("coord", {
     description: "Show held resources, watch one attempt, or resolve an inspected blocked key",
     async handler(args, ctx) {
-      const root = stateDirectory();
       const [action, id] = args.trim().split(/\s+/);
       if (action === "watch" && id) {
         watchAttempt(root, id, ctx);
@@ -98,8 +133,14 @@ export default function coordination(pi: ExtensionAPI): void {
       }
       if (action && action !== "status")
         throw new Error("Usage: /coord [status | watch ID | resolve ID]");
+      const observed = status(root);
       pi.sendMessage(
-        { customType: "coordination-status", content: status(root), display: true },
+        {
+          customType: "coordination-status",
+          content: observed.content,
+          display: true,
+          details: { leases: observed.leases, attempts: observed.attempts },
+        },
         { triggerTurn: false },
       );
     },
@@ -109,15 +150,23 @@ export default function coordination(pi: ExtensionAPI): void {
     name: "coordinate",
     label: "Coordinate",
     description:
-      "Take an exclusive lease on a shared resource for one command, then watch, inspect, or cancel it. Use it for a device, a checkout, or a build target that other agents may touch at the same time. A command that leaves descendants behind keeps its key blocked until someone inspects it and resolves it.",
-    promptSnippet: "Take an exclusive lease on a shared resource before using it",
+      "Take an exclusive lease for one bounded command on a genuinely shared resource, then inspect, watch, cancel, or resolve an owned attempt. Prefer separate writable checkouts. Never hold a lease across approval waits, CI waits, or a manual release FIFO. Unknown outcomes stay blocked until inspection and confirmed process-group absence; resolution does not turn unknown into success.",
+    promptSnippet:
+      "Prefer separate writable checkouts; lease a genuinely shared resource for one bounded mutation",
     promptGuidelines: [
-      "Take a lease before touching a shared device, checkout, or build target, and use the same key other agents use.",
+      "Eliminate shared writable state first. For an unavoidable shared device, checkout mutation, or build target, use the same resource key other agents use.",
+      "Only cancel or resolve your own attempt. Ask the owner for a bounded transfer; operator-confirmed /coord resolve handles inspected recovery across sessions.",
       "Prefer one key per real resource. Reuse the attempt id when a submission is uncertain, since a fresh id can run the command twice.",
       "A lease is not permission to flash, deploy, or merge. Those approvals stay separate.",
     ],
     parameters: Type.Object({
-      action: StringEnum(["submit", "status", "watch", "cancel"] as const),
+      action: StringEnum(["submit", "status", "watch", "cancel", "resolve"] as const),
+      inspected: Type.Optional(
+        Type.Boolean({
+          description:
+            "For resolve: confirms inspection of the resource, process group, and recorded outcome. Only owned attempts may be resolved by the tool.",
+        }),
+      ),
       id: Type.Optional(
         Type.String({ description: "Attempt id; reuse it to retry an uncertain submission" }),
       ),
@@ -134,26 +183,39 @@ export default function coordination(pi: ExtensionAPI): void {
       ),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const root = stateDirectory();
+      if (params.action !== "submit" && params.action !== "status" && params.id === undefined)
+        throw new Error(`${params.action} needs an attempt id`);
       if (params.action === "status" && params.id === undefined) {
+        const observed = status(root);
         return {
-          content: [{ type: "text", text: status(root) }],
-          details: { leases: listLeases(root) },
+          content: [{ type: "text", text: observed.content }],
+          details: { leases: observed.leases, attempts: observed.attempts },
         };
       }
       const id = params.id ?? `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
       if (params.action === "status") {
-        const attempt = readAttempt(root, id);
-        if (!attempt)
+        const observed = watch(root, id);
+        if (observed.kind === "missing")
           return {
             content: [{ type: "text", text: `No attempt ${id} is present` }],
             details: { id },
           };
         const output = tail(root, id);
+        if (observed.kind === "running") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `${describeHolder(observed.holder)}${output ? `\n${output}` : ""}`,
+              },
+            ],
+            details: { id, holder: observed.holder },
+          };
+        }
+        const attempt = observed.attempt;
+        receipts.consume({ ...attempt, kind: "coordination" });
         return {
-          content: [
-            { type: "text", text: output ? `${describe(attempt)}\n${output}` : describe(attempt) },
-          ],
+          content: [{ type: "text", text: `${describe(attempt)}${output ? `\n${output}` : ""}` }],
           details: { id, attempt },
         };
       }
@@ -166,8 +228,26 @@ export default function coordination(pi: ExtensionAPI): void {
           details: { id },
         };
       }
-      if (params.action === "cancel") {
+      if (params.action === "cancel" || params.action === "resolve") {
+        const observed = watch(root, id);
+        if (observed.kind === "missing")
+          return {
+            content: [{ type: "text", text: `No attempt ${id} holds a resource` }],
+            details: { id },
+          };
+        const owner = observed.kind === "running" ? observed.holder.owner : observed.attempt.owner;
+        if (owner !== ctx.sessionManager.getSessionId())
+          throw new Error(
+            `Attempt ${id} belongs to session ${owner}. Ask its owner for a bounded transfer or use operator-confirmed /coord resolve after inspection.`,
+          );
+        if (params.action === "resolve") {
+          const attempt = resolveBlocked(root, id, { inspected: params.inspected === true });
+          receipts.consume({ ...attempt, kind: "coordination" });
+          return { content: [{ type: "text", text: describe(attempt) }], details: { id, attempt } };
+        }
         const result = cancelAttempt(root, id);
+        if (result.kind === "settled")
+          receipts.consume({ ...result.attempt, kind: "coordination" });
         if (result.kind === "missing")
           return {
             content: [{ type: "text", text: `No attempt ${id} holds a resource` }],
@@ -205,6 +285,7 @@ export default function coordination(pi: ExtensionAPI): void {
         };
       }
       if (started.kind === "existing") {
+        receipts.consume({ ...started.attempt, kind: "coordination" });
         return {
           content: [
             { type: "text", text: `Attempt ${id} already exists:\n${describe(started.attempt)}` },
@@ -213,6 +294,7 @@ export default function coordination(pi: ExtensionAPI): void {
         };
       }
       if (started.kind === "failed") {
+        receipts.consume({ ...started.attempt, kind: "coordination" });
         return { content: [{ type: "text", text: describe(started.attempt) }], details: started };
       }
       const reason =

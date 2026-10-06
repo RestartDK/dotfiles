@@ -14,7 +14,13 @@ import { basename, resolve } from "node:path";
 
 import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import { registerTabTitle } from "./tab-title.ts";
+import { parseCommandExit } from "./command-exit.ts";
 import { registerWorktreeHandoff } from "./worktree-handoff.ts";
+import {
+  CompletionReceipts,
+  completionOrigin,
+  type CompletionOrigin,
+} from "../../lib/completion-delivery.ts";
 import type {
   AgentStatus,
   PaneInfo,
@@ -44,7 +50,13 @@ interface PendingRun {
   startedAt: number;
   abort: AbortController;
   notifying: boolean;
+  origin: CompletionOrigin;
 }
+
+type NotificationDetails =
+  | { kind: "closed"; paneId: string; runId: string }
+  | { kind: "expired"; paneId: string; runId: string; elapsedMs: number }
+  | { kind: "done"; paneId: string; runId: string; exitCode: number | null; elapsedMs: number };
 
 type Completion =
   | { kind: "running"; foreground: string | null; elapsedMs: number }
@@ -140,6 +152,8 @@ export default function (pi: ExtensionAPI) {
   const managedPanes = new Map<string, ManagedPane>();
   const aliasOrder: string[] = [];
   const pendingRuns = new Map<string, PendingRun>();
+  const receipts = new CompletionReceipts("herdr");
+  let activeContext: ExtensionContext | undefined;
   const lastCommandByPane = new Map<string, string>();
 
   function snapshotAliases(): Record<string, ManagedPane> {
@@ -171,6 +185,8 @@ export default function (pi: ExtensionAPI) {
   }
 
   function reconstructState(ctx: ExtensionContext) {
+    activeContext = ctx;
+    receipts.restore(ctx.sessionManager.getBranch());
     let aliases: Record<string, ManagedPane> = {};
     let order: string[] = [];
 
@@ -243,7 +259,10 @@ export default function (pi: ExtensionAPI) {
     await reportAgentState("idle", ctx);
   });
   pi.on("session_tree", async (_event, ctx) => reconstructState(ctx));
-  pi.on("agent_start", async (_event, ctx) => reportAgentState("working", ctx));
+  pi.on("agent_start", async (_event, ctx) => {
+    activeContext = ctx;
+    await reportAgentState("working", ctx);
+  });
   pi.on("agent_settled", async (_event, ctx) =>
     reportAgentState(ctx.isIdle() ? "idle" : "working", ctx),
   );
@@ -554,14 +573,6 @@ export default function (pi: ExtensionAPI) {
     return `${minutes}m ${seconds}s`;
   }
 
-  function parseExitCode(output: string, marker: string | null): number | null {
-    if (!marker) return null;
-    const matches = output.matchAll(new RegExp(`^${marker}=(\\d+)\\s*$`, "gm"));
-    let exitCode: number | null = null;
-    for (const match of matches) exitCode = Number(match[1]);
-    return exitCode;
-  }
-
   async function readForeground(
     paneId: string,
     signal?: AbortSignal,
@@ -592,7 +603,7 @@ export default function (pi: ExtensionAPI) {
       { source: "visible", lines, raw: false },
       signal,
     );
-    const exitCode = parseExitCode(output, pendingRun.marker);
+    const exitCode = parseCommandExit(output, pendingRun.marker);
     if (pendingRun.marker && exitCode == null) {
       return {
         kind: "running",
@@ -611,7 +622,7 @@ export default function (pi: ExtensionAPI) {
   function stripMarkerLines(output: string): string {
     return output
       .split("\n")
-      .filter((line) => !/^__pi_rc_[0-9a-f]{6}=\d+\s*$/.test(line))
+      .filter((line) => !/^__pi_rc_(?:[0-9a-f]{6}|[0-9a-f]{32})=\d+\s*$/.test(line))
       .join("\n");
   }
 
@@ -641,26 +652,36 @@ export default function (pi: ExtensionAPI) {
     return error instanceof HerdrRequestError && error.code === "pane_not_found";
   }
 
-  function sendNotifierMessage(content: string, details: Record<string, unknown>) {
+  function settleNotifier(pendingRun: PendingRun, content: string, details: NotificationDetails) {
+    if (
+      !activeContext ||
+      pendingRun.abort.signal.aborted ||
+      pendingRuns.get(pendingRun.paneId) !== pendingRun
+    )
+      return;
     try {
-      pi.sendMessage(
-        { customType: "herdr-run-finished", content, display: true, details },
-        { deliverAs: "followUp", triggerTurn: true },
-      );
+      receipts.deliver({
+        receipt: {
+          kind: "herdr",
+          paneId: pendingRun.paneId,
+          runId: pendingRun.runId,
+          outcome: details.kind,
+        },
+        origin: pendingRun.origin,
+        current: completionOrigin(activeContext.sessionManager),
+        publish(delivery) {
+          pi.sendMessage(
+            { customType: "herdr-run-finished", content, display: true, details },
+            { deliverAs: "followUp", triggerTurn: delivery === "wake" },
+          );
+        },
+      });
     } catch (error) {
       logLifecycleError("deliver a command completion notification", error);
+      return;
     }
-  }
-
-  function settleNotifier(
-    pendingRun: PendingRun,
-    content: string,
-    details: Record<string, unknown>,
-  ) {
-    sendNotifierMessage(content, details);
-    if (pendingRuns.get(pendingRun.paneId) === pendingRun) {
-      pendingRuns.delete(pendingRun.paneId);
-    }
+    pendingRun.abort.abort();
+    if (pendingRuns.get(pendingRun.paneId) === pendingRun) pendingRuns.delete(pendingRun.paneId);
   }
 
   function startNotifier(pendingRun: PendingRun, lines: number, initialDelayMs: number) {
@@ -682,7 +703,7 @@ export default function (pi: ExtensionAPI) {
               settleNotifier(
                 pendingRun,
                 `herdr: pane '${pendingRun.paneLabel}' closed before '${pendingRun.command}' finished`,
-                { paneId: pendingRun.paneId, runId: pendingRun.runId },
+                { kind: "closed", paneId: pendingRun.paneId, runId: pendingRun.runId },
               );
               return;
             }
@@ -692,7 +713,7 @@ export default function (pi: ExtensionAPI) {
               settleNotifier(
                 pendingRun,
                 `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' still running after 6h; stopped watching`,
-                { paneId: pendingRun.paneId, runId: pendingRun.runId, elapsedMs },
+                { kind: "expired", paneId: pendingRun.paneId, runId: pendingRun.runId, elapsedMs },
               );
               return;
             }
@@ -710,6 +731,7 @@ export default function (pi: ExtensionAPI) {
               pendingRun,
               `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' finished: exit ${exitCode} after ${formatElapsed(completion.elapsedMs)}\n\n${tail}`,
               {
+                kind: "done",
                 paneId: pendingRun.paneId,
                 runId: pendingRun.runId,
                 exitCode: completion.exitCode,
@@ -724,6 +746,7 @@ export default function (pi: ExtensionAPI) {
               pendingRun,
               `herdr: '${pendingRun.command}' in pane '${pendingRun.paneLabel}' still running after 6h; stopped watching`,
               {
+                kind: "expired",
                 paneId: pendingRun.paneId,
                 runId: pendingRun.runId,
                 elapsedMs: completion.elapsedMs,
@@ -751,10 +774,16 @@ export default function (pi: ExtensionAPI) {
   }
 
   function doneResult(
-    action: "run" | "wait",
+    action: "run" | "wait" | "read",
     pendingRun: PendingRun,
     completion: Extract<Completion, { kind: "done" }>,
   ) {
+    receipts.consume({
+      kind: "herdr",
+      paneId: pendingRun.paneId,
+      runId: pendingRun.runId,
+      outcome: "done",
+    });
     const exitCode = completion.exitCode == null ? "unknown" : completion.exitCode;
     return {
       content: [
@@ -767,6 +796,7 @@ export default function (pi: ExtensionAPI) {
         action,
         pane: pendingRun.paneLabel,
         paneId: pendingRun.paneId,
+        runId: pendingRun.runId,
         command: pendingRun.command,
         exitCode: completion.exitCode,
         elapsedMs: completion.elapsedMs,
@@ -1531,7 +1561,7 @@ export default function (pi: ExtensionAPI) {
 
           const normalizedCommand = command.trim().replace(/;+$/, "").trimEnd();
           if (!normalizedCommand) throw new Error("'command' is required for run");
-          const runId = randomBytes(3).toString("hex");
+          const runId = randomBytes(16).toString("hex");
           const marker = normalizedCommand.endsWith("&") ? null : `__pi_rc_${runId}`;
           const submittedCommand = marker
             ? `{ ${normalizedCommand}; }; echo "${marker}=$?"`
@@ -1545,6 +1575,7 @@ export default function (pi: ExtensionAPI) {
             startedAt: Date.now(),
             abort: new AbortController(),
             notifying: false,
+            origin: completionOrigin(ctx.sessionManager),
           };
 
           expectResult(
@@ -1639,6 +1670,19 @@ export default function (pi: ExtensionAPI) {
             signal,
           );
 
+          const pendingRun = pendingRuns.get(resolved.pane.pane_id);
+          if (pendingRun) {
+            const exitCode = parseCommandExit(output, pendingRun.marker);
+            if (exitCode !== null && (await readForeground(pendingRun.paneId, signal)).done) {
+              abortPendingRun(pendingRun.paneId);
+              return doneResult("read", pendingRun, {
+                kind: "done",
+                exitCode,
+                elapsedMs: Date.now() - pendingRun.startedAt,
+                tail: formatReadOutput(stripMarkerLines(output)),
+              });
+            }
+          }
           return {
             content: [{ type: "text", text: formatReadOutput(output) }],
             details: withSnapshot({

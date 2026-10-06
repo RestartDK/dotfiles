@@ -2,9 +2,9 @@
 name: split-to-prs
 description: >-
   Split current work into small reviewable PRs, using GitHub native stacks via gh stack
-  and stacking only when changes truly depend on each other, with a Linear
-  issue per PR. Use when the user asks to split a chat, set of changes, branch,
-  or PR.
+  and stacking only when changes truly depend on each other. Repository policy
+  owns tracker requirements. Use when the user asks to split a chat, set of
+  changes, branch, or PR.
 ---
 # Split to PRs
 
@@ -18,7 +18,7 @@ Turn one pile of work into a few small PRs. On GitHub, use the official `github/
 - Never discard user work. No destructive git commands (`reset --hard`, `clean -fdx`, branch deletion, force-push, history rewrite) without explicit approval.
 - Always save a recoverable snapshot before moving work around. This often starts from dirty work on `main`, so do not assume there is already a safe branch.
 - Stage only named files or hunks. No `git add .` / `git add -A`.
-- Every split PR gets its own Linear issue. Create the issue before opening the PR and link it in the PR body.
+- Read `AGENTS.md` and the repo plugin for tracker requirements. Connected MCPs do not create them. Apply Cobb’s issue workflow only to Cobb slices; personal dotfiles PRs need no Linear issue.
 
 ## 1. Check the state
 
@@ -34,7 +34,7 @@ Decide stacking per slice:
 - **Dependent slices** require another slice to build or make sense. Use one GitHub native stack in dependency order, with all branches in the same repository. If native stacks are unavailable, deliver the slices sequentially from trunk. Stack only when the dependency is real.
 - A mix is fine: e.g. two independent PRs off trunk plus a two-PR stack.
 
-Include the planned Linear issue titles alongside the PR titles.
+Include tracker titles only when repository policy requires them.
 
 Ask for approval before starting.
 
@@ -49,7 +49,7 @@ Ask for approval before starting.
   fi
   ```
 
-- For each approved slice, create its Linear issue first (Linear MCP tools). Reuse an existing issue only if the user points to one.
+- For each approved slice, follow the repository’s tracker workflow if required. Create or reuse issues under that policy, not from MCP availability.
 
 - Independent slices: from trunk, create one branch per slice and commit only the planned files or hunks. Use normal Git branches.
 
@@ -66,8 +66,8 @@ Ask for approval before starting.
 
 - For independent PRs, push with Git and use `gh pr create`. If native stacks are unavailable, report the limitation and submit only the root slice. After it merges, rebase the next approved slice onto trunk, re-verify, and repeat.
 
-- Reference the Linear issue in each PR body (e.g. `Fixes ENG-123`) and use commitlint-compatible PR titles.
+- Link required repository issues in their PR bodies. Use commitlint-compatible PR titles.
 
 ## 4. Report back
 
-Keep it short: PR titles, PR URLs, and Linear issue IDs, plus the stack structure if any and anything left on the starting branch or working tree. Do not delete the backup ref or original branch unless the user asks.
+Keep it short: PR titles, PR URLs, any repository-required issue IDs, the stack structure if any, and anything left on the starting branch or working tree. Do not delete the backup ref or original branch unless the user asks.
