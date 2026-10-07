@@ -124,13 +124,6 @@ assert builtins.all (
   &&
     home.home.file.".pi/agent/mcp.json".source
     == (if profile == "work" then ../config/pi/agent/mcp-work.json else ../config/pi/agent/mcp.json)
-  &&
-    home.home.file.".pi/agent/packages/pi-claude-task".source
-    == "${self.packages.${system}.pi-claude-task}/lib/node_modules/pi-claude-task"
-  && home.home.file.".pi/agent/packages/pi-claude-task".recursive == false
-  &&
-    builtins.elem "./packages/pi-claude-task"
-      (builtins.fromJSON (builtins.readFile home.home.file.".pi/agent/settings.json".source)).packages
   && !(home.home.file ? ".pi/agent/auth.json")
 ) owners;
 assert !(personalMcp.mcpServers ? figma);

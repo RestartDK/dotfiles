@@ -6,8 +6,7 @@
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.99.1",
   "packages": [
-    "./packages/pi-web-access",
-    "./packages/pi-claude-task"
+    "./packages/pi-web-access"
   ],
   "powerline": {
     "preset": "default",

@@ -252,7 +252,6 @@
           opnix = inputs.opnix.packages.${system}.default;
           pi = inputs.llm-agents.packages.${system}.pi;
           pi-package-updater = piPackageUpdater;
-          pi-claude-task = pkgs.callPackage ./packages/pi-claude-task/package.nix { };
           default = traitor;
         }
       );
