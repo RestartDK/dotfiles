@@ -15,7 +15,7 @@ import { basename, resolve } from "node:path";
 import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import { registerTabTitle } from "./tab-title.ts";
 import { parseCommandExit } from "./command-exit.ts";
-import { registerWorktreeHandoff } from "./worktree-handoff.ts";
+import { registerWorktreeHandoff, type PiHandoffEnvironment } from "./worktree-handoff.ts";
 import { presentWorktree } from "./worktree.ts";
 import {
   CompletionReceipts,
@@ -123,7 +123,16 @@ export default function (pi: ExtensionAPI) {
   const currentPaneTarget = currentPaneTargetEnv;
   const herdr = new HerdrClient(socketPath);
   registerTabTitle(pi, herdr, currentPaneTarget);
-  registerWorktreeHandoff(pi, { herdr, currentPaneTarget, resolveWorktreeParent });
+  const namespace = process.env.PI_NETNS_SELECTED?.trim();
+  const environment: PiHandoffEnvironment = namespace
+    ? {
+        kind: "namespace",
+        namespace,
+        runDevNetns:
+          process.env.PI_NETNS_RUN_DEV_NETNS?.trim() || "/run/current-system/sw/bin/run-dev-netns",
+      }
+    : { kind: "local" };
+  registerWorktreeHandoff(pi, { herdr, currentPaneTarget, resolveWorktreeParent, environment });
 
   // Background completions arrive as custom messages. Render them as a one-line summary and keep
   // the captured output tail behind the expand hint so they do not flood the transcript.
@@ -327,13 +336,13 @@ export default function (pi: ExtensionAPI) {
   }
 
   function selectedPiNetns(): string | null {
-    const value = process.env.PI_NETNS_SELECTED?.trim();
-    return value ? value : null;
+    return environment.kind === "namespace" ? environment.namespace : null;
   }
 
   function piRunDevNetns(): string {
-    const value = process.env.PI_NETNS_RUN_DEV_NETNS?.trim();
-    return value || "/run/current-system/sw/bin/run-dev-netns";
+    return environment.kind === "namespace"
+      ? environment.runDevNetns
+      : "/run/current-system/sw/bin/run-dev-netns";
   }
 
   function buildEnterPiNetnsCommand(namespace: string): string {
@@ -946,7 +955,7 @@ export default function (pi: ExtensionAPI) {
       "Preserve the current UI focus by default. Create work tabs and panes with focus disabled unless the user explicitly asks to view them or the workflow truly requires visible interaction there.",
       "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab, or Pi's own pane for a browser preview with `allowPiTab`.",
       "Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
-      "Use `worktree_create` to create a Git checkout and open a plain workspace at its path. Use grouped: true to opt into Herdr's native worktree grouping. worktree_open behaves the same. worktree_remove only supports native managed workspaces.",
+      "Use `worktree_create` and `worktree_open` only to create/open supporting checkouts for coordination, verification, delegation, or other ongoing work. They never move this session. When this conversation is dedicated to the target task and the user asks it to live in a separate worktree, use `worktree_enter`, including after multi-turn discussion. `worktree_create` creates a Git checkout and opens a plain workspace at its path. Use grouped: true to opt into Herdr's native worktree grouping. worktree_open behaves the same. worktree_remove only supports native managed workspaces.",
       "Use `worktree_remove` to delete a Herdr-managed worktree checkout; identify by workspace id or label, or by path or branch; never the workspace pi runs in. It runs git worktree remove and does not delete the branch.",
       "For any command that finishes (tests, builds, clippy, scripts, CI suites), use `run` with `wait: true` (blocks up to `timeout`, default 10 minutes, returns exit code and tail) or `notify: true` (returns at once; a message arrives when it exits). Never poll with bash `sleep`. Never re-arm a timed-out watch.",
       "`watch` is for readiness patterns only, such as a server's listen line. Do not watch for sentinel echoes like `CI_EXIT=`; the shell echoes your command line and the match fires before the command runs.",
