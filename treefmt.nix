@@ -2,6 +2,7 @@
 
 let
   oxlintIncludes = [
+    "packages/pi-artifacts/src/*.ts"
     "config/amp/plugins/*.ts"
     "config/karabiner/src/*.ts"
     "config/opencode/plugins/*.js"
@@ -13,6 +14,8 @@ let
     "config/pi/agent/extensions/**/*.ts"
   ];
   oxfmtIncludes = oxlintIncludes ++ [
+    "packages/pi-artifacts/package.json"
+    "packages/pi-artifacts/tsconfig.json"
     ".oxfmtrc.json"
     ".oxlintrc.json"
     "config/karabiner/package.json"

@@ -124,6 +124,14 @@ assert builtins.all (
   &&
     home.home.file.".pi/agent/mcp.json".source
     == (if profile == "work" then ../config/pi/agent/mcp-work.json else ../config/pi/agent/mcp.json)
+  && builtins.all (
+    name:
+    home.home.file.".pi/agent/packages/${name}".source
+    == "${self.packages.${system}.${name}}/lib/node_modules/${name}"
+    &&
+      builtins.elem "./packages/${name}"
+        (builtins.fromJSON (builtins.readFile home.home.file.".pi/agent/settings.json".source)).packages
+  ) (import ../packages/pi-package-names.nix)
   && !(home.home.file ? ".pi/agent/auth.json")
 ) owners;
 assert !(personalMcp.mcpServers ? figma);

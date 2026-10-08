@@ -6,7 +6,8 @@
   "hideThinkingBlock": false,
   "lastChangelogVersion": "0.99.1",
   "packages": [
-    "./packages/pi-web-access"
+    "./packages/pi-web-access",
+    "./packages/pi-artifacts"
   ],
   "powerline": {
     "preset": "default",
