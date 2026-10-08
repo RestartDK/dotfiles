@@ -37,7 +37,6 @@ export interface WorktreeParentResolution {
 }
 
 export interface WorktreeHandoffDeps {
-  environment?: PiHandoffEnvironment;
   observeForeground?: typeof observePaneForeground;
   herdr: Pick<HerdrClient, "call">;
   currentPaneTarget: string;
@@ -54,9 +53,6 @@ export function worktreeBranchFromArg(arg: string): string {
   const branch = arg.trim();
   return branch.includes("/") ? branch : `daniel/${branch}`;
 }
-
-export type PiHandoffEnvironment =
-  { kind: "local" } | { kind: "namespace"; namespace: string; runDevNetns: string };
 
 type LaunchPhase =
   | { kind: "preparing" }
@@ -87,10 +83,7 @@ export function handoffResourceArgs(argv: string[], cwd: string): string[] {
       ].includes(arg)
     )
       args.push(arg);
-    if (
-      ["-t", "--tools", "-xt", "--exclude-tools"].includes(arg) &&
-      argv[i + 1] !== undefined
-    ) {
+    if (["-t", "--tools", "-xt", "--exclude-tools"].includes(arg) && argv[i + 1] !== undefined) {
       args.push(arg, argv[++i]);
       continue;
     }
@@ -129,10 +122,7 @@ export function handoffResourceArgs(argv: string[], cwd: string): string[] {
     }
     if (["-e", "--extension"].includes(arg) && argv[i + 1] !== undefined) {
       const path = argv[++i];
-      args.push(
-        arg,
-        path.startsWith("builtin:") || isAbsolute(path) ? path : resolve(cwd, path),
-      );
+      args.push(arg, path.startsWith("builtin:") || isAbsolute(path) ? path : resolve(cwd, path));
     }
   }
   return args;
@@ -145,7 +135,6 @@ export function buildPiHandoffCommand(options: {
   model: Pick<NonNullable<ExtensionContext["model"]>, "provider" | "id">;
   thinking: ReturnType<ExtensionAPI["getThinkingLevel"]>;
   resourceArgs: string[];
-  environment?: PiHandoffEnvironment;
 }): string {
   const direnvPrelude =
     'if [ -f .envrc ] && command -v direnv >/dev/null 2>&1; then direnv allow . >/dev/null 2>&1; eval "$(direnv export bash 2>/dev/null)"; fi;';
@@ -166,12 +155,7 @@ export function buildPiHandoffCommand(options: {
   const name = options.sessionName?.trim();
   if (name) args.push("--name", name);
   args.push("--", `/worktree-continue ${options.successorId}`);
-  const env = options.environment;
-  const namespace =
-    env?.kind === "namespace"
-      ? `export PI_NETNS=${shellQuote(env.namespace)} PI_NETNS_SELECTED=${shellQuote(env.namespace)} PI_NETNS_RUN_DEV_NETNS=${shellQuote(env.runDevNetns)}; `
-      : "";
-  return `${direnvPrelude} ${namespace}${args.map(shellQuote).join(" ")}`;
+  return `${direnvPrelude} ${args.map(shellQuote).join(" ")}`;
 }
 
 function shellQuote(value: string): string {
@@ -228,11 +212,7 @@ export async function handoffPane(
     if (previous) {
       try {
         const target = expectResult(
-          await herdr.call(
-            "pane.get",
-            { pane_id: previous.paneId },
-            { timeoutMs: 5000, signal },
-          ),
+          await herdr.call("pane.get", { pane_id: previous.paneId }, { timeoutMs: 5000, signal }),
           "pane_info",
         ).pane;
         if (target.agent)
@@ -247,12 +227,9 @@ export async function handoffPane(
         ).process_info;
         const observation = await observeForeground(info);
         if (observation.kind !== "idle")
-          throw new Error(
-            `Previous successor ${previous.paneId} has uncertain live ownership.`,
-          );
+          throw new Error(`Previous successor ${previous.paneId} has uncertain live ownership.`);
       } catch (error) {
-        if (!(error instanceof HerdrRequestError && error.code === "pane_not_found"))
-          throw error;
+        if (!(error instanceof HerdrRequestError && error.code === "pane_not_found")) throw error;
       }
     }
   };
@@ -302,9 +279,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
     if (!ctx.model) throw new Error("Select a model before moving this conversation.");
     const saved = SessionManager.open(sourceSessionFile);
     if (
-      !saved
-        .getBranch()
-        .some((entry) => entry.type === "message" && entry.message.role === "user")
+      !saved.getBranch().some((entry) => entry.type === "message" && entry.message.role === "user")
     )
       throw new Error("Send a message in this session before moving it.");
     return {
@@ -323,11 +298,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
       if (ctx.hasPendingMessages())
         throw new Error("Queued input arrived. Handoff stopped without moving this session.");
       const currentPane = expectResult(
-        await herdr.call(
-          "pane.get",
-          { pane_id: currentPaneTarget },
-          { timeoutMs: 5000, signal },
-        ),
+        await herdr.call("pane.get", { pane_id: currentPaneTarget }, { timeoutMs: 5000, signal }),
         "pane_info",
       ).pane;
       const parent = await resolveWorktreeParent(
@@ -370,7 +341,6 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         model: ctx.model,
         thinking: pi.getThinkingLevel(),
         resourceArgs: handoffResourceArgs(process.argv, ctx.cwd),
-        environment: deps.environment,
       });
       const deadline = Date.now() + 2000;
       while (true) {
@@ -606,9 +576,8 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
     if (state.kind === "launching") {
       try {
         if (
-          (await new HandoffReadiness(state.destination.claimPath, state.id).decide(
-            "stopped",
-          )) === "ready"
+          (await new HandoffReadiness(state.destination.claimPath, state.id).decide("stopped")) ===
+          "ready"
         ) {
           pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...state, kind: "transferred" });
           return;
@@ -684,9 +653,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
           throw new Error("This session is not in the designated handoff checkout and pane.");
         const source = worktreeState(SessionManager.open(state.sourceSessionFile).getBranch());
         if (source?.kind !== "launching" || source.id !== state.id)
-          throw new Error(
-            "The source handoff is no longer launching. Inspect the source session.",
-          );
+          throw new Error("The source handoff is no longer launching. Inspect the source session.");
         pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...state, kind: "owned" });
         continuing = state;
         pi.sendUserMessage(

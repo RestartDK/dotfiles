@@ -79,9 +79,7 @@ export function handoffBlock(
   )
     return undefined;
   const destination =
-    "destination" in state && state.destination
-      ? ` Inspect pane ${state.destination.paneId}.`
-      : "";
+    "destination" in state && state.destination ? ` Inspect pane ${state.destination.paneId}.` : "";
   const recovery =
     "destination" in state && state.destination
       ? "Use the destination session, or /tree or /new to recover."
@@ -103,8 +101,7 @@ export class HandoffReadiness {
     try {
       content = await readFile(this.path, "utf8");
     } catch (error) {
-      if (error instanceof Error && "code" in error && error.code === "ENOENT")
-        return undefined;
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
       throw error;
     }
     if (content === `ready:${this.id}`) return "ready";

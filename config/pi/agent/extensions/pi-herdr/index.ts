@@ -15,7 +15,7 @@ import { basename, resolve } from "node:path";
 import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import { registerTabTitle } from "./tab-title.ts";
 import { parseCommandExit } from "./command-exit.ts";
-import { registerWorktreeHandoff, type PiHandoffEnvironment } from "./worktree-handoff.ts";
+import { registerWorktreeHandoff } from "./worktree-handoff.ts";
 import { presentWorktree } from "./worktree.ts";
 import {
   CompletionReceipts,
@@ -123,16 +123,7 @@ export default function (pi: ExtensionAPI) {
   const currentPaneTarget = currentPaneTargetEnv;
   const herdr = new HerdrClient(socketPath);
   registerTabTitle(pi, herdr, currentPaneTarget);
-  const namespace = process.env.PI_NETNS_SELECTED?.trim();
-  const environment: PiHandoffEnvironment = namespace
-    ? {
-        kind: "namespace",
-        namespace,
-        runDevNetns:
-          process.env.PI_NETNS_RUN_DEV_NETNS?.trim() || "/run/current-system/sw/bin/run-dev-netns",
-      }
-    : { kind: "local" };
-  registerWorktreeHandoff(pi, { herdr, currentPaneTarget, resolveWorktreeParent, environment });
+  registerWorktreeHandoff(pi, { herdr, currentPaneTarget, resolveWorktreeParent });
 
   // Background completions arrive as custom messages. Render them as a one-line summary and keep
   // the captured output tail behind the expand hint so they do not flood the transcript.
@@ -336,13 +327,13 @@ export default function (pi: ExtensionAPI) {
   }
 
   function selectedPiNetns(): string | null {
-    return environment.kind === "namespace" ? environment.namespace : null;
+    const value = process.env.PI_NETNS_SELECTED?.trim();
+    return value ? value : null;
   }
 
   function piRunDevNetns(): string {
-    return environment.kind === "namespace"
-      ? environment.runDevNetns
-      : "/run/current-system/sw/bin/run-dev-netns";
+    const value = process.env.PI_NETNS_RUN_DEV_NETNS?.trim();
+    return value || "/run/current-system/sw/bin/run-dev-netns";
   }
 
   function buildEnterPiNetnsCommand(namespace: string): string {

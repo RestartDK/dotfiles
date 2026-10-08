@@ -3,7 +3,9 @@ import { basename } from "node:path";
 import type { PaneProcessInfo } from "./generated/success-response.ts";
 
 export type ForegroundObservation =
-  { kind: "idle" } | { kind: "initializing" } | { kind: "busy"; reason: string };
+  | { kind: "idle" }
+  | { kind: "initializing" }
+  | { kind: "busy"; reason: string };
 
 export interface ProcProcess {
   pid: number;

@@ -141,9 +141,9 @@ export async function ensureWorktree(
   request: Omit<WorktreeRequest, "action" | "grouped"> & { branch: string },
 ): Promise<WorktreeWorkspace> {
   const cwd = request.checkoutCwd ?? request.cwd;
-  const fields = (
-    await git(cwd, ["worktree", "list", "--porcelain", "-z"], request.signal)
-  ).split("\0");
+  const fields = (await git(cwd, ["worktree", "list", "--porcelain", "-z"], request.signal)).split(
+    "\0",
+  );
   return presentWorktree(herdr, {
     ...request,
     action: fields.includes(`branch refs/heads/${request.branch}`) ? "open" : "create",
@@ -258,8 +258,7 @@ export type CheckoutClaim = ClaimOwner & { path: string };
 
 async function claimOwner(path: string): Promise<ClaimOwner> {
   const value: unknown = JSON.parse(await readFile(join(path, "owner"), "utf8"));
-  if (!Check(ClaimOwner, value))
-    throw new Error(`Invalid handoff reservation owner at ${path}.`);
+  if (!Check(ClaimOwner, value)) throw new Error(`Invalid handoff reservation owner at ${path}.`);
   return value;
 }
 

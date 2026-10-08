@@ -746,10 +746,7 @@ test("explicit CLI tool permissions and project trust reach the successor unchan
       successorId: "successor",
       model,
       thinking: "high",
-      resourceArgs: handoffResourceArgs(
-        ["pi", ...restrictions, "--", "--tools", "bash"],
-        f.dir,
-      ),
+      resourceArgs: handoffResourceArgs(["pi", ...restrictions, "--", "--tools", "bash"], f.dir),
     } satisfies Parameters<typeof buildPiHandoffCommand>[0];
     const { stdout } = await exec("bash", [
       "-c",
@@ -799,41 +796,6 @@ test("an unrelated vanished agent cwd does not block handoff or hide a target ow
     ),
     /already has an agent/,
   );
-});
-
-test("successor namespace exports survive shell quoting and local launches stay unchanged", async (t) => {
-  const f = await fixture(t);
-  const options = {
-    sessionFile: f.sessionFile,
-    sessionName: undefined,
-    successorId: "successor",
-    model,
-    thinking: "high",
-    resourceArgs: [],
-    environment: {
-      kind: "namespace",
-      namespace: "dev-user's $(false)\nspace",
-      runDevNetns: "/tmp/tool's $(false)",
-    },
-  } satisfies Parameters<typeof buildPiHandoffCommand>[0];
-  const script = `pi() { printf '%s\\0' "$PI_NETNS" "$PI_NETNS_SELECTED" "$PI_NETNS_RUN_DEV_NETNS"; }; `;
-  const namespaced = await exec("bash", ["-c", script + buildPiHandoffCommand(options)], {
-    cwd: tmpdir(),
-  });
-  assert.deepEqual(namespaced.stdout.split("\0").slice(0, -1), [
-    options.environment.namespace,
-    options.environment.namespace,
-    options.environment.runDevNetns,
-  ]);
-  const local = await exec(
-    "bash",
-    ["-c", script + buildPiHandoffCommand({ ...options, environment: { kind: "local" } })],
-    {
-      cwd: tmpdir(),
-      env: { ...process.env, PI_NETNS: "", PI_NETNS_SELECTED: "", PI_NETNS_RUN_DEV_NETNS: "" },
-    },
-  );
-  assert.deepEqual(local.stdout.split("\0").slice(0, -1), ["", "", ""]);
 });
 
 test("fresh shells get a bounded initialization window before launch", async (t) => {
@@ -961,8 +923,7 @@ test("completed unoccupied handoffs allow re-entry but concurrent launchers stil
   ]);
   const wins = results.filter((result) => result.status === "fulfilled");
   assert.equal(wins.length, 1);
-  for (const win of wins)
-    if (win.status === "fulfilled") await releaseCheckout(win.value.claim);
+  for (const win of wins) if (win.status === "fulfilled") await releaseCheckout(win.value.claim);
 });
 
 test("cancellation after acknowledged readiness persists transferred rather than stopped", async (t) => {
@@ -979,10 +940,7 @@ test("cancellation after acknowledged readiness persists transferred rather than
   source = await runtime(f.session, f.dir, c.herdr);
   await (await source.enter()).finish();
   assert.equal(worktreeState(f.session.getBranch())?.kind, "transferred");
-  assert.equal(
-    worktreeState(SessionManager.open(f.sessionFile).getBranch())?.kind,
-    "transferred",
-  );
+  assert.equal(worktreeState(SessionManager.open(f.sessionFile).getBranch())?.kind, "transferred");
 });
 
 test("designated successors suppress the source warning and destinationless stops offer tree recovery", async (t) => {
@@ -1041,12 +999,7 @@ test("canonical missing target subdirectories retain ownership and filesystem ac
     foreground_cwd: join(alias, "vanished"),
   };
   await assert.rejects(
-    handoffPane(
-      client(f.path, { agents: [owner] }).herdr,
-      checkout,
-      "source:pane",
-      f.sessionFile,
-    ),
+    handoffPane(client(f.path, { agents: [owner] }).herdr, checkout, "source:pane", f.sessionFile),
     /already has an agent/,
   );
   const blocked = join(f.dir, "blocked");
@@ -1125,10 +1078,7 @@ test("tool-looking values of other CLI options cannot override the source permis
 test("reservation cleanup rejects changed ownership and unknown files without deleting them", async (t) => {
   const f = await fixture(t);
   const claim = await claimCheckout(f.path, f.sessionFile);
-  await assert.rejects(
-    releaseCheckout({ ...claim, id: "another-operation" }),
-    /ownership changed/,
-  );
+  await assert.rejects(releaseCheckout({ ...claim, id: "another-operation" }), /ownership changed/);
   const originalOwner = await readFile(join(claim.path, "owner"), "utf8");
   await fs.writeFile(join(claim.path, "unexpected"), "preserve");
   await assert.rejects(releaseCheckout(claim), /pending files/);
