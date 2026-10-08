@@ -1,1 +1,1 @@
-export const nodeExecutable: string | undefined = undefined;
+export const bunExecutable: string | undefined = undefined;

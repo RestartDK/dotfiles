@@ -33,6 +33,9 @@
   "quietStartup": true,
   "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen",
+  "terminal": {
+    "images": "kitty"
+  },
   "enabledModels": [
     "opencode-go/*",
     "openrouter/deepseek/deepseek-v4.1-flash",

@@ -256,7 +256,7 @@
           home-manager = inputs.home-manager.packages.${system}.default;
           nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
-          pi = import ./packages/pi-artifacts/wrap-pi.nix pkgs inputs.llm-agents.packages.${system}.pi;
+          pi = inputs.llm-agents.packages.${system}.pi;
           pi-package-updater = piPackageUpdater;
           default = traitor;
         }
@@ -360,25 +360,6 @@
               ''
                 export HOME=$TMPDIR
                 bun test ${./config/pi/agent/lib}
-                touch $out
-              '';
-          pi-artifacts =
-            (pkgsFor system).runCommand "pi-artifacts-check"
-              {
-                nativeBuildInputs = [
-                  (pkgsFor system).python3
-                  (pkgsFor system).bash
-                ];
-                artifactPackage = self.packages.${system}.pi-artifacts;
-                wrappedChild = import ./packages/pi-artifacts/wrap-pi.nix (pkgsFor system) (
-                  (pkgsFor system).writeShellScriptBin "pi" ''
-                    printf '%s|%s|%s|%s' "''${PI_IMAGE_PROTOCOL-unset}" "''${HERDR_ENV-unset}" "$1" "$2"
-                  ''
-                );
-              }
-              ''
-                python ${./tests/pi-artifacts-terminal.py} "$wrappedChild/bin/pi"
-                test -e "$artifactPackage/lib/node_modules/pi-artifacts/dist/index.js"
                 touch $out
               '';
           pi-todos =

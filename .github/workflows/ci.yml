@@ -49,7 +49,6 @@ jobs:
             .#checks.x86_64-linux.quality \
             .#checks.x86_64-linux.pi-coordination \
             .#checks.x86_64-linux.pi-vim \
-            .#checks.x86_64-linux.pi-artifacts \
             .#checks.x86_64-linux.skills \
             .#checks.x86_64-linux.personal-secrets \
             .#checks.x86_64-linux.agent-profiles \

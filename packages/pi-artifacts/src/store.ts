@@ -27,7 +27,7 @@ import {
   type PngReference,
   type SnapshotImage,
 } from "./model.js";
-import { nodeExecutable } from "./runtime.js";
+import { bunExecutable } from "./runtime.js";
 
 export function stateDirectory(): string {
   const base = process.env.XDG_STATE_HOME || join(homedir(), ".local", "state");
@@ -75,11 +75,9 @@ function hasCode(error: unknown, code: string): boolean {
 }
 
 function renderFile(path: string, signal?: AbortSignal): Promise<Buffer> {
-  const executable = nodeExecutable;
+  const executable = bunExecutable;
   if (!executable)
-    throw new Error(
-      "Pinned Node runtime is not configured. Build pi-artifacts with Nix; source development tests require the Nix package.",
-    );
+    throw new Error("Pinned Bun runtime is not configured. Build pi-artifacts with Nix.");
   return new Promise((resolve, reject) => {
     execFile(
       executable,
@@ -99,7 +97,7 @@ function renderFile(path: string, signal?: AbortSignal): Promise<Buffer> {
         let message: string;
         if (signal?.aborted || error.name === "AbortError") message = "Artifact worker cancelled";
         else if (error.code === "ENOENT")
-          message = `Pinned Node runtime missing: ${executable}. Rebuild pi-artifacts with Nix`;
+          message = `Pinned Bun runtime missing: ${executable}. Rebuild pi-artifacts with Nix`;
         else if (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER")
           message = "Artifact worker output limit exceeded";
         else if (error.killed && error.signal === "SIGKILL")

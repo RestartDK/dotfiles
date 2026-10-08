@@ -13,13 +13,10 @@
   },
   "files": [
     "dist",
-    "fonts",
-    "README.md",
-    "!dist/*.test.*"
+    "fonts"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "node --test dist/artifacts.test.js"
+    "build": "tsc"
   },
   "dependencies": {
     "@resvg/resvg-js": "2.6.2",

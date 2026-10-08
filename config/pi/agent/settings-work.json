@@ -34,6 +34,9 @@
   "quietStartup": true,
   "theme": "Tokyo Night Day/Tokyo Night",
   "tuiMode": "fullscreen",
+  "terminal": {
+    "images": "kitty"
+  },
   "enabledModels": [
     "openai-codex/gpt-6.1-sol",
     "anthropic/claude-fable-5-1",
