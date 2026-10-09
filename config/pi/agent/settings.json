@@ -41,7 +41,6 @@
     "openrouter/deepseek/deepseek-v4.1-flash",
     "openrouter/*",
     "openai/*",
-    "openai-codex/*",
     "ollama/*"
   ],
   "defaultProvider": "opencode-go",

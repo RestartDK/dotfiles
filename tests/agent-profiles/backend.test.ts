@@ -181,7 +181,7 @@ describe("typed backend sessions", () => {
     ]);
     expect(sessions.map((session) => session.options.target)).toEqual([
       { kind: "pi", provider: "openrouter", id: "xiaomi/mimo-v2.6-flash", thinking: "xhigh" },
-      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
 

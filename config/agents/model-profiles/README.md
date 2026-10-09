@@ -16,7 +16,7 @@ The work profile's `mimo` route uses OpenRouter's `xiaomi/mimo-v2.6-flash` at `x
 
 ## Native Pi parents
 
-The parent uses the profile's parent route. Work uses `sol` (`openai-codex/gpt-6.1-sol` at `xhigh`); personal uses `deepseek` (`opencode-go/deepseek-v4.1-flash` at `high`, falling back to `openrouter/deepseek/deepseek-v4.1-flash`). The parent uses the head of its native Pi route; the rest of the chain is the fallback used by role dispatch. Session-local compatible thinking changes remain available to parents. Each worker runs the exact target its role resolves to. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`; implicit parent downgrades and unrelated effective levels are blocked.
+The parent uses the profile's parent route. Work uses `sol` (`openai/gpt-6.1-sol` at `xhigh`); personal uses `deepseek` (`opencode-go/deepseek-v4.1-flash` at `high`, falling back to `openrouter/deepseek/deepseek-v4.1-flash`). The parent uses the head of its native Pi route; the rest of the chain is the fallback used by role dispatch. Session-local compatible thinking changes remain available to parents. Each worker runs the exact target its role resolves to. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`; implicit parent downgrades and unrelated effective levels are blocked.
 
 `packages/pi-profiled` patches Pi 0.99.1 before compiling its Bun executable. The core runtime checks native requests even with extensions disabled, including retries, compaction and branch summaries. It rejects replacement transports, incompatible endpoints and transformed wire models. This is not a sandbox for arbitrary extension or shell code making its own requests.
 
@@ -26,7 +26,7 @@ The JSON policy stays live-editable. Changes to the compiled policy library or c
 
 ## Worker sessions
 
-Fable resolves to Pi Codex Astra in the work profile. The personal profile has no astra route; its Codex work runs on `sol` (`openai-codex/gpt-6.1-sol`). A worker runs as an in-process Pi SDK session with its route's provider, model and effort, the preset system prompt, the requested tools and `codemode`. Workers load no user extensions, skills, prompt templates or themes. Results report the actual model and every attempt.
+The work profile's Astra and Sol routes use `openai`. The personal profile declares no OpenAI worker routes; manual OpenAI selections use `openai`. A worker runs as an in-process Pi SDK session with its route's provider, model and effort, the preset system prompt, the requested tools and `codemode`. Workers load no user extensions, skills, prompt templates or themes. Results report the actual model and every attempt.
 
 Recognized native HTTP and provider error envelopes classify as auth, quota or unavailable. Fallback requires a matching terminal provider failure before any tool use. Any tool use, including a read, closes fallback. Task/test failures, unknown errors, scope mismatches and cancellation never advance. The parent must reconcile partial work before retrying. Output is bounded to 50 KiB.
 
