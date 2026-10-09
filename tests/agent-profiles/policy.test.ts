@@ -14,13 +14,13 @@ const policy = (profile: string) =>
   parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
 
 describe("profile routing", () => {
-  test("work resolves Codex and OpenRouter routes", () => {
+  test("work resolves OpenAI and OpenRouter routes", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "precise-code" }).chain).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6.1-sol", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
       { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "max" },
@@ -41,10 +41,10 @@ describe("profile routing", () => {
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
       "opencode-go/glm-5.3-flash",
     ]);
-    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
+    expect(() => resolveRoute(personal, { model: "openai/gpt-6-astra:xhigh" })).toThrow(
       "not allowed",
     );
-    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
+    expect(() => resolveRoute(personal, { model: "openai/gpt-5.6-sol:xhigh" })).toThrow(
       "not allowed",
     );
   });
@@ -54,7 +54,7 @@ describe("profile routing", () => {
     expect(() => resolveRoute(work, { role: "arena-runners" })).toThrow("member or seat");
     expect(
       backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
-    ).toBe("openai-codex/gpt-6.1-sol");
+    ).toBe("openai/gpt-6.1-sol");
     expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
@@ -135,11 +135,10 @@ describe("profile routing", () => {
 
   test("raw requests preserve declared chains and effort", () => {
     const work = policy("work");
-    expect(resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
-    expect(() => resolveRoute(work, { model: "openai-codex/undeclared:xhigh" })).toThrow(
-      "not allowed",
-    );
-    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:high" })).toThrow(
+    expect(resolveRoute(work, { model: "openai/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
+    expect(() => resolveRoute(work, { model: "openai/undeclared:xhigh" })).toThrow("not allowed");
+    expect(() => resolveRoute(work, { model: "openai/gpt-6-astra:high" })).toThrow("not allowed");
+    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
       "not allowed",
     );
   });
@@ -203,8 +202,8 @@ describe("profile routing", () => {
         routes: {
           ...valid.routes,
           astra: [
-            { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
-            { thinking: "high", model: "openai-codex/gpt-6-astra", kind: "pi" },
+            { kind: "pi", model: "openai/gpt-6-astra", thinking: "xhigh" },
+            { thinking: "high", model: "openai/gpt-6-astra", kind: "pi" },
           ],
         },
       },

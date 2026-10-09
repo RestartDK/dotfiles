@@ -2,9 +2,9 @@
 
 Pi tool for orchestrating Herdr panes, tabs, workspaces, and worktrees.
 
-Interactive sessions name their tab from the first prompt. Title generation runs in the background using `openai-codex/gpt-5.6-luna`, with `openai/gpt-5.6-luna` as the fallback. Each provider has a 15-second deadline. The OpenAI fallback needs separate OpenAI API credentials in Pi.
+Interactive sessions name their tab from the first prompt. Title generation runs in the background using `openai/gpt-5.6-luna` with a 15-second deadline. It requires OpenAI API credentials in Pi.
 
-Generated titles use at most four words and 28 characters. Pi saves the title as the session name, restores it on resume, and mirrors manual `/name` changes to Herdr. Headless sessions do not rename tabs. Session shutdown cancels pending title work. If both providers fail, Pi shows a warning and leaves the name unchanged.
+Generated titles use at most four words and 28 characters. Pi saves the title as the session name, restores it on resume, and mirrors manual `/name` changes to Herdr. Headless sessions do not rename tabs. Session shutdown cancels pending title work. If title generation fails, Pi shows a warning and leaves the name unchanged.
 
 `worktree_enter` moves a conversation dedicated to one active task into a plain Git worktree. The model chooses it from the task relationship, including after multi-turn discussion. It is model-only and must be called alone. Coordinators and supporting checkouts use `herdr` with `worktree_create` or `worktree_open`, which never move the current session.
 
