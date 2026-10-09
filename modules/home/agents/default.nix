@@ -67,6 +67,8 @@ let
       };
 in
 {
+  options.services.dstackJobs.enable = lib.mkEnableOption "the Linux durable PR-job daemon";
+
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       (lib.mkIf agentSkillsEnabled {
@@ -208,6 +210,30 @@ in
 
       (lib.mkIf pi {
         home.file = piPackageFiles;
+      })
+
+      (lib.mkIf (pi && pkgs.stdenv.hostPlatform.isLinux) {
+        home.packages = [ piPackages.dstack ];
+      })
+
+      (lib.mkIf (pi && pkgs.stdenv.hostPlatform.isLinux && config.services.dstackJobs.enable) {
+        systemd.user.services.dstackd = {
+          Unit = {
+            Description = "Durable PR jobs";
+            After = [ "network-online.target" ];
+          };
+          Service = {
+            ExecStart = "${piPackages.dstack}/bin/dstackd";
+            WorkingDirectory = "%h";
+            Restart = "on-failure";
+            RestartSec = 3;
+            UMask = "0077";
+            KillMode = "mixed";
+            TimeoutStopSec = 30;
+            NoNewPrivileges = true;
+          };
+          Install.WantedBy = [ "default.target" ];
+        };
       })
 
     ]
