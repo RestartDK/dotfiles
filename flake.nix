@@ -146,7 +146,13 @@
             pkgs.nodejs
           ];
           text = ''
-            packages=(${nixpkgs.lib.escapeShellArgs piPackageNames})
+            packages=(${
+              nixpkgs.lib.escapeShellArgs (
+                builtins.filter (
+                  name: !(self.packages.${pkgs.stdenv.hostPlatform.system}.${name}.isLocalPiPackage or false)
+                ) piPackageNames
+              )
+            })
             backup_dir="$(mktemp -d)"
 
             restore() {

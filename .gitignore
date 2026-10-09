@@ -26,6 +26,8 @@ node_modules/
 **/automatic_backups/
 **/__pycache__/
 **/*.pyc
+/packages/pi-artifacts/dist/
+/packages/pi-artifacts/fonts/
 
 # editor/system noise
 .DS_Store
