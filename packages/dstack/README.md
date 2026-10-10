@@ -73,7 +73,7 @@ The controller reuses `watch-pr --status-only` classification with the PR author
 
 A read-only native worker verifies bot claims and human unanswered threads against code. Full thread bodies are supplied as untrusted data. Human non-author code findings receive a verdict reply immediately, then wait for the author's reaction. Thumbs up and direction allow a repair. Thumbs down leaves code unchanged. Answers can resolve questions without a code gate.
 
-Every GitHub body starts with `[🫩 Daniel's Agent]` followed by a newline. Pending human replies end with the existing exact reaction instruction. Fixed and dismissed threads get individual replies, resolution, and a re-review request. Human requests use the GitHub reviewer endpoint. Bot requests post `@LOGIN review` with the same explanation. Provider-specific bot acknowledgement is not verified.
+Every comment and review body the daemon posts starts with `[🫩 Daniel's Agent]` followed by a newline. The prefix marks agent-written comments so the watcher can separate them from author instructions; a pull request description never carries it. Pending human replies end with the existing exact reaction instruction. Fixed and dismissed threads get individual replies, resolution, and a re-review request. Human requests use the GitHub reviewer endpoint. Bot requests post `@LOGIN review` with the same explanation. Provider-specific bot acknowledgement is not verified.
 
 The maintained watcher distinguishes the PR author from the authenticated publisher. It ignores agent-prefixed operational replies as author instructions. Approval binds the latest verdict to the exact discussion and full author updates. Edited or withdrawn direction cannot authorize stale work.
 
