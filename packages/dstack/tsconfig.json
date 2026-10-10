@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@earendil-works/pi-coding-agent": ["node_modules/@earendil-works/pi-coding-agent"],
+      "@earendil-works/pi-tui": ["node_modules/@earendil-works/pi-tui"],
+      "typebox": ["node_modules/typebox"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "../../config/pi/agent/lib/dstack-jobs.ts",
+    "../../config/pi/agent/lib/model-policy.ts",
+    "../../config/pi/agent/extensions/pi-jobs/**/*.ts"
+  ]
+}

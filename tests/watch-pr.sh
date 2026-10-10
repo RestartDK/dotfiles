@@ -41,7 +41,17 @@ view() {
 }
 
 threads() {
-  cat >"$fixture_dir/threads.json"
+  jq '
+    if .data.repository.pullRequest.reviewThreads != null then
+      .data.repository.pullRequest.reviewThreads |= (
+        .pageInfo //= {hasNextPage:false}
+        | .nodes |= map(.comments |= (
+          .pageInfo //= {hasNextPage:false}
+          | .nodes |= map(.reactions.pageInfo //= {hasNextPage:false})
+        ))
+      )
+    else . end
+  ' >"$fixture_dir/threads.json"
 }
 
 fixture() {
@@ -179,8 +189,8 @@ fixture thumb_up
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}}
   ]}}
 ]}}}}}
 JSON
@@ -193,8 +203,8 @@ fixture thumb_down
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}}
   ]}}
 ]}}}}}
 JSON
@@ -207,8 +217,8 @@ fixture reaction_latest
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T11:00:00Z","user":{"login":"RestartDK"}},{"content":"THUMBS_UP","createdAt":"2026-01-01T10:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T09:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T09:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T11:00:00Z","user":{"login":"RestartDK"}},{"content":"THUMBS_UP","createdAt":"2026-01-01T10:00:00Z","user":{"login":"RestartDK"}}]}}
   ]}}
 ]}}}}}
 JSON
@@ -249,12 +259,28 @@ assert_jq HUMAN_PENDING '.verdict' "fixed in verdict"
 assert_jq pending '.threads[0].decision' "fixed in reply is not direction"
 assert_jq 1 '.human_pending' "fixed in human pending count"
 
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[2].body = "[🫩 Daniel\u0027s Agent]\nFixed in abc123: renamed the field"' "$fixture_dir/threads.json" >"$fixture_dir/prefixed.json"
+mv "$fixture_dir/prefixed.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq pending '.threads[0].decision' "agent-prefixed fix reply is not author direction"
+
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[0].reactions.nodes = [{content:"THUMBS_UP",createdAt:"2026-01-01T00:30:00Z",user:{login:"RestartDK"}}]' "$fixture_dir/threads.json" >"$fixture_dir/old-reaction.json"
+mv "$fixture_dir/old-reaction.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq pending '.threads[0].decision' "approval before the gated verdict cannot authorize code changes"
+
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.pageInfo.hasNextPage = true' "$fixture_dir/threads.json" >"$fixture_dir/incomplete.json"
+mv "$fixture_dir/incomplete.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_failure "truncated comments cannot preserve obsolete approval"
+assert_contains "Incomplete review observation" "$last_output" "pagination error stays visible"
+
 fixture direction_reaction
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T03:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T03:00:00Z","user":{"login":"RestartDK"}}]}},
     {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r3","body":"Rename the field\nto x","createdAt":"2026-01-01T02:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
   ]}}
 ]}}}}}
@@ -263,6 +289,10 @@ invoke 42 --me RestartDK --repo twin-so/cobb --status-only
 assert_status 0 "direction reaction status"
 assert_jq implement '.threads[0].decision' "direction reaction decision"
 assert_jq 'Rename the field to x' '.threads[0].direction' "direction reaction body"
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[2].createdAt = "2026-01-01T04:00:00Z"' "$fixture_dir/threads.json" >"$fixture_dir/new-direction.json"
+mv "$fixture_dir/new-direction.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq direction '.threads[0].decision' "later author direction supersedes an earlier reaction"
 
 fixture mixed
 threads <<'JSON'
@@ -339,6 +369,57 @@ invoke 42 --me RestartDK --repo twin-so/cobb --status-only
 assert_status 0 "bot suffix status"
 assert_jq THREADS '.verdict' "bot suffix verdict"
 assert_jq bot '.threads[0].kind' "bot suffix kind"
+
+for kind in bot owner; do
+  fixture "author-update-$kind"
+  login=bugbot typename=Bot
+  if [[ $kind == owner ]]; then login=RestartDK typename=User; fi
+  jq -cn --arg login "$login" --arg typename "$typename" '
+    {data:{repository:{pullRequest:{reviewThreads:{nodes:[{id:"T1",isResolved:false,isOutdated:false,comments:{nodes:[
+      {id:"C1",url:"https://example.invalid/root",body:"Fix the predicate",createdAt:"2026-01-01T00:00:00Z",author:{login:$login,__typename:$typename},reactions:{nodes:[]}}
+    ]}}]}}}}}' | threads
+  invoke 42 --me RestartDK --agent-login RestartDK --repo twin-so/cobb --status-only
+  before_authority=$(jq -c '.threads[0].approval' <<<"$last_output")
+  jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes += [
+    {id:"C2",url:"https://example.invalid/direction",body:"Do not implement this.",createdAt:"2026-01-01T01:00:00Z",updatedAt:"2026-01-01T02:00:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[],pageInfo:{hasNextPage:false}}}
+  ]' "$fixture_dir/threads.json" >"$fixture_dir/changed.json"
+  mv "$fixture_dir/changed.json" "$fixture_dir/threads.json"
+  invoke 42 --me RestartDK --agent-login RestartDK --repo twin-so/cobb --status-only
+  assert_status 0 "$kind author withdrawal status"
+  assert_jq 'Do not implement this.' '.threads[0].approval.author_updates[-1].body' "$kind full author direction is bound"
+  if [[ $(jq -c '.threads[0].approval' <<<"$last_output") == "$before_authority" ]]; then
+    printf 'FAIL %s author withdrawal did not change authority\n' "$kind" >&2
+    exit 1
+  fi
+  jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes += [
+    {id:"C3",url:"https://example.invalid/agent",body:"[🫩 Daniel\u0027s Agent]\nOperational reply",createdAt:"2026-01-01T03:00:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[],pageInfo:{hasNextPage:false}}}
+  ]' "$fixture_dir/threads.json" >"$fixture_dir/changed.json"
+  mv "$fixture_dir/changed.json" "$fixture_dir/threads.json"
+  authority=$(jq -c '.threads[0].approval' <<<"$last_output")
+  invoke 42 --me RestartDK --agent-login RestartDK --repo twin-so/cobb --status-only
+  assert_eq "$authority" "$(jq -c '.threads[0].approval' <<<"$last_output")" "$kind agent reply is not author withdrawal"
+done
+
+fixture edited_long_direction
+jq -cn '
+  {data:{repository:{pullRequest:{reviewThreads:{nodes:[{id:"T1",isResolved:false,isOutdated:false,comments:{nodes:[
+    {id:"C1",url:"https://example.invalid/root",body:"Fix code",createdAt:"2026-01-01T00:00:00Z",author:{login:"alice",__typename:"User"},reactions:{nodes:[]}},
+    {id:"C2",url:"https://example.invalid/gate",body:"[🫩 Daniel\u0027s Agent]\nChecking with the author before changing anything",createdAt:"2026-01-01T01:00:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[{id:"R1",content:"THUMBS_UP",createdAt:"2026-01-01T02:00:00Z",user:{login:"RestartDK"}}]}},
+    {id:"C3",url:"https://example.invalid/direction",body:(("x"*420)+" implement"),createdAt:"2026-01-01T01:30:00Z",updatedAt:"2026-01-01T01:30:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[]}}
+  ]}}]}}}}}' | threads
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq implement '.threads[0].decision' "later reaction precedence"
+authority=$(jq -c '.threads[0].approval' <<<"$last_output")
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[2] |= (.body = (("x"*420)+" do not implement") | .updatedAt="2026-01-01T03:00:00Z")' "$fixture_dir/threads.json" >"$fixture_dir/changed.json"
+mv "$fixture_dir/changed.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "edited long direction status"
+assert_jq direction '.threads[0].decision' "direction edit takes precedence over old reaction"
+assert_jq true '.threads[0].approval.author_updates[-1].body | endswith("do not implement")' "full direction beyond display limit is bound"
+if [[ $(jq -c '.threads[0].approval' <<<"$last_output") == "$authority" ]]; then
+  printf 'FAIL edited long direction did not change authority\n' >&2
+  exit 1
+fi
 
 fixture graphql_error
 threads <<'JSON'

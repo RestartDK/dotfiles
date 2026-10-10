@@ -260,7 +260,13 @@
           opnix = inputs.opnix.packages.${system}.default;
           pi = inputs.llm-agents.packages.${system}.pi;
           pi-package-updater = piPackageUpdater;
+          herdr = inputs.llm-agents.packages.${system}.herdr;
           default = traitor;
+        }
+        // nixpkgs.lib.optionalAttrs (system == linuxSystem) {
+          dstack = pkgs.callPackage ./packages/dstack/package.nix {
+            pi = self.packages.${system}.pi;
+          };
         }
       );
 
@@ -400,7 +406,13 @@
           pi-coordination =
             (pkgsFor system).runCommand "pi-coordination-tests"
               {
-                nativeBuildInputs = [ (pkgsFor system).bun ];
+                nativeBuildInputs = [
+                  (pkgsFor system).bun
+                ]
+                ++ nixpkgs.lib.optionals (pkgsFor system).stdenv.hostPlatform.isLinux [
+                  self.packages.${system}.dstack
+                  self.checks.${system}.watch-pr
+                ];
               }
               ''
                 export HOME=$TMPDIR
@@ -476,6 +488,7 @@
             ) (inputs.deploy-rs.lib.${linuxSystem}.deployChecks (self.deploy // { nodes.${nodeName} = node; }))
           ) self.deploy.nodes
           // {
+            dstack = self.packages.${system}.dstack;
             srv-nana-policy = import ./tests/srv-nana/policy.nix {
               pkgs = pkgsFor system;
               inherit self;
