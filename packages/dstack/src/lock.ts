@@ -21,8 +21,8 @@ export async function acquireLock(
     await new Promise<void>((resolve, reject) => {
       const flags =
         lease.waitSeconds > 0 ? ["--timeout", String(lease.waitSeconds)] : ["--nonblock"];
-      const child = spawn(command.file, [...command.args, ...flags, "3"], {
-        stdio: ["ignore", "ignore", "ignore", file.fd],
+      const child = spawn(command.file, [...command.args, ...flags, "0"], {
+        stdio: [file.fd, "ignore", "ignore"],
       });
       const timeout = setTimeout(
         () => {
