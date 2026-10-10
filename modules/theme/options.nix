@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  options,
   ...
 }:
 
@@ -52,9 +53,11 @@ let
       scheme = lib.mkOption {
         type = lib.types.strMatching "[a-z0-9][a-z0-9-]*";
         description = ''
-          Tinted Theming scheme filename without the extension. Stylix carries this
-          through as `colors.slug` and `colors.scheme-name`, which targets such as
-          zed and fish use to name the theme.
+          Filename of the published Tinted Theming scheme that best matches this
+          palette, without the extension. The values come from this palette, not
+          from that file; the name exists so Stylix can carry it through as
+          `colors.slug` and `colors.scheme-name`, which targets such as zed and
+          fish use to name the theme.
         '';
       };
     }
@@ -86,8 +89,15 @@ in
       description = "The resolved palette. Consumers read roles from here.";
     };
 
-    stylix.enable = lib.mkEnableOption "rendering this host through Stylix";
+    stylixDriven = lib.mkOption {
+      type = lib.types.bool;
+      readOnly = true;
+      description = "Whether Stylix renders this host from the palette. Derived, never set.";
+    };
   };
 
-  config.my.theme.palette = config.my.theme.palettes.${config.my.theme.active};
+  config = {
+    my.theme.palette = config.my.theme.palettes.${config.my.theme.active};
+    my.theme.stylixDriven = (options ? stylix) && config.stylix.enable;
+  };
 }

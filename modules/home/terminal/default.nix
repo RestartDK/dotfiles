@@ -36,11 +36,13 @@ in
         programs.btop = {
           enable = true;
           # Stylix owns the theme wherever the palette drives the host.
-          settings = {
-            vim_keys = true;
-            proc_sorting = "memory";
-          }
-          // lib.optionalAttrs (!config.my.theme.stylix.enable) { color_theme = "TTY"; };
+          settings = lib.mkMerge [
+            {
+              vim_keys = true;
+              proc_sorting = "memory";
+            }
+            (lib.mkIf (!config.my.theme.stylixDriven) { color_theme = "TTY"; })
+          ];
         };
         xdg.configFile = {
           "thefuck/settings.py" = {
@@ -58,26 +60,28 @@ in
         programs.ghostty = {
           enable = true;
           # Stylix owns the theme, font and size on the Wayland desktop.
-          settings = {
-            shell-integration = "zsh";
-            desktop-notifications = true;
-            clipboard-read = "allow";
-            clipboard-write = "allow";
-            cursor-style-blink = false;
-            window-padding-x = 8;
-            window-padding-y = 6;
-            window-padding-balance = true;
-            window-save-state = "always";
-            keybind = [
-              "super+r=reload_config"
-              "command+shift+p=toggle_command_palette"
-            ];
-          }
-          // lib.optionalAttrs (!config.my.theme.stylix.enable) {
-            theme = "dark:TokyoNight,light:TokyoNight Day";
-            font-family = "JetBrainsMono Nerd Font Mono";
-            font-size = 14;
-          };
+          settings = lib.mkMerge [
+            {
+              shell-integration = "zsh";
+              desktop-notifications = true;
+              clipboard-read = "allow";
+              clipboard-write = "allow";
+              cursor-style-blink = false;
+              window-padding-x = 8;
+              window-padding-y = 6;
+              window-padding-balance = true;
+              window-save-state = "always";
+              keybind = [
+                "super+r=reload_config"
+                "command+shift+p=toggle_command_palette"
+              ];
+            }
+            (lib.mkIf (!config.my.theme.stylixDriven) {
+              theme = "dark:TokyoNight,light:TokyoNight Day";
+              font-family = "JetBrainsMono Nerd Font Mono";
+              font-size = 14;
+            })
+          ];
         };
       })
 

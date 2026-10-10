@@ -1,4 +1,6 @@
 {
+  # Values from tokyonight.nvim's `night` palette and Ghostty's bundled
+  # TokyoNight theme.
   mode = "dark";
   family = "tokyo";
   scheme = "tokyo-night-dark";

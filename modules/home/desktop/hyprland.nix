@@ -1,13 +1,10 @@
 {
-  config,
   lib,
   ...
 }:
 
 let
   inherit (lib.generators) mkLuaInline;
-
-  colors = config.lib.stylix.colors;
 
   exec = command: mkLuaInline ''hl.dsp.exec_cmd("${command}")'';
 
@@ -57,6 +54,11 @@ let
   ];
 in
 {
+  imports = [
+    ./hyprlock.nix
+    ./hyprpaper.nix
+  ];
+
   # NixOS programs.hyprland owns the package, portals and the session entry,
   # so the Home Manager module only generates the configuration.
   wayland.windowManager.hyprland = {
@@ -203,70 +205,5 @@ in
         )
       ]) (lib.range 1 10);
     };
-  };
-
-  programs.hyprlock = {
-    enable = true;
-
-    # Background and input-field colors come from the Stylix Hyprlock target.
-    settings = {
-      "$font" = "JetBrainsMono Nerd Font";
-
-      general = {
-        hide_cursor = false;
-        ignore_empty_input = true;
-      };
-
-      animations.enabled = false;
-
-      background = {
-        monitor = "";
-        blur_passes = 2;
-        blur_size = 7;
-      };
-
-      input-field = {
-        monitor = "";
-        size = "320, 56";
-        outline_thickness = 2;
-        placeholder_text = "Password";
-        fail_text = "$PAMFAIL";
-        rounding = 8;
-        fade_on_empty = false;
-        dots_spacing = 0.2;
-        position = "0, -20";
-        halign = "center";
-        valign = "center";
-      };
-
-      label = [
-        {
-          monitor = "";
-          text = "$TIME";
-          font_size = 64;
-          font_family = "$font";
-          color = "rgba(${colors.base05}ff)";
-          position = "0, 120";
-          halign = "center";
-          valign = "center";
-        }
-        {
-          monitor = "";
-          text = ''cmd[update:60000] date +"%A, %d %B %Y"'';
-          font_size = 18;
-          font_family = "$font";
-          color = "rgba(${colors.base04}ff)";
-          position = "0, 72";
-          halign = "center";
-          valign = "center";
-        }
-      ];
-    };
-  };
-
-  # The wallpaper comes from the Stylix Hyprpaper target.
-  services.hyprpaper = {
-    enable = true;
-    settings.ipc = true;
   };
 }

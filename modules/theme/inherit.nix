@@ -10,7 +10,7 @@
   config = lib.mkIf (osConfig != null && osConfig ? my.theme) {
     my.theme = {
       active = lib.mkDefault osConfig.my.theme.active;
-      stylix.enable = lib.mkDefault osConfig.my.theme.stylix.enable;
+      palettes = lib.mkDefault osConfig.my.theme.palettes;
     };
   };
 }

@@ -1,4 +1,7 @@
 {
+  # Generated once from the former config/shell/starship.toml, which this file
+  # replaced. This is now the source of truth, so an upstream starship section
+  # has to be added here by hand.
   username = {
     format = "[$user]($style) on ";
   };

@@ -1,4 +1,5 @@
 {
+  # Values from Catppuccin's published palette.json, Mocha flavour.
   mode = "dark";
   family = "catppuccin";
   scheme = "catppuccin-mocha";

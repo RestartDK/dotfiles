@@ -1,4 +1,5 @@
 {
+  # Values from Ghostty's bundled TokyoNight Day theme.
   mode = "light";
   family = "tokyo";
   scheme = "tokyo-night-light";

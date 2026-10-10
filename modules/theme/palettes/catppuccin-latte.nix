@@ -1,4 +1,5 @@
 {
+  # Values from Catppuccin's published palette.json, Latte flavour.
   mode = "light";
   family = "catppuccin";
   scheme = "catppuccin-latte";

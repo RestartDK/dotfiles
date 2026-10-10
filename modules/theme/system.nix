@@ -8,8 +8,6 @@ let
   palette = config.my.theme.palette;
 in
 {
-  my.theme.stylix.enable = true;
-
   stylix = {
     enable = true;
 
