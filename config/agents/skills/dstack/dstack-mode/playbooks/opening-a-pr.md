@@ -12,7 +12,7 @@ Invoked at the end of every other playbook.
 
 **Titles.** Use Conventional Commits in the form `type(scope): subject`, following the repository's scope rule. Otherwise use the changed area, such as `dstack`. Use `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, or `perf`. Keep the subject short and imperative, apply `/technical-writing` and `/unslop`, and name a real symbol when useful. Do not add a trailing period.
 
-**Descriptions.** Write for the teammate who reviews between two meetings. Use three or four short paragraphs, without routine section headers. A reviewer should know what changed, why, and where to look in under a minute. Follow the repository's authoring skill when it provides one.
+**Descriptions.** Write for the teammate who reviews between two meetings. Use three or four short paragraphs, without routine section headers. A reviewer should know what changed, why, and where to look in under a minute. Follow the repository's authoring skill when it provides one. A description never carries the `[🫩 Daniel's Agent]` prefix, which marks agent comments and review bodies for the watcher and does not belong on the change itself.
 
 1. Open with two plain sentences about the change and the problem it solves. No identifiers, file paths, labels, or headers. A colleague from another team should understand both without opening the diff.
 2. Explain the fix in plain language. Include only what the diff cannot show, plus deliberate limitations, affected users, compatibility risks, and real tradeoffs when they matter.
