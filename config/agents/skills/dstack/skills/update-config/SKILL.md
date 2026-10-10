@@ -52,7 +52,6 @@ traitor test       # rebuild current host with test
 traitor update     # update flake inputs
 traitor upgrade    # update all inputs, then rebuild current host
 traitor rollback   # roll back current host generation
-traitor twin       # apply Home Manager-only twin profile
 traitor nana       # rebuild srv-nana explicitly
 traitor mac        # rebuild dkumlin-macbook-pro explicitly
 traitor work-mac   # rebuild dkumlin-twin-macbook-pro explicitly
@@ -121,7 +120,7 @@ Every skill lives in one tree, dstack included:
 config/agents/skills/<skill-name>/SKILL.md
 ```
 
-`modules/home/agents/default.nix` links that directory once at `~/.agents/skills` when `my.liveConfig.groups.agents` or `agentSkills` is on; Pi, Codex, and opencode all read it there. Claude Code reads only `~/.claude/skills`, so it gets its own link. When both groups are off, Pi links `my.liveConfig.piSkillsPath` instead. Twin points that at the empty `config/pi/agent/skills-twin` stub; the Cobb dev hosts point it at this shared tree so the dstack references in `~/.pi/agent/AGENTS.md` resolve. `.system/` is Codex's regenerated system skills and is not hand-edited.
+`modules/home/agents/default.nix` links that directory once at `~/.agents/skills` when `my.liveConfig.groups.agents` or `agentSkills` is on; Pi, Codex, and opencode all read it there. Claude Code reads only `~/.claude/skills`, so it gets its own link. When both groups are off, Pi links `my.liveConfig.piSkillsPath` instead. The Cobb dev hosts point it at this shared tree so the dstack references in `~/.pi/agent/AGENTS.md` resolve. `.system/` is Codex's regenerated system skills and is not hand-edited.
 
 ### Cobb bridge changes
 
@@ -162,7 +161,6 @@ traitor check
 For targeted diagnostics:
 
 ```bash
-nix eval --raw .#homeConfigurations.twin.activationPackage.drvPath --no-write-lock-file --allow-dirty
 nix eval --raw .#darwinConfigurations.dkumlin-macbook-pro.config.system.build.toplevel.drvPath --no-write-lock-file --allow-dirty
 nix eval --raw .#darwinConfigurations.dkumlin-twin-macbook-pro.config.system.build.toplevel.drvPath --no-write-lock-file --allow-dirty
 nix eval --raw .#nixosConfigurations.srv-nana.config.system.build.toplevel.drvPath --no-write-lock-file --allow-dirty

@@ -3,7 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
@@ -221,10 +220,6 @@
             rm -rf "$backup_dir"
           '';
         };
-      twinPkgs = import inputs.nixpkgs-unstable {
-        system = linuxSystem;
-        config.allowUnfree = true;
-      };
       privateValues = import inputs.private;
       homeSpecialArgs = {
         inherit inputs;
@@ -601,15 +596,6 @@
             };
           }
         ];
-      };
-
-      # Dev-only profile for existing NixOS/Linux target machines. This is
-      # intentionally Home Manager only: it does not change DNS, SSH, users,
-      # groups, Docker, bootloader, or other host-level settings.
-      homeConfigurations.twin = home-manager.lib.homeManagerConfiguration {
-        pkgs = twinPkgs;
-        extraSpecialArgs = homeSpecialArgs;
-        modules = [ ./hosts/twin/home.nix ];
       };
 
       darwinConfigurations."dkumlin-macbook-pro" = nix-darwin.lib.darwinSystem {

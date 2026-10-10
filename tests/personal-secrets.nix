@@ -8,7 +8,6 @@ let
   mac = self.darwinConfigurations.dkumlin-macbook-pro.config;
   nana = self.nixosConfigurations.srv-nana.config;
   twinMac = self.darwinConfigurations.dkumlin-twin-macbook-pro.config;
-  twin = self.homeConfigurations.twin.config;
   personalHosts = [
     {
       config = mac;
@@ -90,7 +89,6 @@ assert mac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
 assert twinMac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
 assert nana.systemd.services.opnix-secrets.serviceConfig.User == "root";
 assert !nana.services.onepassword-secrets.systemdIntegration.enable;
-assert !(twin.programs ? onepassword-secrets);
 assert builtins.all
   (
     hostName:

@@ -1,6 +1,6 @@
 # Deployment
 
-Every pull request and `main` push runs three CI jobs named `checks`, `systems`, and `result`. `checks` runs a single Nix command over formatting, lint, personal secrets, and Hatchi deployment safeguards, and `systems` builds the Nana and Hatchi NixOS systems. Push runs execute on the LAN runner. Pull-request runs execute on GitHub runners and contact srv-hatchi over Tailscale to substitute from its binary cache, and skip a host's build when that cache already holds its toplevel output. This gate does not build Darwin or Twin, run VM tests, deploy, activate, or reboot.
+Every pull request and `main` push runs three CI jobs named `checks`, `systems`, and `result`. `checks` runs a single Nix command over formatting, lint, personal secrets, and Hatchi deployment safeguards, and `systems` builds the Nana and Hatchi NixOS systems. Push runs execute on the LAN runner. Pull-request runs execute on GitHub runners and contact srv-hatchi over Tailscale to substitute from its binary cache, and skip a host's build when that cache already holds its toplevel output. This gate does not build Darwin, run VM tests, deploy, activate, or reboot.
 
 `traitor verify srv-hatchi services-vm` remains a manual diagnostic. `traitor verify srv-hatchi policy` runs the same deployment safeguards checked by CI, including bootstrap validation and exact-node CLI behavior.
 

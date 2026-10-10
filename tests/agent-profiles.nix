@@ -67,13 +67,6 @@ let
       claude = true;
     }
     {
-      home = self.homeConfigurations.twin.config;
-      profile = "work";
-      system = "x86_64-linux";
-      skillsSource = ../config/pi/agent/skills-twin;
-      claude = false;
-    }
-    {
       home = cobb;
       profile = "work";
       system = "x86_64-linux";
