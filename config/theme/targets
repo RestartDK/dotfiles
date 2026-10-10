@@ -1,0 +1,2 @@
+# template<TAB>target, one per line. '#' lines are ignored.
+ghostty.conf.tpl	~/.config/ghostty/themes/live

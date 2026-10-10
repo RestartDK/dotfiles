@@ -1,0 +1,85 @@
+#!/bin/sh
+# Renders the appearance-path configs from the palette for the current mode.
+#
+#   theme            re-render for the mode already selected
+#   theme light      select light, then render
+#   theme dark       select dark, then render
+#   theme toggle     flip the mode, then render
+#   theme status     print the mode and the palette it resolves to
+#
+# The palettes are rendered by Nix at build time; this only renders app configs
+# from them, so it never invents a colour. The selected mode lives in
+# $XDG_STATE_HOME/theme/mode and is deliberately not read at evaluation time.
+set -eu
+
+state="${XDG_STATE_HOME:-$HOME/.local/state}/theme"
+data="${XDG_DATA_HOME:-$HOME/.local/share}/theme"
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/theme"
+
+die() {
+  printf 'theme: %s\n' "$*" >&2
+  exit 1
+}
+
+mode_of() { cat "$state/mode" 2>/dev/null || printf 'dark\n'; }
+
+palette_of() {
+  awk -v m="$1" '$1 == m { print $2; found = 1 } END { exit !found }' "$data/modes"
+}
+
+set_mode() {
+  mkdir -p "$state"
+  printf '%s\n' "$1" >"$state/mode"
+}
+
+action="${1:-apply}"
+case "$action" in
+  light | dark)
+    set_mode "$action"
+    mode="$action"
+    ;;
+  toggle)
+    if [ "$(mode_of)" = dark ]; then mode=light; else mode=dark; fi
+    set_mode "$mode"
+    ;;
+  apply | "") mode="$(mode_of)" ;;
+  status) mode="$(mode_of)" ;;
+  *) die "usage: theme [light|dark|toggle|status]" ;;
+esac
+
+name="$(palette_of "$mode")" || die "no palette is mapped to mode '$mode' in $data/modes"
+palette="$data/palettes/$name"
+[ -f "$palette" ] || die "missing palette file $palette"
+
+if [ "$action" = status ]; then
+  printf 'mode %s\npalette %s\n' "$mode" "$name"
+  exit 0
+fi
+
+rendered=0
+while IFS='	' read -r template target; do
+  case "$template" in '' | '#'*) continue ;; esac
+  case "$target" in "~/"*) target="$HOME/${target#\~/}" ;; esac
+
+  mkdir -p "$(dirname "$target")"
+  if ! awk -v palette="$palette" -f "$conf/subst.awk" "$conf/templates/$template" >"$target.new"; then
+    rm -f "$target.new"
+    die "rendering $template failed"
+  fi
+  mv "$target.new" "$target"
+  rendered=$((rendered + 1))
+done <"$conf/targets"
+
+role() { awk -F= -v r="$1" '$1 == r { print substr($2, 2) }' "$palette"; }
+
+if command -v hyprctl >/dev/null 2>&1; then
+  hyprctl keyword general:col.active_border "rgb($(role accent))" >/dev/null 2>&1 || true
+  hyprctl keyword general:col.inactive_border "rgb($(role muted))" >/dev/null 2>&1 || true
+  hyprctl keyword misc:background_color "rgb($(role background))" >/dev/null 2>&1 || true
+fi
+
+if command -v ghostty >/dev/null 2>&1; then
+  ghostty +reload_config >/dev/null 2>&1 || true
+fi
+
+printf 'theme: %s (%s), %s configs rendered\n' "$mode" "$name" "$rendered"
