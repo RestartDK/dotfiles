@@ -162,10 +162,6 @@
 
   my.liveConfig = {
     enable = true;
-    sync = {
-      enable = true;
-      checkout = "/home/dkumlin/.config/dotfiles";
-    };
     groups = {
       shell = true;
       git = true;

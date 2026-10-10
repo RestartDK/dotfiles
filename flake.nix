@@ -590,6 +590,7 @@
         };
         modules = [
           ./hosts/dkumlin-macbook-pro
+          inputs.stylix.darwinModules.stylix
           home-manager.darwinModules.home-manager
           {
             home-manager = {
@@ -611,6 +612,7 @@
         };
         modules = [
           ./hosts/dkumlin-twin-macbook-pro
+          inputs.stylix.darwinModules.stylix
           home-manager.darwinModules.home-manager
           {
             home-manager = {

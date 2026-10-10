@@ -35,13 +35,12 @@ in
         home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
         programs.btop = {
           enable = true;
+          # Stylix owns the theme wherever the palette drives the host.
           settings = {
             vim_keys = true;
             proc_sorting = "memory";
-            # Stylix overrides both on hosts that enable it.
-            color_theme = lib.mkDefault "TTY";
-            shown_boxes = lib.mkDefault "cpu mem proc";
-          };
+          }
+          // lib.optionalAttrs (!config.my.theme.stylix.enable) { color_theme = "TTY"; };
         };
         xdg.configFile = {
           "thefuck/settings.py" = {
@@ -58,6 +57,7 @@ in
       (lib.mkIf cfg.groups.ghostty {
         programs.ghostty = {
           enable = true;
+          # Stylix owns the theme, font and size on the Wayland desktop.
           settings = {
             shell-integration = "zsh";
             desktop-notifications = true;
@@ -72,10 +72,11 @@ in
               "super+r=reload_config"
               "command+shift+p=toggle_command_palette"
             ];
-            # Stylix replaces the theme and font on hosts that enable it.
-            theme = lib.mkDefault "dark:TokyoNight,light:TokyoNight Day";
-            font-family = lib.mkDefault "JetBrainsMono Nerd Font Mono";
-            font-size = lib.mkDefault 14;
+          }
+          // lib.optionalAttrs (!config.my.theme.stylix.enable) {
+            theme = "dark:TokyoNight,light:TokyoNight Day";
+            font-family = "JetBrainsMono Nerd Font Mono";
+            font-size = 14;
           };
         };
       })

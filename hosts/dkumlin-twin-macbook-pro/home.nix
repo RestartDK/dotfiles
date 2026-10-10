@@ -22,10 +22,6 @@
 
   my.liveConfig = {
     enable = true;
-    sync = {
-      enable = true;
-      checkout = "/Users/danielkumlin/.config/dotfiles";
-    };
     groups = {
       shell = true;
       git = true;

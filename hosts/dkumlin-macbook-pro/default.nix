@@ -6,7 +6,11 @@
     (import ../../profiles/personal-secrets.nix { userName = "danielkumlin"; })
     ../../modules/darwin/determinate-nix.nix
     ../../modules/darwin/spotlight-hotkeys.nix
+    ../../modules/theme/options.nix
+    ../../modules/theme/system.nix
   ];
+
+  my.theme.active = "tokyo-dark";
 
   my.darwin.spotlightHotkeys.enable = true;
 

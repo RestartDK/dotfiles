@@ -66,7 +66,7 @@ sudo nixos-rebuild switch --flake .#<host>
 darwin-rebuild switch --flake .#<host>
 ```
 
-`hosts/` composes each machine and `nix flake show` lists them. A machine that only consumes config needs no checkout. `traitor sync` keeps a checkout rebased on the machines that author it.
+`hosts/` composes each machine and `nix flake show` lists them. A machine that only consumes config needs no checkout. `traitor sync` rebases a checkout on the machines that author it, and is run by hand.
 
 ## Where the rest lives
 
