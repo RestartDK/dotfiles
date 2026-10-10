@@ -8,10 +8,10 @@ let
   cobb =
     (inputs.home-manager.lib.homeManagerConfiguration {
       pkgs = self.nixosConfigurations.srv-nana.pkgs;
-      extraSpecialArgs.osConfig.networking.hostName = "titan";
       modules = [
-        self.homeManagerModules.cobb-daniel
+        self.homeManagerModules.default
         {
+          my.ai.profile = "work";
           home = {
             username = "daniel";
             homeDirectory = "/home/daniel";

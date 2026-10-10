@@ -26,13 +26,12 @@ let
     }
   ];
   cobb =
-    hostName:
     (inputs.home-manager.lib.homeManagerConfiguration {
       pkgs = self.nixosConfigurations.srv-nana.pkgs;
-      extraSpecialArgs.osConfig.networking.hostName = hostName;
       modules = [
-        self.homeManagerModules.cobb-daniel
+        self.homeManagerModules.default
         {
+          my.ai.profile = "work";
           home = {
             username = "daniel";
             homeDirectory = "/home/daniel";
@@ -89,24 +88,16 @@ assert mac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
 assert twinMac.launchd.daemons.opnix-secrets.serviceConfig.RunAtLoad;
 assert nana.systemd.services.opnix-secrets.serviceConfig.User == "root";
 assert !nana.services.onepassword-secrets.systemdIntegration.enable;
-assert builtins.all
-  (
-    hostName:
-    let
-      home = cobb hostName;
-    in
-    !(home.programs ? onepassword-secrets)
-    && !(home.home.file ? ".pi/agent/auth.json")
-    && !(home.home.sessionVariables ? OPENROUTER_API_KEY)
-    && !(home.home.sessionVariables ? OPENCODE_API_KEY)
-    && pkgs.lib.hasPrefix "/nix/store/" home.home.file.".pi/agent/models.json".source
-    && home.home.file.".pi/agent/models.json".source == ../config/pi/agent/models.json
-  )
-  [
-    "titan"
-    "titan-2"
-    "monster"
-  ];
+assert
+  let
+    home = cobb;
+  in
+  !(home.programs ? onepassword-secrets)
+  && !(home.home.file ? ".pi/agent/auth.json")
+  && !(home.home.sessionVariables ? OPENROUTER_API_KEY)
+  && !(home.home.sessionVariables ? OPENCODE_API_KEY)
+  && pkgs.lib.hasPrefix "/nix/store/" home.home.file.".pi/agent/models.json".source
+  && home.home.file.".pi/agent/models.json".source == ../config/pi/agent/models.json;
 pkgs.runCommand "personal-secrets-tests"
   {
     nativeBuildInputs = [

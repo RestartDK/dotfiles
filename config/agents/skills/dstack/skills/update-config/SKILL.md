@@ -79,7 +79,7 @@ hosts/<host>/                     # NixOS/nix-darwin host composition
 hosts/<host>/home.nix             # host-specific Home Manager config
 modules/home/                     # reusable Home Manager feature modules
 modules/nixos/                    # reusable NixOS modules
-profiles/home/                    # reusable Home Manager profiles/bridges
+profiles/home/                    # the portable Home Manager module
 config/                           # live-editable source dotfiles
 packages/                         # local package definitions
 overlays/                         # overlays
@@ -124,12 +124,12 @@ config/agents/skills/<skill-name>/SKILL.md
 
 ### Cobb bridge changes
 
-Cobb owns Cobb machines. Do not copy Daniel's dotfiles into Cobb. Cobb should consume the dotfiles flake/profile.
+Cobb owns Cobb machines. Do not copy Daniel's dotfiles into Cobb. Cobb consumes the portable Home Manager module and keeps its own host gate.
 
 Dotfiles side:
 
 ```text
-profiles/home/cobb-daniel.nix
+profiles/home/portable.nix      # exported as homeManagerModules.default
 ```
 
 Cobb side:
@@ -137,6 +137,8 @@ Cobb side:
 ```text
 /Users/danielkumlin/Projects/cobb/nix/hosts/profiles/daniel.nix
 ```
+
+That file imports `inputs.daniel-dotfiles.homeManagerModules.default` only on development hosts, and sets `my.ai.profile = "work"`. The module contributes packages and config groups only; it never touches users, services, or networking.
 
 Validate Cobb against a local dotfiles checkout before the remote/lock is updated:
 

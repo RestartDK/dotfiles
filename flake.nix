@@ -476,16 +476,16 @@
 
       homeManagerModules =
         let
-          withDotfilesInputs = module: extraImports: { ... }: {
-            # Keep the embedding flake's generic `inputs` argument intact. Cobb
-            # passes its own inputs through Home Manager extraSpecialArgs.
+          withDotfilesInputs = module: { ... }: {
+            # Keep the embedding flake's generic `inputs` argument intact. A
+            # consumer passes its own inputs through Home Manager
+            # extraSpecialArgs.
             _module.args.dotfilesInputs = inputs;
-            imports = [ module ] ++ extraImports;
+            imports = [ module ];
           };
         in
         {
-          groups = withDotfilesInputs ./modules/home/groups.nix [ ];
-          cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
+          default = withDotfilesInputs ./profiles/home/portable.nix;
         };
 
       deploy = {
