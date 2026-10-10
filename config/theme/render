@@ -57,12 +57,14 @@ if [ "$action" = status ]; then
 fi
 
 rendered=0
-while IFS='	' read -r template target; do
+while IFS='	' read -r template target base; do
   case "$template" in '' | '#'*) continue ;; esac
   case "$target" in "~/"*) target="$HOME/${target#\~/}" ;; esac
+  case "${base:-}" in "~/"*) base="$HOME/${base#\~/}" ;; esac
 
   mkdir -p "$(dirname "$target")"
-  if ! awk -v palette="$palette" -f "$conf/subst.awk" "$conf/templates/$template" >"$target.new"; then
+  [ -z "${base:-}" ] || cat "$base" >"$target.new"
+  if ! awk -v palette="$palette" -f "$conf/subst.awk" "$conf/templates/$template" >>"$target.new"; then
     rm -f "$target.new"
     die "rendering $template failed"
   fi
