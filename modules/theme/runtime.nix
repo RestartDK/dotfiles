@@ -67,6 +67,12 @@ in
           dark ${theme.runtime.dark}
           light ${theme.runtime.light}
         '';
+
+        # The static half of the starship config, which the renderer prepends to
+        # its palette table.
+        "theme/starship-base.toml".source =
+          (pkgs.formats.toml { }).generate "starship-base"
+            config.programs.starship.settings;
       }
       (lib.mapAttrs' (
         name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile name palette; }
@@ -81,9 +87,19 @@ in
       '')
     ];
 
-    # The renderer owns Ghostty's theme file, so Stylix stops writing colours for
-    # it and keeps the font and opacity.
+    # The renderer owns these files, so Stylix stops writing them while keeping
+    # the fonts and everything else it covers.
     stylix.targets.ghostty.colors.enable = false;
+    stylix.targets.btop.enable = false;
+    stylix.targets.starship.enable = false;
+
     programs.ghostty.settings.theme = "live";
+    programs.btop.settings.color_theme = "live";
+
+    # macOS has no Stylix wallpaper target; desktoppr is the declarative route.
+    programs.desktoppr = lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin && config.stylix.image != null) {
+      enable = true;
+      settings.picture = config.stylix.image;
+    };
   };
 }
