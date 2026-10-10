@@ -1,0 +1,86 @@
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+
+let
+  theme = config.my.theme;
+
+  # The runtime renderer reads these files, so Nix stays the source of the
+  # values while the mode stays a runtime decision.
+  paletteFile =
+    palette:
+    lib.concatLines (
+      [
+        "mode=${palette.mode}"
+        "family=${palette.family}"
+        "scheme=${palette.scheme}"
+      ]
+      ++ lib.mapAttrsToList (role: value: "${role}=${value}") (
+        lib.removeAttrs palette [
+          "mode"
+          "family"
+          "scheme"
+        ]
+      )
+    );
+in
+{
+  options.my.theme.runtime = {
+    light = lib.mkOption {
+      type = lib.types.str;
+      default = "tokyo-day";
+      description = "Palette rendered while the runtime mode is light.";
+    };
+
+    dark = lib.mkOption {
+      type = lib.types.str;
+      default = "tokyo-dark";
+      description = "Palette rendered while the runtime mode is dark.";
+    };
+  };
+
+  config = lib.mkIf theme.stylixDriven {
+    assertions = [
+      {
+        assertion =
+          builtins.hasAttr theme.runtime.light theme.palettes
+          && builtins.hasAttr theme.runtime.dark theme.palettes;
+        message = "my.theme.runtime must name entries of my.theme.palettes";
+      }
+    ];
+
+    xdg.configFile."theme" = {
+      source = ../../../config/theme;
+      recursive = true;
+      force = true;
+    };
+
+    xdg.dataFile = lib.mkMerge [
+      {
+        "theme/modes".text = ''
+          dark ${theme.runtime.dark}
+          light ${theme.runtime.light}
+        '';
+      }
+      (lib.mapAttrs' (
+        name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile palette; }
+      ) theme.palettes)
+    ];
+
+    # A store path is needed on PATH, and the implementation stays live-editable
+    # at ~/.config/theme/render.
+    home.packages = [
+      (pkgs.writeShellScriptBin "theme" ''
+        exec "''${XDG_CONFIG_HOME:-$HOME/.config}/theme/render" "$@"
+      '')
+    ];
+
+    # The renderer owns Ghostty's theme file, so Stylix stops writing colours for
+    # it and keeps the font and opacity.
+    stylix.targets.ghostty.colors.enable = false;
+    programs.ghostty.settings.theme = "live";
+  };
+}
