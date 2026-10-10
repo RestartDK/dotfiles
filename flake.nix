@@ -91,7 +91,11 @@
           };
         }
       );
-      sshSettings = (import ./modules/home/ssh.nix { inherit (home-manager) lib; }).programs.ssh.settings;
+      sshSettings =
+        (import ./modules/home/ssh.nix {
+          inherit (home-manager) lib;
+          network = privateValues;
+        }).programs.ssh.settings;
       fleetInventory = {
         schemaVersion = 1;
         hosts = map (name: { inherit name; }) (
