@@ -14,6 +14,8 @@
     ../../modules/nixos/numtide-cache.nix
     ../../modules/nixos/desktop.nix
     ../../modules/nixos/hyprland.nix
+    ../../modules/theme/options.nix
+    ../../modules/theme/system.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/tailscale.nix
     ../../modules/nixos/docker.nix
@@ -21,6 +23,10 @@
     ../../modules/nixos/nvidia.nix
     ../../modules/nixos/rustdesk.nix
   ];
+
+  my.theme.active = "tokyo-dark";
+
+  stylix.image = ../../config/hypr/wallpapers/current.png;
 
   my.host = {
     hostName = "srv-nana";

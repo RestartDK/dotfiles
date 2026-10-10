@@ -33,11 +33,18 @@ in
           terminalBrowserPackage
         ];
         home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
+        programs.btop = {
+          enable = true;
+          # Stylix owns the theme wherever the palette drives the host.
+          settings = lib.mkMerge [
+            {
+              vim_keys = true;
+              proc_sorting = "memory";
+            }
+            (lib.mkIf (!config.my.theme.stylixDriven) { color_theme = "TTY"; })
+          ];
+        };
         xdg.configFile = {
-          "btop/btop.conf" = {
-            source = ../../../config/btop/btop.conf;
-            force = true;
-          };
           "thefuck/settings.py" = {
             source = ../../../config/thefuck/settings.py;
             force = true;
@@ -50,10 +57,31 @@ in
       })
 
       (lib.mkIf cfg.groups.ghostty {
-        xdg.configFile."ghostty" = {
-          source = ../../../config/ghostty;
-          recursive = true;
-          force = true;
+        programs.ghostty = {
+          enable = true;
+          # Stylix owns the theme, font and size on the Wayland desktop.
+          settings = lib.mkMerge [
+            {
+              shell-integration = "zsh";
+              desktop-notifications = true;
+              clipboard-read = "allow";
+              clipboard-write = "allow";
+              cursor-style-blink = false;
+              window-padding-x = 8;
+              window-padding-y = 6;
+              window-padding-balance = true;
+              window-save-state = "always";
+              keybind = [
+                "super+r=reload_config"
+                "command+shift+p=toggle_command_palette"
+              ];
+            }
+            (lib.mkIf (!config.my.theme.stylixDriven) {
+              theme = "dark:TokyoNight,light:TokyoNight Day";
+              font-family = "JetBrainsMono Nerd Font Mono";
+              font-size = 14;
+            })
+          ];
         };
       })
 
