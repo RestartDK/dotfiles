@@ -469,6 +469,31 @@ test("launch failures persist stopped state and reload cannot spawn or execute m
   assert.equal(c.calls.filter((method) => method === "pane.send_input").length, 1);
 });
 
+test("a target outside a Git work tree fails the tool call before any handoff state exists", async (t) => {
+  const f = await fixture(t);
+  const outside = await mkdtemp(join(tmpdir(), "outside-"));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  const c = client(f.path);
+  const source = await runtime(f.session, outside, c.herdr);
+  await assert.rejects(
+    source.tool.execute(
+      "enter",
+      { branch: "task" },
+      undefined,
+      undefined,
+      source.runner.createToolContext("enter", undefined),
+    ),
+    /not inside a Git work tree/,
+  );
+  assert.equal(
+    f.session
+      .getBranch()
+      .filter((entry) => entry.type === "custom" && entry.customType === HANDOFF_ENTRY).length,
+    0,
+  );
+  assert.equal(handoffBlock(f.session, outside), undefined);
+});
+
 test("startup timeout keeps the source alive and rejects a late successor", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   const f = await fixture(t);
