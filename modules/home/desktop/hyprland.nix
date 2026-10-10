@@ -171,7 +171,7 @@ in
         (bind "SUPER + P" (exec "hyprpicker -a") null)
         (bind "CTRL + SHIFT + 4" (exec "~/.config/hypr/scripts/screenshot-area") null)
         (bind "SUPER + SHIFT + N" (exec "~/.config/hypr/scripts/toggle-hyprsunset") null)
-          (bind "SUPER + CTRL + T" (exec "theme toggle") null)
+        (bind "SUPER + CTRL + T" (exec "theme toggle") null)
         (bind "SUPER + V" (mkLuaInline ''hl.dsp.window.float({ action = "toggle" })'') null)
         (bind "SUPER + T" (mkLuaInline ''hl.dsp.layout("togglesplit")'') null)
         (bind "SUPER + Escape" (exec "hyprlock") null)
