@@ -38,6 +38,7 @@ import {
   HandoffReadiness,
   handoffBlock,
   worktreeState,
+  type EnterRequest,
   type WorktreeState,
 } from "./worktree-state.ts";
 
@@ -229,7 +230,6 @@ async function runtime(
         herdr,
         currentPaneTarget: paneId,
         observeForeground: fixtureForeground,
-        resolveWorktreeParent: async () => ({ cwd, workspaceId: undefined }),
       }),
     cwd,
     createEventBus(),
@@ -288,18 +288,23 @@ async function runtime(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   };
-  async function enter() {
+  async function enter(parameters: EnterRequest = { branch: "task" }) {
+    const call = assistant.content.find(
+      (part) => part.type === "toolCall" && part.name === "worktree_enter",
+    );
+    if (call?.type !== "toolCall") throw new Error("worktree_enter call missing");
+    call.arguments = parameters;
     const messageEntryId = session.appendMessage(assistant);
     const guard = await runner.emitToolCall({
       type: "tool_call",
       toolCallId: "enter",
       toolName: "worktree_enter",
-      input: { branch: "task" },
+      input: parameters,
     });
     if (guard?.block) throw new Error(guard.reason);
     const result = await enterTool.execute(
       "enter",
-      { branch: "task" },
+      parameters,
       undefined,
       undefined,
       runner.createToolContext("enter", undefined),
@@ -492,6 +497,23 @@ test("a target outside a Git work tree fails the tool call before any handoff st
     0,
   );
   assert.equal(handoffBlock(f.session, outside), undefined);
+});
+
+test("a checkout passed as cwd targets its repository, not the session directory", async (t) => {
+  const f = await fixture(t);
+  const outside = await mkdtemp(join(tmpdir(), "outside-"));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  const c = client(f.path, {
+    send: async () => {
+      const state = worktreeState(f.session.getBranch());
+      if (state?.kind !== "launching")
+        throw new Error(`expected a launching handoff, got ${state?.kind}`);
+      await new HandoffReadiness(state.destination.claimPath, state.id).decide("ready");
+    },
+  });
+  const source = await runtime(f.session, outside, c.herdr);
+  await (await source.enter({ branch: "task", cwd: f.dir })).finish();
+  assert.equal(worktreeState(f.session.getBranch())?.kind, "transferred");
 });
 
 test("startup timeout keeps the source alive and rejects a late successor", async (t) => {

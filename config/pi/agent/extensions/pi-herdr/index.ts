@@ -123,7 +123,7 @@ export default function (pi: ExtensionAPI) {
   const currentPaneTarget = currentPaneTargetEnv;
   const herdr = new HerdrClient(socketPath);
   registerTabTitle(pi, herdr, currentPaneTarget);
-  registerWorktreeHandoff(pi, { herdr, currentPaneTarget, resolveWorktreeParent });
+  registerWorktreeHandoff(pi, { herdr, currentPaneTarget });
 
   // Background completions arrive as custom messages. Render them as a one-line summary and keep
   // the captured output tail behind the expand hint so they do not flood the transcript.

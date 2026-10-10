@@ -17,6 +17,12 @@ export const EnterParameters = Type.Object({
     Type.String({ description: "Optional absolute checkout path with a short slug" }),
   ),
   label: Type.Optional(Type.String()),
+  cwd: Type.Optional(
+    Type.String({
+      description:
+        "Checkout to create the worktree in, when this session did not start inside the repository. Defaults to the session cwd.",
+    }),
+  ),
 });
 export type EnterRequest = Static<typeof EnterParameters>;
 
@@ -53,6 +59,9 @@ const State = Type.Union([
 export type HandoffRequest = Static<typeof Request>;
 export type HandoffDestination = Static<typeof Destination>;
 export type WorktreeState = Static<typeof State>;
+export type ResolvedHandoffRequest = Omit<HandoffRequest, "request"> & {
+  request: Omit<EnterRequest, "cwd"> & { cwd: string };
+};
 
 export function worktreeState(branch: SessionEntry[]): WorktreeState | undefined {
   const entry = branch
