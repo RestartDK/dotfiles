@@ -1,0 +1,6 @@
+# template<TAB>target[<TAB>base], one per line. A base file is prepended to the
+# rendered template, for configs whose static half Nix still owns.
+ghostty.conf.tpl	~/.config/ghostty/themes/live
+btop.theme.tpl	~/.config/btop/themes/live.theme
+starship.toml.tpl	~/.config/starship.toml	~/.local/share/theme/starship-base.toml
+nvim.lua.tpl	~/.local/share/theme/nvim.lua

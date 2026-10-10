@@ -26,8 +26,6 @@
 
   my.theme.active = "tokyo-dark";
 
-  stylix.image = ../../config/hypr/wallpapers/current.png;
-
   my.host = {
     hostName = "srv-nana";
     userName = "dkumlin";

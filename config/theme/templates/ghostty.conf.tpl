@@ -1,0 +1,23 @@
+background = {{ background }}
+foreground = {{ foreground }}
+cursor-color = {{ foreground }}
+cursor-text = {{ dark_background }}
+selection-background = {{ selection }}
+selection-foreground = {{ foreground }}
+
+palette = 0={{ dark_background }}
+palette = 1={{ red }}
+palette = 2={{ green }}
+palette = 3={{ yellow }}
+palette = 4={{ blue }}
+palette = 5={{ magenta }}
+palette = 6={{ cyan }}
+palette = 7={{ light_foreground }}
+palette = 8={{ muted }}
+palette = 9={{ red }}
+palette = 10={{ green }}
+palette = 11={{ yellow }}
+palette = 12={{ blue }}
+palette = 13={{ magenta }}
+palette = 14={{ cyan }}
+palette = 15={{ bright_foreground }}

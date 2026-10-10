@@ -155,3 +155,17 @@ bridge.refresh = refresh
 hs.autoLaunch(true)
 refresh()
 _G.PiGhosttyImagePaste = bridge
+
+-- Follow the macOS appearance with the runtime theme switch. macOS posts this
+-- notification when Appearance changes, so this is an observer and not a poll.
+local appearanceWatcher = hs.distributednotifications.new(function()
+  local mode = "dark"
+  local ok, out = pcall(hs.execute, "defaults read -g AppleInterfaceStyle")
+  if not (ok and out and out:match("Dark")) then
+    mode = "light"
+  end
+  hs.execute("theme " .. mode)
+end, "AppleInterfaceThemeChangedNotification")
+
+appearanceWatcher:start()
+hs.execute("theme")

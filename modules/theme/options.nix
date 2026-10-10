@@ -83,6 +83,18 @@ in
       description = "Named colour sets. Add one here to make it selectable everywhere.";
     };
 
+    backgrounds = lib.mkOption {
+      type = lib.types.attrsOf lib.types.path;
+      default = {
+        tokyo-dark = ../../config/hypr/wallpapers/tokyo-night.png;
+        tokyo-day = ../../config/hypr/wallpapers/tokyo-day.png;
+      };
+      description = ''
+        Wallpaper per palette, optional. A palette without one leaves the
+        wallpaper alone rather than failing.
+      '';
+    };
+
     palette = lib.mkOption {
       type = paletteType;
       readOnly = true;
