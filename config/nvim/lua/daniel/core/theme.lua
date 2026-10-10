@@ -1,81 +1,76 @@
 local M = {}
 
-local function detect_background()
-  if vim.uv.os_uname().sysname ~= "Darwin" then
-    return vim.o.background == "light" and "light" or "dark"
-  end
+-- Written by theme(1) from the active palette, outside config/nvim so the live
+-- checkout stays the only writer of this directory.
+local state_path = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/theme/nvim.lua"
 
-  local result = vim.system({ "defaults", "read", "-g", "AppleInterfaceStyle" }, { text = true }):wait()
-  if result.code == 0 and result.stdout and result.stdout:match("Dark") then
-    return "dark"
-  end
+local variants = {
+  tokyonight = { dark = "night", light = "day" },
+  catppuccin = { dark = "mocha", light = "latte" },
+}
 
-  return "light"
+local function read_state()
+  local ok, state = pcall(dofile, state_path)
+  if ok and type(state) == "table" and state.family and state.mode then
+    return state
+  end
+  return { family = "tokyo", mode = "dark" }
 end
 
-local function apply_tokyonight(background)
-  local style = background == "light" and "day" or "night"
+local function plugin_for(family)
+  if family == "catppuccin" then
+    return "catppuccin"
+  end
+  return "tokyonight"
+end
 
-  if M.current_style == style and vim.o.background == background then
+local function apply(state)
+  local plugin = plugin_for(state.family)
+  local variant = (variants[plugin] or {})[state.mode] or "night"
+
+  if M.applied_plugin == plugin and M.applied_variant == variant then
     return
   end
 
-  vim.o.background = background
-  M.current_style = style
+  vim.o.background = state.mode == "light" and "light" or "dark"
 
-  require("tokyonight").setup({
-    style = style,
-    light_style = "day",
-    transparent = true,
-    terminal_colors = true,
-    on_colors = function(colors)
-      colors.bg_gutter = "none"
-    end,
-    styles = {
-      sidebars = "transparent",
-      floats = "transparent",
-    },
-  })
+  if plugin == "catppuccin" then
+    require("catppuccin").setup({
+      flavour = variant,
+      transparent_background = true,
+      term_colors = true,
+      styles = { sidebars = "transparent", floats = "transparent" },
+    })
+  else
+    require("tokyonight").setup({
+      style = variant,
+      transparent = true,
+      terminal_colors = true,
+      on_colors = function(colors)
+        colors.bg_gutter = "none"
+      end,
+      styles = { sidebars = "transparent", floats = "transparent" },
+    })
+  end
 
-  vim.cmd.colorscheme("tokyonight")
+  M.applied_plugin = plugin
+  M.applied_variant = variant
+
+  vim.cmd.colorscheme(plugin)
 end
 
-function M.sync_with_macos()
-  apply_tokyonight(detect_background())
+-- Re-read on refocus rather than on a timer. theme(1) may have run while Neovim
+-- was in the background.
+function M.sync()
+  apply(read_state())
 end
 
 function M.setup()
-  M.sync_with_macos()
+  M.sync()
 
   vim.api.nvim_create_autocmd("FocusGained", {
     group = vim.api.nvim_create_augroup("DanielThemeSync", { clear = true }),
-    callback = M.sync_with_macos,
-  })
-
-  if vim.uv.os_uname().sysname ~= "Darwin" or M.timer then
-    return
-  end
-
-  M.timer = vim.uv.new_timer()
-  M.timer:start(
-    0,
-    2000,
-    vim.schedule_wrap(function()
-      M.sync_with_macos()
-    end)
-  )
-
-  vim.api.nvim_create_autocmd("VimLeavePre", {
-    group = vim.api.nvim_create_augroup("DanielThemeCleanup", { clear = true }),
-    callback = function()
-      if not M.timer then
-        return
-      end
-
-      M.timer:stop()
-      M.timer:close()
-      M.timer = nil
-    end,
+    callback = M.sync,
   })
 end
 
