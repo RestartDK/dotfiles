@@ -49,7 +49,7 @@ in
           enable = true;
           # The live zshrc runs `starship init zsh` itself.
           enableZshIntegration = false;
-          settings = builtins.fromTOML (builtins.readFile ../../../config/shell/starship.toml);
+          settings = import ./starship-settings.nix;
         };
         xdg = {
           localBinInPath = true;
