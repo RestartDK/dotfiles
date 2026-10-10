@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, watch } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,12 +119,35 @@ async function fixture(overrides: Record<string, unknown> = {}) {
   };
   let daemon: ChildProcess | null = null;
   const admitted = new Set<string>();
-  async function start() {
+  async function start(
+    options: { recovery?: Pick<PromiseWithResolvers<void>, "resolve" | "reject"> } = {},
+  ) {
+    const recovery = options.recovery;
     const child = spawn(node, ["--import", terminalCrashHook, daemonEntry], {
       env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: recovery ? ["ignore", "pipe", "pipe", "ipc"] : ["ignore", "pipe", "pipe"],
     });
+    daemon = child;
     let log = "";
+    if (recovery) {
+      child.on("message", (value: unknown) => {
+        try {
+          const message = record(value);
+          if (message.kind === "dstack-test.recovered") recovery.resolve();
+          else if (message.kind === "dstack-test.failed")
+            recovery.reject(new Error(string(message.reason)));
+          else recovery.reject(new Error("Unexpected recovery fixture message"));
+        } catch (error) {
+          recovery.reject(error);
+        }
+      });
+      child.once("exit", (code, signal) =>
+        recovery.reject(new Error(`Recovery daemon exited ${code ?? signal}: ${log}`)),
+      );
+      child.once("disconnect", () =>
+        recovery.reject(new Error(`Recovery daemon disconnected: ${log}`)),
+      );
+    }
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk: string) => {
@@ -151,7 +174,7 @@ async function fixture(overrides: Record<string, unknown> = {}) {
         }
       });
     });
-    daemon = child;
+    return child;
   }
   async function shutdown(signal: "SIGTERM" | "SIGKILL" = "SIGTERM") {
     const child = daemon;
@@ -635,28 +658,33 @@ test("oversized shared-run CI logs block instead of erasing a selected job's evi
   }
 }, 90_000);
 
+async function boundedEvent<T>(event: Promise<T>, reason: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      event,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(reason)), 60_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 test("terminal document saved before task completion survives SIGKILL and PR reopening", async () => {
   const f = await fixture();
   try {
-    await f.start();
+    const child = await f.start();
+    const killed = new Promise<NodeJS.Signals | null>((resolve) => {
+      child.once("exit", (_code, signal) => resolve(signal));
+    });
     const job = await f.register("drive");
     await until(f.socket, (jobs) => jobs[0]?.observedAt !== null);
     await writeFile(join(f.root, "kill-terminal"), "armed\n");
     const receipt = join(f.root, "terminal-crash-receipt.json");
-    const killed = new Promise<void>((resolve, reject) => {
-      const watcher = watch(f.root, () => {
-        if (!existsSync(receipt)) return;
-        clearTimeout(timer);
-        watcher.close();
-        resolve();
-      });
-      const timer = setTimeout(() => {
-        watcher.close();
-        reject(new Error("Terminal crash boundary was not reached"));
-      }, 60_000);
-    });
     await f.patch({ lifecycle: "CLOSED" });
-    await killed;
+    expect(await boundedEvent(killed, "Terminal crash boundary was not reached")).toBe("SIGKILL");
     await f.shutdown("SIGKILL");
     const proof = record(JSON.parse(await readFile(receipt, "utf8")));
     expect(array(proof.states).map((state) => record(state).kind)).toEqual(["terminal"]);
@@ -666,22 +694,14 @@ test("terminal document saved before task completion survives SIGKILL and PR reo
       threads: [{ ...human, kind: "owner", author: "daniel", decision: "implement" }],
     });
     const completion = join(f.root, "recovered-task-completion.json");
-    const completed = new Promise<void>((resolve, reject) => {
-      const watcher = watch(f.root, () => {
-        if (!existsSync(completion)) return;
-        clearTimeout(timer);
-        watcher.close();
-        resolve();
-      });
-      const timer = setTimeout(() => {
-        watcher.close();
-        reject(new Error("Recovered durable task did not complete"));
-      }, 60_000);
-    });
-    await f.start();
-    await completed;
+    const completed = Promise.withResolvers<void>();
+    await Promise.all([
+      f.start({ recovery: completed }),
+      boundedEvent(completed.promise, "Recovered durable task did not complete"),
+    ]);
     const settled = record(JSON.parse(await readFile(completion, "utf8")));
     expect(array(settled.tasks).map((task) => record(task).status)).toEqual(["terminal"]);
+    expect(array(settled.outcomes)).toEqual([{ status: "completed", result: "closed" }]);
     expect(array(settled.states)).toMatchObject([{ kind: "terminal", outcome: "closed" }]);
     const recovered = first(await f.request({ op: "status", id: job.id }));
     expect(recovered.state).toMatchObject({ kind: "terminal", outcome: "closed" });

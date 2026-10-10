@@ -1,4 +1,4 @@
-import { existsSync, renameSync, watch, writeFileSync } from "node:fs";
+import { existsSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -16,7 +16,7 @@ Harness.open = async (...args) => {
   const harness = await open(...args);
   if (root && existsSync(join(root, "terminal-fault-consumed"))) {
     let captured = false;
-    const capture = async () => {
+    const capture = async (outcomes) => {
       if (captured) return;
       const database = new DatabaseSync(join(root, "state/jobs.sqlite"), { readOnly: true });
       const tasks = database.prepare("SELECT kind, status FROM tasks").all();
@@ -28,6 +28,7 @@ Harness.open = async (...args) => {
         join(root, "recovered-task-completion.next"),
         JSON.stringify({
           tasks,
+          outcomes,
           states: Object.values(store?.jobs ?? {}).map((job) => job.view.state),
         }),
       );
@@ -35,18 +36,28 @@ Harness.open = async (...args) => {
         join(root, "recovered-task-completion.next"),
         join(root, "recovered-task-completion.json"),
       );
-      watcher.close();
+      process.send?.({ kind: "dstack-test.recovered" });
+      detach();
     };
-    const watcher = watch(join(root, "state"), () => {
-      void capture();
+    const detach = harness.subscribeCommits((publication) => {
+      const terminal = publication.changes.filter(
+        (change) =>
+          change.type === "task" &&
+          change.value.kind === "dstack.pr" &&
+          change.value.state.status === "terminal",
+      );
+      if (!terminal.length) return;
+      setImmediate(() => {
+        void capture(terminal.map((change) => change.value.state.outcome)).catch((error) => {
+          detach();
+          process.send?.({
+            kind: "dstack-test.failed",
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        });
+      });
     });
-    watcher.unref();
-    const close = harness.close.bind(harness);
-    harness.close = async (...args) => {
-      watcher.close();
-      return close(...args);
-    };
-    void capture();
+    harness.subscribeClose(detach);
   }
   const commit = harness.commit.bind(harness);
   harness.commit = async (...args) => {
