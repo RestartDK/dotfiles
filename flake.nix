@@ -90,7 +90,11 @@
           };
         }
       );
-      sshSettings = (import ./modules/home/ssh.nix { inherit (home-manager) lib; }).programs.ssh.settings;
+      sshSettings =
+        (import ./modules/home/ssh.nix {
+          inherit (home-manager) lib;
+          network = privateValues;
+        }).programs.ssh.settings;
       fleetInventory = {
         schemaVersion = 1;
         hosts = map (name: { inherit name; }) (
@@ -319,6 +323,19 @@
               }
               ''
                 FLEET_BIN=${./bin/fleet} FLEET_TEST_BASH=${(pkgsFor system).bash}/bin/bash bash ${./tests/fleet.sh}
+                touch $out
+              '';
+          fleet-inventory =
+            (pkgsFor system).runCommand "fleet-inventory-check"
+              {
+                nativeBuildInputs = [ (pkgsFor system).jq ];
+              }
+              ''
+                jq -e '
+                  .schemaVersion == 1 and
+                  (.hosts | type == "array" and length > 0) and
+                  all(.hosts[]; (.name | type == "string") and (.name | length > 0))
+                ' <<< ${nixpkgs.lib.escapeShellArg (builtins.toJSON fleetInventory)} >/dev/null
                 touch $out
               '';
           skills =
