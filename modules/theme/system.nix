@@ -18,6 +18,9 @@ in
     base16Scheme = "${pkgs.base16-schemes}/share/themes/${palette.scheme}.yaml";
     polarity = palette.mode;
 
+    # One value for the desktop, the lock screen and the boot stack.
+    image = config.my.theme.backgrounds.${config.my.theme.active} or null;
+
     override = {
       base00 = palette.background;
       base01 = palette.lighter_background;

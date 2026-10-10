@@ -11,13 +11,16 @@ let
   # The runtime renderer reads these files, so Nix stays the source of the
   # values while the mode stays a runtime decision.
   paletteFile =
-    palette:
+    name: palette:
     lib.concatLines (
       [
         "mode=${palette.mode}"
         "family=${palette.family}"
         "scheme=${palette.scheme}"
       ]
+      ++ lib.optional (builtins.hasAttr name theme.backgrounds) "background_image=${
+        toString theme.backgrounds.${name}
+      }"
       ++ lib.mapAttrsToList (role: value: "${role}=${value}") (
         lib.removeAttrs palette [
           "mode"
@@ -66,7 +69,7 @@ in
         '';
       }
       (lib.mapAttrs' (
-        name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile palette; }
+        name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile name palette; }
       ) theme.palettes)
     ];
 
