@@ -72,6 +72,11 @@ done <"$conf/targets"
 
 role() { awk -F= -v r="$1" '$1 == r { print substr($2, 2) }' "$palette"; }
 
+background_image="$(awk -F= '$1 == "background_image" { print $2 }' "$palette")"
+if [ -n "$background_image" ] && command -v hyprctl >/dev/null 2>&1; then
+  hyprctl hyprpaper wallpaper ",$background_image" >/dev/null 2>&1 || true
+fi
+
 if command -v hyprctl >/dev/null 2>&1; then
   hyprctl keyword general:col.active_border "rgb($(role accent))" >/dev/null 2>&1 || true
   hyprctl keyword general:col.inactive_border "rgb($(role muted))" >/dev/null 2>&1 || true
