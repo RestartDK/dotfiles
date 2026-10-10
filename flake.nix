@@ -258,9 +258,7 @@
           opnix = inputs.opnix.packages.${system}.default;
           pi = inputs.llm-agents.packages.${system}.pi;
           pi-package-updater = piPackageUpdater;
-          herdr = inputs.llm-agents.packages.${system}.herdr.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [ ./packages/herdr/pr-diff-spacing.patch ];
-          });
+          herdr = inputs.llm-agents.packages.${system}.herdr;
           default = traitor;
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) {

@@ -95,8 +95,6 @@ The viewer verifies its ownership before reuse. Sequenced metadata expires after
 
 `dstack herdr --notify` enables blocker and terminal notifications when it creates a new viewer. It does not change an existing viewer's notification setting. Initial attachment and stale cached snapshots do not notify.
 
-The Herdr package patch replaces the dot between adjacent signed addition and deletion counts with a space. Both counts and their configured colors stay intact. Other token separators stay unchanged.
-
 Home Manager installs the package for Linux Pi users. `services.dstackJobs.enable = true` adds the user service. This PR does not enable the option on any host.
 
 ## Limits
@@ -130,6 +128,6 @@ The acceptance suite uses the built daemon, actual SQLite, private Unix IPC, rea
 
 `tests/native-eval.ts` runs a separate model evaluation through the configured `bug-fix` route. The tested work profile selected `pi/openai-codex/gpt-6.1-sol:xhigh`. Native triage and repair completed in isolated repositories. Fixture tests do not establish production-model behavior.
 
-Isolated real Herdr and Pi sessions verified Jobs pane reuse, the hotkey, stale metadata rejection, TTL expiry, narrow and wide output, offline state, and viewer disconnect. These UI checks used a private typed snapshot fixture. The sidebar before and after captures used the pinned baseline and patched Herdr binaries.
+Isolated real Herdr and Pi sessions verified Jobs pane reuse, the hotkey, stale metadata rejection, TTL expiry, narrow and wide output, offline state, and viewer disconnect. These UI checks used a private typed snapshot fixture.
 
 Independent Sol reviews covered authority, effect recovery, process ownership, and Jobs startup. Mimo and GLM review credentials were unavailable; no routes were substituted. Full `traitor check --no-build` was blocked by an existing private flake input returning 404. Targeted package and quality checks are separate from host activation; no live configuration was applied.
