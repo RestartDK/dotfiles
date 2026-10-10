@@ -142,9 +142,6 @@ for node in srv-nana srv-hatchi; do
   printf '%s\n' run "$ROOT#deploy-rs" -- "$ROOT#$node" --dry-activate --remote-build >"$TMPDIR/expected"
   diff -u "$TMPDIR/expected" "$NIX_CALLS"
 done
-invoke 0 twin
-printf '%s\n' run "$ROOT#home-manager" -- switch --flake "$ROOT#twin" -b hm-backup >"$TMPDIR/expected"
-diff -u "$TMPDIR/expected" "$NIX_CALLS"
 if grep 'nix run' "$ROOT/bin/traitor" | grep -Ev 'nix run (\.#|"[$]flake_dir#)' >/dev/null; then
   echo "traitor must run external tools through root flake outputs" >&2
   exit 1

@@ -1,7 +1,7 @@
 # Keep one shared SSH agent socket across the processes a dev host inherits.
 #
 # Herdr's server, its remote client bridge, and every dev-namespace process on
-# the Twin and Cobb hosts inherit SSH_AUTH_SOCK from whichever connection
+# the Cobb hosts inherit SSH_AUTH_SOCK from whichever connection
 # started them. When that connection ends the inherited path is dead, and the
 # replacement socket arrives on a new path that nobody points at. Keep a stable
 # indirection at ~/.ssh/agent/current, repoint it whenever a connection brings a

@@ -8,10 +8,10 @@ let
   cobb =
     (inputs.home-manager.lib.homeManagerConfiguration {
       pkgs = self.nixosConfigurations.srv-nana.pkgs;
-      extraSpecialArgs.osConfig.networking.hostName = "titan";
       modules = [
-        self.homeManagerModules.cobb-daniel
+        self.homeManagerModules.default
         {
+          my.ai.profile = "work";
           home = {
             username = "daniel";
             homeDirectory = "/home/daniel";
@@ -65,13 +65,6 @@ let
       system = "aarch64-darwin";
       skillsSource = ../config/agents/skills;
       claude = true;
-    }
-    {
-      home = self.homeConfigurations.twin.config;
-      profile = "work";
-      system = "x86_64-linux";
-      skillsSource = ../config/pi/agent/skills-twin;
-      claude = false;
     }
     {
       home = cobb;

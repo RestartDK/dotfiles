@@ -3,7 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
@@ -221,10 +220,6 @@
             rm -rf "$backup_dir"
           '';
         };
-      twinPkgs = import inputs.nixpkgs-unstable {
-        system = linuxSystem;
-        config.allowUnfree = true;
-      };
       privateValues = import inputs.private;
       homeSpecialArgs = {
         inherit inputs;
@@ -481,16 +476,16 @@
 
       homeManagerModules =
         let
-          withDotfilesInputs = module: extraImports: { ... }: {
-            # Keep the embedding flake's generic `inputs` argument intact. Cobb
-            # passes its own inputs through Home Manager extraSpecialArgs.
+          withDotfilesInputs = module: { ... }: {
+            # Keep the embedding flake's generic `inputs` argument intact. A
+            # consumer passes its own inputs through Home Manager
+            # extraSpecialArgs.
             _module.args.dotfilesInputs = inputs;
-            imports = [ module ] ++ extraImports;
+            imports = [ module ];
           };
         in
         {
-          groups = withDotfilesInputs ./modules/home/groups.nix [ ];
-          cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
+          default = withDotfilesInputs ./profiles/home/portable.nix;
         };
 
       deploy = {
@@ -601,15 +596,6 @@
             };
           }
         ];
-      };
-
-      # Dev-only profile for existing NixOS/Linux target machines. This is
-      # intentionally Home Manager only: it does not change DNS, SSH, users,
-      # groups, Docker, bootloader, or other host-level settings.
-      homeConfigurations.twin = home-manager.lib.homeManagerConfiguration {
-        pkgs = twinPkgs;
-        extraSpecialArgs = homeSpecialArgs;
-        modules = [ ./hosts/twin/home.nix ];
       };
 
       darwinConfigurations."dkumlin-macbook-pro" = nix-darwin.lib.darwinSystem {

@@ -1,6 +1,6 @@
 # Agent model profiles
 
-Nix selects `work.json` or `personal.json` with `my.ai.profile`. The standard Mac uses personal. Twin Mac, Twin Home Manager and the Cobb bridge use work. The selected file is live-linked at `$XDG_CONFIG_HOME/dstack/models.json`, or `~/.config/dstack/models.json` when XDG_CONFIG_HOME is unset.
+Nix selects `work.json` or `personal.json` with `my.ai.profile`. The standard Mac uses personal. Twin Mac and the Cobb bridge use work. The selected file is live-linked at `$XDG_CONFIG_HOME/dstack/models.json`, or `~/.config/dstack/models.json` when XDG_CONFIG_HOME is unset.
 
 `/subagents` shows the active profile, roles, panel members and backend chains. The dispatcher reloads this global file for each call. Project settings cannot replace it. Missing, malformed or incomplete policy stops dispatch.
 

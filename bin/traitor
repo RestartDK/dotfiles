@@ -17,7 +17,6 @@ Commands:
   update [inputs...]     Update all pins or selected flake inputs
   upgrade                Update everything, then rebuild
   show                   Show flake outputs
-  twin                   Apply the Home Manager-only twin profile
   nana                   Rebuild srv-nana explicitly
   mac                    Rebuild dkumlin-macbook-pro explicitly
   work-mac               Rebuild dkumlin-twin-macbook-pro explicitly
@@ -546,11 +545,6 @@ show)
   flake_dir="$(resolve_flake_dir)"
   cd "$flake_dir"
   nix flake show
-  ;;
-twin)
-  flake_dir="$(resolve_flake_dir)"
-  cd "$flake_dir"
-  nix run "$flake_dir#home-manager" -- switch --flake "$flake_dir#twin" -b hm-backup "$@"
   ;;
 nana)
   FLAKE_HOST=srv-nana run_rebuild switch "$@"
