@@ -72,6 +72,16 @@ export async function validateCheckoutPath(path: string): Promise<void> {
       throw new Error(`Checkout path exceeds 60 bytes: ${candidate}`);
 }
 
+export async function requireCheckoutRoot(cwd: string, signal?: AbortSignal): Promise<string> {
+  try {
+    return await git(cwd, ["rev-parse", "--show-toplevel"], signal, 5000);
+  } catch (error) {
+    throw new Error(
+      `${cwd} is not inside a Git work tree. ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 async function openWorkspace(
   herdr: Client,
   request: WorktreeRequest,

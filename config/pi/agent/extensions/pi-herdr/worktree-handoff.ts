@@ -14,6 +14,7 @@ import {
   claimCheckout,
   ensureWorktree,
   releaseCheckout,
+  requireCheckoutRoot,
   type CheckoutClaim,
   type WorktreeWorkspace,
 } from "./worktree.ts";
@@ -25,28 +26,15 @@ import {
   handoffBlock,
   worktreeState,
   type EnterRequest,
-  type HandoffRequest,
   type HandoffDestination,
+  type ResolvedHandoffRequest,
   type WorktreeState,
 } from "./worktree-state.ts";
-
-export interface WorktreeParentResolution {
-  workspaceId: string | undefined;
-  cwd: string | undefined;
-  checkoutCwd?: string;
-}
 
 export interface WorktreeHandoffDeps {
   observeForeground?: typeof observePaneForeground;
   herdr: Pick<HerdrClient, "call">;
   currentPaneTarget: string;
-  resolveWorktreeParent: (
-    workspaceRef: string | undefined,
-    explicitCwd: string | undefined,
-    requestCwd: string,
-    currentWorkspaceId: string,
-    signal?: AbortSignal,
-  ) => Promise<WorktreeParentResolution>;
 }
 
 export function worktreeBranchFromArg(arg: string): string {
@@ -261,12 +249,15 @@ export async function handoffPane(
 }
 
 export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffDeps): void {
-  const { herdr, currentPaneTarget, resolveWorktreeParent } = deps;
+  const { herdr, currentPaneTarget } = deps;
   const observeForeground = deps.observeForeground ?? observePaneForeground;
-  let pending: { handoff: HandoffRequest; toolCallId: string } | undefined;
+  let pending: { handoff: ResolvedHandoffRequest; toolCallId: string } | undefined;
   let continuing: Exclude<WorktreeState, { kind: "requested" | "stopped" }> | undefined;
 
-  function request(params: EnterRequest, ctx: ExtensionContext): HandoffRequest {
+  async function request(
+    params: EnterRequest,
+    ctx: ExtensionContext,
+  ): Promise<ResolvedHandoffRequest> {
     if (ctx.mode !== "tui") throw new Error("Worktree handoff requires the interactive TUI.");
     const blocked = handoffBlock(ctx.sessionManager, ctx.cwd);
     if (blocked) throw new Error(blocked);
@@ -282,15 +273,16 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
       !saved.getBranch().some((entry) => entry.type === "message" && entry.message.role === "user")
     )
       throw new Error("Send a message in this session before moving it.");
+    const cwd = await requireCheckoutRoot(resolve(ctx.cwd, params.cwd ?? "."), ctx.signal);
     return {
       id: randomUUID(),
       sourceSessionFile,
       sourceSessionId: ctx.sessionManager.getSessionId(),
-      request: { ...params, branch: worktreeBranchFromArg(params.branch) },
+      request: { ...params, branch: worktreeBranchFromArg(params.branch), cwd },
     };
   }
 
-  async function launch(handoff: HandoffRequest, ctx: ExtensionContext): Promise<void> {
+  async function launch(handoff: ResolvedHandoffRequest, ctx: ExtensionContext): Promise<void> {
     let phase: LaunchPhase = { kind: "preparing" };
     const signal = ctx.signal;
     try {
@@ -301,16 +293,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         await herdr.call("pane.get", { pane_id: currentPaneTarget }, { timeoutMs: 5000, signal }),
         "pane_info",
       ).pane;
-      const parent = await resolveWorktreeParent(
-        undefined,
-        undefined,
-        ctx.cwd,
-        currentPane.workspace_id,
-        signal,
-      );
       const checkout = await ensureWorktree(herdr, {
-        cwd: parent.cwd ?? ctx.cwd,
-        checkoutCwd: parent.checkoutCwd,
         ...handoff.request,
         focus: false,
         signal,
@@ -477,7 +460,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
           ],
           details: { handoffId: current.id },
         };
-      const handoff = request(params, ctx);
+      const handoff = await request(params, ctx);
       pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...handoff, kind: "requested" });
       pending = { handoff, toolCallId };
       return {
@@ -626,7 +609,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
           ctx.ui.notify(`This task already owns ${current.destination.path}.`, "info");
           return;
         }
-        const handoff = request({ branch: args }, ctx);
+        const handoff = await request({ branch: args }, ctx);
         pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...handoff, kind: "requested" });
         await launch(handoff, ctx);
       } catch (error) {
