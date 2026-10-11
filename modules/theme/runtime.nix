@@ -56,7 +56,7 @@ in
     ];
 
     xdg.configFile."theme" = {
-      source = ../../../config/theme;
+      source = ../../config/theme;
       recursive = true;
       force = true;
     };
