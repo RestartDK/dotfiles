@@ -89,10 +89,11 @@ in
         '';
 
         # The static half of the starship config, which the renderer prepends to
-        # its palette table.
-        "theme/starship-base.toml".source =
-          (pkgs.formats.toml { }).generate "starship-base"
-            config.programs.starship.settings;
+        # its palette table. `palette` is a root key, so it has to live here,
+        # where the TOML generator emits it ahead of every table.
+        "theme/starship-base.toml".source = (pkgs.formats.toml { }).generate "starship-base" (
+          config.programs.starship.settings // { palette = "base16"; }
+        );
       }
       (lib.mapAttrs' (
         name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile palette; }
@@ -100,11 +101,14 @@ in
     ];
 
     # A store path is needed on PATH, and the implementation stays live-editable
-    # at ~/.config/theme/render.
+    # at ~/.config/theme/render. The renderer moves the macOS picture through
+    # desktoppr on PATH, and the launchd observer gets it from its own PATH, so
+    # the interactive shell needs the package too.
     home.packages = [
       (pkgs.writeShellScriptBin "theme" ''
         exec "''${XDG_CONFIG_HOME:-$HOME/.config}/theme/render" "$@"
       '')
-    ];
+    ]
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.desktoppr ];
   };
 }

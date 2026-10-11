@@ -1,5 +1,3 @@
-palette = "base16"
-
 [palettes.base16]
 black = "{{ background }}"
 bright-black = "{{ muted }}"
