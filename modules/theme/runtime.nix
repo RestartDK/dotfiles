@@ -101,11 +101,14 @@ in
     ];
 
     # A store path is needed on PATH, and the implementation stays live-editable
-    # at ~/.config/theme/render.
+    # at ~/.config/theme/render. The renderer moves the macOS picture through
+    # desktoppr on PATH, and the launchd observer gets it from its own PATH, so
+    # the interactive shell needs the package too.
     home.packages = [
       (pkgs.writeShellScriptBin "theme" ''
         exec "''${XDG_CONFIG_HOME:-$HOME/.config}/theme/render" "$@"
       '')
-    ];
+    ]
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.desktoppr ];
   };
 }
