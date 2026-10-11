@@ -26,8 +26,8 @@ Open the preview as a split beside Pi, in Pi's own tab. Do not create a separate
    TERMINAL_BROWSER_NO_TELEMETRY=1 terminal-browser open --split right /absolute/path/to/explanation.html
    ```
 
-2. Run `terminal-browser ls --json` and record the browser key and tab id before interacting. Do not reuse an unrelated browser or authenticated tab.
-3. Open later artifacts from Pi's pane. The default merge behavior opens them in the neighboring browser instead of creating another split. Refresh the recorded tab id after navigation or a new tab.
+2. Run `terminal-browser ls --json` and record the browser key and tab id before interacting. Do not reuse an unrelated browser or authenticated tab. When more than one session is running, `terminal-browser ls --all` lists every browser and `agent-browser tab list` mixes tabs from all of them, so pass an explicit `--browser` and `--tab`.
+3. Open later artifacts from Pi's pane with the same `--split right` flag. Merge into the neighboring browser runs only when `--split` is present, so a bare `terminal-browser open` skips the adopt step and stacks another split pane. Refresh the recorded tab id after navigation or a new tab.
 4. Keep focus unchanged on updates unless the user asks to view the preview.
 
 ## Inspect and exercise the real page
