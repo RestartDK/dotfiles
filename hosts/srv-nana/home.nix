@@ -4,6 +4,7 @@
   imports = [
     ../../modules/home/dev-packages.nix
     ../../modules/home/groups.nix
+    ../../modules/theme/stylix-handover.nix
     ../../modules/home/desktop/hyprland.nix
     ../../modules/home/desktop/stylix.nix
   ];

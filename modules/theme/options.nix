@@ -86,8 +86,8 @@ in
     backgrounds = lib.mkOption {
       type = lib.types.attrsOf lib.types.path;
       default = {
-        tokyo-dark = ../../config/hypr/wallpapers/tokyo-night.png;
-        tokyo-day = ../../config/hypr/wallpapers/tokyo-day.png;
+        tokyo-dark = ../../config/wallpapers/tokyo-night.png;
+        tokyo-day = ../../config/wallpapers/tokyo-day.png;
       };
       description = ''
         Wallpaper per palette, optional. A palette without one leaves the

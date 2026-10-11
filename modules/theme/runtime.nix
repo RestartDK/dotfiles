@@ -86,20 +86,5 @@ in
         exec "''${XDG_CONFIG_HOME:-$HOME/.config}/theme/render" "$@"
       '')
     ];
-
-    # The renderer owns these files, so Stylix stops writing them while keeping
-    # the fonts and everything else it covers.
-    stylix.targets.ghostty.colors.enable = false;
-    stylix.targets.btop.enable = false;
-    stylix.targets.starship.enable = false;
-
-    programs.ghostty.settings.theme = "live";
-    programs.btop.settings.color_theme = "live";
-
-    # macOS has no Stylix wallpaper target; desktoppr is the declarative route.
-    programs.desktoppr = lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin && config.stylix.image != null) {
-      enable = true;
-      settings.picture = config.stylix.image;
-    };
   };
 }

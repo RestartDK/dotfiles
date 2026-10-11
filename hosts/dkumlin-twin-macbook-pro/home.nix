@@ -5,6 +5,7 @@
     ../../modules/home/cobb-forwarding.nix
     ../../modules/home/dev-packages.nix
     ../../modules/home/groups.nix
+    ../../modules/theme/stylix-handover.nix
     ../../modules/home/ssh.nix
   ];
 
