@@ -14,6 +14,12 @@ in
 {
   services.home-assistant = {
     enable = true;
+    # The module skips the install check in its own default package, so that is
+    # repeated here rather than lost when the patch is added.
+    package = pkgs.home-assistant.overrideAttrs (oldAttrs: {
+      doInstallCheck = false;
+      patches = (oldAttrs.patches or [ ]) ++ [ ./home-assistant-rtsps-timeout.patch ];
+    });
     customComponents = [
       aarlo
       sonoff
