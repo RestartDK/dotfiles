@@ -26,7 +26,7 @@
     waybar.enable = false;
   };
 
-  programs.ghostty.settings.theme = "live";
+  programs.ghostty.settings.theme = "dark:live-dark,light:live-light";
   programs.btop.settings.color_theme = "live";
 
   # macOS has no Stylix wallpaper target; desktoppr is the declarative route.

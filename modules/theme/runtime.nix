@@ -49,6 +49,16 @@ let
         ]
       )
     );
+  # Ghostty switches between two theme files on the OS appearance, so both are
+  # rendered from the palettes at build time through the same template the
+  # runtime renderer uses.
+  ghosttyTheme =
+    name: palette:
+    pkgs.runCommand "ghostty-theme-${name}" { nativeBuildInputs = [ pkgs.gawk ]; } ''
+      awk -v palette=${pkgs.writeText "palette-${name}" (paletteFile palette)} \
+        -f ${../../config/theme/subst.awk} \
+        ${../../config/theme/templates/ghostty.conf.tpl} > $out
+    '';
 in
 {
   options.my.theme.runtime = {
@@ -75,10 +85,15 @@ in
       }
     ];
 
-    xdg.configFile."theme" = {
-      source = ../../config/theme;
-      recursive = true;
-      force = true;
+    xdg.configFile = {
+      "theme" = {
+        source = ../../config/theme;
+        recursive = true;
+        force = true;
+      };
+
+      "ghostty/themes/live-dark".source = ghosttyTheme "dark" theme.palettes.${theme.runtime.dark};
+      "ghostty/themes/live-light".source = ghosttyTheme "light" theme.palettes.${theme.runtime.light};
     };
 
     xdg.dataFile = lib.mkMerge [
