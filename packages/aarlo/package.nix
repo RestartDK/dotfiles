@@ -24,6 +24,10 @@ buildHomeAssistantComponent rec {
     unidecode
   ];
 
+  # Arlo's stream URLs are single use and Home Assistant retries the first one,
+  # so the component hands the stream worker a fresh URL while it lives.
+  patches = [ ./stream-refresh.patch ];
+
   meta = {
     changelog = "https://github.com/twrecked/hass-aarlo/releases/tag/v${version}";
     description = "Asynchronous Arlo component for Home Assistant";
