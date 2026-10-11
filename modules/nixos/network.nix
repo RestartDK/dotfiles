@@ -30,6 +30,15 @@ in
           clientNetworks = mkOption { type = types.listOf (types.strMatching "[0-9a-fA-F:./]+"); };
           adminNetworks = mkOption { type = types.listOf (types.strMatching "[0-9a-fA-F:./]+"); };
           upstreamDNS = mkOption { type = types.listOf types.str; };
+          iotLink = mkOption {
+            description = "The wireless leg's own subnet and the gateway the routed path uses, so the public tree carries no addresses.";
+            type = types.submodule {
+              options = {
+                network = mkOption { type = types.strMatching "[0-9.]+/[0-9]+"; };
+                gateway = mkOption { type = types.strMatching "[0-9.]+"; };
+              };
+            };
+          };
         };
       }
     );

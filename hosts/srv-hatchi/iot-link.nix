@@ -1,6 +1,10 @@
-{ config, ... }:
+{ config, lib, ... }:
 let
   ssid = "Owner";
+  iotLink = config.my.network.iotLink;
+  iotParts = lib.splitString "/" iotLink.network;
+  iotAddress = builtins.elemAt iotParts 0;
+  iotPrefix = lib.toInt (builtins.elemAt iotParts 1);
 in
 {
   hardware.wirelessRegulatoryDatabase = true;
@@ -13,16 +17,16 @@ in
     interface wlp69s0
       metric 2000
   '';
-  # The leg exists for multicast discovery, not for reachability. The wireless
-  # access point bridges the IoT SSID to the wireless clients only, so the wired
+  # The leg exists for multicast discovery, not for reachability. The access
+  # point bridges the IoT SSID to the wireless clients only, so the wired
   # devices on that subnet answer on the routed path and not over the leg. This
-  # keeps unicast on the wire, where it already worked, and sends multicast out
-  # the leg so Home Assistant hears mDNS and SSDP on the subnet.
+  # keeps unicast on the wire, where it already worked, and sends the multicast
+  # range out the leg so Home Assistant hears mDNS and SSDP on the subnet.
   networking.interfaces.enp68s0.ipv4.routes = [
     {
-      address = "192.168.205.0";
-      prefixLength = 24;
-      via = "192.168.200.1";
+      address = iotAddress;
+      prefixLength = iotPrefix;
+      via = iotLink.gateway;
       options = {
         metric = "100";
         scope = "global";
