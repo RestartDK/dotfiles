@@ -1,10 +1,9 @@
-import { execFile, spawn } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { array, number, record, string } from "../../../config/pi/agent/lib/dstack-jobs.js";
+import { host, type Command, type ProcessKey } from "./host.js";
 import { setTimeout as delay } from "node:timers/promises";
 
-export type Command = { file: string; args: string[] };
+export type { Command } from "./host.js";
 export type ProcessOptions = {
   cwd: string;
   signal: AbortSignal;
@@ -23,85 +22,20 @@ export class ProcessFailure extends Error {
     super(`External process ${category}${code === null ? "" : ` (${code})`}`);
   }
 }
-type Identity = { pid: number; start: string; token: string };
-const exec = promisify(execFile);
-const processScan = `import json, os, sys
-wanted, key = sys.argv[1:]
-result = []
-for pid in os.listdir('/proc'):
-    if not pid.isdecimal():
-        continue
-    path = '/proc/' + pid
-    try:
-        if os.stat(path).st_uid != os.getuid():
-            continue
-        with open(path + '/environ', 'rb') as f:
-            env = f.read().split(b'\\0')
-        if (key + '=' + wanted).encode() not in env:
-            continue
-        with open(path + '/stat') as f:
-            fields = f.read().rsplit(')', 1)[1].split()
-        if fields[0] != 'Z':
-            result.append({'pid':int(pid), 'start':fields[19]})
-    except (ProcessLookupError, FileNotFoundError, PermissionError):
-        continue
-print(json.dumps(result))
-`;
-async function owned(token: string, key: string): Promise<Identity[]> {
-  const output = await exec(
-    process.env.DSTACK_PYTHON || "python3",
-    ["-c", processScan, token, key],
-    { timeout: 3000, maxBuffer: 128 * 1024 },
-  );
-  const parsed: unknown = JSON.parse(output.stdout);
-  return array(parsed).map((raw) => {
-    const value = record(raw);
-    return { pid: number(value.pid), start: string(value.start), token };
-  });
-}
-const pidfdSignal = `import os, signal, sys
-pid, started, token, key, action = sys.argv[1:]
-try:
-    fd = os.pidfd_open(int(pid))
-    try:
-        path = '/proc/' + pid
-        with open(path + '/stat') as f:
-            actual = f.read().rsplit(')', 1)[1].split()[19]
-        with open(path + '/environ', 'rb') as f:
-            env = f.read().split(b'\\0')
-        if actual == started and (key + '=' + token).encode() in env and os.stat(path).st_uid == os.getuid():
-            signal.pidfd_send_signal(fd, getattr(signal, action))
-    finally:
-        os.close(fd)
-except (ProcessLookupError, FileNotFoundError):
-    pass
-`;
-async function release(token: string, key: string): Promise<void> {
+async function release(token: string, key: ProcessKey): Promise<void> {
   for (let round = 0; round < 20; round++) {
-    const processes = await owned(token, key);
+    const processes = await host().owned(token, key);
     if (!processes.length) return;
     for (const p of processes) {
       try {
-        await exec(
-          process.env.DSTACK_PYTHON || "python3",
-          [
-            "-c",
-            pidfdSignal,
-            String(p.pid),
-            p.start,
-            token,
-            key,
-            round < 10 ? "SIGTERM" : "SIGKILL",
-          ],
-          { timeout: 3000, maxBuffer: 1024 },
-        );
+        await host().signal(p, round < 10 ? "SIGTERM" : "SIGKILL");
       } catch {
-        throw new Error("Owned process pidfd signal failed; cleanup remains pending");
+        throw new Error("Owned process signal failed; cleanup remains pending");
       }
     }
     await delay(100);
   }
-  if ((await owned(token, key)).length) throw new Error("Owned process release not verified");
+  if ((await host().owned(token, key)).length) throw new Error("Owned process release not verified");
 }
 export function releaseProcess(token: string): Promise<void> {
   return release(token, "DSTACK_PROCESS_TOKEN");

@@ -9,6 +9,7 @@ import {
   stateDirectory,
 } from "../../../config/pi/agent/lib/dstack-jobs.js";
 import { openController, type ControllerConfig } from "./controller.js";
+import { host } from "./host.js";
 import { acquireLock } from "./lock.js";
 import type { Command } from "./process.js";
 
@@ -54,8 +55,7 @@ function close(server: Server): Promise<void> {
   );
 }
 export async function startDaemon(config: DaemonConfig) {
-  if (process.platform !== "linux")
-    throw new Error("This pilot requires Linux flock and /proc process identity");
+  await host().verify();
   if (
     !isAbsolute(config.stateDir) ||
     !isAbsolute(config.socket) ||
