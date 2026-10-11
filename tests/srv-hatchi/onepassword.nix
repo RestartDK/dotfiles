@@ -5,11 +5,12 @@
 }:
 let
   fields = builtins.fromJSON (builtins.readFile ./fixtures/synthetic-secrets.json);
+  network = builtins.fromJSON (builtins.readFile ./fixtures/synthetic-network.json);
 in
 pkgs.testers.runNixOSTest {
   name = "srv-hatchi-onepassword";
   globalTimeout = 1200;
-  node.specialArgs = { inherit inputs self; };
+  node.specialArgs = { inherit inputs self network; };
   nodes.hatchi = { config, lib, ... }: {
     imports = [ ./onepassword-machine.nix ];
     virtualisation = {

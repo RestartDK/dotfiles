@@ -8,6 +8,9 @@
 }:
 let
   hatchiPublicKey = lib.strings.trim (builtins.readFile ../../config/ssh/public-keys/hatchi.pub);
+  homelabSshPublicKey = lib.strings.trim (
+    builtins.readFile ../../config/ssh/public-keys/homelab-ssh.pub
+  );
 in
 {
   imports = [
@@ -30,7 +33,10 @@ in
     inherit (config.my.host) extraGroups uid;
     home = config.my.host.homeDirectory;
     shell = pkgs.zsh;
-    openssh.authorizedKeys.keys = config.my.host.authorizedKeys ++ [ hatchiPublicKey ];
+    openssh.authorizedKeys.keys = config.my.host.authorizedKeys ++ [
+      hatchiPublicKey
+      homelabSshPublicKey
+    ];
   };
   home-manager = {
     useGlobalPkgs = true;

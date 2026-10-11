@@ -6,6 +6,7 @@
     ../../modules/home/groups.nix
     ../../modules/home/desktop/hyprland.nix
     ../../modules/home/desktop/stylix.nix
+    ../../modules/home/ssh.nix
   ];
 
   home.username = "dkumlin";

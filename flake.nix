@@ -96,12 +96,13 @@
       sshSettings =
         (import ./modules/home/ssh.nix {
           inherit (home-manager) lib;
+          pkgs = pkgsFor linuxSystem;
           network = privateValues;
         }).programs.ssh.settings;
       fleetInventory = {
         schemaVersion = 1;
         hosts = map (name: { inherit name; }) (
-          builtins.attrNames (nixpkgs.lib.filterAttrs (_: settings: settings ? IdentityFile) sshSettings)
+          builtins.attrNames (nixpkgs.lib.filterAttrs (_: settings: settings ? User) sshSettings)
         );
       };
       mkFleetPackage =

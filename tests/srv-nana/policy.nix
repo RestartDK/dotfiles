@@ -80,6 +80,9 @@ assert home.gtk.gtk3.colorScheme == "dark";
 assert home.gtk.gtk4.colorScheme == "dark";
 assert home.dconf.settings."org/gnome/desktop/interface"."color-scheme" == "prefer-dark";
 assert home.gtk.iconTheme.name == "Papirus";
+assert builtins.any (
+  file: builtins.baseNameOf file == "homelab-ssh.pub"
+) cfg.users.users.${cfg.my.host.userName}.openssh.authorizedKeys.keyFiles;
 assert lib.getName home.gtk.iconTheme.package == "papirus-icon-theme";
 assert home.home.pointerCursor.name == "Adwaita";
 assert lib.getName home.home.pointerCursor.package == "adwaita-icon-theme";

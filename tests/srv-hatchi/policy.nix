@@ -6,6 +6,9 @@
 let
   inherit (pkgs) lib;
   hatchiPublicKey = lib.strings.trim (builtins.readFile ../../config/ssh/public-keys/hatchi.pub);
+  homelabSshPublicKey = lib.strings.trim (
+    builtins.readFile ../../config/ssh/public-keys/homelab-ssh.pub
+  );
   secretsBefore =
     unit:
     builtins.elem "hatchi-secret-files.service" cfg.systemd.services.${unit}.requires
@@ -309,6 +312,8 @@ assert cfg.services.nextcloud.datadir == "/srv/nextcloud";
 assert cfg.my.host.uid == 1000;
 assert cfg.users.users.${cfg.my.host.userName}.uid == 1000;
 assert builtins.elem hatchiPublicKey
+  cfg.users.users.${cfg.my.host.userName}.openssh.authorizedKeys.keys;
+assert builtins.elem homelabSshPublicKey
   cfg.users.users.${cfg.my.host.userName}.openssh.authorizedKeys.keys;
 assert builtins.elem hatchiPublicKey cfg.users.users.root.openssh.authorizedKeys.keys;
 assert cfg.users.groups.users.gid == 100;
