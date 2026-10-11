@@ -69,10 +69,6 @@ in
       })
 
       (lib.mkIf cfg.groups.macos {
-        home.file.".hammerspoon/init.lua" = {
-          source = ../../../config/hammerspoon/init.lua;
-          force = true;
-        };
         xdg.configFile = {
           "aerospace/aerospace.toml" = {
             source = ../../../config/aerospace/aerospace.toml;

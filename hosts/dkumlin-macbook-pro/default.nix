@@ -135,7 +135,6 @@
       "font-sauce-code-pro-nerd-font"
       "font-source-sans-3"
       "ghostty"
-      "hammerspoon"
       "helium-browser"
       "godot"
       "karabiner-elements"
