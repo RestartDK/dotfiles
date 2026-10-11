@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ inputs, network, ... }:
 
 {
   imports = [
@@ -37,7 +37,13 @@
     linger = true;
     openssh.authorizedKeys.keyFiles = [
       ../../config/ssh/public-keys/nana.pub
+      ../../config/ssh/public-keys/homelab-ssh.pub
     ];
+  };
+
+  my.secrets.keys.homelabSshKey = {
+    reference = network.personalSecretReferences.homelabSshKey;
+    path = "/run/onepassword-ssh/id_ed25519";
   };
 
   boot.loader.grub = {

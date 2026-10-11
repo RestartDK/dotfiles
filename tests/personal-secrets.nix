@@ -13,16 +13,29 @@ let
       config = mac;
       userName = "danielkumlin";
       group = "staff";
+      secrets = [
+        "opencodeApiKey"
+        "openrouterApiKey"
+      ];
     }
     {
       config = nana;
       userName = "dkumlin";
       group = nana.users.users.dkumlin.group;
+      secrets = [
+        "homelabSshKey"
+        "opencodeApiKey"
+        "openrouterApiKey"
+      ];
     }
     {
       config = twinMac;
       userName = "danielkumlin";
       group = "staff";
+      secrets = [
+        "opencodeApiKey"
+        "openrouterApiKey"
+      ];
     }
   ];
   cobb =
@@ -52,6 +65,7 @@ assert builtins.all (
     config,
     userName,
     group,
+    secrets,
   }:
   let
     cfg = config.services.onepassword-secrets;
@@ -59,21 +73,29 @@ assert builtins.all (
     opencode = cfg.secrets.opencodeApiKey;
     home = config.home-manager.users.${userName};
     homeDir = home.home.homeDirectory;
+    fleetKey = cfg.secrets.homelabSshKey or null;
   in
   cfg.enable
   && cfg.tokenFile == "/etc/opnix-token"
   && cfg.users == [ ]
-  &&
-    builtins.attrNames cfg.secrets == [
-      "opencodeApiKey"
-      "openrouterApiKey"
-    ]
+  && builtins.attrNames cfg.secrets == secrets
   && openrouter.reference == privateValues.personalSecretReferences.openrouterApiKey
   && openrouter.path == "${homeDir}/.opnix-openrouter-api-key"
   && cfg.secretPaths.openrouterApiKey == openrouter.path
   && opencode.reference == privateValues.personalSecretReferences.opencodeApiKey
   && opencode.path == "${homeDir}/.opnix-opencode-api-key"
   && cfg.secretPaths.opencodeApiKey == opencode.path
+  && (
+    fleetKey == null
+    || (
+      fleetKey.reference == privateValues.personalSecretReferences.homelabSshKey
+      && fleetKey.path == "/run/onepassword-ssh/id_ed25519"
+      && cfg.secretPaths.homelabSshKey == fleetKey.path
+      && fleetKey.owner == userName
+      && fleetKey.group == group
+      && fleetKey.mode == "0400"
+    )
+  )
   &&
     builtins.all (secret: secret.owner == userName && secret.group == group && secret.mode == "0400")
       [

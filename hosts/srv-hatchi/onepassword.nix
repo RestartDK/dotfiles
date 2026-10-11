@@ -16,6 +16,7 @@ let
     glancePassword = null;
     grafanaKey = null;
     grafanaPassword = null;
+    homelabSshKey = null;
     nextcloudPassword = null;
     qbittorrentPasswordHash = null;
     runnerAccessToken = null;
@@ -34,6 +35,13 @@ let
     lib.generators.toINI { } config.services.qbittorrent.serverConfig
   );
   wifiSecrets = pkgs.writeText "wpa-secrets.conf" "wifi_psk=@hatchi-wifi-psk@\n";
+  secretOverrides = {
+    homelabSshKey = {
+      path = "/run/onepassword-ssh/id_ed25519";
+      owner = config.my.host.userName;
+      group = "users";
+    };
+  };
 in
 {
   options.my.hatchi.onepassword = {
@@ -73,12 +81,16 @@ in
         enable = true;
         outputDir = "/run/hatchi-onepassword";
         systemdIntegration.enable = false;
-        secrets = lib.mapAttrs (name: reference: {
-          inherit reference;
-          mode = "0400";
-          owner = if lib.hasPrefix "grafana" name then "grafana" else "root";
-          group = if lib.hasPrefix "grafana" name then "grafana" else "root";
-        }) (lib.filterAttrs (_: reference: reference != null) cfg.references);
+        secrets = lib.mapAttrs (
+          name: reference:
+          {
+            inherit reference;
+            mode = "0400";
+            owner = if lib.hasPrefix "grafana" name then "grafana" else "root";
+            group = if lib.hasPrefix "grafana" name then "grafana" else "root";
+          }
+          // (secretOverrides.${name} or { })
+        ) (lib.filterAttrs (_: reference: reference != null) cfg.references);
       };
       systemd.services.opnix-secrets = {
         preStart = ''

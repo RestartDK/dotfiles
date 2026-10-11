@@ -5,11 +5,12 @@
 }:
 let
   fields = builtins.fromJSON (builtins.readFile ./fixtures/synthetic-secrets.json);
+  network = builtins.fromJSON (builtins.readFile ./fixtures/synthetic-network.json);
 in
 pkgs.testers.runNixOSTest {
   name = "srv-hatchi-services";
   globalTimeout = 1800;
-  node.specialArgs = { inherit inputs; };
+  node.specialArgs = { inherit inputs network; };
   nodes = {
     hatchi = { config, lib, ... }: {
       imports = [ self.nixosModules.srv-hatchi ];
@@ -98,6 +99,7 @@ pkgs.testers.runNixOSTest {
           set -eu
           umask 077
           install -d -m751 /run/hatchi-onepassword
+          install -d -m751 /run/onepassword-ssh
           ${lib.concatStringsSep "\n" (
             lib.mapAttrsToList (name: value: ''
               printf '%s' ${lib.escapeShellArg value} > ${config.services.onepassword-secrets.secretPaths.${name}}
