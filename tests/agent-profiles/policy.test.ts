@@ -86,11 +86,11 @@ describe("profile routing", () => {
     for (const [role, member] of expected)
       expect(resolveRoute(selected, { role }).selection).toEqual({ kind: "role", role, member });
     const panels: Record<string, [string, ...string[]]> = {
-      "how-critics": work ? ["mimo"] : ["glm", "muse"],
-      "arena-runners": work ? ["mimo", "sol", "deepseek"] : ["deepseek", "muse", "mimo"],
-      "arena-cross-judge": work ? ["mimo", "sol"] : ["glm", "muse"],
-      "architect-runners": work ? ["mimo", "sol", "glm"] : ["deepseek", "muse", "mimo"],
-      "interrogate-reviewers": work ? ["mimo", "sol", "glm"] : ["glm", "muse", "mimo"],
+      "how-critics": work ? ["mimo"] : ["glm", "mimo"],
+      "arena-runners": work ? ["mimo", "sol", "deepseek"] : ["deepseek", "mimo"],
+      "arena-cross-judge": work ? ["mimo", "sol"] : ["glm", "mimo"],
+      "architect-runners": work ? ["mimo", "sol", "glm"] : ["deepseek", "mimo"],
+      "interrogate-reviewers": work ? ["mimo", "sol", "glm"] : ["glm", "mimo"],
     };
     for (const [role, members] of Object.entries(panels)) {
       expect(selected.roles.get(role)).toEqual({ kind: "panel", members });
