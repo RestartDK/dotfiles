@@ -47,6 +47,8 @@ in
       "zeroconf"
     ];
     config.default_config = { };
+    # Sonos discovery never reaches these speakers, so they are listed by host.
+    config.sonos.media_player.hosts = config.my.network.sonos;
     config.http = {
       server_host = "127.0.0.1";
       server_port = port;

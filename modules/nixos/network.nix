@@ -39,6 +39,11 @@ in
               };
             };
           };
+          sonos = mkOption {
+            default = [ ];
+            description = "Speaker addresses, for the integrations whose discovery does not reach them.";
+            type = types.listOf (types.strMatching "[0-9.]+");
+          };
         };
       }
     );
