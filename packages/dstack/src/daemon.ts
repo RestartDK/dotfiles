@@ -3,7 +3,7 @@ import { defaultConfig, startDaemon } from "./server.js";
 
 if (process.argv.includes("--help")) {
   console.log(
-    "dstackd\nPrivate Linux PR job daemon. Configuration: DSTACK_STATE_DIR, DSTACK_SOCKET, DSTACK_WORKTREE_ROOT, DSTACK_PI, DSTACK_OBSERVER, DSTACK_GH, DSTACK_GIT, XDG_CONFIG_HOME.",
+    "dstackd\nPrivate PR job daemon. Configuration: DSTACK_STATE_DIR, DSTACK_SOCKET, DSTACK_WORKTREE_ROOT, DSTACK_PI, DSTACK_OBSERVER, DSTACK_GH, DSTACK_GIT, DSTACK_PROC, XDG_CONFIG_HOME.",
   );
 } else {
   try {

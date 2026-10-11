@@ -22,6 +22,32 @@ import { releaseProcess, releaseScope } from "../src/process.ts";
 
 const exec = promisify(execFile);
 const node = process.env.DSTACK_TEST_NODE || "node";
+
+async function workerTokenGone(pid: number, token: string): Promise<boolean> {
+  if (process.platform !== "linux") {
+    // macOS has no /proc, so this proves the pid is gone, not that its environment changed.
+    for (let attempt = 0; attempt < 100; attempt++) {
+      try {
+        const { stdout } = await exec("ps", ["-o", "stat=", "-p", String(pid)]);
+        if (stdout.trim() === "" || stdout.trim().startsWith("Z")) return true;
+      } catch {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return false;
+  }
+  try {
+    const env = await readFile(`/proc/${String(pid)}/environ`, "utf8");
+    return !env.split("\0").includes(`DSTACK_PROCESS_TOKEN=${token}`);
+  } catch (error) {
+    if (
+      !(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")
+    )
+      throw error;
+    return true;
+  }
+}
 const daemonEntry = fileURLToPath(new URL("./daemon-fixture.mjs", import.meta.url));
 const cli = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const terminalCrashHook = fileURLToPath(new URL("./terminal-crash-hook.mjs", import.meta.url));
@@ -396,15 +422,7 @@ test("crash with a real native subprocess quiesces registered processes and bloc
     expect(f.calls()).toHaveLength(1);
     const call = f.calls()[0];
     if (!call) throw new Error("Missing interrupted worker");
-    try {
-      const env = await readFile(`/proc/${String(call.pid)}/environ`, "utf8");
-      expect(env.split("\0")).not.toContain(`DSTACK_PROCESS_TOKEN=${String(call.token)}`);
-    } catch (error) {
-      if (
-        !(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")
-      )
-        throw error;
-    }
+    expect(await workerTokenGone(Number(call.pid), String(call.token))).toBe(true);
     await f.request({ op: "stop", id: job.id });
     const jobs = await until(f.socket, (jobs) => jobs[0]?.state.kind === "terminal");
     expect(jobs[0]?.state).toMatchObject({ outcome: "stopped" });

@@ -103,6 +103,31 @@ function linuxHost(): Host {
   };
 }
 
+function darwinHost(): Host {
+  const proc = process.env.DSTACK_PROC || "dstack-proc";
+  const runProc = (args: string[], maxBytes: number) =>
+    exec(proc, args, { timeout: 3000, maxBuffer: maxBytes });
+  return {
+    async owned(token, key) {
+      const output = await runProc(["owned", key, token], 128 * 1024);
+      const parsed: unknown = JSON.parse(output.stdout);
+      return array(parsed).map((raw) => {
+        const value = record(raw);
+        return { pid: number(value.pid), start: string(value.start), token, key };
+      });
+    },
+    async signal(identity, action) {
+      await runProc(
+        ["signal", String(identity.pid), identity.start, identity.key, identity.token, action],
+        1024,
+      );
+    },
+    async verify() {
+      await runProc(["verify"], 1024);
+    },
+  };
+}
+
 let selected: Host | null = null;
 
 export function host(): Host {
@@ -110,6 +135,8 @@ export function host(): Host {
   switch (process.platform) {
     case "linux":
       return (selected = linuxHost());
+    case "darwin":
+      return (selected = darwinHost());
     default:
       throw new Error(`No process-ownership backend for platform ${process.platform}`);
   }

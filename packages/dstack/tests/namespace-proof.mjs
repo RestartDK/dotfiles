@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
+if (process.platform !== "linux") {
+  console.log("namespace-proof: skipped, network namespaces and /proc are Linux-only");
+  process.exit(0);
+}
 const root = await mkdtemp("/tmp/dns-");
 const daemon = fileURLToPath(new URL("../dist/daemon.js", import.meta.url));
 const env = {
