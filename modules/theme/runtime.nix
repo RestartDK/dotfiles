@@ -29,7 +29,7 @@ let
   # The runtime renderer reads these files, so Nix stays the source of the
   # values while the mode stays a runtime decision.
   paletteFile =
-    name: palette:
+    palette:
     lib.concatLines (
       [
         "mode=${palette.mode}"
@@ -39,9 +39,7 @@ let
         "nvim_option=${nvimSchemes.${palette.family}.option}"
         "nvim_variant=${nvimSchemes.${palette.family}.${palette.mode}}"
       ]
-      ++ lib.optional (builtins.hasAttr name theme.backgrounds) "background_image=${
-        toString theme.backgrounds.${name}
-      }"
+      ++ lib.optional (palette.wallpaper != null) "background_image=${toString palette.wallpaper}"
       ++ lib.mapAttrsToList (role: value: "${role}=${value}") (
         lib.removeAttrs palette [
           "mode"
@@ -96,7 +94,7 @@ in
             config.programs.starship.settings;
       }
       (lib.mapAttrs' (
-        name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile name palette; }
+        name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile palette; }
       ) theme.palettes)
     ];
 

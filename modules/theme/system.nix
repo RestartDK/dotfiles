@@ -19,7 +19,7 @@ in
     polarity = palette.mode;
 
     # One value for the desktop, the lock screen and the boot stack.
-    image = config.my.theme.backgrounds.${config.my.theme.active} or null;
+    image = palette.wallpaper;
 
     override = {
       base00 = palette.background;

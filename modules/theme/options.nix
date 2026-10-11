@@ -46,6 +46,11 @@ let
           "light"
         ];
       };
+      wallpaper = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Wallpaper for this theme, or null to leave the desktop wallpaper alone.";
+      };
       family = lib.mkOption {
         type = lib.types.strMatching "[a-z][a-z0-9-]*";
         description = "Upstream project the palette is drawn from. Apps that consume named themes map from this.";
@@ -81,18 +86,6 @@ in
         catppuccin-latte = import ./palettes/catppuccin-latte.nix;
       };
       description = "Named colour sets. Add one here to make it selectable everywhere.";
-    };
-
-    backgrounds = lib.mkOption {
-      type = lib.types.attrsOf lib.types.path;
-      default = {
-        tokyo-dark = ../../config/wallpapers/tokyo-night.png;
-        tokyo-day = ../../config/wallpapers/tokyo-day.png;
-      };
-      description = ''
-        Wallpaper per palette, optional. A palette without one leaves the
-        wallpaper alone rather than failing.
-      '';
     };
 
     palette = lib.mkOption {

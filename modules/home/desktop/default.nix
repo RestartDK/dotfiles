@@ -31,11 +31,6 @@ in
             recursive = true;
             force = true;
           };
-          "hypr/wallpapers" = {
-            source = ../../../config/hypr/wallpapers;
-            recursive = true;
-            force = true;
-          };
           "waybar" = {
             source = ../../../config/waybar;
             recursive = true;
