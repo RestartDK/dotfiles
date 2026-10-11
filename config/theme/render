@@ -85,6 +85,12 @@ if command -v hyprctl >/dev/null 2>&1; then
   hyprctl keyword misc:background_color "rgb($(role background))" >/dev/null 2>&1 || true
 fi
 
+# macOS has no compositor IPC, and desktoppr sets the picture imperatively for
+# all screens. It has to run as the user, which this does.
+if [ -n "$background_image" ] && command -v desktoppr >/dev/null 2>&1; then
+  desktoppr "$background_image" >/dev/null 2>&1 || true
+fi
+
 if command -v ghostty >/dev/null 2>&1; then
   ghostty +reload_config >/dev/null 2>&1 || true
 fi
