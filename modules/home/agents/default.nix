@@ -67,7 +67,7 @@ let
       };
 in
 {
-  options.services.dstackJobs.enable = lib.mkEnableOption "the Linux durable PR-job daemon";
+  options.services.dstackJobs.enable = lib.mkEnableOption "the durable PR-job daemon";
 
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
@@ -212,7 +212,7 @@ in
         home.file = piPackageFiles;
       })
 
-      (lib.mkIf (pi && pkgs.stdenv.hostPlatform.isLinux) {
+      (lib.mkIf pi {
         home.packages = [ piPackages.dstack ];
       })
 
@@ -233,6 +233,25 @@ in
             NoNewPrivileges = true;
           };
           Install.WantedBy = [ "default.target" ];
+        };
+      })
+
+      (lib.mkIf (pi && pkgs.stdenv.hostPlatform.isDarwin && config.services.dstackJobs.enable) {
+        home.activation.dstackJobsState = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run mkdir -p "$HOME/.local/state/dstack"
+          run chmod 700 "$HOME/.local/state/dstack"
+        '';
+        launchd.agents.dstackd = {
+          enable = true;
+          config = {
+            ProgramArguments = [ "${piPackages.dstack}/bin/dstackd" ];
+            RunAtLoad = true;
+            KeepAlive.SuccessfulExit = false;
+            ThrottleInterval = 3;
+            WorkingDirectory = config.home.homeDirectory;
+            StandardOutPath = "${config.home.homeDirectory}/.local/state/dstack/dstackd.log";
+            StandardErrorPath = "${config.home.homeDirectory}/.local/state/dstack/dstackd.err";
+          };
         };
       })
 

@@ -1,6 +1,6 @@
 # Local PR jobs pilot
 
-This Linux pilot keeps PR review and CI checks active after an interactive Pi session ends. A local daemon owns durable jobs. The CLI, Pi extension, and Herdr Jobs pane display the same state without model calls. The Home Manager service is optional and disabled by default.
+This pilot keeps PR review and CI checks active after an interactive Pi session ends. A local daemon owns durable jobs. The CLI, Pi extension, and Herdr Jobs pane display the same state without model calls. The Home Manager service is optional and disabled by default.
 
 ## Commands
 
@@ -24,7 +24,7 @@ dstack stop JOB_ID
 
 ## Runtime and packaging
 
-The daemon requires Linux 5.3 or newer, Node 22.19 or newer, Git, GitHub CLI, util-linux `flock`, and Python 3.9 or newer with `os.pidfd_open` and `signal.pidfd_send_signal`. The Nix package pins Node 24. The maintained `watch-pr` also needs its existing Bash and jq dependencies.
+The daemon runs on Linux 5.3 or newer and on macOS. Both need Node 22.19 or newer, Git, GitHub CLI, and the maintained `watch-pr` with its existing Bash and jq dependencies. Linux additionally needs util-linux `flock` and Python 3.9 or newer with `os.pidfd_open` and `signal.pidfd_send_signal`. macOS additionally needs the nixpkgs `flock` package, since macOS ships `flock(2)` but no `flock(1)` binary, and Python 3 with `psutil`, which reads `/proc` on Linux and `KERN_PROCARGS2` on macOS. The Nix package pins Node 24 and provides that interpreter.
 
 | Variable               | Default                                                     |
 | ---------------------- | ----------------------------------------------------------- |
@@ -34,8 +34,9 @@ The daemon requires Linux 5.3 or newer, Node 22.19 or newer, Git, GitHub CLI, ut
 | `DSTACK_PI`            | `pi`                                                        |
 | `DSTACK_GH`            | `gh`                                                        |
 | `DSTACK_GIT`           | `git`                                                       |
-| `DSTACK_FLOCK`         | `flock`                                                     |
-| `DSTACK_PYTHON`        | `python3`                                                   |
+| `DSTACK_FLOCK`         | `flock`; util-linux on Linux, nixpkgs `flock` on macOS      |
+| `DSTACK_PYTHON`        | `python3`, Linux only                                       |
+| `DSTACK_PROC`          | `dstack-proc`, macOS only, a psutil wrapper                |
 | `DSTACK_OBSERVER`      | `~/.agents/skills/dstack/dstack-mode/scripts/watch-pr`      |
 | `XDG_CONFIG_HOME`      | Existing model-policy default                               |
 
@@ -43,7 +44,7 @@ Executable overrides belong to trusted daemon configuration, never the public jo
 
 The state directory must be private, canonical, and owned by the current user. The socket must be inside it. Directory and socket modes are 0700 and 0600. The API exposes no TCP listener.
 
-`flock` locks an inherited duplicate of a file descriptor retained by the daemon. The descriptor stays open until storage closes. This lock works across network namespaces and releases after a crash. Only the daemon opens SQLite.
+`flock` locks an inherited duplicate of a file descriptor retained by the daemon. The descriptor stays open until storage closes. This lock works across network namespaces and releases after a crash. Linux uses util-linux `flock`; macOS uses the nixpkgs `flock` package, which takes the same single numeric descriptor behind the same `--nonblock` and `--timeout` interface. Only the daemon opens SQLite.
 
 The Nix source must include these cross-root sources during bundling:
 
@@ -65,7 +66,7 @@ Every effect is recorded before execution. Replies carry a stable remote marker.
 
 Owned detached worktrees use short paths and a `dstack:JOB_ID` Git lock. Source checkout files and branches are not edited. Fetches and repair commits add objects to the source repository's shared Git object database.
 
-Registered environment tokens identify external command scopes and workers. Recovery checks the user, process start time, and token before signaling through a pidfd. A reused PID cannot redirect the signal. Stop, merge, and closure release owned processes, verify the worktree lock release, and retain the checkout, database, sessions, and logs. No data deletion policy exists. Failed cleanup remains pending. Closure without merge is archived as `closed`.
+Registered environment tokens identify external command scopes and workers. Recovery checks the user, process start time, and token before signalling. Both platforms enumerate owned processes by scanning same-user, non-zombie processes whose environment carries the token, so a descendant that inherits the token is discoverable. Linux signals through a pidfd and re-reads `/proc`. macOS re-reads the target's start time and environment through `KERN_PROCARGS2` inside `dstack-proc` immediately before `kill(2)`. Linux closes the reused-PID race with pidfd; macOS re-proves identity in a small window before `kill(2)` with no pidfd equivalent, so that window is a residual risk there. The start time is an opaque string, compared for equality and never parsed. Its resolution is one clock tick, ten milliseconds by default, on Linux and a microsecond on macOS, so it is a second factor rather than the proof: the 192-bit token is what makes a recycled PID indistinguishable from the original. `KERN_PROCARGS2` refuses to disclose the environment of a `CS_RESTRICT` process, and psutil reports that refusal as a distinct error rather than as an empty environment, so `dstack-proc owned` names the same-user processes it could not read on stderr and never reports an unreadable process as unowned. Every daemon-spawned binary is built by Nix and so is not `CS_RESTRICT`, and `dstack-proc verify` refuses to start the daemon when it cannot read the environment of a child it just spawned. Stop, merge, and closure release owned processes, verify the worktree lock release, and retain the checkout, database, sessions, and logs. No data deletion policy exists. Failed cleanup remains pending. Closure without merge is archived as `closed`.
 
 ## Review and CI behavior
 
@@ -95,7 +96,7 @@ The viewer verifies its ownership before reuse. Sequenced metadata expires after
 
 `dstack herdr --notify` enables blocker and terminal notifications when it creates a new viewer. It does not change an existing viewer's notification setting. Initial attachment and stale cached snapshots do not notify.
 
-Home Manager installs the package for Linux Pi users. `services.dstackJobs.enable = true` adds the user service. This PR does not enable the option on any host.
+Home Manager installs the package for Linux and macOS Pi users. `services.dstackJobs.enable = true` adds the user service on Linux and the `dstackd` LaunchAgent on macOS. This PR does not enable the option on any host.
 
 ## Limits
 
@@ -124,7 +125,13 @@ node dist/daemon.js --help
 
 The acceptance suite uses the built daemon, actual SQLite, private Unix IPC, real temporary Git repositories, real subprocesses, and fake GitHub, watch-pr, and Pi subprocesses. It makes no model calls. It exercises admission, duplicate registration, exclusive ownership, disconnect, restart, offline state, human gates, branch pushes, per-thread replies, remote receipt reconciliation, interrupted-worker cleanup, conflicts, CI repair, and retained resources. Temporary artifacts remain under the printed `/tmp/dj-*` paths for inspection. The suite does not prove model judgment or GitHub's live behavior.
 
-`tests/namespace-proof.mjs` checks daemon exclusivity across real competing network namespaces. The terminal crash regression kills the daemon after the terminal document commit but before task completion. It waits for the recovered durable task to finish before checking that PR reopening caused no worker execution.
+`tests/proc-helper.test.ts` exercises the helper directly and skips when `DSTACK_PROC` is unset. The package check sets it, so the full suite runs the helper on Linux through psutil's `/proc` backend and covers environment enumeration, refusal to signal a pid whose start time or token does not match, refusal when the start time belongs to a different live process, and the `verify` probe. The macOS kernel path is what that cannot reach: psutil's `KERN_PROCARGS2` reads and the launchd agent have never been executed. Verify them on a macOS host with:
+
+```sh
+nix build --no-link --print-build-logs .#packages.aarch64-darwin.dstack
+```
+
+That build runs the full suite on macOS, where the acceptance suite drives the daemon through the darwin backend. It has not been executed from this Linux checkout, so these macOS claims remain unverified without a macOS host: `psutil.Process.environ()` against a real `KERN_PROCARGS2`, the reused-PID window, and the launchd agent. `tests/namespace-proof.mjs` checks daemon exclusivity across real competing network namespaces. The terminal crash regression kills the daemon after the terminal document commit but before task completion. It waits for the recovered durable task to finish before checking that PR reopening caused no worker execution.
 
 `tests/native-eval.ts` runs a separate model evaluation through the configured `bug-fix` route. The tested work profile selected `pi/openai-codex/gpt-6.1-sol:xhigh`. Native triage and repair completed in isolated repositories. Fixture tests do not establish production-model behavior.
 
