@@ -2,7 +2,8 @@
 """Reconcile Home Assistant config entries with a device manifest.
 
 Home Assistant stores integrations in its own config-entry storage, so this tool
-drives the documented config-flow REST API instead of hand-editing storage.
+drives the documented config-flow APIs instead of hand-editing storage. Flows
+that Home Assistant discovered on the network are confirmed with `adopt`.
 
     HA_URL=https://homeassistant.example.com HA_USERNAME=... HA_PASSWORD=... \
         ha-devices list
@@ -11,10 +12,15 @@ drives the documented config-flow REST API instead of hand-editing storage.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
+import socket
+import ssl
+import struct
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,6 +36,130 @@ class Credentials:
 
 class HaError(RuntimeError):
     pass
+
+
+class WebSocket:
+    """Minimal RFC 6455 client, enough for the Home Assistant command API.
+
+    Home Assistant only exposes in-progress flows over its websocket API, and a
+    discovery flow is the only way into integrations such as Sonos.
+    """
+
+    def __init__(self, url: str, token: str) -> None:
+        parts = urllib.parse.urlsplit(url)
+        host = parts.hostname or "localhost"
+        port = parts.port or (443 if parts.scheme == "wss" else 80)
+        self._socket = socket.create_connection((host, port), timeout=30)
+        if parts.scheme == "wss":
+            self._socket = ssl.create_default_context().wrap_socket(
+                self._socket, server_hostname=host
+            )
+        key = base64.b64encode(os.urandom(16)).decode()
+        self._socket.sendall(
+            (
+                f"GET {parts.path or '/api/websocket'} HTTP/1.1\r\n"
+                f"Host: {host}:{port}\r\n"
+                "Upgrade: websocket\r\n"
+                "Connection: Upgrade\r\n"
+                f"Sec-WebSocket-Key: {key}\r\n"
+                "Sec-WebSocket-Version: 13\r\n\r\n"
+            ).encode()
+        )
+        self._buffer = b""
+        while b"\r\n\r\n" not in self._buffer:
+            chunk = self._socket.recv(4096)
+            if not chunk:
+                raise HaError("websocket handshake closed early")
+            self._buffer += chunk
+        head, _, rest = self._buffer.partition(b"\r\n\r\n")
+        if b"101" not in head.split(b"\r\n", 1)[0]:
+            raise HaError(f"websocket upgrade refused: {head.splitlines()[0]!r}")
+        self._buffer = rest
+        self._receive()
+        self._send({"type": "auth", "access_token": token})
+        if self._receive().get("type") != "auth_ok":
+            raise HaError("websocket authentication failed")
+
+    def close(self) -> None:
+        self._socket.close()
+
+    def command(self, message: dict[str, object], timeout: float) -> list[dict]:
+        """Send one command and collect its events and result."""
+        self._send(message)
+        identifier = message.get("id")
+        collected: list[dict] = []
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return collected
+            self._socket.settimeout(remaining)
+            try:
+                received = self._receive()
+            except (TimeoutError, socket.timeout):
+                return collected
+            if received.get("id") != identifier:
+                continue
+            if received.get("type") == "result":
+                return collected + [received]
+            collected.append(received)
+
+    def _read(self, count: int) -> bytes:
+        while len(self._buffer) < count:
+            chunk = self._socket.recv(max(4096, count - len(self._buffer)))
+            if not chunk:
+                raise HaError("websocket closed")
+            self._buffer += chunk
+        data, self._buffer = self._buffer[:count], self._buffer[count:]
+        return data
+
+    def _send(self, payload: dict[str, object]) -> None:
+        data = json.dumps(payload).encode()
+        mask = os.urandom(4)
+        header = bytearray([0x81])
+        if len(data) < 126:
+            header.append(0x80 | len(data))
+        elif len(data) < 65536:
+            header.append(0x80 | 126)
+            header += struct.pack(">H", len(data))
+        else:
+            header.append(0x80 | 127)
+            header += struct.pack(">Q", len(data))
+        header += mask
+        masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(data))
+        self._socket.sendall(bytes(header) + masked)
+
+    def _frame(self) -> tuple[bool, int, bytes]:
+        first, second = self._read(2)
+        length = second & 0x7F
+        if length == 126:
+            length = struct.unpack(">H", self._read(2))[0]
+        elif length == 127:
+            length = struct.unpack(">Q", self._read(8))[0]
+        mask = self._read(4) if second & 0x80 else b""
+        payload = self._read(length)
+        if mask:
+            payload = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+        return bool(first & 0x80), first & 0x0F, payload
+
+    def _receive(self) -> dict:
+        fragments = b""
+        while True:
+            final, opcode, payload = self._frame()
+            if opcode == 0x8:
+                raise HaError("websocket closed by server")
+            if opcode == 0x9:
+                self._socket.sendall(bytes([0x8A, 0x80]) + os.urandom(4))
+                continue
+            if opcode == 0xA:
+                continue
+            fragments += payload
+            if final:
+                break
+        try:
+            return json.loads(fragments)
+        except json.JSONDecodeError as error:
+            raise HaError(f"websocket sent non-JSON: {fragments[:200]!r}") from error
 
 
 class Ha:
@@ -138,11 +268,32 @@ class Ha:
             token=self._token,
         )
 
+    def flows(self, timeout: float = 8.0) -> list[dict[str, object]]:
+        parts = urllib.parse.urlsplit(self._creds.url)
+        scheme = "wss" if parts.scheme == "https" else "ws"
+        url = urllib.parse.urlunsplit((scheme, parts.netloc, "/api/websocket", "", ""))
+        client = WebSocket(url, self._token)
+        try:
+            responses = client.command({"id": 1, "type": "config_entries/subscribe"}, timeout)
+        finally:
+            client.close()
+        return [response["flow"] for response in responses if response.get("type") == "added"]
+
+    def confirm_flow(self, flow_id: str) -> dict:
+        return self.submit_flow(flow_id, {})
+
     def delete_entry(self, entry_id: str) -> None:
         self._request(
             f"/api/config/config_entries/entry/{entry_id}",
             token=self._token,
             method="DELETE",
+        )
+
+    def reload_entry(self, entry_id: str) -> None:
+        self._request(
+            f"/api/config/config_entries/entry/{entry_id}/reload",
+            {},
+            token=self._token,
         )
 
     def has_entry(self, handler: str, host: str | None) -> bool:
@@ -255,6 +406,50 @@ def command_remove(ha: Ha, target: str) -> int:
     return 0
 
 
+def command_reload(ha: Ha, target: str) -> int:
+    matches = [
+        entry
+        for entry in ha.entries()
+        if entry.get("domain") == target or entry.get("entry_id") == target
+    ]
+    if not matches:
+        print(f"no config entry matches {target}")
+        return 1
+    for entry in matches:
+        ha.reload_entry(str(entry["entry_id"]))
+        print(f"reloaded {entry.get('domain')} {entry.get('title')}")
+    return 0
+
+
+def command_flows(ha: Ha) -> int:
+    flows = ha.flows()
+    if not flows:
+        print("no pending flows")
+        return 0
+    for flow in flows:
+        context = flow.get("context") or {}
+        label = context.get("title") or context.get("unique_id") or ""
+        print(f"{flow.get('flow_id')}\t{flow.get('handler')}\t{context.get('source')}\t{label}")
+    return 0
+
+
+def command_adopt(ha: Ha, handlers: list[str]) -> int:
+    wanted = set(handlers)
+    flows = [flow for flow in ha.flows() if flow.get("handler") in wanted]
+    if not flows:
+        print(f"no pending flows for {', '.join(sorted(wanted))}")
+        return 1
+    failed = 0
+    for flow in flows:
+        context = flow.get("context") or {}
+        name = context.get("title") or flow.get("handler")
+        result = ha.confirm_flow(str(flow["flow_id"]))
+        print(f"{name}: {describe(result)}")
+        if result.get("type") != "create_entry":
+            failed += 1
+    return 1 if failed else 0
+
+
 def command_reconcile(ha: Ha, manifest_path: str, dry_run: bool) -> int:
     with open(manifest_path) as manifest_file:
         manifest = json.load(manifest_file)
@@ -296,6 +491,14 @@ def main(argv: list[str]) -> int:
     remove = subparsers.add_parser("remove", help="delete config entries by domain or id")
     remove.add_argument("target")
 
+    reload_parser = subparsers.add_parser("reload", help="reload config entries by domain or id")
+    reload_parser.add_argument("target")
+
+    subparsers.add_parser("flows", help="pending discovery and user flows")
+
+    adopt = subparsers.add_parser("adopt", help="confirm every pending flow for a handler")
+    adopt.add_argument("handlers", nargs="+")
+
     reconcile = subparsers.add_parser("reconcile", help="converge on a manifest")
     reconcile.add_argument("manifest")
     reconcile.add_argument("--dry-run", action="store_true")
@@ -311,6 +514,12 @@ def main(argv: list[str]) -> int:
             return command_add(ha, args.handler, parse_fields(args.fields))
         case "remove":
             return command_remove(ha, args.target)
+        case "reload":
+            return command_reload(ha, args.target)
+        case "flows":
+            return command_flows(ha)
+        case "adopt":
+            return command_adopt(ha, args.handlers)
         case "reconcile":
             return command_reconcile(ha, args.manifest, args.dry_run)
     raise HaError(f"unknown command {args.command}")
