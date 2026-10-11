@@ -59,6 +59,9 @@ in
       (lib.mkIf cfg.groups.ghostty {
         programs.ghostty = {
           enable = true;
+          # macOS gets Ghostty from the Homebrew cask; pkgs.ghostty is
+          # Linux-only and refuses to evaluate on darwin.
+          package = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin null;
           # Stylix owns the theme, font and size on the Wayland desktop.
           settings = lib.mkMerge [
             {
