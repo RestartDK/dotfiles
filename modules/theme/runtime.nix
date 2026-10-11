@@ -100,6 +100,11 @@ in
       ) theme.palettes)
     ];
 
+    # The renderer writes the starship config from the palette, so Home Manager
+    # must not link its own copy over it. `programs.starship.settings` still
+    # feeds the generated base.
+    home.file."${config.programs.starship.configPath}".enable = lib.mkForce false;
+
     # A store path is needed on PATH, and the implementation stays live-editable
     # at ~/.config/theme/render. The renderer moves the macOS picture through
     # desktoppr on PATH, and the launchd observer gets it from its own PATH, so
