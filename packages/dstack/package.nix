@@ -14,8 +14,17 @@
   pi,
   lib,
   stdenv,
+  writeScript,
+  runtimeShell,
 }:
 
+let
+  procPython = python3.withPackages (ps: [ ps.psutil ]);
+  procHelper = writeScript "dstack-proc" ''
+    #!${runtimeShell}
+    exec ${procPython}/bin/python3 ${./native/dstack-proc.py} "$@"
+  '';
+in
 (buildNpmPackage.override { nodejs = nodejs_24; }) {
   pname = "dstack-jobs";
   version = "0.1.0";
@@ -50,16 +59,13 @@
     util-linux
     python3
   ];
-  postBuild = lib.optionalString stdenv.hostPlatform.isDarwin ''
-    $CC -O2 -o dstack-proc native/dstack-proc.c
-  '';
   doCheck = true;
   checkPhase = ''
     runHook preCheck
     export HOME="$TMPDIR/home"
     mkdir -p "$HOME"
+    export DSTACK_PROC=${procHelper}
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
-      export DSTACK_PROC="$PWD/dstack-proc"
       export DSTACK_FLOCK=${lib.getExe flock}
     ''}
     DSTACK_TEST_NODE=${nodejs_24}/bin/node bun test tests ../../config/pi/agent/extensions/pi-jobs
@@ -72,7 +78,7 @@
     mkdir -p "$out/libexec/dstack" "$out/bin"
     cp -r dist node_modules package.json "$out/libexec/dstack/"
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
-      install -m755 dstack-proc "$out/bin/dstack-proc"
+      install -m755 ${procHelper} "$out/bin/dstack-proc"
     ''}
     for entry in dstack:cli dstackd:daemon; do
       makeWrapper ${nodejs_24}/bin/node "$out/bin/''${entry%:*}" \
