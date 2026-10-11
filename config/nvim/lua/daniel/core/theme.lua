@@ -1,62 +1,49 @@
 local M = {}
 
 -- Written by theme(1) from the active palette, outside config/nvim so the live
--- checkout stays the only writer of this directory.
+-- checkout stays the only writer of this directory. It names the plugin, the
+-- option that selects the variant, and the variant, so this file holds no table
+-- of its own.
 local state_path = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/theme/nvim.lua"
-
-local variants = {
-  tokyonight = { dark = "night", light = "day" },
-  catppuccin = { dark = "mocha", light = "latte" },
-}
 
 local function read_state()
   local ok, state = pcall(dofile, state_path)
-  if ok and type(state) == "table" and state.family and state.mode then
+  if ok and type(state) == "table" and state.plugin and state.option and state.variant then
     return state
   end
-  return { family = "tokyo", mode = "dark" }
-end
-
-local function plugin_for(family)
-  if family == "catppuccin" then
-    return "catppuccin"
-  end
-  return "tokyonight"
+  return { plugin = "tokyonight", option = "style", variant = "night", mode = "dark" }
 end
 
 local function apply(state)
-  local plugin = plugin_for(state.family)
-  local variant = (variants[plugin] or {})[state.mode] or "night"
-
-  if M.applied_plugin == plugin and M.applied_variant == variant then
+  if M.applied_plugin == state.plugin and M.applied_variant == state.variant then
     return
   end
 
   vim.o.background = state.mode == "light" and "light" or "dark"
 
-  if plugin == "catppuccin" then
-    require("catppuccin").setup({
-      flavour = variant,
-      transparent_background = true,
-      term_colors = true,
-      styles = { sidebars = "transparent", floats = "transparent" },
-    })
+  local opts = {
+    [state.option] = state.variant,
+    styles = { sidebars = "transparent", floats = "transparent" },
+  }
+
+  -- The two plugins spell transparency and terminal colours differently.
+  if state.plugin == "catppuccin" then
+    opts.transparent_background = true
+    opts.term_colors = true
   else
-    require("tokyonight").setup({
-      style = variant,
-      transparent = true,
-      terminal_colors = true,
-      on_colors = function(colors)
-        colors.bg_gutter = "none"
-      end,
-      styles = { sidebars = "transparent", floats = "transparent" },
-    })
+    opts.transparent = true
+    opts.terminal_colors = true
+    opts.on_colors = function(colors)
+      colors.bg_gutter = "none"
+    end
   end
 
-  M.applied_plugin = plugin
-  M.applied_variant = variant
+  require(state.plugin).setup(opts)
 
-  vim.cmd.colorscheme(plugin)
+  M.applied_plugin = state.plugin
+  M.applied_variant = state.variant
+
+  vim.cmd.colorscheme(state.plugin)
 end
 
 -- Re-read on refocus rather than on a timer. theme(1) may have run while Neovim

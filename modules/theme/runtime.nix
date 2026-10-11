@@ -8,6 +8,24 @@
 let
   theme = config.my.theme;
 
+  # Neovim cannot enumerate a plugin's variants, and the two plugins disagree on
+  # both the option name and the value set, so the mapping lives here and is
+  # rendered into the palette file. Neovim then needs no table of its own.
+  nvimSchemes = {
+    tokyo = {
+      plugin = "tokyonight";
+      option = "style";
+      dark = "night";
+      light = "day";
+    };
+    catppuccin = {
+      plugin = "catppuccin";
+      option = "flavour";
+      dark = "mocha";
+      light = "latte";
+    };
+  };
+
   # The runtime renderer reads these files, so Nix stays the source of the
   # values while the mode stays a runtime decision.
   paletteFile =
@@ -17,6 +35,9 @@ let
         "mode=${palette.mode}"
         "family=${palette.family}"
         "scheme=${palette.scheme}"
+        "nvim_plugin=${nvimSchemes.${palette.family}.plugin}"
+        "nvim_option=${nvimSchemes.${palette.family}.option}"
+        "nvim_variant=${nvimSchemes.${palette.family}.${palette.mode}}"
       ]
       ++ lib.optional (builtins.hasAttr name theme.backgrounds) "background_image=${
         toString theme.backgrounds.${name}
