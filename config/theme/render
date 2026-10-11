@@ -91,8 +91,4 @@ if [ -n "$background_image" ] && command -v desktoppr >/dev/null 2>&1; then
   desktoppr "$background_image" >/dev/null 2>&1 || true
 fi
 
-if command -v ghostty >/dev/null 2>&1; then
-  ghostty +reload_config >/dev/null 2>&1 || true
-fi
-
 printf 'theme: %s (%s), %s configs rendered\n' "$mode" "$name" "$rendered"
