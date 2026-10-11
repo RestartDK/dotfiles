@@ -1,0 +1,15 @@
+--- a/homeassistant/components/stream/worker.py
++++ b/homeassistant/components/stream/worker.py
+@@ -544,7 +544,11 @@
+     """
+ 
+     try:
+-        return av.open(source, options=pyav_options, timeout=SOURCE_TIMEOUT)
++        # PyAV applies rw_timeout when given a timeout, and a camera behind
++        # `rtsps://` fails its TLS handshake under that timeout, so the stream
++        # never opens. Plain rtsp sources are the ones that need it.
++        timeout = None if source.startswith("rtsps://") else SOURCE_TIMEOUT
++        return av.open(source, options=pyav_options, timeout=timeout)
+     except av.HTTPBadRequestError as err:
+         raise StreamWorkerError(
+             f"Bad Request Error opening stream ({redact_av_error_string(err)})",
