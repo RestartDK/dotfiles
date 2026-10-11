@@ -24,7 +24,7 @@ dstack stop JOB_ID
 
 ## Runtime and packaging
 
-The daemon runs on Linux 5.3 or newer and on macOS. Both need Node 22.19 or newer, Git, GitHub CLI, and the maintained `watch-pr` with its existing Bash and jq dependencies. Linux additionally needs util-linux `flock` and Python 3.9 or newer with `os.pidfd_open` and `signal.pidfd_send_signal`. macOS additionally needs the bundled `dstack-proc` helper, which enumerates same-user processes and reads `proc_pidinfo` and `KERN_PROCARGS2`, and the bundled `flock` shim. The Nix package pins Node 24.
+The daemon runs on Linux 5.3 or newer and on macOS. Both need Node 22.19 or newer, Git, GitHub CLI, and the maintained `watch-pr` with its existing Bash and jq dependencies. Linux additionally needs util-linux `flock` and Python 3.9 or newer with `os.pidfd_open` and `signal.pidfd_send_signal`. macOS additionally needs the bundled `dstack-proc` helper, which enumerates same-user processes and reads `proc_pidinfo` and `KERN_PROCARGS2`, plus the nixpkgs `flock` package, since macOS ships `flock(2)` but no `flock(1)` binary. The Nix package pins Node 24.
 
 | Variable               | Default                                                     |
 | ---------------------- | ----------------------------------------------------------- |
@@ -34,7 +34,7 @@ The daemon runs on Linux 5.3 or newer and on macOS. Both need Node 22.19 or newe
 | `DSTACK_PI`            | `pi`                                                        |
 | `DSTACK_GH`            | `gh`                                                        |
 | `DSTACK_GIT`           | `git`                                                       |
-| `DSTACK_FLOCK`         | `flock`, the bundled shim on macOS                          |
+| `DSTACK_FLOCK`         | `flock`; util-linux on Linux, nixpkgs `flock` on macOS      |
 | `DSTACK_PYTHON`        | `python3`, Linux only                                       |
 | `DSTACK_PROC`          | `dstack-proc`, macOS only                                   |
 | `DSTACK_OBSERVER`      | `~/.agents/skills/dstack/dstack-mode/scripts/watch-pr`      |
@@ -44,7 +44,7 @@ Executable overrides belong to trusted daemon configuration, never the public jo
 
 The state directory must be private, canonical, and owned by the current user. The socket must be inside it. Directory and socket modes are 0700 and 0600. The API exposes no TCP listener.
 
-`flock` locks an inherited duplicate of a file descriptor retained by the daemon. The descriptor stays open until storage closes. This lock works across network namespaces and releases after a crash. Linux uses util-linux `flock`; macOS uses the bundled shim, which calls `flock(2)` on the single numeric descriptor it is given behind the same `--nonblock` and `--timeout` interface and rejects a descriptor that is not a regular file. Only the daemon opens SQLite.
+`flock` locks an inherited duplicate of a file descriptor retained by the daemon. The descriptor stays open until storage closes. This lock works across network namespaces and releases after a crash. Linux uses util-linux `flock`; macOS uses the nixpkgs `flock` package, which takes the same single numeric descriptor behind the same `--nonblock` and `--timeout` interface. Only the daemon opens SQLite.
 
 The Nix source must include these cross-root sources during bundling:
 
@@ -125,13 +125,13 @@ node dist/daemon.js --help
 
 The acceptance suite uses the built daemon, actual SQLite, private Unix IPC, real temporary Git repositories, real subprocesses, and fake GitHub, watch-pr, and Pi subprocesses. It makes no model calls. It exercises admission, duplicate registration, exclusive ownership, disconnect, restart, offline state, human gates, branch pushes, per-thread replies, remote receipt reconciliation, interrupted-worker cleanup, conflicts, CI repair, and retained resources. Temporary artifacts remain under the printed `/tmp/dj-*` paths for inspection. The suite does not prove model judgment or GitHub's live behavior.
 
-`tests/darwin-proc.test.ts` exercises the macOS helper directly and is skipped everywhere else. It covers environment enumeration, refusal to signal a pid whose start time or token does not match, and the `verify` capability probe. The rest of the macOS backend is compile-checked against the macOS 14.4 SDK but has never been executed: neither `native/dstack-proc.c` nor `native/flock.c` has run. Verify them on a macOS host with:
+`tests/darwin-proc.test.ts` exercises the macOS helper directly and is skipped everywhere else. It covers environment enumeration, refusal to signal a pid whose start time or token does not match, and the `verify` capability probe. The rest of the macOS backend is compile-checked against the macOS 14.4 SDK but has never been executed: `native/dstack-proc.c` has not run. Verify it on a macOS host with:
 
 ```sh
 nix build --no-link --print-build-logs .#packages.aarch64-darwin.dstack
 ```
 
-That build compiles both helpers and runs the full suite on macOS, where the helper tests run instead of being skipped and the acceptance suite drives the daemon through the darwin backend. It has not been executed from this Linux checkout, so these macOS claims remain unverified without a macOS host: the `KERN_PROCARGS2` environment read, the `verify` probe, the reused-PID window, and the launchd agent. `tests/namespace-proof.mjs` checks daemon exclusivity across real competing network namespaces. The terminal crash regression kills the daemon after the terminal document commit but before task completion. It waits for the recovered durable task to finish before checking that PR reopening caused no worker execution.
+That build compiles the helper and runs the full suite on macOS, where the helper tests run instead of being skipped and the acceptance suite drives the daemon through the darwin backend. It has not been executed from this Linux checkout, so these macOS claims remain unverified without a macOS host: the `KERN_PROCARGS2` environment read, the `verify` probe, the reused-PID window, and the launchd agent. `tests/namespace-proof.mjs` checks daemon exclusivity across real competing network namespaces. The terminal crash regression kills the daemon after the terminal document commit but before task completion. It waits for the recovered durable task to finish before checking that PR reopening caused no worker execution.
 
 `tests/native-eval.ts` runs a separate model evaluation through the configured `bug-fix` route. The tested work profile selected `pi/openai-codex/gpt-6.1-sol:xhigh`. Native triage and repair completed in isolated repositories. Fixture tests do not establish production-model behavior.
 

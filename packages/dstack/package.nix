@@ -7,6 +7,7 @@
   git,
   gh,
   jq,
+  flock,
   util-linux,
   python3,
   openssh,
@@ -51,7 +52,6 @@
   ];
   postBuild = lib.optionalString stdenv.hostPlatform.isDarwin ''
     $CC -O2 -o dstack-proc native/dstack-proc.c
-    $CC -O2 -o dstack-flock native/flock.c
   '';
   doCheck = true;
   checkPhase = ''
@@ -60,7 +60,7 @@
     mkdir -p "$HOME"
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
       export DSTACK_PROC="$PWD/dstack-proc"
-      export DSTACK_FLOCK="$PWD/dstack-flock"
+      export DSTACK_FLOCK=${lib.getExe flock}
     ''}
     DSTACK_TEST_NODE=${nodejs_24}/bin/node bun test tests ../../config/pi/agent/extensions/pi-jobs
     ${nodejs_24}/bin/node dist/cli.js --help
@@ -73,7 +73,6 @@
     cp -r dist node_modules package.json "$out/libexec/dstack/"
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
       install -m755 dstack-proc "$out/bin/dstack-proc"
-      install -m755 dstack-flock "$out/bin/dstack-flock"
     ''}
     for entry in dstack:cli dstackd:daemon; do
       makeWrapper ${nodejs_24}/bin/node "$out/bin/''${entry%:*}" \
@@ -86,7 +85,7 @@
           --set DSTACK_FLOCK ${util-linux}/bin/flock \
         ''}${lib.optionalString stdenv.hostPlatform.isDarwin ''
           --set DSTACK_PROC $out/bin/dstack-proc \
-          --set DSTACK_FLOCK $out/bin/dstack-flock \
+          --set DSTACK_FLOCK ${lib.getExe flock} \
         ''}--set DSTACK_OBSERVER ${../../config/agents/skills/dstack/dstack-mode/scripts/watch-pr} \
         --prefix PATH : ${
           lib.makeBinPath (
