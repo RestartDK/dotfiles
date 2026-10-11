@@ -66,6 +66,9 @@ in
       }) cfg.references;
     }
     (lib.mkIf enabled {
+      # wpa_supplicant reads the PSK as an unprivileged user, so the rendered file
+      # and its directory belong to that group even if wireless is later disabled.
+      users.groups.wpa_supplicant = { };
       services.onepassword-secrets = {
         enable = true;
         outputDir = "/run/hatchi-onepassword";
@@ -95,7 +98,8 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           RuntimeDirectory = "hatchi-secrets";
-          RuntimeDirectoryMode = "0700";
+          RuntimeDirectoryMode = "0710";
+          Group = "wpa_supplicant";
           UMask = "0077";
           PrivateTmp = true;
           ProtectSystem = "strict";
@@ -108,7 +112,7 @@ in
           ${pkgs.replace-secret}/bin/replace-secret '@hatchi-adguard-hash@' ${paths.adguardPasswordHash} /run/hatchi-secrets/AdGuardHome.yaml
           ${pkgs.coreutils}/bin/install -m400 ${qbittorrentConfig} /run/hatchi-secrets/qBittorrent.conf
           ${pkgs.replace-secret}/bin/replace-secret '@hatchi-qbittorrent-hash@' ${paths.qbittorrentPasswordHash} /run/hatchi-secrets/qBittorrent.conf
-          ${pkgs.coreutils}/bin/install -m400 ${wifiSecrets} /run/hatchi-secrets/wpa-secrets.conf
+          ${pkgs.coreutils}/bin/install -g wpa_supplicant -m640 ${wifiSecrets} /run/hatchi-secrets/wpa-secrets.conf
           ${pkgs.replace-secret}/bin/replace-secret '@hatchi-wifi-psk@' ${paths.wifiPsk} /run/hatchi-secrets/wpa-secrets.conf
         '';
       };
