@@ -7,6 +7,12 @@ that Home Assistant discovered on the network are confirmed with `adopt`.
 
     HA_URL=https://homeassistant.example.com HA_USERNAME=... HA_PASSWORD=... \
         ha-devices list
+
+A manifest names each device, its integration handler and that handler's fields,
+and any value starting with `op://` is resolved through the 1Password CLI:
+
+    {"devices": [{"name": "Printer", "handler": "ipp",
+                   "fields": {"host": "<device address>"}}]}
 """
 
 from __future__ import annotations
