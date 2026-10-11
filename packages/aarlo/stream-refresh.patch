@@ -1,0 +1,74 @@
+--- a/custom_components/aarlo/camera.py
++++ b/custom_components/aarlo/camera.py
+@@ -36,10 +36,11 @@
+     ATTR_ENTITY_ID,
+     CONF_FILENAME,
+ )
+-from homeassistant.core import HomeAssistant
++from homeassistant.core import HomeAssistant, callback
+ from homeassistant.exceptions import HomeAssistantError
+ from homeassistant.helpers.aiohttp_client import async_aiohttp_proxy_stream
+ from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
++from homeassistant.helpers.event import async_call_later
+ from homeassistant.helpers.entity import DeviceInfo
+ from homeassistant.config_entries import ConfigEntry
+ 
+@@ -101,6 +102,8 @@
+ 
+ CONF_FFMPEG_ARGUMENTS = "ffmpeg_arguments"
+ DEFAULT_FFMPEG_ARGUMENTS = "-pred 1 -q:v 2 -r 5"
++# Arlo stream URLs are single use, so the worker is handed a new one this often.
++STREAM_REFRESH_INTERVAL = 60
+ 
+ POWERSAVE_MODE_MAPPING = {1: "best_battery_life", 2: "optimized", 3: "best_video"}
+ 
+@@ -301,6 +304,7 @@
+     _last_image_source: str | None = None
+     _ffmpeg_arguments: str = DEFAULT_FFMPEG_ARGUMENTS
+     _stream_snapshot: bool = False
++    _stream_refresh_scheduled: bool = False
+     _save_updates_to: str | None = None
+ 
+     def __init__(self, camera, aarlo_config, hass):
+@@ -524,8 +528,40 @@
+         to the original Arlo one. This means we get a `rtsps` stream back which the stream
+         component can handle.
+         """
+-        return await self.hass.async_add_executor_job(self._camera.get_stream, "arlo")
++        url = await self.hass.async_add_executor_job(self._camera.get_stream, "arlo")
++        self._async_refresh_stream_source()
++        return url
++
++    @callback
++    def _async_refresh_stream_source(self) -> None:
++        """Hand the stream worker a fresh URL while the stream lives.
++
++        Arlo's stream URLs are single use. Home Assistant retries the first one
++        until the stream object expires, so a camera that needs waking never
++        recovers and the log fills with failures. Nest and Synology solve the
++        same problem by pushing a new URL into the worker.
++        """
++        if self._stream_refresh_scheduled:
++            return
++        self._stream_refresh_scheduled = True
+ 
++        async def _refresh(_now=None) -> None:
++            if not self.stream:
++                self._stream_refresh_scheduled = False
++                return
++            try:
++                url = await self.hass.async_add_executor_job(
++                    self._camera.get_stream, "arlo"
++                )
++            except Exception as err:  # noqa: BLE001
++                _LOGGER.debug(f"stream refresh failed for {self._attr_name}: {err}")
++                url = None
++            if url and url != self.stream.source:
++                self.stream.update_source(url)
++            async_call_later(self.hass, STREAM_REFRESH_INTERVAL, _refresh)
++
++        async_call_later(self.hass, STREAM_REFRESH_INTERVAL, _refresh)
++
+     async def async_stream_source(self, user_agent=None):
+         return await self.hass.async_add_executor_job(
+             self._camera.get_stream, user_agent
