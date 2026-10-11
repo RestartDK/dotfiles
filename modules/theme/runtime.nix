@@ -45,6 +45,7 @@ let
           "mode"
           "family"
           "scheme"
+          "wallpaper"
         ]
       )
     );
