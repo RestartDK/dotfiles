@@ -89,10 +89,11 @@ in
         '';
 
         # The static half of the starship config, which the renderer prepends to
-        # its palette table.
-        "theme/starship-base.toml".source =
-          (pkgs.formats.toml { }).generate "starship-base"
-            config.programs.starship.settings;
+        # its palette table. `palette` is a root key, so it has to live here,
+        # where the TOML generator emits it ahead of every table.
+        "theme/starship-base.toml".source = (pkgs.formats.toml { }).generate "starship-base" (
+          config.programs.starship.settings // { palette = "base16"; }
+        );
       }
       (lib.mapAttrs' (
         name: palette: lib.nameValuePair "theme/palettes/${name}" { text = paletteFile palette; }
