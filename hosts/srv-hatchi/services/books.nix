@@ -7,6 +7,14 @@
 let
   system = pkgs.stdenv.hostPlatform.system;
   mangyWeb = inputs.mangy.packages.${system}.web;
+  # The driver takes a socket as a host beginning with a slash, and it cannot
+  # parse the socket form of a URL at all, so the units name the socket here
+  # rather than through DATABASE_URL.
+  mangySocketEnv = [
+    "PGDATABASE=mangy"
+    "PGHOST=/run/postgresql"
+    "PGUSER=mangy"
+  ];
 in
 {
   services.komga = {
@@ -29,6 +37,13 @@ in
     server.port = 3002;
     environmentFile = config.my.hatchi.secretFiles.mangyEnv;
   };
+
+  # The driver takes a socket as a host beginning with a slash, and it cannot
+  # parse the socket form of a URL at all, so the units name the socket here
+  # rather than through DATABASE_URL.
+  systemd.services.mangy-migrate.serviceConfig.Environment = mangySocketEnv;
+  systemd.services.mangy-server.serviceConfig.Environment = mangySocketEnv;
+  systemd.services.mangy-worker.serviceConfig.Environment = mangySocketEnv;
 
   services.postgresql = {
     ensureDatabases = [ "mangy" ];
