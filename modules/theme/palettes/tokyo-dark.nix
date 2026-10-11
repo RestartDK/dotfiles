@@ -4,6 +4,7 @@
   mode = "dark";
   family = "tokyo";
   scheme = "tokyo-night-dark";
+  wallpaper = ../backgrounds/tokyo-night.png;
 
   background = "#1a1b26";
   dark_background = "#16161e";

@@ -3,6 +3,7 @@
   mode = "light";
   family = "tokyo";
   scheme = "tokyo-night-light";
+  wallpaper = ../backgrounds/tokyo-day.png;
 
   background = "#e1e2e7";
   dark_background = "#d0d5e3";
