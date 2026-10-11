@@ -6,6 +6,7 @@
     ../../modules/home/dev-packages.nix
     ../../modules/home/groups.nix
     ../../modules/theme/stylix-handover.nix
+    ../../modules/theme/macos-observer.nix
     ../../modules/home/ssh.nix
   ];
 
