@@ -29,6 +29,19 @@ in
     config = {
       ProgramArguments = [ (lib.getExe observer) ];
       WatchPaths = [ "${config.home.homeDirectory}/Library/Preferences/.GlobalPreferences.plist" ];
+
+      # launchd starts an agent with a minimal PATH, so the renderer's
+      # `command -v` guards would skip desktoppr and Ghostty without this. The
+      # Ghostty entry is the application bundle, which is how it is installed on
+      # these hosts.
+      EnvironmentVariables.PATH = lib.concatStringsSep ":" [
+        (lib.makeBinPath [ pkgs.desktoppr ])
+        "/Applications/Ghostty.app/Contents/MacOS"
+        "/usr/bin"
+        "/bin"
+        "/usr/sbin"
+        "/sbin"
+      ];
       RunAtLoad = true;
       StandardOutPath = "${config.home.homeDirectory}/Library/Logs/theme-appearance.log";
       StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/theme-appearance-error.log";
