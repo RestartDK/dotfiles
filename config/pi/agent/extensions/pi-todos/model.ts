@@ -189,7 +189,7 @@ export function applyTodoAction(snapshot: TodoSnapshot, action: TodoAction): Tod
   }
 }
 
-function terminalText(value: string): string {
+export function terminalText(value: string): string {
   return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
 }
 
