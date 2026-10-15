@@ -391,7 +391,7 @@
               }
               ''
                 export HOME=$TMPDIR
-                bun test ${./config/pi/agent/extensions/pi-todos}/model.test.ts
+                bun test ${./config/pi/agent/extensions/pi-todos}
                 touch $out
               '';
           pi-vim =
