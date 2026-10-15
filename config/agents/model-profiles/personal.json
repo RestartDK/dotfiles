@@ -21,13 +21,6 @@
         "model": "opencode-go/glm-5.3-flash",
         "thinking": "high"
       }
-    ],
-    "mimo": [
-      {
-        "kind": "pi",
-        "model": "opencode-go/mimo-v2.6-flash",
-        "thinking": "xhigh"
-      }
     ]
   },
   "roles": {
@@ -113,44 +106,24 @@
     },
     "how-critics": {
       "kind": "panel",
-      "members": [
-        "glm",
-        "mimo"
-      ]
+      "members": ["glm"]
     },
     "arena-runners": {
       "kind": "panel",
-      "members": [
-        "deepseek",
-        "mimo"
-      ]
+      "members": ["deepseek"]
     },
     "arena-cross-judge": {
       "kind": "panel",
-      "members": [
-        "glm",
-        "mimo"
-      ]
+      "members": ["glm"]
     },
     "architect-runners": {
       "kind": "panel",
-      "members": [
-        "deepseek",
-        "mimo"
-      ]
+      "members": ["deepseek"]
     },
     "interrogate-reviewers": {
       "kind": "panel",
-      "members": [
-        "glm",
-        "mimo"
-      ]
+      "members": ["glm"]
     }
   },
-  "providers": [
-    "opencode-go",
-    "openrouter",
-    "openai",
-    "ollama"
-  ]
+  "providers": ["opencode-go", "openrouter", "openai", "ollama"]
 }

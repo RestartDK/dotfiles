@@ -24,13 +24,6 @@
         "thinking": "max"
       }
     ],
-    "mimo": [
-      {
-        "kind": "pi",
-        "model": "openrouter/xiaomi/mimo-v2.6-flash",
-        "thinking": "xhigh"
-      }
-    ],
     "sol": [
       {
         "kind": "pi",
@@ -82,39 +75,39 @@
     },
     "prose": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "judgment": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "review": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "hardest": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "how-explainer": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "why-synthesizer": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "reflect-judgment": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "reflect-divergent": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "reflect-synthesizer": {
       "kind": "single",
-      "route": "mimo"
+      "route": "sol"
     },
     "how-explorer": {
       "kind": "single",
@@ -122,45 +115,24 @@
     },
     "how-critics": {
       "kind": "panel",
-      "members": [
-        "mimo"
-      ]
+      "members": ["sol"]
     },
     "arena-runners": {
       "kind": "panel",
-      "members": [
-        "mimo",
-        "sol",
-        "deepseek"
-      ]
+      "members": ["sol", "deepseek"]
     },
     "arena-cross-judge": {
       "kind": "panel",
-      "members": [
-        "mimo",
-        "sol"
-      ]
+      "members": ["sol"]
     },
     "architect-runners": {
       "kind": "panel",
-      "members": [
-        "mimo",
-        "sol",
-        "glm"
-      ]
+      "members": ["sol", "glm"]
     },
     "interrogate-reviewers": {
       "kind": "panel",
-      "members": [
-        "mimo",
-        "sol",
-        "glm"
-      ]
+      "members": ["sol", "glm"]
     }
   },
-  "providers": [
-    "openrouter",
-    "openai",
-    "ollama"
-  ]
+  "providers": ["openrouter", "openai", "ollama"]
 }

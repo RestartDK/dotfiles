@@ -26,7 +26,7 @@ describe("profile routing", () => {
       { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "max" },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
-      { kind: "pi", provider: "openrouter", id: "xiaomi/mimo-v2.6-flash", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6.1-sol", thinking: "xhigh" },
     ]);
   });
 
@@ -55,7 +55,7 @@ describe("profile routing", () => {
     expect(
       backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
     ).toBe("openai/gpt-6.1-sol");
-    expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
+    expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 1 }).chain[0])).toBe(
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
     for (const input of [
@@ -78,19 +78,19 @@ describe("profile routing", () => {
     group("feature refactoring swarm-workers", work ? "astra" : "deepseek");
     group("bug-fix perf-issue hillclimb reflect-tooling precise-code", work ? "sol" : "deepseek");
     group("why-investigators fast-code how-explorer", "deepseek");
-    group("prose review", work ? "mimo" : "glm");
+    group("prose review", work ? "sol" : "glm");
     group(
       "judgment hardest how-explainer why-synthesizer reflect-judgment reflect-divergent reflect-synthesizer",
-      work ? "mimo" : "deepseek",
+      work ? "sol" : "deepseek",
     );
     for (const [role, member] of expected)
       expect(resolveRoute(selected, { role }).selection).toEqual({ kind: "role", role, member });
     const panels: Record<string, [string, ...string[]]> = {
-      "how-critics": work ? ["mimo"] : ["glm", "mimo"],
-      "arena-runners": work ? ["mimo", "sol", "deepseek"] : ["deepseek", "mimo"],
-      "arena-cross-judge": work ? ["mimo", "sol"] : ["glm", "mimo"],
-      "architect-runners": work ? ["mimo", "sol", "glm"] : ["deepseek", "mimo"],
-      "interrogate-reviewers": work ? ["mimo", "sol", "glm"] : ["glm", "mimo"],
+      "how-critics": work ? ["sol"] : ["glm"],
+      "arena-runners": work ? ["sol", "deepseek"] : ["deepseek"],
+      "arena-cross-judge": work ? ["sol"] : ["glm"],
+      "architect-runners": work ? ["sol", "glm"] : ["deepseek"],
+      "interrogate-reviewers": work ? ["sol", "glm"] : ["glm"],
     };
     for (const [role, members] of Object.entries(panels)) {
       expect(selected.roles.get(role)).toEqual({ kind: "panel", members });
@@ -104,6 +104,22 @@ describe("profile routing", () => {
     }
     expect([...selected.roles.keys()].sort()).toEqual(
       [...expected.keys(), ...Object.keys(panels)].sort(),
+    );
+  });
+
+  test.each(["work", "personal"])("%s rejects Mimo dispatch", (profile) => {
+    const selected = policy(profile);
+    for (const chain of selected.routes.values()) {
+      for (const backend of chain) expect(backend.id).not.toMatch(/(^|\/)mimo(?:[-/]|$)/i);
+    }
+    for (const model of [
+      "opencode-go/mimo-v2.6-flash:xhigh",
+      "openrouter/xiaomi/mimo-v2.6-flash:xhigh",
+    ]) {
+      expect(() => resolveRoute(selected, { model })).toThrow("not allowed");
+    }
+    expect(() => resolveRoute(selected, { role: "arena-runners", member: "mimo" })).toThrow(
+      "member or seat",
     );
   });
 

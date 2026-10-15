@@ -180,7 +180,7 @@ describe("typed backend sessions", () => {
       new BackendRunner(runtime).run(feature),
     ]);
     expect(sessions.map((session) => session.options.target)).toEqual([
-      { kind: "pi", provider: "openrouter", id: "xiaomi/mimo-v2.6-flash", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6.1-sol", thinking: "xhigh" },
       { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
   });
