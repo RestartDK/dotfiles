@@ -1,12 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  Container,
-  Key,
-  matchesKey,
-  ScrollView,
-  Text,
-  TruncatedText,
-} from "@earendil-works/pi-tui";
+import { Key, matchesKey, ScrollView, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   applyTodoAction,
@@ -19,6 +12,7 @@ import {
   todoText,
   type TodoSnapshot,
 } from "./model.ts";
+import { renderTodoList } from "./view.ts";
 
 const identity = {
   id: Type.Integer({ minimum: 1 }),
@@ -49,20 +43,6 @@ const snapshotSchema = Type.Object({
 export default function todosExtension(pi: ExtensionAPI) {
   let snapshot: TodoSnapshot = EMPTY_TODOS;
 
-  const render = (ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui") return;
-    if (snapshot.visibility === "hidden" || !snapshot.plan) {
-      ctx.ui.setWidget(TODO_ENTRY, undefined);
-      return;
-    }
-    ctx.ui.setWidget(TODO_ENTRY, (_tui, theme) => {
-      const widget = new Container();
-      for (const line of todoText(snapshot).split("\n"))
-        widget.addChild(new TruncatedText(theme.fg("muted", line), 0, 0));
-      return widget;
-    });
-  };
-
   const restore = (ctx: ExtensionContext) => {
     snapshot = EMPTY_TODOS;
     try {
@@ -71,13 +51,12 @@ export default function todosExtension(pi: ExtensionAPI) {
       if (ctx.hasUI) ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       else throw error;
     }
-    render(ctx);
+    if (ctx.mode === "tui") ctx.ui.setWidget(TODO_ENTRY, undefined);
   };
 
-  const persist = (next: TodoSnapshot, ctx: ExtensionContext) => {
+  const persist = (next: TodoSnapshot) => {
     pi.appendEntry(TODO_ENTRY, next);
     snapshot = next;
-    render(ctx);
   };
 
   pi.on("session_start", (_event, ctx) => restore(ctx));
@@ -108,21 +87,16 @@ export default function todosExtension(pi: ExtensionAPI) {
         case "replace":
           persist(
             applyTodoAction(current, { action: "replace", plan: parseTodoPlan(params.plan) }),
-            ctx,
           );
           break;
         case "update":
-          persist(
-            applyTodoAction(current, { action: "update", item: parseTodoItem(params.item) }),
-            ctx,
-          );
+          persist(applyTodoAction(current, { action: "update", item: parseTodoItem(params.item) }));
           break;
         case "clear":
-          persist(applyTodoAction(current, { action: "clear" }), ctx);
+          persist(applyTodoAction(current, { action: "clear" }));
           break;
         case "list":
           snapshot = current;
-          render(ctx);
           break;
         default: {
           const exhaustive: never = params.action;
@@ -135,6 +109,11 @@ export default function todosExtension(pi: ExtensionAPI) {
         structuredContent: snapshot,
       };
     },
+    renderCall(args, theme) {
+      let text = theme.fg("toolTitle", theme.bold("todo ")) + theme.fg("muted", args.action ?? "");
+      if (args.item?.id !== undefined) text += " " + theme.fg("accent", `#${args.item.id}`);
+      return new Text(text, 0, 0);
+    },
     renderResult(result, { expanded }, theme, context) {
       const text = result.content.find((part) => part.type === "text");
       if (context.isError)
@@ -143,16 +122,12 @@ export default function todosExtension(pi: ExtensionAPI) {
           0,
           0,
         );
-      return new Text(
-        theme.fg("muted", todoText(parseTodoSnapshot(result.details), expanded)),
-        0,
-        0,
-      );
+      return renderTodoList(parseTodoSnapshot(result.details), expanded, theme);
     },
   });
 
   pi.registerCommand("todos", {
-    description: "Toggle the todo widget, or use show, hide, or list",
+    description: "Show the full todo checklist",
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui") {
         ctx.ui.notify("/todos requires interactive mode", "error");
@@ -160,39 +135,49 @@ export default function todosExtension(pi: ExtensionAPI) {
       }
       const current = restoreTodos(ctx.sessionManager.getBranch());
       switch (args.trim()) {
-        case "":
-          persist(
-            applyTodoAction(current, {
-              action: "visibility",
-              visibility: current.visibility === "shown" ? "hidden" : "shown",
-            }),
-            ctx,
-          );
-          break;
-        case "show":
         case "hide":
-          persist(
-            applyTodoAction(current, {
-              action: "visibility",
-              visibility: args.trim() === "show" ? "shown" : "hidden",
-            }),
-            ctx,
-          );
+          persist(applyTodoAction(current, { action: "visibility", visibility: "hidden" }));
+          ctx.ui.setWidget(TODO_ENTRY, undefined);
           break;
+        case "":
+        case "show":
         case "list":
+          if (args.trim() === "show")
+            persist(applyTodoAction(current, { action: "visibility", visibility: "shown" }));
           await ctx.ui.custom<void>(
-            (tui, _theme, _keys, done) => {
-              const view = new ScrollView(
-                new Text(todoText(current, true) + "\n\nEscape closes; arrows scroll", 1, 1),
-                { scrollbar: "auto", overscroll: "contain" },
+            (tui, theme, _keys, done) => {
+              const view = new ScrollView(renderTodoList(current, true, theme), {
+                overscroll: "contain",
+              });
+              const hint = new Text(
+                theme.fg("dim", "Esc closes · j/k / ↑↓ scroll · PgUp/PgDn page"),
+                0,
+                1,
               );
-              return Object.assign(view, {
+              return {
+                render: (width: number) => {
+                  const lines = view.render(width);
+                  const footer = hint.render(width);
+                  const height = Math.max(1, tui.terminal.rows - footer.length - 6);
+                  const border = theme.fg("borderMuted", "─".repeat(width));
+                  view.updateLayout(lines.length, height, () => tui.requestRender());
+                  return [
+                    border,
+                    ...lines.slice(view.scrollTop, view.scrollTop + height),
+                    ...footer,
+                    border,
+                  ];
+                },
+                invalidate: () => {
+                  view.invalidate();
+                  hint.invalidate();
+                },
                 handleInput: (data: string) => {
                   if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) done();
-                  else if (matchesKey(data, "up")) {
+                  else if (matchesKey(data, "up") || matchesKey(data, "k")) {
                     view.scrollBy(-1);
                     tui.requestRender();
-                  } else if (matchesKey(data, "down")) {
+                  } else if (matchesKey(data, "down") || matchesKey(data, "j")) {
                     view.scrollBy(1);
                     tui.requestRender();
                   } else if (matchesKey(data, Key.pageUp)) {
@@ -203,13 +188,13 @@ export default function todosExtension(pi: ExtensionAPI) {
                     tui.requestRender();
                   }
                 },
-              });
+              };
             },
-            { overlay: true },
+            { overlay: true, overlayOptions: { width: "100%" } },
           );
           break;
         default:
-          ctx.ui.notify("Usage: /todos [show|hide|list]", "warning");
+          ctx.ui.notify("Usage: /todos [list|show|hide]", "warning");
       }
     },
   });
