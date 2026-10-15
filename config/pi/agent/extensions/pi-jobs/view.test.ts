@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { parseSnapshot, type Connection, type JobView } from "../../lib/dstack-jobs.ts";
 import { modelContext } from "./view.ts";
+import { watchLine, type WatchView } from "../../lib/dstack-watches.ts";
 
 const job: JobView = {
   id: "a".repeat(24),
@@ -42,6 +43,37 @@ test("empty and connected-stale snapshots are distinct from fresh normal jobs", 
   expect(JSON.parse(modelContext(normal, 2) ?? "{}").stale).toBe(false);
   expect(JSON.parse(modelContext(normal, 20_000) ?? "{}").stale).toBe(true);
 });
+test("watch context is session-scoped, bounded and retains offline diagnostics", () => {
+  const watch: WatchView = {
+    id: "b".repeat(24),
+    requestId: "tool",
+    sessionId: "native",
+    trigger: { kind: "timer", at: 1 },
+    deadline: 2,
+    message: "private reminder",
+    createdAt: 0,
+    updatedAt: 1,
+    state: { kind: "error", reason: "unavailable\u001b[2J\n" + "x".repeat(2000) },
+  };
+  const watches = Array.from({ length: 100 }, (_, i) => ({
+    ...watch,
+    id: i.toString(16).padStart(24, "0"),
+  }));
+  const connection: Connection = {
+    kind: "offline",
+    reason: "unavailable",
+    last: { version: 1, now: 10, jobs: [], watches },
+  };
+  expect(watchLine(watch)).not.toContain("\u001b");
+  expect(watchLine(watch).length).toBeLessThanOrEqual(500);
+  expect(modelContext(connection, 11, "different", "Receipt file unavailable")).toBeNull();
+  const context = JSON.parse(
+    modelContext(connection, 11, "native", "Receipt file unavailable") ?? "{}",
+  );
+  expect(context).toMatchObject({ stale: true, wakeReceiverStatus: "Receipt file unavailable" });
+  expect(context.watches).toHaveLength(64);
+});
+
 test("large job sets keep every job visible to the model", () => {
   const jobs = Array.from({ length: 100 }, (_, i) => ({
     ...job,

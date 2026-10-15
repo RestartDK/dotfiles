@@ -28,6 +28,7 @@ import {
 import { Github, type GithubConfig } from "./github.js";
 import { releaseProcess, releaseScope } from "./process.js";
 import { Workers, type WorkerConfig } from "./worker.js";
+import { createWatchController, Watches } from "./watches.js";
 
 export const Jobs = defineDoc<Store>({
   kind: "dstack.jobs",
@@ -482,8 +483,10 @@ export async function openController(config: ControllerConfig) {
       );
     },
   });
+  const watches = createWatchController(config, () => harness);
+  await releaseScope(watches.admissionScope);
   const registry = createRegistry();
-  registry.install({ name: "dstack", tasks: [task] });
+  registry.install({ name: "dstack", tasks: [task, watches.task] });
   harness = await Harness.open(
     await openNodeSqliteStorage(join(config.stateDir, "jobs.sqlite")),
     { models: createModels(), registry },
@@ -492,9 +495,11 @@ export async function openController(config: ControllerConfig) {
   const root = await harness.root(context);
   await harness.commit(async (tx) => {
     await tx.doc(Jobs);
+    await tx.doc(Watches);
   }, context);
   harness.resume();
   return {
+    watchRequest: watches.request,
     async request(input: JobRequest): Promise<Snapshot> {
       let selected: string | null = null;
       if (input.op === "register") {
@@ -553,7 +558,12 @@ export async function openController(config: ControllerConfig) {
         .filter((j) => selected === null || j.view.id === selected)
         .map(publicView);
       if (selected !== null && !jobs.length) throw new Error("Unknown job");
-      return { version: 1, now: Date.now(), jobs };
+      return {
+        version: 1,
+        now: Date.now(),
+        jobs,
+        watches: (await watches.request({ op: "list" })).watches,
+      };
     },
     async close(): Promise<void> {
       await harness.close(context);

@@ -13,6 +13,8 @@ import {
   type Connection,
 } from "../../../config/pi/agent/lib/dstack-jobs.js";
 
+import { watchLine } from "../../../config/pi/agent/lib/dstack-watches.js";
+
 const ttlMs = 15_000;
 type Herdr = Pick<HerdrClient, "call">;
 type OwnedPane = Pick<PaneInfo, "pane_id" | "terminal_id"> & { owner: string };
@@ -201,12 +203,13 @@ export class JobsPresentation {
     if (snapshot && snapshot.now < this.#snapshotAt) return null;
     if (snapshot) this.#snapshotAt = snapshot.now;
     const jobs = snapshot?.jobs ?? [];
+    const watches = snapshot?.watches ?? [];
     const blocked = jobs.filter((job) => job.state.kind === "blocked").length;
     const terminal = jobs.filter((job) => job.state.kind === "terminal").length;
     const summary =
       connection.kind === "offline"
         ? "offline, cached state is stale"
-        : `${jobs.length} jobs, ${blocked} blocked, ${terminal} terminal`;
+        : `${jobs.length} jobs, ${blocked} blocked, ${terminal} terminal${watches.length ? `, ${watches.length} wakes` : ""}`;
     const notifications: ParamsFor<"notification.show">[] = [];
     if (connection.kind === "online") {
       for (const job of jobs) {
@@ -234,6 +237,8 @@ export class JobsPresentation {
               `  ${job.id} | ${plain(job.source)}`,
             ])
           : [connection.kind === "offline" ? "No cached snapshot." : "No jobs registered."]),
+        ...watches.slice(0, 16).map(watchLine),
+        ...(watches.length > 16 ? [`+${watches.length - 16} wakes | dstack wake list`] : []),
       ].join("\n"),
       metadata: {
         pane_id: this.pane.pane_id,
