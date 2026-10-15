@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { parseSnapshot, type Connection, type JobView } from "../../lib/dstack-jobs.ts";
-import { modelContext, widgetLines } from "./view.ts";
+import { modelContext } from "./view.ts";
 
 const job: JobView = {
   id: "a".repeat(24),
@@ -30,8 +30,6 @@ test("offline retains jobs with an explicit stale signal and does not fabricate 
   const content = modelContext(connection);
   if (!content) throw new Error("Lost cached job context");
   expect(JSON.parse(content)).toMatchObject({ stale: true, jobs: [{ id: job.id }] });
-  expect(widgetLines(connection)[0]).toContain("STALE");
-  expect(widgetLines(connection).join("\n")).not.toContain("\u001b");
 });
 test("empty and connected-stale snapshots are distinct from fresh normal jobs", () => {
   const empty: Connection = {
@@ -40,12 +38,11 @@ test("empty and connected-stale snapshots are distinct from fresh normal jobs", 
     receivedAt: 1,
   };
   expect(modelContext(empty, 2)).toBeNull();
-  expect(widgetLines(empty, 2).join("\n")).toContain("No jobs");
   const normal: Connection = { ...empty, snapshot: { version: 1, now: 1, jobs: [job] } };
   expect(JSON.parse(modelContext(normal, 2) ?? "{}").stale).toBe(false);
   expect(JSON.parse(modelContext(normal, 20_000) ?? "{}").stale).toBe(true);
 });
-test("large job sets keep model-visible state while bounding passive widget height", () => {
+test("large job sets keep every job visible to the model", () => {
   const jobs = Array.from({ length: 100 }, (_, i) => ({
     ...job,
     id: i.toString(16).padStart(24, "0"),
@@ -53,7 +50,5 @@ test("large job sets keep model-visible state while bounding passive widget heig
   }));
   const snapshot = parseSnapshot({ version: 1, now: 10, jobs });
   const connection: Connection = { kind: "online", snapshot, receivedAt: 10 };
-  expect(widgetLines(connection, 11).length).toBeLessThanOrEqual(6);
   expect(JSON.parse(modelContext(connection, 11) ?? "{}").jobs).toHaveLength(100);
-  expect(widgetLines(connection, 11).at(-1)).toContain("/jobs list");
 });

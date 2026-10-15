@@ -1,21 +1,7 @@
-import { jobLine, type Connection, type Snapshot } from "../../lib/dstack-jobs.ts";
+import type { Connection, Snapshot } from "../../lib/dstack-jobs.ts";
 
 export function visibleSnapshot(connection: Connection): Snapshot | null {
   return connection.kind === "online" ? connection.snapshot : connection.last;
-}
-export function widgetLines(connection: Connection, now = Date.now()): string[] {
-  const snapshot = visibleSnapshot(connection);
-  const stale = connection.kind === "offline" || now - connection.receivedAt > 15_000;
-  const jobs = snapshot?.jobs ?? [];
-  const title = `PR jobs · ${stale ? "OFFLINE / STALE" : "connected"} · ${jobs.length}`;
-  return [
-    title,
-    ...jobs.slice(0, 4).map((job) => jobLine(job, now)),
-    ...(jobs.length > 4 ? [`+${jobs.length - 4} more · /jobs list`] : []),
-    ...(jobs.length
-      ? []
-      : [stale ? "Daemon unavailable. Jobs are not cancelled." : "No jobs for this checkout."]),
-  ];
 }
 export function modelContext(connection: Connection, now = Date.now()): string | null {
   const snapshot = visibleSnapshot(connection);

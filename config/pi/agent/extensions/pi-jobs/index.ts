@@ -1,6 +1,6 @@
 import { realpath } from "node:fs/promises";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Container, Text, TruncatedText } from "@earendil-works/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   callJobs,
@@ -9,33 +9,21 @@ import {
   type Connection,
   type JobRequest,
 } from "../../lib/dstack-jobs.ts";
-import { modelContext, widgetLines } from "./view.ts";
+import { modelContext } from "./view.ts";
 
 export default function jobsExtension(pi: ExtensionAPI): void {
   let connection: Connection = { kind: "offline", reason: "not connected", last: null };
   let disconnect: (() => void) | undefined;
-  const render = (ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui") return;
-    ctx.ui.setWidget("dstack-jobs", (_tui, theme) => {
-      const container = new Container();
-      for (const [index, line] of widgetLines(connection).entries())
-        container.addChild(
-          new TruncatedText(theme.fg(index === 0 ? "accent" : "muted", line), 0, 0),
-        );
-      return container;
-    });
-  };
   pi.on("session_start", async (_event, ctx) => {
     disconnect?.();
+    if (ctx.mode === "tui") ctx.ui.setWidget("dstack-jobs", undefined);
     const source = await realpath(ctx.cwd);
     disconnect = subscribeJobs(
       (next) => {
         connection = next;
-        render(ctx);
       },
       { source },
     );
-    render(ctx);
   });
   pi.on("session_shutdown", (_event, ctx) => {
     disconnect?.();
