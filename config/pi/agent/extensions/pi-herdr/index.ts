@@ -468,64 +468,40 @@ export default function (pi: ExtensionAPI) {
         "pane_info",
       ).pane;
     } catch (error) {
-      if (isAbortError(error, signal)) throw error;
-      return null;
+      if (error instanceof HerdrRequestError && error.code === "pane_not_found") return null;
+      throw error;
     }
-  }
-
-  async function resolveManagedPane(
-    alias: string,
-    workspaceId: string,
-    signal?: AbortSignal,
-  ): Promise<ManagedPane | null> {
-    const managed = managedPanes.get(alias);
-    if (!managed) return null;
-    if (managed.workspaceId !== workspaceId) return null;
-
-    const pane = await getPaneInfo(managed.paneId, signal);
-    if (!pane) {
-      forgetAlias(alias);
-      return null;
-    }
-
-    return managed;
   }
 
   async function resolvePaneRef(
     ref: string,
-    workspaceId: string,
     signal?: AbortSignal,
   ): Promise<{ pane: PaneInfo; alias?: string } | null> {
-    const managed = await resolveManagedPane(ref, workspaceId, signal);
-    if (managed) {
-      const pane = await getPaneInfo(managed.paneId, signal);
-      if (!pane) {
-        forgetAlias(ref);
-        return null;
-      }
-      return { pane, alias: ref };
+    const managed = managedPanes.get(ref);
+    const pane = await getPaneInfo(managed?.paneId ?? ref, signal);
+    if (!pane || (managed && pane.workspace_id !== managed.workspaceId)) {
+      if (managed) forgetAlias(ref);
+      return null;
     }
-
-    const pane = await getPaneInfo(ref, signal);
-    if (!pane || pane.workspace_id !== workspaceId) return null;
-    const alias = [...managedPanes.entries()].find(
-      ([, managedPane]) => managedPane.paneId === pane.pane_id,
-    )?.[0];
+    const alias = managed
+      ? ref
+      : [...managedPanes.entries()].find(
+          ([, managedPane]) => managedPane.paneId === pane.pane_id,
+        )?.[0];
     return { pane, alias };
   }
 
   async function requirePaneRef(
     ref: string,
-    workspaceId: string,
     signal?: AbortSignal,
   ): Promise<{ pane: PaneInfo; alias?: string }> {
     const hadAlias = managedPanes.has(ref);
-    const resolved = await resolvePaneRef(ref, workspaceId, signal);
+    const resolved = await resolvePaneRef(ref, signal);
     if (resolved) return resolved;
     if (hadAlias) {
-      throw new Error(`Pane alias '${ref}' no longer points to a live pane and was removed.`);
+      throw new Error(`Pane alias '${ref}' is stale and was removed.`);
     }
-    throw new Error(`Pane '${ref}' not found in the current workspace.`);
+    throw new Error(`Pane '${ref}' not found.`);
   }
 
   async function readPane(
@@ -1397,18 +1373,19 @@ export default function (pi: ExtensionAPI) {
         case "tab_close": {
           const tabId = params.tab;
           if (!tabId) throw new Error("'tab' is required for tab_close");
-          if (tabId === currentPane.tab_id)
+          const tab = expectResult(
+            await herdr.call("tab.get", { tab_id: tabId }, { signal }),
+            "tab_info",
+          ).tab;
+          if (tab.tab_id === currentPane.tab_id)
             throw new Error("Refusing to close the tab pi is running in.");
 
-          const tabs = await getTabList(currentWorkspaceId, signal);
-          const tab = tabs.find((candidate) => candidate.tab_id === tabId);
-          if (!tab) throw new Error(`Tab '${tabId}' not found in the current workspace.`);
           const paneIds = new Set(
-            (await getWorkspacePanes(currentWorkspaceId, signal))
-              .filter((pane) => pane.tab_id === tabId)
+            (await getWorkspacePanes(tab.workspace_id, signal))
+              .filter((pane) => pane.tab_id === tab.tab_id)
               .map((pane) => pane.pane_id),
           );
-          expectResult(await herdr.call("tab.close", { tab_id: tabId }, { signal }), "ok");
+          expectResult(await herdr.call("tab.close", { tab_id: tab.tab_id }, { signal }), "ok");
           for (const paneId of paneIds) {
             abortPendingRun(paneId);
             lastCommandByPane.delete(paneId);
@@ -1418,7 +1395,7 @@ export default function (pi: ExtensionAPI) {
           }
           return {
             content: [{ type: "text", text: `Closed tab '${tab.label}' (${tabId})` }],
-            details: withSnapshot({ action: "tab_close", tab, tabId }),
+            details: withSnapshot({ action: "tab_close", tab, tabId: tab.tab_id }),
           };
         }
 
@@ -1447,7 +1424,7 @@ export default function (pi: ExtensionAPI) {
             };
           }
           if (params.pane) {
-            const resolved = await requirePaneRef(params.pane, currentWorkspaceId, signal);
+            const resolved = await requirePaneRef(params.pane, signal);
             const pane = expectResult(
               await herdr.call("pane.focus", { pane_id: resolved.pane.pane_id }, { signal }),
               "pane_info",
@@ -1470,7 +1447,7 @@ export default function (pi: ExtensionAPI) {
           }
           const direction = params.direction ?? "right";
 
-          const sourcePane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const sourcePane = await requirePaneRef(paneRef, signal);
           if (sourcePane.pane.tab_id === currentPane.tab_id && params.allowPiTab !== true) {
             throw new Error(
               "Refusing to split a pane in Pi's tab. Create a dedicated work tab with tab_create, then split its root pane alias, or set allowPiTab for a browser preview.",
@@ -1524,7 +1501,7 @@ export default function (pi: ExtensionAPI) {
           if (!paneRef) throw new Error("'pane' is required for run");
           if (!command) throw new Error("'command' is required for run");
 
-          const targetPane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const targetPane = await requirePaneRef(paneRef, signal);
           const paneId = targetPane.pane.pane_id;
           const paneLabel = targetPane.alias || paneRef;
           abortPendingRun(paneId);
@@ -1563,7 +1540,7 @@ export default function (pi: ExtensionAPI) {
                 pane: paneLabel,
                 paneId,
                 command,
-                workspaceId: currentWorkspaceId,
+                workspaceId: targetPane.pane.workspace_id,
               }),
             };
           }
@@ -1667,7 +1644,7 @@ export default function (pi: ExtensionAPI) {
           const paneRef = params.pane;
           if (!paneRef) throw new Error("'pane' is required for read");
 
-          const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const resolved = await requirePaneRef(paneRef, signal);
 
           const output = await readPane(
             resolved.pane.pane_id,
@@ -1710,7 +1687,7 @@ export default function (pi: ExtensionAPI) {
           if (!paneRef) throw new Error("'pane' is required for watch");
           if (!match) throw new Error("'match' is required for watch");
 
-          const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const resolved = await requirePaneRef(paneRef, signal);
           const paneLabel = resolved.alias || paneRef;
           const startTime = Date.now();
 
@@ -1782,7 +1759,7 @@ export default function (pi: ExtensionAPI) {
           const paneRef = params.pane;
           if (!paneRef) throw new Error("'pane' is required for wait");
 
-          const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const resolved = await requirePaneRef(paneRef, signal);
           const paneId = resolved.pane.pane_id;
           const paneLabel = resolved.alias || paneRef;
           const pendingRun = pendingRuns.get(paneId);
@@ -1874,7 +1851,7 @@ export default function (pi: ExtensionAPI) {
           const resolvedPanes: Array<{ pane: PaneInfo; aliasOrRef: string }> = [];
           for (const paneRef of paneRefs) {
             throwIfAborted(signal, "wait_agent");
-            const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+            const resolved = await requirePaneRef(paneRef, signal);
             resolvedPanes.push({
               pane: resolved.pane,
               aliasOrRef: resolved.alias || paneRef,
@@ -1950,7 +1927,7 @@ export default function (pi: ExtensionAPI) {
           if (!params.text && !params.keys)
             throw new Error("'text' or 'keys' is required for send");
 
-          const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const resolved = await requirePaneRef(paneRef, signal);
 
           if (params.text) {
             expectResult(
@@ -1994,7 +1971,7 @@ export default function (pi: ExtensionAPI) {
           const paneRef = params.pane;
           if (!paneRef) throw new Error("'pane' is required for stop");
 
-          const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+          const resolved = await requirePaneRef(paneRef, signal);
           if (resolved.pane.pane_id === currentPaneId) {
             throw new Error("Refusing to close the pane pi is running in.");
           }
