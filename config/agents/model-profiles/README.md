@@ -6,13 +6,13 @@ Nix selects `work.json` or `personal.json` with `my.ai.profile`. The standard Ma
 
 ```json
 {"agent":"dstack-agent","role":"feature","task":"Implement the scoped change"}
-{"agent":"dstack-agent","role":"arena-runners","member":"mimo","task":"Review the design"}
+{"agent":"dstack-agent","role":"arena-runners","member":"deepseek","task":"Review the design"}
 {"agent":"comment-sicko","role":"review","task":"Review the current diff"}
 ```
 
 Panels require `member` or a zero-based `seat`, never both. Managed dstack agents require roles. Ad-hoc `model` requests must match a declared route including effort. `thinking` overrides and combined `role`/`model` inputs are rejected.
 
-The work profile's `mimo` route uses OpenRouter's `xiaomi/mimo-v2.6-flash` at `xhigh`. Neither profile declares an Opus route or allows the native Anthropic provider.
+The work profile uses its existing `sol` route for prose, judgment, review and synthesis. Neither profile declares a Mimo or Opus route or allows the native Anthropic provider.
 
 ## Native Pi parents
 
