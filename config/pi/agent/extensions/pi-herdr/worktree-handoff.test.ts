@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { EventEmitter, once } from "node:events";
 import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
@@ -16,6 +17,7 @@ import {
   ModelRuntime,
   SessionManager,
   type AgentActivityOutcome,
+  type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage, Model, ToolResultMessage } from "@earendil-works/pi-ai";
 import { AuthStorage } from "./node_modules/@earendil-works/pi-coding-agent/dist/core/auth-storage.js";
@@ -26,13 +28,8 @@ import type { HerdrClient } from "./client.ts";
 import { observePaneForeground } from "./pane-foreground.ts";
 import type { PaneInfo, WorkspaceInfo } from "./generated/success-response.ts";
 import { claimCheckout, releaseCheckout, type WorktreeWorkspace } from "./worktree.ts";
-import {
-  buildPiHandoffCommand,
-  handoffPane,
-  handoffResourceArgs,
-  registerWorktreeHandoff,
-  worktreeBranchFromArg,
-} from "./worktree-handoff.ts";
+import { handoffPane, registerWorktreeHandoff, worktreeBranchFromArg } from "./worktree-handoff.ts";
+import { HandoffLaunch, buildPiHandoffCommand, handoffResourceArgs } from "./worktree-launch.ts";
 import {
   HANDOFF_ENTRY,
   HandoffReadiness,
@@ -185,7 +182,11 @@ function client(
         return {
           type: "tab_created",
           tab: { ...tab, tab_id: "target:fresh-tab" },
-          root_pane: { ...pane, tab_id: "target:fresh-tab", pane_id: "target:fresh" },
+          root_pane: {
+            ...pane,
+            tab_id: "target:fresh-tab",
+            pane_id: "target:fresh",
+          },
         };
       }
       if (method === "pane.send_input") {
@@ -207,6 +208,7 @@ async function runtime(
 ) {
   const notifications: string[] = [];
   const prompts: unknown[] = [];
+  const notices: Parameters<ExtensionAPI["sendMessage"]>[0][] = [];
   const errors: string[] = [];
   const controls = {
     shutdown: 0,
@@ -218,6 +220,9 @@ async function runtime(
   const host = createExtensionRuntime();
   host.appendEntry = (type, data) => {
     session.appendCustomEntry(type, data);
+  };
+  host.sendMessage = (message) => {
+    notices.push(message);
   };
   host.getThinkingLevel = () => "high";
   host.getSessionName = () => "Original task";
@@ -272,7 +277,12 @@ async function runtime(
   const assistant: AssistantMessage = {
     role: "assistant",
     content: [
-      { type: "toolCall", name: "worktree_enter", id: "enter", arguments: { branch: "task" } },
+      {
+        type: "toolCall",
+        name: "worktree_enter",
+        id: "enter",
+        arguments: { branch: "task" },
+      },
     ],
     api: model.api,
     provider: model.provider,
@@ -320,7 +330,11 @@ async function runtime(
     return {
       result,
       async finish(
-        options: { persist?: boolean; outcome?: AgentActivityOutcome; isError?: boolean } = {},
+        options: {
+          persist?: boolean;
+          outcome?: AgentActivityOutcome;
+          isError?: boolean;
+        } = {},
       ) {
         message.isError = options.isError ?? false;
         const toolResultEntryIds =
@@ -351,7 +365,18 @@ async function runtime(
     assert.ok(command);
     await command.handler(args, runner.createCommandContext());
   }
-  return { runner, tool, controls, notifications, prompts, errors, assistant, enter, command };
+  return {
+    runner,
+    tool,
+    controls,
+    notifications,
+    prompts,
+    notices,
+    errors,
+    assistant,
+    enter,
+    command,
+  };
 }
 
 test("handoff forks only the saved tool result and shuts down only after successor continuation starts", async (t) => {
@@ -449,7 +474,7 @@ test("unsaved, failed, and aborted tool results never launch or lose the source"
   }
 });
 
-test("launch failures persist stopped state and reload cannot spawn or execute more tools", async (t) => {
+test("failed source reload remains usable without automatically restarting the handoff", async (t) => {
   const f = await fixture(t);
   const c = client(f.path, {
     send: async () => {
@@ -468,10 +493,138 @@ test("launch failures persist stopped state and reload cannot spawn or execute m
     toolName: "read",
     input: { path: "file" },
   });
-  assert.equal(blocked?.block, true);
-  assert.equal(blocked?.terminate, true);
-  await restored.command("worktree", "task");
+  assert.equal(blocked, undefined);
   assert.equal(c.calls.filter((method) => method === "pane.send_input").length, 1);
+  await restored.command("worktree", "task");
+  assert.equal(c.calls.filter((method) => method === "pane.send_input").length, 2);
+});
+
+test("resuming an interrupted source reports its failure once without starting another launch", async (t) => {
+  const f = await fixture(t);
+  const c = client(f.path);
+  const source = await runtime(f.session, f.dir, c.herdr);
+  await source.enter();
+  const restored = await runtime(SessionManager.open(f.sessionFile), f.dir, c.herdr);
+  await restored.runner.emit({ type: "session_start", reason: "resume" });
+  assert.equal(restored.notices.length, 1);
+  assert.match(String(restored.notices[0].content), /reloaded or resumed/);
+  await restored.runner.emit({ type: "session_start", reason: "reload" });
+  assert.equal(restored.notices.length, 1);
+  assert.ok(!c.calls.includes("pane.send_input"));
+});
+
+test("slow claimant liveness checks do not hold the successor readiness lock", async (t) => {
+  const f = await fixture(t);
+  const original = await claimCheckout(f.path, f.sessionFile);
+  const gate = new EventEmitter();
+  const entered = once(gate, "entered");
+  const resume = once(gate, "resume");
+  const contender = claimCheckout(f.path, f.sessionFile, undefined, {
+    assertAvailable: async () => {
+      gate.emit("entered");
+      await resume;
+    },
+  });
+  await entered;
+  try {
+    assert.equal(await new HandoffReadiness(original.path, original.id).decide("ready"), "ready");
+  } finally {
+    gate.emit("resume");
+  }
+  await assert.rejects(contender, /reservation/);
+  await releaseCheckout(original);
+});
+
+test("failed launches reach model context and leave the source usable", async (t) => {
+  const f = await fixture(t);
+  const c = client(f.path, {
+    send: async () => {
+      throw new Error("shell unavailable");
+    },
+  });
+  const source = await runtime(f.session, f.dir, c.herdr);
+  await (await source.enter()).finish();
+  assert.equal(source.notices.length, 1);
+  assert.match(String(source.notices[0].content), /shell unavailable/);
+  assert.equal(handoffBlock(f.session, f.dir), undefined);
+  const input = await source.runner.emitInput(
+    "Inspect the failed handoff",
+    undefined,
+    "interactive",
+  );
+  assert.notEqual(input.action, "handled");
+});
+
+test("stopped reservations recover after branch navigation but never replace a live owner", async (t) => {
+  const f = await fixture(t);
+  const before = f.session.getLeafId();
+  assert.ok(before);
+  const c = client(f.path);
+  const checkout: WorktreeWorkspace = {
+    workspace,
+    tab,
+    root_pane: pane,
+    worktree: { path: f.path },
+    already_open: true,
+  };
+  const original = await handoffPane(
+    c.herdr,
+    checkout,
+    "source:pane",
+    f.sessionFile,
+    undefined,
+    "failed-attempt",
+    fixtureForeground,
+  );
+  f.session.appendCustomEntry(HANDOFF_ENTRY, {
+    kind: "stopped",
+    id: original.claim.id,
+    sourceSessionId: f.session.getSessionId(),
+    sourceSessionFile: f.sessionFile,
+    request: { branch: "daniel/task" },
+    destination: {
+      path: f.path,
+      workspaceId: workspace.workspace_id,
+      paneId: original.pane.pane_id,
+      claimPath: original.claim.path,
+    },
+    reason: "startup failed",
+  } satisfies WorktreeState);
+  await new HandoffReadiness(original.claim.path, original.claim.id).decide("stopped");
+  f.session.branch(before);
+  f.session.appendMessage({
+    role: "user",
+    content: "Retry in the existing workspace",
+    timestamp: 4,
+  });
+  assert.equal(worktreeState(f.session.getBranch()), undefined);
+  await assert.rejects(
+    handoffPane(
+      client(f.path, { busy: "process" }).herdr,
+      checkout,
+      "source:pane",
+      f.sessionFile,
+      undefined,
+      "blocked-attempt",
+      fixtureForeground,
+    ),
+    /uncertain live ownership/,
+  );
+  const recovered = await handoffPane(
+    c.herdr,
+    checkout,
+    "source:pane",
+    f.sessionFile,
+    undefined,
+    "replacement",
+    fixtureForeground,
+  );
+  assert.equal(recovered.claim.id, "replacement");
+  await assert.rejects(
+    new HandoffReadiness(original.claim.path, original.claim.id).decide("ready"),
+    /ownership changed/,
+  );
+  await releaseCheckout(recovered.claim);
 });
 
 test("a target outside a Git work tree fails the tool call before any handoff state exists", async (t) => {
@@ -616,7 +769,13 @@ test("checkout ownership includes grouped and symlinked agent locations, not jus
   for (const occupant of [
     { ...pane, agent: "pi" },
     { ...pane, pane_id: sourcePane.pane_id },
-    { ...pane, workspace_id: "grouped", pane_id: "grouped:agent", agent: "codex", cwd: alias },
+    {
+      ...pane,
+      workspace_id: "grouped",
+      pane_id: "grouped:agent",
+      agent: "codex",
+      cwd: alias,
+    },
   ]) {
     const c = client(f.path, { agents: [occupant] });
     await assert.rejects(
@@ -686,7 +845,7 @@ test("readiness and timeout choose one atomic decision even when they race", asy
   for (const order of ["ready-first", "stopped-first", "concurrent"]) {
     const f = await fixture(t);
     const claim = await claimCheckout(f.path, "source");
-    const readiness = new HandoffReadiness(claim.path, "successor");
+    const readiness = new HandoffReadiness(claim.path, claim.id);
     if (order === "ready-first") await readiness.decide("ready");
     if (order === "stopped-first") await readiness.decide("stopped");
     const results = await Promise.all([readiness.decide("ready"), readiness.decide("stopped")]);
@@ -711,7 +870,10 @@ test("branch-local state ignores abandoned handoffs and rejects malformed persis
   assert.ok(handoffBlock(f.session, f.dir));
   f.session.branch(before);
   assert.equal(worktreeState(f.session.getBranch()), undefined);
-  f.session.appendCustomEntry(HANDOFF_ENTRY, { kind: "owned", id: "successor" });
+  f.session.appendCustomEntry(HANDOFF_ENTRY, {
+    kind: "owned",
+    id: "successor",
+  });
   assert.throws(() => worktreeState(f.session.getBranch()), /Invalid saved/);
 });
 
@@ -729,9 +891,13 @@ test("resumed pending sources stop, and stale successors cannot claim or restart
 
 test("launch argv preserves model, reasoning, title, transcript, and isolated extensions without shell injection", async (t) => {
   const f = await fixture(t);
+  const launch = new HandoffLaunch(join(f.dir, "claim"), "launch");
+  await launch.prepare();
   const options = {
+    launch,
     sessionFile: "/tmp/it's $(false).jsonl",
     sessionName: "User's task",
+    namespace: "dev-fixture-21",
     successorId: "successor",
     model,
     thinking: "high",
@@ -742,9 +908,13 @@ test("launch argv preserves model, reasoning, title, transcript, and isolated ex
   } satisfies Parameters<typeof buildPiHandoffCommand>[0];
   const { stdout } = await exec(
     "bash",
-    ["-c", `pi() { printf '%s\\0' "$@"; }; ${buildPiHandoffCommand(options)}`],
+    [
+      "-c",
+      `pi() { test "$PI_NETNS" = dev-fixture-21 && test "$PI_NETNS_SELECTED" = dev-fixture-21 || return 41; printf '%s\\0' "$@"; }; export -f pi; ${buildPiHandoffCommand(options)}`,
+    ],
     { cwd: tmpdir() },
   );
+  assert.deepEqual(await launch.read(), { kind: "exited", phase: "pi", code: 0 });
   assert.deepEqual(stdout.split("\0").slice(0, -1), [
     "-ne",
     "-e",
@@ -787,7 +957,10 @@ test("explicit CLI tool permissions and project trust reach the successor unchan
     ["--tools", ""],
     ["--tools", "read", "--tools", "read,worktree_enter", "-xt", "bash"],
   ]) {
+    const launch = new HandoffLaunch(join(f.dir, "claim"), String(restrictions));
+    await launch.prepare();
     const options = {
+      launch,
       sessionFile: f.sessionFile,
       sessionName: undefined,
       successorId: "successor",
@@ -797,7 +970,7 @@ test("explicit CLI tool permissions and project trust reach the successor unchan
     } satisfies Parameters<typeof buildPiHandoffCommand>[0];
     const { stdout } = await exec("bash", [
       "-c",
-      `pi() { printf '%s\\0' "$@"; }; ${buildPiHandoffCommand(options)}`,
+      `pi() { printf '%s\\0' "$@"; }; export -f pi; ${buildPiHandoffCommand(options)}`,
     ]);
     const launched = stdout.split("\0").slice(0, -1);
     assert.deepEqual(launched.slice(0, restrictions.length), restrictions);
@@ -875,7 +1048,7 @@ test("no-send failures release their own claim, including tab creation failures"
   }
 });
 
-test("uncertain sends retain their claim and a late successor cannot admit another launcher", async (t) => {
+test("uncertain sends retain their claim while the destination still has running work", async (t) => {
   const f = await fixture(t);
   const c = client(f.path, {
     send: async () => {
@@ -887,6 +1060,7 @@ test("uncertain sends retain their claim and a late successor cannot admit anoth
   const state = worktreeState(f.session.getBranch());
   assert.ok(state?.kind === "stopped" && state.destination);
   assert.ok(await readFile(join(state.destination.claimPath, "owner"), "utf8"));
+  const busy = client(f.path, { busy: "process" });
   const checkout: WorktreeWorkspace = {
     workspace,
     tab,
@@ -896,7 +1070,7 @@ test("uncertain sends retain their claim and a late successor cannot admit anoth
   };
   await assert.rejects(
     handoffPane(
-      c.herdr,
+      busy.herdr,
       checkout,
       "another:pane",
       f.sessionFile,
@@ -904,7 +1078,7 @@ test("uncertain sends retain their claim and a late successor cannot admit anoth
       undefined,
       fixtureForeground,
     ),
-    /reservation/,
+    /uncertain live ownership/,
   );
   assert.equal(c.calls.filter((call) => call === "pane.send_input").length, 1);
 });
@@ -990,9 +1164,11 @@ test("cancellation after acknowledged readiness persists transferred rather than
   assert.equal(worktreeState(SessionManager.open(f.sessionFile).getBranch())?.kind, "transferred");
 });
 
-test("designated successors suppress the source warning and destinationless stops offer tree recovery", async (t) => {
+test("designated successors suppress the source warning and destinationless failures stay usable", async (t) => {
   const f = await fixture(t);
-  const claim = await claimCheckout(f.path, f.sessionFile, undefined, { id: "successor" });
+  const claim = await claimCheckout(f.path, f.sessionFile, undefined, {
+    id: "successor",
+  });
   const state: WorktreeState = {
     kind: "launching",
     id: "successor",
@@ -1021,10 +1197,7 @@ test("designated successors suppress the source warning and destinationless stop
     destination: null,
     reason: "not launched",
   } satisfies WorktreeState);
-  const guidance = handoffBlock(f.session, f.dir);
-  assert.ok(guidance);
-  assert.ok(guidance.includes("/tree") && guidance.includes("/new"));
-  assert.ok(!guidance.includes("Use the destination session"));
+  assert.equal(handoffBlock(f.session, f.dir), undefined);
 });
 
 test("canonical missing target subdirectories retain ownership and filesystem access errors propagate", async (t) => {
