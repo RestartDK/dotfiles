@@ -34,6 +34,8 @@ npm run typecheck
 npm test
 ```
 
+Background command successes and failures use Pi's native message cards. The card keeps the pane and command visible, with the output tail behind the normal expand shortcut.
+
 Tracked command completions carry a receipt. A synchronous wait or read of a confirmed exit consumes the result, so the background observer cannot announce it again. Reading an echoed shell command is not confirmation. A fresh result wakes its originating request once; an older request’s result is recorded without starting another turn. Receipts restore from the active session branch.
 
 This does not make monitoring durable. The existing six-hour observation limit and shutdown behavior remain unchanged.
