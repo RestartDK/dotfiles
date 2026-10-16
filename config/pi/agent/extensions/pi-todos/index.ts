@@ -12,6 +12,7 @@ import {
   todoText,
   type TodoSnapshot,
 } from "./model.ts";
+import { withTodoMemory } from "./memory.ts";
 import { renderTodoList } from "./view.ts";
 
 const identity = {
@@ -59,6 +60,9 @@ export default function todosExtension(pi: ExtensionAPI) {
     snapshot = next;
   };
 
+  pi.on("context", (event, ctx) => ({
+    messages: withTodoMemory(event.messages, restoreTodos(ctx.sessionManager.getBranch())),
+  }));
   pi.on("session_start", (_event, ctx) => restore(ctx));
   pi.on("session_tree", (_event, ctx) => restore(ctx));
   pi.on("tool_result", (event, ctx) => {
