@@ -6,7 +6,7 @@ import {
   truncateTail,
 } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
-import { Text } from "@earendil-works/pi-tui";
+import { Box, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
@@ -125,15 +125,17 @@ export default function (pi: ExtensionAPI) {
   registerTabTitle(pi, herdr, currentPaneTarget);
   registerWorktreeHandoff(pi, { herdr, currentPaneTarget });
 
-  // Background completions arrive as custom messages. Render them as a one-line summary and keep
-  // the captured output tail behind the expand hint so they do not flood the transcript.
   pi.registerMessageRenderer("herdr-run-finished", (message, { expanded, outputPad }, theme) => {
     const content = Array.isArray(message.content)
       ? message.content.map((part) => (part.type === "text" ? part.text : "")).join("\n")
       : message.content;
     const [summary = "", ...tailLines] = content.split("\n");
     const tail = tailLines.join("\n").trim();
-    const exitCode = (message.details as { exitCode?: number | null } | undefined)?.exitCode;
+    const details = message.details;
+    const exitCode =
+      typeof details === "object" && details !== null && "exitCode" in details
+        ? details.exitCode
+        : undefined;
     const settled = typeof exitCode === "number";
     const icon = !settled ? "◌" : exitCode === 0 ? "✓" : "✗";
     const color = !settled ? "warning" : exitCode === 0 ? "success" : "error";
@@ -144,7 +146,9 @@ export default function (pi: ExtensionAPI) {
         ? "\n" + theme.fg("dim", tail)
         : theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
     }
-    return new Text(text, outputPad, 0);
+    const card = new Box(outputPad, 1, (line) => theme.bg("customMessageBg", line));
+    card.addChild(new Text(text, 0, 0));
+    return card;
   });
   const lifecycleSource = `pi-herdr:${process.pid}:${Date.now()}`;
   let lifecycleSeq = 0;

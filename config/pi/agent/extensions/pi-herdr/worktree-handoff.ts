@@ -6,7 +6,8 @@ import {
 import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
+import { HandoffLaunch, buildPiHandoffCommand, handoffResourceArgs } from "./worktree-launch.ts";
 
 import { expectResult, HerdrRequestError, type HerdrClient } from "./client.ts";
 import {
@@ -45,110 +46,11 @@ export function worktreeBranchFromArg(arg: string): string {
 type LaunchPhase =
   | { kind: "preparing" }
   | { kind: "reserved"; claim: CheckoutClaim; destination: HandoffDestination }
-  | { kind: "submitted"; claim: CheckoutClaim; destination: HandoffDestination };
-
-export function handoffResourceArgs(argv: string[], cwd: string): string[] {
-  const args: string[] = [];
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === "--") break;
-    if (
-      [
-        "-ne",
-        "--no-extensions",
-        "-ns",
-        "--no-skills",
-        "-nc",
-        "--no-context-files",
-        "-nt",
-        "--no-tools",
-        "-nbt",
-        "--no-builtin-tools",
-        "-a",
-        "--approve",
-        "-na",
-        "--no-approve",
-      ].includes(arg)
-    )
-      args.push(arg);
-    if (["-t", "--tools", "-xt", "--exclude-tools"].includes(arg) && argv[i + 1] !== undefined) {
-      args.push(arg, argv[++i]);
-      continue;
-    }
-    if (
-      [
-        "--provider",
-        "--model",
-        "--api-key",
-        "--system-prompt",
-        "--append-system-prompt",
-        "--name",
-        "-n",
-        "--session",
-        "--session-id",
-        "--fork",
-        "--session-dir",
-        "--models",
-        "--thinking",
-        "--export",
-        "--skill",
-        "--prompt-template",
-        "--theme",
-      ].includes(arg) &&
-      argv[i + 1] !== undefined
-    ) {
-      i++;
-      continue;
-    }
-    if (
-      ["--mode", "--use-theme", "--tui-mode"].includes(arg) &&
-      argv[i + 1] !== undefined &&
-      !argv[i + 1].startsWith("-")
-    ) {
-      i++;
-      continue;
-    }
-    if (["-e", "--extension"].includes(arg) && argv[i + 1] !== undefined) {
-      const path = argv[++i];
-      args.push(arg, path.startsWith("builtin:") || isAbsolute(path) ? path : resolve(cwd, path));
-    }
-  }
-  return args;
-}
-
-export function buildPiHandoffCommand(options: {
-  sessionFile: string;
-  sessionName: string | undefined;
-  successorId: string;
-  model: Pick<NonNullable<ExtensionContext["model"]>, "provider" | "id">;
-  thinking: ReturnType<ExtensionAPI["getThinkingLevel"]>;
-  resourceArgs: string[];
-}): string {
-  const direnvPrelude =
-    'if [ -f .envrc ] && command -v direnv >/dev/null 2>&1; then direnv allow . >/dev/null 2>&1; eval "$(direnv export bash 2>/dev/null)"; fi;';
-  const args = [
-    "pi",
-    ...options.resourceArgs,
-    "--fork",
-    options.sessionFile,
-    "--session-id",
-    options.successorId,
-    "--provider",
-    options.model.provider,
-    "--model",
-    options.model.id,
-    "--thinking",
-    options.thinking,
-  ];
-  const name = options.sessionName?.trim();
-  if (name) args.push("--name", name);
-  args.push("--", `/worktree-continue ${options.successorId}`);
-  return `${direnvPrelude} ${args.map(shellQuote).join(" ")}`;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
+  | {
+      kind: "submitted";
+      claim: CheckoutClaim;
+      destination: HandoffDestination;
+    };
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -251,6 +153,7 @@ export async function handoffPane(
 export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffDeps): void {
   const { herdr, currentPaneTarget } = deps;
   const observeForeground = deps.observeForeground ?? observePaneForeground;
+  const sourceNamespace = process.env.PI_NETNS_SELECTED?.trim();
   let pending: { handoff: ResolvedHandoffRequest; toolCallId: string } | undefined;
   let continuing: Exclude<WorktreeState, { kind: "requested" | "stopped" }> | undefined;
 
@@ -282,8 +185,22 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
     };
   }
 
+  function stopSource(state: Extract<WorktreeState, { kind: "stopped" }>): void {
+    pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, state);
+    pi.sendMessage(
+      {
+        customType: "pi-herdr-worktree-failure",
+        content: `Worktree handoff failed: ${state.reason} The source session is still usable. Inspect the destination before retrying worktree_enter; do not repeat the same request while an agent or job owns it.`,
+        display: true,
+        details: { handoffId: state.id, destination: state.destination },
+      },
+      { triggerTurn: false },
+    );
+  }
+
   async function launch(handoff: ResolvedHandoffRequest, ctx: ExtensionContext): Promise<void> {
     let phase: LaunchPhase = { kind: "preparing" };
+    let launchReceipt: HandoffLaunch | undefined;
     const signal = ctx.signal;
     try {
       signal?.throwIfAborted();
@@ -314,10 +231,19 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         claimPath: claim.path,
       };
       phase = { kind: "reserved", claim, destination };
-      const state = { ...handoff, kind: "launching", destination } satisfies WorktreeState;
+      const state = {
+        ...handoff,
+        kind: "launching",
+        destination,
+      } satisfies WorktreeState;
       pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, state);
       if (!ctx.model) throw new Error("The selected model is no longer available.");
+      const receipt = new HandoffLaunch(claim.path, handoff.id);
+      await receipt.prepare();
+      launchReceipt = receipt;
       const command = buildPiHandoffCommand({
+        launch: launchReceipt,
+        namespace: sourceNamespace,
         sessionFile: handoff.sourceSessionFile,
         sessionName: pi.getSessionName(),
         successorId: handoff.id,
@@ -370,8 +296,11 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         ),
         "ok",
       );
-      await new HandoffReadiness(claim.path, handoff.id).wait(60_000, signal);
-      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...state, kind: "transferred" });
+      await new HandoffReadiness(claim.path, handoff.id).wait(60_000, signal, launchReceipt);
+      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+        ...state,
+        kind: "transferred",
+      });
       try {
         await herdr.call("tab.focus", { tab_id: pane.tab_id }, { timeoutMs: 5000, signal });
       } catch (error) {
@@ -383,7 +312,16 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
       );
       ctx.shutdown();
     } catch (error) {
-      const reason = errorMessage(error);
+      let reason = errorMessage(error);
+      if (launchReceipt && phase.kind !== "preparing") {
+        try {
+          await launchReceipt.capture(herdr, phase.destination.paneId);
+          if (!reason.includes(launchReceipt.directory))
+            reason += ` Diagnostics at ${launchReceipt.directory}.`;
+        } catch (captureError) {
+          reason += ` Could not capture destination output: ${errorMessage(captureError)}. Diagnostics at ${launchReceipt.directory}.`;
+        }
+      }
       if (phase.kind === "reserved") {
         try {
           await releaseCheckout(phase.claim);
@@ -419,7 +357,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
           );
         }
       }
-      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+      stopSource({
         ...handoff,
         kind: "stopped",
         destination: phase.kind === "preparing" ? null : phase.destination,
@@ -461,7 +399,10 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
           details: { handoffId: current.id },
         };
       const handoff = await request(params, ctx);
-      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...handoff, kind: "requested" });
+      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+        ...handoff,
+        kind: "requested",
+      });
       pending = { handoff, toolCallId };
       return {
         content: [
@@ -482,7 +423,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
     pending = undefined;
     const result = event.toolResults.find((result) => result.toolCallId === toolCallId);
     if (event.outcome !== "completed" || !result || result.isError) {
-      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+      stopSource({
         ...handoff,
         kind: "stopped",
         destination: null,
@@ -509,7 +450,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         throw new Error("Refusing to fork before the handoff tool result is saved.");
       await launch(handoff, ctx);
     } catch (error) {
-      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+      stopSource({
         ...handoff,
         kind: "stopped",
         destination: null,
@@ -562,14 +503,17 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
           (await new HandoffReadiness(state.destination.claimPath, state.id).decide("stopped")) ===
           "ready"
         ) {
-          pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...state, kind: "transferred" });
+          pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+            ...state,
+            kind: "transferred",
+          });
           return;
         }
       } catch (error) {
         ctx.ui.notify(`Could not cancel successor readiness: ${errorMessage(error)}`, "error");
       }
     }
-    pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+    stopSource({
       ...state,
       kind: "stopped",
       destination: "destination" in state ? state.destination : null,
@@ -610,7 +554,10 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
           return;
         }
         const handoff = await request({ branch: args }, ctx);
-        pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...handoff, kind: "requested" });
+        pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+          ...handoff,
+          kind: "requested",
+        });
         await launch(handoff, ctx);
       } catch (error) {
         ctx.ui.notify(`Worktree handoff failed: ${errorMessage(error)}`, "error");
@@ -637,7 +584,10 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         const source = worktreeState(SessionManager.open(state.sourceSessionFile).getBranch());
         if (source?.kind !== "launching" || source.id !== state.id)
           throw new Error("The source handoff is no longer launching. Inspect the source session.");
-        pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, { ...state, kind: "owned" });
+        pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+          ...state,
+          kind: "owned",
+        });
         continuing = state;
         pi.sendUserMessage(
           `Continue the original user task from the forked conversation in ${state.destination.path} on ${state.request.branch}. The worktree handoff is complete. Resume the agreed next step, preserving the user's scope, approvals, and constraints. Do not create another handoff or repeat completed work.`,

@@ -11,13 +11,17 @@ import {
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { Type, type Static } from "typebox";
 import { Check } from "typebox/value";
-import { HandoffReadiness, worktreeState, type HandoffDestination } from "./worktree-state.ts";
+import {
+  HandoffOwner,
+  HandoffReadiness,
+  worktreeState,
+  type HandoffDestination,
+} from "./worktree-state.ts";
+import { withHandoffLock } from "./worktree-lock.ts";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { setTimeout as delay } from "node:timers/promises";
 
 import { expectResult, type HerdrClient, type ResultOfType } from "./client.ts";
 
@@ -51,7 +55,11 @@ async function git(
   timeout?: number,
 ): Promise<string> {
   return (
-    await exec("git", ["-C", cwd, ...args], { signal, timeout, maxBuffer: 1024 * 1024 })
+    await exec("git", ["-C", cwd, ...args], {
+      signal,
+      timeout,
+      maxBuffer: 1024 * 1024,
+    })
   ).stdout.trim();
 }
 
@@ -143,7 +151,11 @@ async function openWorkspace(
     ),
     "workspace_created",
   );
-  return { ...created, worktree: { path, branch: request.branch }, already_open: false };
+  return {
+    ...created,
+    worktree: { path, branch: request.branch },
+    already_open: false,
+  };
 }
 
 export async function ensureWorktree(
@@ -186,7 +198,10 @@ export async function presentWorktree(
       );
       return {
         ...result,
-        worktree: { path: result.worktree.path, branch: result.worktree.branch ?? undefined },
+        worktree: {
+          path: result.worktree.path,
+          branch: result.worktree.branch ?? undefined,
+        },
         already_open: false,
       };
     }
@@ -196,7 +211,10 @@ export async function presentWorktree(
     );
     return {
       ...result,
-      worktree: { path: result.worktree.path, branch: result.worktree.branch ?? undefined },
+      worktree: {
+        path: result.worktree.path,
+        branch: result.worktree.branch ?? undefined,
+      },
     };
   }
   const common = await realpath(
@@ -262,13 +280,11 @@ export async function presentWorktree(
   }
 }
 
-const ClaimOwner = Type.Object({ id: Type.String(), sourceSessionFile: Type.String() });
-type ClaimOwner = Static<typeof ClaimOwner>;
-export type CheckoutClaim = ClaimOwner & { path: string };
+export type CheckoutClaim = HandoffOwner & { path: string };
 
-async function claimOwner(path: string): Promise<ClaimOwner> {
+async function claimOwner(path: string): Promise<HandoffOwner> {
   const value: unknown = JSON.parse(await readFile(join(path, "owner"), "utf8"));
-  if (!Check(ClaimOwner, value)) throw new Error(`Invalid handoff reservation owner at ${path}.`);
+  if (!Check(HandoffOwner, value)) throw new Error(`Invalid handoff reservation owner at ${path}.`);
   return value;
 }
 
@@ -285,26 +301,7 @@ async function removeClaim(claim: CheckoutClaim): Promise<void> {
 }
 
 export async function releaseCheckout(claim: CheckoutClaim): Promise<void> {
-  const lock = `${claim.path}.lock`;
-  const deadline = Date.now() + 2000;
-  while (true) {
-    try {
-      await mkdir(lock);
-      break;
-    } catch (error) {
-      if (
-        !(error instanceof Error && "code" in error && error.code === "EEXIST") ||
-        Date.now() >= deadline
-      )
-        throw error;
-      await delay(25);
-    }
-  }
-  try {
-    await removeClaim(claim);
-  } finally {
-    await rmdir(lock);
-  }
+  await withHandoffLock(claim.path, "wait", () => removeClaim(claim));
 }
 
 export async function claimCheckout(
@@ -322,16 +319,8 @@ export async function claimCheckout(
     signal,
   );
   signal?.throwIfAborted();
-  const lock = `${claimPath}.lock`;
-  try {
-    await mkdir(lock);
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "EEXIST")
-      throw new Error(`This checkout has a handoff reservation being changed at ${lock}.`);
-    throw error;
-  }
-  try {
-    await options.assertAvailable?.();
+  await options.assertAvailable?.();
+  return withHandoffLock(claimPath, "reject", async () => {
     signal?.throwIfAborted();
     try {
       await mkdir(claimPath);
@@ -339,16 +328,24 @@ export async function claimCheckout(
       if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
       try {
         const owner = await claimOwner(claimPath);
-        const state = worktreeState(SessionManager.open(owner.sourceSessionFile).getBranch());
+        const state = worktreeState(
+          SessionManager.open(owner.sourceSessionFile).getEntries(),
+          owner.id,
+        );
+        const decision = await new HandoffReadiness(claimPath, owner.id).read();
         if (
           !options.assertAvailable ||
-          state?.kind !== "transferred" ||
-          state.id !== owner.id ||
+          !state ||
+          !("destination" in state) ||
+          !state.destination ||
           state.destination.claimPath !== claimPath ||
           state.destination.path !== path ||
-          (await new HandoffReadiness(claimPath, owner.id).read()) !== "ready"
+          !(
+            (state.kind === "transferred" && decision === "ready") ||
+            (state.kind === "stopped" && decision === "stopped")
+          )
         )
-          throw new Error("The previous launch is not confirmed complete and unoccupied.");
+          throw new Error("The previous launch is not confirmed stopped or complete.");
         await options.assertAvailable(state.destination);
         await removeClaim({ ...owner, path: claimPath });
         await mkdir(claimPath);
@@ -381,7 +378,5 @@ export async function claimCheckout(
       throw error;
     }
     return claim;
-  } finally {
-    await rmdir(lock);
-  }
+  });
 }

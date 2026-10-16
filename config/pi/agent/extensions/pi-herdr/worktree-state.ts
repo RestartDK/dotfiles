@@ -1,12 +1,19 @@
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { randomUUID } from "node:crypto";
 import { link, readFile, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { withHandoffLock } from "./worktree-lock.ts";
+import type { HandoffLaunch } from "./worktree-launch.ts";
 import { setTimeout as delay } from "node:timers/promises";
 import { Type, type Static } from "typebox";
 import { Check } from "typebox/value";
 
 export const HANDOFF_ENTRY = "pi-herdr-worktree-v1";
+export const HandoffOwner = Type.Object({
+  id: Type.String(),
+  sourceSessionFile: Type.String(),
+});
+export type HandoffOwner = Static<typeof HandoffOwner>;
 export const EnterParameters = Type.Object({
   branch: Type.String({
     minLength: 1,
@@ -14,7 +21,9 @@ export const EnterParameters = Type.Object({
   }),
   base: Type.Optional(Type.String()),
   path: Type.Optional(
-    Type.String({ description: "Optional absolute checkout path with a short slug" }),
+    Type.String({
+      description: "Optional absolute checkout path with a short slug",
+    }),
   ),
   label: Type.Optional(Type.String()),
   cwd: Type.Optional(
@@ -63,16 +72,15 @@ export type ResolvedHandoffRequest = Omit<HandoffRequest, "request"> & {
   request: Omit<EnterRequest, "cwd"> & { cwd: string };
 };
 
-export function worktreeState(branch: SessionEntry[]): WorktreeState | undefined {
-  const entry = branch
-    .slice()
-    .reverse()
-    .find((entry) => entry.type === "custom" && entry.customType === HANDOFF_ENTRY);
-  if (!entry || entry.type !== "custom") return undefined;
-  const data: unknown = entry.data;
-  if (!Check(State, data))
-    throw new Error("Invalid saved worktree handoff state. Use /tree or /new to recover.");
-  return data;
+export function worktreeState(entries: SessionEntry[], id?: string): WorktreeState | undefined {
+  for (const entry of entries.slice().reverse()) {
+    if (entry.type !== "custom" || entry.customType !== HANDOFF_ENTRY) continue;
+    const data: unknown = entry.data;
+    if (!Check(State, data))
+      throw new Error("Invalid saved worktree handoff state. Use /tree or /new to recover.");
+    if (id === undefined || data.id === id) return data;
+  }
+  return undefined;
 }
 
 export function handoffBlock(
@@ -80,7 +88,7 @@ export function handoffBlock(
   cwd: string,
 ): string | undefined {
   const state = worktreeState(session.getBranch());
-  if (!state) return undefined;
+  if (!state || state.kind === "stopped") return undefined;
   if (
     state.kind === "owned" &&
     state.id === session.getSessionId() &&
@@ -121,24 +129,29 @@ export class HandoffReadiness {
   }
 
   async decide(decision: "ready" | "stopped"): Promise<"ready" | "stopped"> {
-    const candidate = `${this.path}-${randomUUID()}`;
-    await writeFile(candidate, decision === "ready" ? `ready:${this.id}` : "stopped", {
-      flag: "wx",
+    return withHandoffLock(dirname(this.path), "wait", async () => {
+      const owner: unknown = JSON.parse(await readFile(join(dirname(this.path), "owner"), "utf8"));
+      if (!Check(HandoffOwner, owner) || owner.id !== this.id)
+        throw new Error(`Handoff reservation ownership changed at ${dirname(this.path)}.`);
+      const candidate = `${this.path}-${randomUUID()}`;
+      await writeFile(candidate, decision === "ready" ? `ready:${this.id}` : "stopped", {
+        flag: "wx",
+      });
+      try {
+        await link(candidate, this.path);
+        return decision;
+      } catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+        const winner = await this.read();
+        if (!winner) throw new Error(`Handoff decision disappeared at ${this.path}.`);
+        return winner;
+      } finally {
+        await unlink(candidate);
+      }
     });
-    try {
-      await link(candidate, this.path);
-      return decision;
-    } catch (error) {
-      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
-      const winner = await this.read();
-      if (!winner) throw new Error(`Handoff decision disappeared at ${this.path}.`);
-      return winner;
-    } finally {
-      await unlink(candidate);
-    }
   }
 
-  async wait(timeoutMs = 60_000, signal?: AbortSignal): Promise<void> {
+  async wait(timeoutMs = 60_000, signal?: AbortSignal, launch?: HandoffLaunch): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (true) {
       signal?.throwIfAborted();
@@ -146,10 +159,15 @@ export class HandoffReadiness {
       if (decision === "ready") return;
       if (decision === "stopped")
         throw new Error(`Handoff stopped. Inspect the reservation at ${this.path}.`);
+      const status = launch ? await launch.read() : undefined;
+      if (status?.kind === "exited")
+        throw new Error(
+          `Successor exited with status ${status.code} during ${status.phase} startup before readiness. Diagnostics at ${launch?.directory}.`,
+        );
       if (Date.now() >= deadline) {
         if ((await this.decide("stopped")) === "ready") return;
         throw new Error(
-          `Pi did not acknowledge readiness. Inspect the destination pane and reservation at ${this.path} before recovery.`,
+          `Pi did not acknowledge readiness. Last launch phase: ${status?.kind ?? "unknown"}. Inspect the destination pane and reservation at ${this.path} before recovery.${launch ? ` Diagnostics at ${launch.directory}.` : ""}`,
         );
       }
       await delay(250, undefined, { signal });
