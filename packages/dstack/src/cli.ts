@@ -9,6 +9,8 @@ import {
   type JobRequest,
 } from "../../../config/pi/agent/lib/dstack-jobs.js";
 import { parsePr } from "./domain.js";
+import { watchLine } from "../../../config/pi/agent/lib/dstack-watches.js";
+import { wakeCommand } from "./wake-cli.js";
 import { herdrContext, openJobsPane, watchJobsPane } from "./herdr.js";
 
 const help = `dstack register --repo OWNER/REPO --pr N --source PATH --mode observe|drive
@@ -18,6 +20,11 @@ dstack stop ID
 dstack watch [ID] [--json]
 dstack attach [ID] [--json]
 dstack herdr [--notify]
+dstack wake create (--in 5m | --at ISO | --repo OWNER/REPO --pr N) --message TEXT [--session ID] [--deadline ISO] [--request-id KEY]
+dstack wake create --request-id KEY
+dstack wake list [--session ID]
+dstack wake status ID
+dstack wake cancel ID
 
 Registration authorizes only the selected mode. Drive may repair and push the owning branch.
 Scoped worker tools are not an OS sandbox.
@@ -28,6 +35,7 @@ const args = process.argv.slice(2);
 const command = args.shift();
 try {
   if (!command || command === "--help" || command === "help") console.log(help);
+  else if (command === "wake") await wakeCommand(args);
   else if (command === "herdr") {
     if (args.length > 1 || (args.length === 1 && args[0] !== "--notify"))
       throw new Error("Expected dstack herdr [--notify]");
@@ -67,7 +75,15 @@ try {
         ? jobs.map((job) => jobLine(job, connection.snapshot.now))
         : ["No matching jobs."];
       if (process.stdout.isTTY) process.stdout.write("\x1b[2J\x1b[H");
-      console.log(["Dstack jobs | Ctrl-C disconnects only", ...lines].join("\n"));
+      const watches = id ? [] : (connection.snapshot.watches ?? []);
+      console.log(
+        [
+          "Dstack jobs | Ctrl-C disconnects only",
+          ...lines,
+          ...watches.slice(0, 16).map(watchLine),
+          ...(watches.length > 16 ? [`+${watches.length - 16} watches | dstack wake list`] : []),
+        ].join("\n"),
+      );
     });
     const stop = () => {
       disconnect();

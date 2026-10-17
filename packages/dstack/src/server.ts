@@ -10,6 +10,7 @@ import {
 } from "../../../config/pi/agent/lib/dstack-jobs.js";
 import { openController, type ControllerConfig } from "./controller.js";
 import { acquireLock } from "./lock.js";
+import { parseWatchRequest } from "../../../config/pi/agent/lib/dstack-watches.js";
 import type { Command } from "./process.js";
 
 export type DaemonConfig = ControllerConfig & { socket: string; flock: Command };
@@ -93,12 +94,14 @@ export async function startDaemon(config: DaemonConfig) {
         if (
           closing ||
           req.method !== "POST" ||
-          req.url !== "/v1/jobs" ||
+          (req.url !== "/v1/jobs" && req.url !== "/v1/watches") ||
           req.headers["content-type"] !== "application/json"
         ) {
-          res
-            .writeHead(400)
-            .end(JSON.stringify({ error: "Expected POST /v1/jobs with application/json" }));
+          res.writeHead(400).end(
+            JSON.stringify({
+              error: "Expected POST /v1/jobs or /v1/watches with application/json",
+            }),
+          );
           return;
         }
         try {
@@ -111,7 +114,10 @@ export async function startDaemon(config: DaemonConfig) {
             chunks.push(buffer);
           }
           const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-          const result = await controller.request(parseRequest(body));
+          const result =
+            req.url === "/v1/watches"
+              ? await controller.watchRequest(parseWatchRequest(body))
+              : await controller.request(parseRequest(body));
           res.end(JSON.stringify(result));
         } catch (error) {
           res

@@ -2,6 +2,9 @@ import { request } from "node:http";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { isRecord } from "./model-policy.ts";
+import { parseWatch, type WatchView } from "./dstack-watches.ts";
+
+export const maxSnapshotBytes = 32 * 1024 * 1024;
 
 export const agentPrefix = "[🫩 Daniel's Agent]\n";
 export const authorGate =
@@ -30,7 +33,7 @@ export type JobView = Registration & {
   pending: string[];
   history: { at: number; event: string }[];
 };
-export type Snapshot = { version: 1; now: number; jobs: JobView[] };
+export type Snapshot = { version: 1; now: number; jobs: JobView[]; watches?: WatchView[] };
 export type JobRequest =
   | { op: "register"; registration: Registration }
   | { op: "list" }
@@ -148,7 +151,12 @@ export function parseSnapshot(value: unknown): Snapshot {
       }),
     };
   });
-  return { version: 1, now: number(v.now), jobs };
+  return {
+    version: 1,
+    now: number(v.now),
+    jobs,
+    watches: v.watches === undefined ? [] : array(v.watches).map(parseWatch),
+  };
 }
 export function stateDirectory(env: NodeJS.ProcessEnv = process.env): string {
   return (
@@ -175,10 +183,11 @@ export function callJobs(
       (res) => {
         res.setEncoding("utf8");
         let result = "";
+        let bytes = 0;
         res.on("data", (chunk: string) => {
           result += chunk;
-          if (Buffer.byteLength(result) > 4 * 1024 * 1024)
-            req.destroy(new Error("Job response too large"));
+          bytes += Buffer.byteLength(chunk);
+          if (bytes > maxSnapshotBytes) req.destroy(new Error("Job response too large"));
         });
         res.on("error", reject);
         res.on("end", () => {
