@@ -9,14 +9,26 @@ import {
   type Connection,
   type JobRequest,
 } from "../../lib/dstack-jobs.ts";
-import { modelContext } from "./view.ts";
+import { jobToolResult, modelContext } from "./view.ts";
+import { callWatches } from "../../lib/dstack-watches.ts";
+import { nativeWatchRequest, watchToolResult } from "./wake-tool.ts";
+import { WakeReceiver } from "./wake-receiver.ts";
+import { wakeOutput, wakeParameters } from "./wake-schema.ts";
 
 export default function jobsExtension(pi: ExtensionAPI): void {
   let connection: Connection = { kind: "offline", reason: "not connected", last: null };
   let disconnect: (() => void) | undefined;
+  let receiver: WakeReceiver | undefined;
+  let receiverStatus: string | null = null;
   pi.on("session_start", async (_event, ctx) => {
     disconnect?.();
+    receiver?.stop();
+    receiverStatus = null;
     if (ctx.mode === "tui") ctx.ui.setWidget("dstack-jobs", undefined);
+    receiver = new WakeReceiver(ctx, pi.sendMessage.bind(pi), (reason) => {
+      receiverStatus = reason;
+    });
+    receiver.start();
     const source = await realpath(ctx.cwd);
     disconnect = subscribeJobs(
       (next) => {
@@ -28,10 +40,17 @@ export default function jobsExtension(pi: ExtensionAPI): void {
   pi.on("session_shutdown", (_event, ctx) => {
     disconnect?.();
     disconnect = undefined;
+    receiver?.stop();
+    receiver = undefined;
     if (ctx.mode === "tui") ctx.ui.setWidget("dstack-jobs", undefined);
   });
-  pi.on("before_agent_start", () => {
-    const content = modelContext(connection);
+  pi.on("before_agent_start", (_event, ctx) => {
+    const content = modelContext(
+      connection,
+      Date.now(),
+      ctx.sessionManager.getSessionId(),
+      receiverStatus,
+    );
     if (content) return { message: { customType: "dstack-jobs", content, display: false } };
     return undefined;
   });
@@ -64,15 +83,28 @@ export default function jobsExtension(pi: ExtensionAPI): void {
     }),
     async execute(_id, params, signal) {
       const snapshot = await callJobs(parseRequest(params), { signal });
+      return jobToolResult(snapshot);
+    },
+    renderResult(result, _options, theme) {
+      const text = result.content.find((part) => part.type === "text");
+      return new Text(theme.fg("muted", text?.type === "text" ? text.text : "No job state"), 0, 0);
+    },
+  });
+  pi.registerTool({
+    name: "dstack_wake",
+    label: "Scheduled wake",
+    description:
+      "Create a session-targeted timer or pinned GitHub PR-check wake, list, inspect, or cancel it. Timer at and deadline are absolute Unix milliseconds. Checks complete only when a nonempty check set finishes, including failures. The daemon observes without model turns. Delivery waits for this native session to be idle. Never poll this tool in a loop. Creation requires a saved native session and scopes retries to this session, assistant entry, and tool-call ID. Lists prioritize active wakes and return at most 64 with an omitted count.",
+    parameters: wakeParameters,
+    outputSchema: wakeOutput,
+    async execute(id, params, signal, _update, ctx) {
+      const input = nativeWatchRequest(id, params, ctx.sessionManager);
+      const snapshot = watchToolResult(await callWatches(input, { signal }));
       return {
         content: [{ type: "text", text: JSON.stringify(snapshot) }],
         details: snapshot,
         structuredContent: snapshot,
       };
-    },
-    renderResult(result, _options, theme) {
-      const text = result.content.find((part) => part.type === "text");
-      return new Text(theme.fg("muted", text?.type === "text" ? text.text : "No job state"), 0, 0);
     },
   });
   pi.registerCommand("jobs", {
