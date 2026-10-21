@@ -233,9 +233,10 @@ export async function presentWorktree(
     const listing = (await git(root, ["worktree", "list", "--porcelain", "-z"], request.signal))
       .split("\0\0")
       .map((record) => record.split("\0"));
+    const requested = request.path ? await canonicalPath(resolve(cwd, request.path)) : undefined;
     const match = listing.find((fields) =>
-      request.path
-        ? fields.includes(`worktree ${resolve(cwd, request.path)}`)
+      requested
+        ? fields.includes(`worktree ${requested}`)
         : fields.includes(`branch refs/heads/${request.branch}`),
     );
     const checkout = match?.find((field) => field.startsWith("worktree "))?.slice(9);
