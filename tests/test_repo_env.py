@@ -36,6 +36,7 @@ class RepoEnvironmentTests(unittest.TestCase):
             "XDG_CACHE_HOME": str(self.home / "cache"),
             "XDG_CONFIG_HOME": str(self.home / "config"),
         }
+        (self.home / ".zshenv").write_text("unsetopt GLOBAL_RCS\n")
         self.rc = self.home / ".zshrc"
         self.rc.write_text(
             f'export PATH={shlex.quote(os.environ["PATH"])}\n'
