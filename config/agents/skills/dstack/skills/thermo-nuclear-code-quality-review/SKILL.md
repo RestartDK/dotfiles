@@ -10,17 +10,17 @@ dstack wiring: run as one lens under the **interrogate** primitive when the desi
 
 Use this skill for an unusually strict review focused on implementation quality, maintainability, abstraction quality, and codebase health.
 
-Above all, this skill should push the reviewer to be **ambitious** about code structure. Do not merely identify local cleanup opportunities. Actively search for "code judo" moves: restructurings that preserve behavior while making the implementation dramatically simpler, smaller, more direct, and more elegant.
+Review the original request alongside the diff. Limit restructuring to the requested behavior, correctness, or material complexity introduced by this change. Unrelated cleanup is separate work, not an acceptance blocker.
 
 ## Core Prompt
 
 Start from this baseline:
 
-> Perform a deep code quality audit of the current branch's changes.
-> Rethink how to structure / implement the changes to meaningfully improve code quality without impacting behavior.
-> Work to improve abstractions, modularity, reduce Spaghetti code, improve succinctness and legibility.
-> Be ambitious, if there is a clear path to improving the implementation that involves restructuring some of the codebase, go for it.
-> Be extremely thorough and rigorous. Measure twice, cut once.
+> Audit the current branch against the original request.
+> Check the actual input-to-output flow, typed boundaries, error handling, and verification evidence.
+> Look for changes that preserve the requested behavior while deleting complexity.
+> Restructure where the task needs it. Do not turn review into an unrelated rewrite.
+> Be thorough about correctness and skeptical of unnecessary abstractions.
 
 ## Non-Negotiable Additional Standards
 
@@ -55,10 +55,11 @@ Apply the baseline prompt above, plus these explicit review rules:
    - Be skeptical of generic mechanisms that hide simple data-shape assumptions.
    - Flag thin abstractions, identity wrappers, or pass-through helpers that add indirection without buying clarity.
 
-5. **Push hard on type and boundary cleanliness when they affect maintainability.**
-   - Question unnecessary optionality, `unknown`, `any`, or cast-heavy code when a clearer type boundary could exist.
-   - Prefer explicit typed models or shared contracts over loosely-shaped ad-hoc objects.
-   - If a branch relies on silent fallback to paper over an unclear invariant, ask whether the boundary should be made explicit instead.
+5. **Make input and domain boundaries explicit.**
+   - Follow each changed external input through its canonical parser or constructor into the domain type. Reuse that owner instead of creating a parallel shape.
+   - Parse once at ingress. Keep raw records and `unknown` there. Reject `any` and unchecked casts that hide a missing boundary.
+   - Encode invariants in constructors and types where possible. Do not model mutually exclusive states as independent optional fields.
+   - Trust constructed types inside the system instead of repeating validation throughout business logic.
 
 6. **Keep logic in the canonical layer and reuse existing helpers.**
    - Call out feature logic leaking into shared paths or implementation details leaking through APIs.
@@ -73,6 +74,8 @@ Apply the baseline prompt above, plus these explicit review rules:
 8. **Preserve error taxonomy.**
    - Do not collapse distinct failure causes (missing, expired, already consumed, unauthorized, malformed) into one opaque error; callers and support must be able to tell them apart.
    - Use cause-specific messages and the idiomatic status for each case (`NotFound` for missing, not a generic `FailedPrecondition`).
+   - Trace failures through the actual callers. Do not replace a failure with a success-shaped fallback unless the contract explicitly requires it.
+   - Use repository-required checks and focused negative-path tests to verify changed error behavior.
 
 9. **No silent behavior changes.**
    - Changing a default, a flag's meaning, a hash's semantics, or a fallback's behavior without making it explicit is a blocker; rename the knob or document the new semantics.

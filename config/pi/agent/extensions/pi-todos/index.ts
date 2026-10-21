@@ -14,7 +14,6 @@ import {
 } from "./model.ts";
 import { withTodoMemory } from "./memory.ts";
 import { renderTodoList } from "./view.ts";
-import { registerOutcome } from "./outcome-tool.ts";
 
 const identity = {
   id: Type.Integer({ minimum: 1 }),
@@ -43,7 +42,6 @@ const snapshotSchema = Type.Object({
 });
 
 export default function todosExtension(pi: ExtensionAPI) {
-  registerOutcome(pi);
   let snapshot: TodoSnapshot = EMPTY_TODOS;
 
   const restore = (ctx: ExtensionContext) => {
