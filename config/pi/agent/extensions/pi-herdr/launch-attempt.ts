@@ -216,17 +216,39 @@ export class LaunchAttempt {
     throw new Error(`Launch ${this.options.id} is stopping.`);
   }
 
+  private async authorizationCommitted(): Promise<boolean> {
+    try {
+      if ((await readFile(join(this.directory, "transferred"), "utf8")) !== this.options.id)
+        throw new Error("Launch authorization ownership changed.");
+      return true;
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+      throw error;
+    }
+  }
+
   async transfer(signal?: AbortSignal): Promise<void> {
-    if ((await this.read()).kind === "transferred") return;
+    if ((await this.read()).phase === "transferred" || (await this.authorizationCommitted()))
+      return;
     const candidate = join(this.directory, `authorization-${randomUUID()}`);
     await writeFile(candidate, this.options.id, { flag: "wx", mode: 0o600 });
-    const state = await this.assertAccepting();
+    let state: Awaited<ReturnType<LaunchAttempt["assertAccepting"]>>;
+    try {
+      state = await this.assertAccepting();
+    } catch (error) {
+      if (await this.authorizationCommitted()) return;
+      throw error;
+    }
     signal?.throwIfAborted();
     if (Date.now() >= state.deadline) throw new Error("Launch authorization deadline expired.");
     try {
       linkSync(candidate, join(this.directory, "transferred"));
     } catch (error) {
-      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+      if (
+        !(error instanceof Error && "code" in error && error.code === "EEXIST") ||
+        !(await this.authorizationCommitted())
+      )
+        throw error;
     }
   }
 

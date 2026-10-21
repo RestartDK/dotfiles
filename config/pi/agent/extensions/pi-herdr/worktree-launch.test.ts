@@ -172,6 +172,72 @@ test("cancellation during authorization validation cannot grant a generic payloa
   await assert.rejects(readFile(join(f.directory, "payload")), { code: "ENOENT" });
 });
 
+test("committed authorization is idempotent before its receipt advances from startup", async (t) => {
+  const f = await fixture(t, ":", { claimPath: null });
+  const startup = { ...(await f.launch.read()), phase: "startup" };
+  await writeFile(f.launch.statusPath, JSON.stringify(startup));
+  await f.launch.transfer();
+  const accepting = f.launch.assertAccepting.bind(f.launch);
+  const repeated = t.mock.method(f.launch, "assertAccepting", async () => {
+    await writeFile(
+      f.launch.statusPath,
+      JSON.stringify({ ...startup, kind: "transferred", phase: "transferred" }),
+    );
+    return accepting();
+  });
+  await f.launch.transfer();
+  assert.equal(repeated.mock.callCount(), 0);
+  assert.equal(await readFile(join(f.launch.directory, "transferred"), "utf8"), "attempt");
+  assert.equal((await f.launch.read()).phase, "startup");
+});
+
+test("committed authorization observed during revalidation survives pending receipt, acceptance, and exit", async (t) => {
+  for (const kind of ["active", "transferred", "exited"]) {
+    const f = await fixture(t, ":", { claimPath: null });
+    const startup = { ...(await f.launch.read()), phase: "startup" };
+    await writeFile(f.launch.statusPath, JSON.stringify(startup));
+    const accepting = f.launch.assertAccepting.bind(f.launch);
+    t.mock.method(f.launch, "assertAccepting", async () => {
+      await writeFile(join(f.launch.directory, "transferred"), "attempt");
+      await writeFile(
+        f.launch.statusPath,
+        JSON.stringify({
+          ...startup,
+          kind,
+          phase: kind === "active" ? "startup" : "transferred",
+          ...(kind === "exited" ? { code: 0, reason: null, cleanup: "confirmed" } : {}),
+        }),
+      );
+      return accepting();
+    });
+    await f.launch.transfer();
+    assert.equal((await f.launch.read()).kind, kind);
+    assert.equal(await readFile(join(f.launch.directory, "transferred"), "utf8"), "attempt");
+  }
+});
+
+test("unrelated authorization cannot be adopted before or during revalidation", async (t) => {
+  for (const concurrent of [false, true]) {
+    const f = await fixture(t, ":", { claimPath: null });
+    await writeFile(
+      f.launch.statusPath,
+      JSON.stringify({ ...(await f.launch.read()), phase: "startup" }),
+    );
+    const authorization = join(f.launch.directory, "transferred");
+    if (concurrent) {
+      const accepting = f.launch.assertAccepting.bind(f.launch);
+      t.mock.method(f.launch, "assertAccepting", async () => {
+        await writeFile(authorization, "unrelated");
+        return accepting();
+      });
+    } else {
+      await writeFile(authorization, "unrelated");
+    }
+    await assert.rejects(f.launch.transfer(), /authorization ownership changed/);
+    assert.equal(await readFile(authorization, "utf8"), "unrelated");
+  }
+});
+
 test("source death before transfer cannot be hidden by a fresh heartbeat", async (t) => {
   const f = await fixture(t, "sleep 0.3", { leaseMs: 10_000 });
   const source = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
