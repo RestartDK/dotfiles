@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test, { type TestContext } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -29,7 +29,12 @@ import { observePaneForeground } from "./pane-foreground.ts";
 import type { PaneInfo, WorkspaceInfo } from "./generated/success-response.ts";
 import { claimCheckout, releaseCheckout, type WorktreeWorkspace } from "./worktree.ts";
 import { handoffPane, registerWorktreeHandoff, worktreeBranchFromArg } from "./worktree-handoff.ts";
-import { HandoffLaunch, buildPiHandoffCommand, handoffResourceArgs } from "./worktree-launch.ts";
+import {
+  handoffLaunchDirectory,
+  buildPiHandoffCommand,
+  handoffResourceArgs,
+} from "./worktree-launch.ts";
+import { LaunchAttempt, managedShellEnvironment } from "./launch-attempt.ts";
 import {
   HANDOFF_ENTRY,
   HandoffReadiness,
@@ -105,6 +110,8 @@ async function fixture(t: TestContext) {
     "fixture",
     "--allow-empty",
   ]);
+  await fs.writeFile(join(dir, ".bashrc"), "repo_env_prepare() { :; }\n");
+  await fs.writeFile(join(dir, "pi"), "#!/bin/sh\nprintf '%s\\0' \"$@\"\n", { mode: 0o700 });
   const path = join(dir, "task");
   await exec("git", ["-C", dir, "worktree", "add", "-qb", "daniel/task", path]);
   const session = SessionManager.create(dir, join(dir, "sessions"));
@@ -178,6 +185,7 @@ function client(
           cwd: path,
           label: "Pi",
           focus: false,
+          env: managedShellEnvironment(),
         });
         return {
           type: "tab_created",
@@ -190,6 +198,21 @@ function client(
         };
       }
       if (method === "pane.send_input") {
+        const directory =
+          "text" in params && typeof params.text === "string"
+            ? /REPO_LAUNCH_DIRECTORY='([^']+)'/.exec(params.text)?.[1]
+            : undefined;
+        if (directory) {
+          const attempt = await LaunchAttempt.open(directory);
+          await fs.writeFile(
+            attempt.statusPath,
+            JSON.stringify({
+              ...(await attempt.read()),
+              phase: "startup",
+              deadline: Date.now() + 60_000,
+            }),
+          );
+        }
         await options.send?.();
         return { type: "ok" };
       }
@@ -496,7 +519,8 @@ test("failed source reload remains usable without automatically restarting the h
   assert.equal(blocked, undefined);
   assert.equal(c.calls.filter((method) => method === "pane.send_input").length, 1);
   await restored.command("worktree", "task");
-  assert.equal(c.calls.filter((method) => method === "pane.send_input").length, 2);
+  assert.equal(c.calls.filter((method) => method === "pane.send_input").length, 1);
+  assert.ok(restored.notifications.some((notice) => notice.includes("recovery")));
 });
 
 test("resuming an interrupted source reports its failure once without starting another launch", async (t) => {
@@ -891,13 +915,20 @@ test("resumed pending sources stop, and stale successors cannot claim or restart
 
 test("launch argv preserves model, reasoning, title, transcript, and isolated extensions without shell injection", async (t) => {
   const f = await fixture(t);
-  const launch = new HandoffLaunch(join(f.dir, "claim"), "launch");
+  const launch = new LaunchAttempt(handoffLaunchDirectory(join(f.dir, "claim"), "launch"), {
+    id: "launch",
+    cwd: f.dir,
+    namespace: null,
+    claimPath: null,
+    environmentMs: 2_000,
+    startupMs: 1_000,
+    leaseMs: 2_000,
+  });
   await launch.prepare();
   const options = {
     launch,
     sessionFile: "/tmp/it's $(false).jsonl",
     sessionName: "User's task",
-    namespace: "dev-fixture-21",
     successorId: "successor",
     model,
     thinking: "high",
@@ -906,15 +937,24 @@ test("launch argv preserves model, reasoning, title, transcript, and isolated ex
       f.dir,
     ),
   } satisfies Parameters<typeof buildPiHandoffCommand>[0];
-  const { stdout } = await exec(
+  const execution = exec(
     "bash",
-    [
-      "-c",
-      `pi() { test "$PI_NETNS" = dev-fixture-21 && test "$PI_NETNS_SELECTED" = dev-fixture-21 || return 41; printf '%s\\0' "$@"; }; export -f pi; ${buildPiHandoffCommand(options)}`,
-    ],
-    { cwd: tmpdir() },
+    ["-c", `pi() { printf '%s\\0' "$@"; }; export -f pi; ${buildPiHandoffCommand(options)}`],
+    {
+      cwd: tmpdir(),
+      env: {
+        ...process.env,
+        HOME: f.dir,
+        SHELL: "bash",
+        PATH: `${f.dir}:${resolve(import.meta.dirname, "../../../../../bin")}:${process.env.PATH}`,
+      },
+    },
   );
-  assert.deepEqual(await launch.read(), { kind: "exited", phase: "pi", code: 0 });
+  await launch.waitForStartup();
+  const { stdout } = await execution;
+  const status = await launch.read();
+  assert.equal(status.kind, "exited");
+  if (status.kind === "exited") assert.equal(status.code, 0);
   assert.deepEqual(stdout.split("\0").slice(0, -1), [
     "-ne",
     "-e",
@@ -957,7 +997,18 @@ test("explicit CLI tool permissions and project trust reach the successor unchan
     ["--tools", ""],
     ["--tools", "read", "--tools", "read,worktree_enter", "-xt", "bash"],
   ]) {
-    const launch = new HandoffLaunch(join(f.dir, "claim"), String(restrictions));
+    const launch = new LaunchAttempt(
+      handoffLaunchDirectory(join(f.dir, "claim"), String(restrictions)),
+      {
+        id: String(restrictions),
+        cwd: f.dir,
+        namespace: null,
+        claimPath: null,
+        environmentMs: 2_000,
+        startupMs: 1_000,
+        leaseMs: 2_000,
+      },
+    );
     await launch.prepare();
     const options = {
       launch,
@@ -968,10 +1019,20 @@ test("explicit CLI tool permissions and project trust reach the successor unchan
       thinking: "high",
       resourceArgs: handoffResourceArgs(["pi", ...restrictions, "--", "--tools", "bash"], f.dir),
     } satisfies Parameters<typeof buildPiHandoffCommand>[0];
-    const { stdout } = await exec("bash", [
-      "-c",
-      `pi() { printf '%s\\0' "$@"; }; export -f pi; ${buildPiHandoffCommand(options)}`,
-    ]);
+    const execution = exec(
+      "bash",
+      ["-c", `pi() { printf '%s\\0' "$@"; }; export -f pi; ${buildPiHandoffCommand(options)}`],
+      {
+        env: {
+          ...process.env,
+          HOME: f.dir,
+          SHELL: "bash",
+          PATH: `${f.dir}:${resolve(import.meta.dirname, "../../../../../bin")}:${process.env.PATH}`,
+        },
+      },
+    );
+    await launch.waitForStartup();
+    const { stdout } = await execution;
     const launched = stdout.split("\0").slice(0, -1);
     assert.deepEqual(launched.slice(0, restrictions.length), restrictions);
     const sourceArgs = parseArgs(restrictions);
@@ -1122,6 +1183,21 @@ test("completed unoccupied handoffs allow re-entry but concurrent launchers stil
     ),
     /uncertain live ownership/,
   );
+  const completed = worktreeState(f.session.getBranch());
+  assert.ok(completed?.kind === "transferred");
+  const attempt = await LaunchAttempt.open(
+    handoffLaunchDirectory(completed.destination.claimPath, completed.id),
+  );
+  await fs.writeFile(
+    attempt.statusPath,
+    JSON.stringify({
+      ...(await attempt.read()),
+      kind: "exited",
+      code: 0,
+      reason: null,
+      cleanup: "confirmed",
+    }),
+  );
   const results = await Promise.allSettled([
     handoffPane(
       c.herdr,
@@ -1162,6 +1238,127 @@ test("cancellation after acknowledged readiness persists transferred rather than
   await (await source.enter()).finish();
   assert.equal(worktreeState(f.session.getBranch())?.kind, "transferred");
   assert.equal(worktreeState(SessionManager.open(f.sessionFile).getBranch())?.kind, "transferred");
+});
+
+for (const [route, receiptKind] of [
+  ["wait", "transferred"],
+  ["wait", "exited"],
+  ["wait", "recoveryRequired"],
+  ["shutdown", "transferred"],
+] as const) {
+  test(`${route} preserves accepted ownership after decision cleanup fails (${receiptKind})`, async (t) => {
+    const f = await fixture(t);
+    let source: Awaited<ReturnType<typeof runtime>>;
+    let undo: (() => void) | undefined;
+    let interruptedKind: WorktreeState["kind"] | undefined;
+    let interruptedShutdown: number | undefined;
+    const c = client(f.path, {
+      send: async () => {
+        const state = worktreeState(f.session.getBranch());
+        assert.ok(state?.kind === "launching");
+        await new HandoffReadiness(state.destination.claimPath, state.id).decide("ready");
+        const attempt = await LaunchAttempt.open(
+          handoffLaunchDirectory(state.destination.claimPath, state.id),
+        );
+        await fs.writeFile(
+          attempt.statusPath,
+          JSON.stringify({
+            ...(await attempt.read()),
+            kind: receiptKind,
+            phase: receiptKind === "recoveryRequired" ? "startup" : "transferred",
+            ...(receiptKind === "exited" ? { code: 0, reason: null, cleanup: "confirmed" } : {}),
+            ...(receiptKind === "recoveryRequired" ? { reason: "failed" } : {}),
+          }),
+        );
+        const original = fs.unlink;
+        let injected = false;
+        const unlinker = t.mock.method(
+          fs,
+          "unlink",
+          async (...args: Parameters<typeof fs.unlink>) => {
+            if (
+              !injected &&
+              typeof args[0] === "string" &&
+              args[0].startsWith(`${state.destination.claimPath}/decision-`)
+            ) {
+              injected = true;
+              throw Object.assign(new Error("decision cleanup failed"), { code: "EIO" });
+            }
+            return original(...args);
+          },
+        );
+        syncBuiltinESMExports();
+        undo = () => {
+          unlinker.mock.restore();
+          syncBuiltinESMExports();
+        };
+        if (route === "shutdown") {
+          await source.runner.emit({ type: "session_shutdown", reason: "quit" });
+          interruptedKind = worktreeState(f.session.getBranch())?.kind;
+          interruptedShutdown = source.controls.shutdown;
+        }
+        source.controls.operation.abort();
+      },
+    });
+    source = await runtime(f.session, f.dir, c.herdr);
+    try {
+      await (await source.enter()).finish();
+      assert.equal(worktreeState(f.session.getBranch())?.kind, "transferred");
+      assert.equal(
+        worktreeState(SessionManager.open(f.sessionFile).getBranch())?.kind,
+        "transferred",
+      );
+      assert.equal(source.controls.shutdown, 1);
+      if (route === "shutdown") {
+        assert.equal(interruptedKind, "transferred");
+        assert.equal(interruptedShutdown, 1);
+      }
+    } finally {
+      undo?.();
+    }
+  });
+}
+
+test("uncertain readiness and cleanup keep the source fenced", async (t) => {
+  const f = await fixture(t);
+  let source: Awaited<ReturnType<typeof runtime>>;
+  let undo: (() => void) | undefined;
+  const c = client(f.path, {
+    send: async () => {
+      const state = worktreeState(f.session.getBranch());
+      assert.ok(state?.kind === "launching");
+      await new HandoffReadiness(state.destination.claimPath, state.id).decide("ready");
+      const attempt = await LaunchAttempt.open(
+        handoffLaunchDirectory(state.destination.claimPath, state.id),
+      );
+      await fs.writeFile(
+        attempt.statusPath,
+        JSON.stringify({ ...(await attempt.read()), kind: "recoveryRequired", reason: "failed" }),
+      );
+      const original = HandoffReadiness.prototype.read;
+      const reader = t.mock.method(
+        HandoffReadiness.prototype,
+        "read",
+        async function (this: HandoffReadiness) {
+          if (this.path === join(state.destination.claimPath, "decision"))
+            throw Object.assign(new Error("readiness unavailable"), { code: "EIO" });
+          return original.call(this);
+        },
+      );
+      undo = () => reader.mock.restore();
+      source.controls.operation.abort();
+    },
+  });
+  source = await runtime(f.session, f.dir, c.herdr);
+  try {
+    await (await source.enter()).finish();
+    assert.equal(worktreeState(f.session.getBranch())?.kind, "launching");
+    assert.ok(handoffBlock(f.session, f.dir));
+    assert.equal(source.controls.shutdown, 0);
+    assert.equal(source.notices.length, 0);
+  } finally {
+    undo?.();
+  }
 });
 
 test("designated successors suppress the source warning and destinationless failures stay usable", async (t) => {

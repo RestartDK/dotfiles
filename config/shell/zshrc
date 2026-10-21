@@ -174,10 +174,9 @@ command -v eza >/dev/null 2>&1 && alias ls="eza --icons=always"
 export POWERLINE_NERD_FONTS="${POWERLINE_NERD_FONTS:-1}"
 
 # Tool initializers
-source "${DOTFILES}/config/shell/repo-env.zsh"
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd _repo_env_prompt
-add-zsh-hook chpwd repo_env_prepare
+add-zsh-hook chpwd _repo_env_prompt
 if command -v fnm >/dev/null 2>&1; then
   eval "$(fnm env --use-on-cd --shell zsh)"
   add-zsh-hook -d chpwd _fnm_autoload_hook

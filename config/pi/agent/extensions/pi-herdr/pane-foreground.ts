@@ -80,7 +80,14 @@ export async function readProcTree(rootPid: number): Promise<ProcProcess[]> {
       }
       records.push({ ...stat, shell });
     } catch (error) {
-      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+      if (
+        !(
+          error instanceof Error &&
+          "code" in error &&
+          (error.code === "ENOENT" || error.code === "ESRCH")
+        )
+      )
+        throw error;
     }
   }
   return records;
@@ -92,16 +99,25 @@ export async function observePaneForeground(
 ): Promise<ForegroundObservation> {
   if (info.shell_pid == null || info.foreground_process_group_id == null)
     return { kind: "initializing" };
-  if (info.foreground_process_group_id !== info.shell_pid)
-    return {
-      kind: "busy",
-      reason: `Foreground process group ${info.foreground_process_group_id} is running.`,
-    };
-  if ((options.platform ?? process.platform) !== "linux") return { kind: "idle" };
+  if ((options.platform ?? process.platform) !== "linux")
+    return info.foreground_process_group_id === info.shell_pid
+      ? { kind: "idle" }
+      : {
+          kind: "busy",
+          reason: `Foreground process group ${info.foreground_process_group_id} is running.`,
+        };
   const records = await (options.readTree ?? readProcTree)(info.shell_pid);
   if (!records.some((record) => record.pid === info.shell_pid)) return { kind: "initializing" };
   const interactive = records.filter((record) => record.shell === "interactive");
   if (!interactive.length) return { kind: "initializing" };
+  if (
+    info.foreground_process_group_id !== info.shell_pid &&
+    !interactive.some((shell) => shell.groupId === info.foreground_process_group_id)
+  )
+    return {
+      kind: "busy",
+      reason: `Foreground process group ${info.foreground_process_group_id} is running.`,
+    };
   for (const shell of interactive) {
     if (shell.groupId !== shell.pid) return { kind: "initializing" };
     if (
@@ -128,7 +144,7 @@ export async function observePaneForeground(
   const foregroundJob = records.find(
     (record) =>
       record.tty !== 0 &&
-      record.pid === record.foregroundGroupId &&
+      record.groupId === record.foregroundGroupId &&
       record.shell === "other" &&
       !ancestors.has(record.pid),
   );

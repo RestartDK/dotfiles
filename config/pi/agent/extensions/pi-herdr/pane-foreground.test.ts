@@ -68,6 +68,48 @@ test("wrapped idle shells are accepted but their actual foreground jobs reject l
   }
 });
 
+test("namespace login shells can own the foreground without matching the original shell PID", async () => {
+  assert.equal(
+    (
+      await observePaneForeground(
+        { ...info, foreground_process_group_id: nested.groupId },
+        {
+          platform: "linux",
+          readTree: async () => [wrapper, nested],
+        },
+      )
+    ).kind,
+    "idle",
+  );
+  assert.equal(
+    (
+      await observePaneForeground(
+        { ...info, foreground_process_group_id: 30 },
+        {
+          platform: "linux",
+          readTree: async () => [wrapper, nested],
+        },
+      )
+    ).kind,
+    "busy",
+  );
+});
+
+test("a forked shell with a non-leader foreground supervisor is busy", async () => {
+  const root = { ...wrapper, foregroundGroupId: 20, shell: "interactive" as const };
+  const fork = { ...nested, tty: 1 };
+  const supervisor = { ...fork, pid: 21, parentPid: 20, shell: "other" as const };
+  assert.equal(
+    (
+      await observePaneForeground(
+        { ...info, foreground_process_group_id: 20 },
+        { platform: "linux", readTree: async () => [root, fork, supervisor] },
+      )
+    ).kind,
+    "busy",
+  );
+});
+
 test("nullable process data waits, non-Linux shell behavior stays valid, and access errors are not ignored", async () => {
   assert.equal((await observePaneForeground({ pane_id: "new" })).kind, "initializing");
   assert.equal((await observePaneForeground(info, { platform: "darwin" })).kind, "idle");

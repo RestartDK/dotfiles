@@ -22,15 +22,23 @@ permissions:
 
 jobs:
   launch:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      TMPDIR: /tmp
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: sudo apt-get update && sudo apt-get install -y zsh direnv
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh direnv
+      - if: runner.os == 'macOS'
+        run: brew install zsh direnv
       - run: python3 -m unittest discover -s tests -p 'test_repo_env.py'
       - run: npm ci --ignore-scripts
         working-directory: config/pi/agent/extensions/pi-herdr
-      - run: npm test && npm run typecheck
+      - run: npm test && npm run typecheck && npm run check-generated
         working-directory: config/pi/agent/extensions/pi-herdr

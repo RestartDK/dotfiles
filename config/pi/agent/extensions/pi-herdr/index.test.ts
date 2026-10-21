@@ -239,16 +239,11 @@ test("pane lookup propagates daemon errors instead of removing a live alias", as
   await f.call({ action: "read", pane: "remote" });
 });
 
-test("starting a remote command reports the target workspace", async (t) => {
+test("run refuses an unverified target directory without submitting input", async (t) => {
   const f = await fixture(t);
-  const result = await f.call({ action: "run", pane: "remote", command: "true" });
-  assert.ok(
-    result.details && typeof result.details === "object" && "workspaceId" in result.details,
+  await assert.rejects(
+    f.call({ action: "run", pane: "remote", command: "true" }),
+    /target working directory/,
   );
-  assert.equal(result.details.workspaceId, remote.workspace_id);
-  assert.deepEqual(f.calls.find((call) => call.method === "pane.send_input")?.params, {
-    pane_id: remote.pane_id,
-    text: "true",
-    keys: ["Enter"],
-  });
+  assert.ok(!f.calls.some((call) => call.method === "pane.send_input"));
 });
