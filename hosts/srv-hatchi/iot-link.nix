@@ -1,6 +1,6 @@
 { config, lib, ... }:
 let
-  ssid = "Owner";
+  ssid = config.my.network.ssid;
   iotLink = config.my.network.iotLink;
   iotParts = lib.splitString "/" iotLink.network;
   iotAddress = builtins.elemAt iotParts 0;

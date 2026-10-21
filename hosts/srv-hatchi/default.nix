@@ -11,6 +11,7 @@
     ./services/dashboard.nix
     ./services/books.nix
     ./services/media.nix
+    ./services/miniflux.nix
     ./services/nextcloud.nix
     ./services/couchdb.nix
     ./services/monitoring.nix

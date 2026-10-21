@@ -17,6 +17,7 @@ Set each `my.hatchi.onepassword.references` option to a field containing the fol
 | `grafanaPassword` | The initial Grafana administrator password |
 | `nextcloudPassword` | The initial Nextcloud administrator password |
 | `mangyEnv` | An environment file with `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` |
+| `minifluxAdmin` | An environment file with `ADMIN_USERNAME` and `ADMIN_PASSWORD` for Miniflux's first login |
 | `qbittorrentPasswordHash` | The complete qBittorrent `@ByteArray(base64-salt:base64-digest)` value for `daniel`, using PBKDF2-HMAC-SHA512 with 100000 iterations |
 
 Production references point to the `nixos-acme-environment`, `nixos-admin-config`, `nixos-password-hash`, and `nixos-secret-key` fields in the existing Homelab items. These fields were prepared for a fresh installation. Do not point the formatted credential options at plain-token or plain-password fields. Store only credentials and their required wrappers, not entire application configurations.
@@ -37,7 +38,7 @@ NixOS's native pre-switch check rejects a missing or empty token file before cha
 
 ```text
 1Password service-account token
-  → opnix-secrets.service fetches nine credential files
+  → opnix-secrets.service fetches ten credential files
   → hatchi-secret-files.service substitutes two stored hashes
   → dependent services start
 ```
@@ -48,7 +49,7 @@ The two generated configurations are root-owned `0400` files in a `0700` directo
 
 Polling and the automatic change watcher remain disabled. `systemctl restart opnix-secrets.service` refetches credentials and restarts dependent services. This interrupts applications. Inspect failures before clearing the upstream start limit with `systemctl reset-failed opnix-secrets.service` and restarting failed consumers.
 
-Grafana's initial administrator password does not rotate existing database accounts. Nextcloud creates its first administrator only if no users exist. Its separate credential-backed service uses `NC_PASS` and `--password-from-env`, rather than the upstream installer's password argument that journald can retain. Nginx waits for that service.
+Grafana's initial administrator password does not rotate existing database accounts. Nextcloud creates its first administrator only if no users exist. Miniflux does the same, so rotating `minifluxAdmin` changes nothing after the first boot and the password has to change inside Miniflux instead. Nextcloud's separate credential-backed service uses `NC_PASS` and `--password-from-env`, rather than the upstream installer's password argument that journald can retain. Nginx waits for that service.
 
 ## Verification
 

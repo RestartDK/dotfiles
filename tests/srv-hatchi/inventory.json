@@ -50,6 +50,11 @@
     "route": "qbittorrent"
   },
   {
+    "source": "miniflux",
+    "unit": "miniflux",
+    "route": "miniflux"
+  },
+  {
     "source": "jellyseerr",
     "unit": "seerr",
     "route": "seerr"
