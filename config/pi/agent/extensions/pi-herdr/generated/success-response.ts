@@ -212,33 +212,6 @@ export type ResponseResult =
       [k: string]: unknown;
     }
   | {
-      revision: number;
-      sequence: number;
-      type: "pane_graphics_frame_ack";
-      [k: string]: unknown;
-    }
-  | {
-      cell_height_px: number;
-      cell_width_px: number;
-      /**
-       * Accepts damage metadata while still consuming a complete canonical file.
-       */
-      file_frame_damage?: boolean;
-      file_frame_direct_max_bytes?: number | null;
-      file_frame_directory?: string | null;
-      file_frame_formats?: string[];
-      file_frame_max_bytes?: number | null;
-      file_frame_transport?: string | null;
-      max_layers_per_pane?: number;
-      /**
-       * True only when this pane is on the currently rendered terminal surface.
-       */
-      pane_visible: boolean;
-      pixel_mouse?: boolean;
-      type: "pane_graphics_info";
-      [k: string]: unknown;
-    }
-  | {
       explain: unknown;
       type: "agent_explain";
       [k: string]: unknown;
@@ -662,6 +635,10 @@ export interface ServerCapabilities {
   health_check?: boolean;
   live_handoff: boolean;
   /**
+   * Supports connection-scoped `server.ssh_agent.register` on the local JSON API.
+   */
+  ssh_agent_registration?: boolean;
+  /**
    * Whether this server supports explicit client-shell surface interest.
    */
   surface_interest?: boolean;
@@ -684,6 +661,10 @@ export interface AgentInfo {
   agent?: string | null;
   agent_session?: AgentSessionInfo | null;
   agent_status: AgentStatus;
+  /**
+   * The current idle transition completed work, independently of who has viewed it.
+   */
+  completion_seq?: number | null;
   cwd?: string | null;
   display_agent?: string | null;
   focused: boolean;
@@ -756,6 +737,7 @@ export interface PaneInfo {
   foreground_cwd?: string | null;
   label?: string | null;
   pane_id: string;
+  restore_error?: string | null;
   revision: number;
   scroll?: PaneScrollInfo | null;
   state_labels?: {
