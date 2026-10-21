@@ -81,7 +81,7 @@ Apply the baseline prompt above, plus these explicit review rules:
 10. **Tests must exercise the new path.**
     - Fixture-only updates (adding `None` / defaults to every existing fixture) prove nothing about the new variant; require at least one test driving the `Some` / new-variant path end to end.
     - Assert payload-level properties, not just discriminators or tags.
-    - Each added test names the production break it catches; each deleted test names its surviving equivalent or its LOST reason. A deletion diff is judged per test, never per line count (**principle-tests-earn-their-place**).
+    - Each added test names its contract and contribution to the suite. Each deletion names surviving coverage or explains why no replacement is needed, and accounts for lost protection, feedback speed, and diagnosis. Overlap alone does not justify deletion. Judge deletions per test, never per line count (**principle-tests-earn-their-place**).
 
 11. **Verify reachability and ordering of validation.**
     - Check that new error branches are actually reachable; a stricter upstream check can make a downstream branch dead (e.g. a strict parse inside an access check making a later loose parse infallible).

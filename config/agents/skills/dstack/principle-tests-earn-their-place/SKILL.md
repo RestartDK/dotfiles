@@ -1,58 +1,92 @@
 ---
 name: principle-tests-earn-their-place
-description: "Apply when adding, keeping, or deleting a test, when reviewing a PR's test diff, and in the pre-review pass. A test stays only if deleting it would let a production break through that nothing else catches first. Cut pins, round-trips, and prose greps; a deleted guard names its surviving equivalent."
+description: "Apply when adding, keeping, or deleting tests and before review. Weigh regression protection, refactoring resistance, feedback, and maintenance cost. Overlap alone is not a reason to delete a test. Explain surviving coverage and lost value before removal."
 disable-model-invocation: true
 ---
 
 # Tests Earn Their Place
 
-A test is worth its CI seconds when its deletion would let a specific production break reach users, and no other check (type system, lint, another test, a runtime guard) catches that break first. Every other test is weight. Ask the question in both directions: before writing a test, and before deleting one.
+A test earns its place through meaningful regression protection, useful feedback, and confidence when changing code. Weigh those benefits against maintenance, execution, and diagnostic costs. Test count, coverage percentage, and overlapping coverage do not decide its value alone.
 
-**Why:** Suites grow by accretion. Each test looked reasonable when written, and nobody ever deletes. The result is a suite where 80% of the cases pin literals or round-trip derived code, and CI time becomes a target. When someone finally cuts, they cut by shape (short tests, many similar names), and the real guards hidden among the noise go with them. One audit of 2,200 deletions found roughly 80% were correctly cut and about 150 to 200 real guards on money, auth, replay compatibility, and security primitives left with no surviving equivalent, because the deletion PRs judged by name and line count.
-
-**Failure mode this prevents:** a constant-time compare used by the CSRF check with an empty test module; a pricing lookup whose tests assert the constant instead of the lookup; a model-facing tool schema that regains a `read` action because the only test that pinned its two actions was a "one-liner"; 17 API providers with no header-shape contract because the per-provider tests looked repetitive; a settings radio whose `checked` state and a preparing screen whose error-with-retry path lost their only tests because they were short.
+Tests can pass without useful assertions or fail after harmless refactors. A short or repetitive test can still protect money, authentication, replay compatibility, or a public contract. Judge what the test establishes, not its name, length, or shape.
 
 The rule is language-neutral. It applies to a Rust unit test, a vitest component test, a Playwright flow, and a SQL fixture alike.
 
-## The worth question
+## Ask six questions
 
-For any test, name the production break it catches in one sentence. If the sentence needs the words "the constant changed" or "the derive macro broke", the test has no place. If the break is already caught by a type, a lint, or a test that already exists, the test has no place. If the sentence names a real failure and nothing else catches it, the test stays, whatever its length.
+- **What contract or failure matters here?** Name the incorrect behavior the test protects against. Establish requirements, not the current implementation's sequence of steps.
+- **Would a meaningful bug make it fail?** Inspect the assertions. When uncertain, deliberately break the claimed behavior. Executing the relevant code is not sufficient. Harmless or equivalent mutations need not fail.
+- **Would a correct refactor leave it green?** Avoid private layout, incidental call order, copied prose, and arbitrary counts. Keep checks where exact representations, ordering, or counts are themselves contractual.
+- **What does it add to the remaining suite?** Value can be a different failure mode, a real integration boundary, faster feedback, or clearer diagnosis. A focused unit test and an adapter test can both earn their place. Overlap alone is not grounds for deletion.
+- **Is its ongoing cost justified?** Consider readability, setup, runtime, flakiness, infrastructure, and time to diagnose failures. Simplify an important guard before discarding it.
+- **Is this the appropriate test boundary?** Use focused tests for isolated logic and broader tests for risks that require components to interact. Do not impose a universal unit-to-integration ratio or coverage threshold. Use coverage to find possible gaps, not to prove assertion quality.
 
-## Write these
+## Choose the action
 
-Deterministic, cheap, and nothing upstream of production catches the regression.
+| Action | Rule |
+| --- | --- |
+| Keep | Meaningful protection or feedback justifies the cost. |
+| Rewrite or consolidate | The behavior matters, but the test proves it poorly or expensively. Preserve useful cases and assertions when merging tests. |
+| Remove | The behavior is obsolete, the assertion only mirrors implementation, or the test adds no worthwhile protection or feedback. Explain why before removal. |
 
-1. **Boundary parsers with the negative case.** Webhook and payment-provider payload decode, timezone and cron rejection, ingress parsers for route params and labelled strings. The hand-written branch, never the derived round-trip.
-2. **Backward compatibility of stored data.** Old-format rows deserialize, removed fields are ignored, unspecified enum values resolve to the legacy behavior, snapshot defaults hold. One test per compatibility decision, kept as long as the data exists.
-3. **External contracts as schema assertions.** What a model, a partner API, or a public endpoint sees: hidden legacy fields stay hidden, enums are complete, required lists are present, the example embedded in a description parses as valid input, a tool exposes exactly its intended actions.
-4. **Money through the real function.** The lookup by key, not the constant. Currency mapping, experiment bucket edges, provider payload decode, unit conversion, idempotency references.
-5. **Security negatives.** Constant-time compare, insecure-flag rejection, public serialization omitting private fields, revocation mapping, SSRF hostname rejection. One line of regression from each is an incident.
-6. **State-machine races and rejections.** The wrong-id-dropped case, out-of-order resolution, the transition that must not happen. The happy path alone proves nothing about the guard.
-7. **Provider or plugin contracts as one table.** Headers, auth variables, placeholder backing per provider, in one table-driven test. Never 87 one-liners, never zero.
-8. **User-visible state and accessibility transitions.** Loading, empty, error-with-retry, disabled-while-pending, and the state assistive technology reads (`role`, `checked`, `disabled`, `aria-*`). The callback fires from the rendered control, the error state exposes the retry, the empty state offers exactly its one action. Not that the component rendered.
+## Examples of valuable protection
 
-## Cut these, and do not write them
+These are examples, not an exhaustive whitelist. Apply the questions above to algorithms and business rules too.
 
-- Count pins (`tools.len() == 31`, `icons.len() == 291`).
-- `prompt.contains("<sentence copied from the prompt>")` and other literal-copied-from-source assertions.
-- Set a field, assert the getter. Build a struct or object literal, assert its own fields.
-- Round-trips of generated or derived serialization with no hand-written branch.
-- Renders without crashing, className presence, svg attribute checks, snapshots of literal markup, label text copied from the component.
-- Tests that reimplement the logic inline, or run their own SQL instead of calling the handler under test.
-- The same behavior asserted at three layers (unit, component or integration, end-to-end) with nothing added per layer.
-- A mock so complete the test exercises the mock.
-- Single-sample negatives against a nondeterministic system ("the model never called X") that a retry policy hides.
+- Boundary parsers accept valid input and reject malformed or forbidden input.
+- Stored-data compatibility preserves old rows, legacy defaults, and snapshot behavior for data that still exists.
+- External contracts expose the intended schema and actions. Machine-readable examples parse as valid input.
+- Money calculations exercise the real lookup, conversion, rounding, and idempotency behavior, not copied constants.
+- Security tests exercise rejection, revocation, private-field exclusion, and the security primitive's actual behavior.
+- State-machine tests distinguish valid transitions from wrong identities, races, and out-of-order events.
+- Provider contracts check headers, auth variables, and payload shapes. Use a table when it preserves distinct cases and useful failure messages.
+- UI tests exercise user-visible state, interaction, error recovery, and accessibility semantics such as `role`, `checked`, `disabled`, and `aria-*`.
 
-## Nondeterministic dependencies (models, third-party endpoints)
+## Usually rewrite or remove
+
+These are warning signs, not automatic deletion rules.
+
+- Incidental count pins, such as the current number of icons. A resource, retry, billing, or model-schema budget can justify a count assertion.
+- Copied prompt prose or literal markup with no external contract. Required public text and machine-readable examples can be contracts.
+- Getter or setter checks that only restate a literal fixture.
+- Generated serialization round-trips with no custom behavior or stored-data compatibility case.
+- Render-only checks with no meaningful state, interaction, or accessibility assertion.
+- Tests that reimplement business logic or query a different path than the production handler.
+- Repeated assertions at several layers with no added protection, confidence, speed, or diagnosis.
+- Mocks that replace the behavior the test claims to exercise.
+- Single-sample claims about nondeterministic behavior, especially when retries hide failures.
+
+## Execution policy for nondeterministic dependencies
+
+These restrictions apply independently of a test's value.
 
 **Paid and live-harness calls are out of bounds.** A test may not spend money, need credentials, or spawn a real agent CLI, including behind an env-var hatch that points the suite at an installed binary or provider. When only a live model can check a behavior, check it once by hand, put the exact command and the observed result in the PR, and keep it out of the suite. The tempting case is the one to refuse. "The model should have chosen tool X" is an observation to record by hand, never a test to run in CI.
 
 Where the dependency is faked rather than called, a test earns its place only in the leg the fake cannot cover. Seed fixtures deterministically. Decode the result into a typed value and compare it to a typed expectation; never grep prose. Assert the artifact's provenance and shape, not the route taken to it. Pin the model to a production alias, not a hardcoded SKU string. No in-test retry loops, no cache-busting nonces. A terminal "finished successfully" event is not an assertion.
 
-## Deleting tests
+## Explain each deletion
 
-A test-deletion diff is reviewed per test, not per line count. For each deleted test the PR names the surviving equivalent (file and test name) or marks it LOST with the reason it never guarded anything. A LOST guard in classes 1 through 8 above is restored or rewritten as a table, not deleted. A deletion PR carries a description; a PR titled `perf` or `chore` never changes production behavior alongside.
+Review deletions per test, not per line count. For each deletion:
+
+- Name the behavior and assertions being removed.
+- Name surviving coverage by file and test name, or explain why no replacement is needed. Inspect the survivor's actual assertions and test boundary.
+- Explain lost value, including failure cases, integration confidence, feedback speed, and diagnosis. "Another test covers it" is not sufficient.
+- Transfer useful cases before consolidation. Preserve a timeout, negative case, ownership check, or compatibility assertion that the survivor does not yet contain.
+
+If a required behavior loses meaningful protection, keep or rewrite its guard. Obsolete behavior and assertions that never established a contract need no replacement. Explain the retirement or the lack of value. Do not invent a CI-cost argument without measurements.
+
+A deletion PR carries a description. Keep production behavior changes separate from test-only cleanup.
 
 ## The pre-review pass
 
-Before review, walk the test diff once. Each added test answers the worth question in one sentence. Each deleted test names its survivor or its LOST reason. Fixture-only updates (adding a default to every existing fixture) do not count as coverage of the new variant; at least one test drives the new path.
+Walk the test diff once. Each added test names its contract and contribution to the suite. Each deletion accounts for surviving coverage and lost value. Apply the six questions to rewrites and fixture changes too.
+
+Fixture-only updates do not prove a new variant. Drive the new path and assert its meaningful outcome. A successful command proves only what its selected tests actually exercised.
+
+## Sources
+
+- Kent Beck, [Test Desiderata](https://github.com/KentBeck/TestDesiderata/blob/master/index.md). Behavioral, structure-insensitive, deterministic, fast, readable, and specific tests involve tradeoffs.
+- Google Testing Blog, [Change-Detector Tests Considered Harmful](https://testing.googleblog.com/2015/01/testing-on-toilet-change-detector-tests.html). Tests that mirror implementation can obstruct safe changes.
+- Vladimir Khorikov, [False positives and flaky tests](https://khorikov.org/posts/2020-02-11-false-positives-flaky-tests/). Balance regression protection, refactoring resistance, fast feedback, and maintainability.
+- Martin Fowler, [Test Coverage](https://www.martinfowler.com/bliki/TestCoverage.html) and [Mutation Testing](https://martinfowler.com/bliki/MutationTesting.html). Execution coverage and meaningful fault detection answer different questions.
+- Martin Fowler, [Test Pyramid](https://www.martinfowler.com/bliki/TestPyramid.html), and Kent C. Dodds, [Write tests. Not too many. Mostly integration.](https://kentcdodds.com/blog/write-tests). They favor different test mixes. Neither establishes a universal ratio for every system.
