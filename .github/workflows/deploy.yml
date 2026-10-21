@@ -1,0 +1,47 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, lan-deploy]
+    timeout-minutes: 240
+    environment: deploy
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        host: [srv-hatchi, srv-nana]
+    concurrency:
+      group: "deploy-${{ matrix.host }}"
+      cancel-in-progress: false
+    env:
+      TARGET: "${{ matrix.host }}"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Install the committed SSH host keys
+        run: |
+          mkdir -p "$HOME/.ssh"
+          cat "config/ssh/known_hosts/$TARGET" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+      - run: ./bin/traitor deploy "$TARGET" --remote-build --skip-checks

@@ -1,0 +1,177 @@
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  network = config.my.network;
+  domain = config.my.domain;
+  names = lib.concatMap (host: [ host.hostName ] ++ host.serverAliases) (
+    builtins.attrValues config.services.caddy.virtualHosts
+  );
+  validName =
+    name:
+    lib.hasSuffix ".${domain}" name
+    && builtins.stringLength name <= 253
+    && builtins.all (label: builtins.match "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?" label != null) (
+      lib.splitString "." name
+    );
+  networks =
+    if network == null then
+      {
+        clientNetworks = [ ];
+        adminNetworks = [ ];
+      }
+    else
+      network;
+  ingress =
+    ranges: protocols: ports:
+    lib.concatMapStringsSep "\n" (
+      range:
+      "${
+        if lib.hasInfix ":" range then "ip6" else "ip"
+      } saddr ${range} meta l4proto { ${protocols} } th dport { ${ports} } accept"
+    ) ranges;
+in
+{
+  options.my.hatchi.edgeNames = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    readOnly = true;
+    internal = true;
+  };
+  options.services.caddy.virtualHosts = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule { useACMEHost = lib.mkDefault domain; });
+  };
+  config = {
+    my.hatchi.edgeNames = names;
+    assertions = [
+      {
+        assertion =
+          builtins.all validName names && builtins.length names == builtins.length (lib.unique names);
+        message = "Hatchi Caddy routes must be unique FQDNs below the configured domain";
+      }
+      {
+        assertion = config.services.caddy.settings == { } && config.services.caddy.extraConfig == "";
+        message = "Hatchi routes must use native Caddy virtualHosts";
+      }
+    ];
+    services.caddy = {
+      enable = true;
+      package = pkgs.caddy;
+      openFirewall = false;
+    };
+    security.acme = {
+      acceptTerms = true;
+      defaults.email = null;
+      certs.${domain} = {
+        extraDomainNames = [ "*.${domain}" ];
+        dnsProvider = "cloudflare";
+        dnsResolver = "1.1.1.1:53";
+        environmentFile = config.my.hatchi.secretFiles.cloudflare;
+        group = "caddy";
+      };
+    };
+    sops.secrets = lib.mkIf (!config.my.hatchi.onepassword.enable) {
+      cloudflare.restartUnits = [ "acme-${domain}.service" ];
+      adguard-password = { };
+    };
+    sops.templates."AdGuardHome.yaml" = lib.mkIf (!config.my.hatchi.onepassword.enable) {
+      content = builtins.toJSON (
+        config.services.adguardhome.settings
+        // {
+          http.address = "${config.services.adguardhome.host}:${toString config.services.adguardhome.port}";
+        }
+      );
+      restartUnits = [ "adguardhome.service" ];
+    };
+    services.adguardhome = {
+      enable = true;
+      host = "127.0.0.1";
+      port = 3000;
+      mutableSettings = false;
+      settings = {
+        users = [
+          {
+            name = "daniel";
+            password =
+              if config.my.hatchi.onepassword.enable then
+                "@hatchi-adguard-hash@"
+              else
+                config.sops.placeholder.adguard-password;
+          }
+        ];
+        dns = {
+          bind_hosts = [
+            "0.0.0.0"
+            "::"
+          ];
+          port = 53;
+          upstream_dns = if network == null then [ ] else network.upstreamDNS;
+          bootstrap_dns = [ ];
+          use_private_ptr_resolvers = false;
+        };
+        filtering = {
+          protection_enabled = true;
+          filtering_enabled = true;
+          rewrites = lib.optionals (network != null) [
+            {
+              domain = "*.${domain}";
+              answer = network.dnsAnswer;
+              enabled = true;
+            }
+          ];
+        };
+        filters = [ ];
+      };
+    };
+    services.caddy.virtualHosts."adguard.${domain}".extraConfig =
+      "reverse_proxy 127.0.0.1:${toString config.services.adguardhome.port}";
+    systemd.services =
+      lib.genAttrs
+        (lib.optionals (builtins.hasAttr domain config.security.acme.certs) [
+          "acme-${domain}"
+          "acme-order-renew-${domain}"
+        ])
+        (_: {
+          requires = [ config.my.hatchi.secretService ];
+          after = [ config.my.hatchi.secretService ];
+          partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
+        })
+      // {
+        adguardhome = {
+          serviceConfig.LoadCredential = [
+            "config:${config.my.hatchi.secretFiles.adguardConfig}"
+          ];
+          preStart = lib.mkForce ''
+            ${pkgs.coreutils}/bin/install -m600 "$CREDENTIALS_DIRECTORY/config" "$STATE_DIRECTORY/AdGuardHome.yaml"
+            ${lib.getExe config.services.adguardhome.package} --check-config -c "$STATE_DIRECTORY/AdGuardHome.yaml"
+          '';
+        };
+      };
+    my.hatchi.stateUnits = [
+      "adguardhome"
+      "caddy"
+    ];
+    networking.nftables.enable = true;
+    networking.firewall = {
+      enable = true;
+      trustedInterfaces = lib.mkForce [ "lo" ];
+      allowedTCPPorts = lib.mkForce [ ];
+      allowedUDPPorts = lib.mkForce [ ];
+      interfaces.tailscale0.allowedTCPPorts = [
+        22
+        80
+        443
+      ];
+      interfaces.tailscale0.allowedUDPPorts = [ 53 ];
+      extraInputRules = ''
+        ${ingress networks.clientNetworks "tcp, udp" "53"}
+        ${ingress networks.clientNetworks "tcp" "80, 443"}
+        ${ingress networks.clientNetworks "udp" "443"}
+        ${ingress networks.adminNetworks "tcp" "22"}
+        udp dport ${toString config.services.tailscale.port} accept
+      '';
+    };
+  };
+}

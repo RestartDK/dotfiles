@@ -1,6 +1,6 @@
 {
-  config,
   lib,
+  network ? null,
   osConfig ? null,
   ...
 }:
@@ -15,7 +15,7 @@ let
 in
 {
   imports = [
-    ../../modules/home/live-symlinks.nix
+    ../../modules/home/groups.nix
     ../../modules/home/twin-dev-environment.nix
   ];
 
@@ -24,11 +24,13 @@ in
   # configuration.
   my.twinDevEnvironment.enable = isCobbDevHost;
 
+  my.ai.profile = "work";
+
+  my.liveConfig.piSettingsFile = "config/pi/agent/settings-work.json";
+
   my.liveConfig = {
     enable = isCobbDevHost;
-    repoRoot = "${config.home.homeDirectory}/.config/dotfiles";
-    piSettingsFile = "config/pi/agent/settings-twin.json";
-    piSkillsPath = "config/pi/agent/skills-twin";
+    piSkillsPath = "config/agents/skills";
     groups = {
       # Cobb's Daniel profile disables its generated shell and Neovim config
       # on development hosts, so the canonical dotfiles checkout owns both.
@@ -39,8 +41,6 @@ in
       claude = false;
       agents = false;
       agentSkills = false;
-      agentSkillsGlobal = false;
-      agentSkillsPersonal = false;
 
       git = true;
       editors = true;
@@ -54,8 +54,10 @@ in
     };
   };
 
-  programs.git.settings.user = lib.mkDefault {
-    name = "Daniel Kumlin";
-    email = "danielkumlinwork@gmail.com";
-  };
+  programs.git.settings.user = lib.mkDefault (
+    lib.optionalAttrs (network != null) {
+      name = network.fullName;
+      email = network.workEmail;
+    }
+  );
 }

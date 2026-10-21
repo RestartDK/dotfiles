@@ -3,7 +3,7 @@
 {
   imports = [
     ../../modules/home/dev-packages.nix
-    ../../modules/home/live-symlinks.nix
+    ../../modules/home/groups.nix
     ../../modules/home/ssh.nix
   ];
 
@@ -11,9 +11,14 @@
   home.homeDirectory = "/Users/danielkumlin";
   home.stateVersion = "26.05";
 
+  my.ai.profile = "personal";
+
   my.liveConfig = {
     enable = true;
-    repoRoot = "/Users/danielkumlin/.config/dotfiles";
+    sync = {
+      enable = true;
+      checkout = "/Users/danielkumlin/.config/dotfiles";
+    };
     groups = {
       shell = true;
       git = true;

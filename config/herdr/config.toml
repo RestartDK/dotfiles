@@ -6,26 +6,44 @@ directory = "~/.herdr/worktrees"
 [ui.toast]
 delivery = "herdr"
 
+[ui.sound]
+enabled = true
+path = "sounds/haki.mp3"
+
 [ui]
 agent_panel_sort = "priority"
 
 show_agent_labels_on_pane_borders = false
+
+tab_bar_right = [
+  { type = "zoom" },
+  { type = "command", command = "python3 ~/.config/herdr/hostname-status.py", interval_seconds = 3600, timeout_seconds = 2 },
+]
+tab_bar_right_separator = " · "
+
 [ui.sidebar.agents]
-row_gap = 0
+row_gap = 1
+rows = [["state_icon", "workspace", "tab"], ["agent"]]
+
+[ui.sidebar.spaces]
+row_gap = 1
 rows = [
   [
     "state_icon",
     "workspace",
-    "tab",
   ],
   [
-    "agent",
+    "$repo",
+    "branch",
+    "git_status",
   ],
   [
     { token = "$pr_open", fg = "#3FB950", bold = true },
     { token = "$pr_draft", fg = "#8B949E", bold = true },
     { token = "$pr_merged", fg = "#A371F7", bold = true },
     { token = "$pr_closed", fg = "#F85149", bold = true },
+    { token = "$pr_additions", fg = "#3FB950" },
+    { token = "$pr_deletions", fg = "#F85149" },
   ],
 ]
 
@@ -48,13 +66,7 @@ focus_pane_right = "prefix+l"
 split_vertical = "prefix+shift+l"
 split_horizontal = "prefix+shift+j"
 reload_config = "prefix+shift+r"
-goto = ""
-
-[[keys.command]]
-key = "prefix+g"
-type = "plugin_action"
-command = "daniel.scatterer.agent-picker"
-description = "scatterer agent session picker"
+goto = "prefix+g"
 
 [[keys.command]]
 key = "prefix+shift+s"
@@ -63,16 +75,10 @@ command = "daniel.scatterer.apply-layout"
 description = "scatterer layout"
 
 [[keys.command]]
-key = "prefix+shift+a"
-type = "plugin_action"
-command = "daniel.scatterer.quick-start"
-description = "scatterer quick start"
-
-[[keys.command]]
-key = "prefix+shift+p"
-type = "plugin_action"
-command = "daniel.scatterer.pr-picker"
-description = "scatterer PR picker"
+key = "prefix+shift+b"
+type = "shell"
+command = 'TERMINAL_BROWSER_NO_TELEMETRY=1 HERDR_PANE_ID="$HERDR_ACTIVE_PANE_ID" HERDR_TAB_ID="$HERDR_ACTIVE_TAB_ID" HERDR_WORKSPACE_ID="$HERDR_ACTIVE_WORKSPACE_ID" terminal-browser open --split right'
+description = "open Terminal Browser"
 
 [[keys.command]]
 key = "prefix+shift+g"

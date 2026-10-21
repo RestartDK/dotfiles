@@ -1,6 +1,7 @@
 import {
   CustomEditor,
   type ExtensionAPI,
+  type ExtensionContext,
   type KeybindingsManager,
   type ReadonlyFooterDataProvider,
   type Theme,
@@ -12,7 +13,16 @@ import {
   truncateToWidth,
   type TUI,
 } from "@earendil-works/pi-tui";
-import { renderStatusLine } from "./status-line.ts";
+import { renderBar, renderStatusLine } from "./status-line.ts";
+import {
+  countdown,
+  fetchUsageWindows,
+  USAGE_SOURCES,
+  usageProviderId,
+  type UsageLayout,
+  type UsageSource,
+  type UsageWindow,
+} from "./usage.ts";
 
 type VimMode = "normal" | "insert";
 type PiEditorFactory = (
@@ -47,6 +57,51 @@ function modeChip(theme: Theme, mode: VimMode, branch: string | undefined): stri
   if (!branch) return modeSegment;
   const branchSegment = theme.bg("selectedBg", theme.fg("text", `  ${branch} `));
   return `${modeSegment}${branchSegment}`;
+}
+
+const USAGE_REFRESH_INTERVAL_MS = 5 * 60_000;
+const WINDOW_SEPARATOR = "\ue0b1";
+
+type UsageSnapshot = {
+  providerId: string;
+  source: UsageSource;
+  windows: UsageWindow[];
+};
+
+function usageColor(percent: number): "error" | "warning" | "success" {
+  if (percent >= 92) return "error";
+  if (percent >= 85) return "warning";
+  return "success";
+}
+
+function usageWindow(theme: Theme, window: UsageWindow, now: number, layout: UsageLayout): string {
+  const color = usageColor(window.percent);
+  const parts = [theme.fg("dim", window.label)];
+  if (layout === "bars") parts.push(renderBar(theme, window.percent, color));
+  parts.push(theme.fg(layout === "compact" ? color : "dim", `${Math.round(window.percent)}%`));
+  const reset = countdown(window.resetAt, now);
+  if (reset !== undefined) parts.push(theme.fg("dim", reset));
+  return parts.join(" ");
+}
+
+function usageSegment(
+  theme: Theme,
+  snapshot: UsageSnapshot | undefined,
+  providerId: string | undefined,
+  now: number,
+): string {
+  if (
+    snapshot === undefined ||
+    snapshot.providerId !== providerId ||
+    snapshot.windows.length === 0
+  ) {
+    return "";
+  }
+  const separator = ` ${theme.fg("dim", WINDOW_SEPARATOR)} `;
+  const windows = snapshot.windows.map((window) =>
+    usageWindow(theme, window, now, snapshot.source.layout),
+  );
+  return ` ${theme.fg("accent", snapshot.source.label)} ${windows.join(separator)}`;
 }
 
 interface UsageTotals {
@@ -89,6 +144,27 @@ export default function piVim(pi: ExtensionAPI) {
   let previousFactory: PiEditorFactory | undefined;
   let activeFactory: PiEditorFactory | undefined;
   let restoreBindings: (() => void) | undefined;
+  let usageSnapshot: UsageSnapshot | undefined;
+  let usageTui: TUI | undefined;
+  let usageRefreshTimer: ReturnType<typeof setInterval> | undefined;
+  let usageFetchGeneration = 0;
+
+  async function refreshUsage(ctx: ExtensionContext): Promise<void> {
+    const generation = ++usageFetchGeneration;
+    const providerId = usageProviderId(ctx.model);
+    const source = providerId === undefined ? undefined : USAGE_SOURCES.get(providerId);
+    if (providerId === undefined || source === undefined) {
+      usageSnapshot = undefined;
+      usageTui?.requestRender();
+      return;
+    }
+    const windows = await fetchUsageWindows(providerId, () =>
+      ctx.modelRegistry.getApiKeyForProvider(providerId),
+    );
+    if (generation !== usageFetchGeneration) return;
+    usageSnapshot = { providerId, source, windows };
+    usageTui?.requestRender();
+  }
 
   pi.on("session_start", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
@@ -178,6 +254,7 @@ export default function piVim(pi: ExtensionAPI) {
     let footerDataRef: ReadonlyFooterDataProvider | undefined;
     ctx.ui.setEditorComponent(editorFactory);
     ctx.ui.setFooter((tui, _theme, footerData) => {
+      usageTui = tui;
       footerDataRef = footerData;
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
       return {
@@ -192,7 +269,9 @@ export default function piVim(pi: ExtensionAPI) {
           const extensionStatus = otherStatuses.length
             ? theme.fg("muted", ` ${otherStatuses.join(" ")}`)
             : "";
-          const vimStatus = `${modeChip(theme, mode, branch ?? undefined)}${extensionStatus}`;
+          const now = Math.floor(Date.now() / 1000);
+          const usage = usageSegment(theme, usageSnapshot, usageProviderId(ctx.model), now);
+          const vimStatus = `${modeChip(theme, mode, branch ?? undefined)}${usage}${extensionStatus}`;
 
           return [truncateToWidth(vimStatus, width, "")];
         },
@@ -242,6 +321,7 @@ export default function piVim(pi: ExtensionAPI) {
                 thinkingLevel: ctx.thinkingLevel ?? "off",
                 cwd: ctx.sessionManager.getCwd(),
                 contextPercent: context?.percent ?? null,
+                contextTokens: context?.tokens ?? null,
                 contextWindow: context?.contextWindow ?? model?.contextWindow ?? 0,
                 cost: totals.cost,
                 netns: netns ? sanitizeStatus(netns) : undefined,
@@ -255,11 +335,27 @@ export default function piVim(pi: ExtensionAPI) {
       }),
       { placement: "aboveEditor" },
     );
+    if (usageRefreshTimer !== undefined) clearInterval(usageRefreshTimer);
+    usageRefreshTimer = setInterval(() => {
+      void refreshUsage(ctx);
+    }, USAGE_REFRESH_INTERVAL_MS);
+    void refreshUsage(ctx);
+  });
+
+  pi.on("model_select", (_event, ctx) => {
+    if (ctx.mode !== "tui") return;
+    void refreshUsage(ctx);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
+    usageSnapshot = undefined;
+    usageFetchGeneration++;
     restoreBindings?.();
     restoreBindings = undefined;
+    if (usageRefreshTimer !== undefined) {
+      clearInterval(usageRefreshTimer);
+      usageRefreshTimer = undefined;
+    }
     if (ctx.mode !== "tui") return;
     ctx.ui.setWidget("pi-vim-status-line", undefined);
     ctx.ui.setFooter(undefined);
@@ -268,5 +364,6 @@ export default function piVim(pi: ExtensionAPI) {
     }
     activeFactory = undefined;
     previousFactory = undefined;
+    usageTui = undefined;
   });
 }

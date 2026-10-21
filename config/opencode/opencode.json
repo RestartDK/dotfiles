@@ -1,26 +1,33 @@
 {
-  "$schema" : "https:\/\/opencode.ai\/config.json",
-  "mcp" : {
-    "expo" : {
-      "oauth" : {
-
-      },
-      "type" : "remote",
-      "url" : "https:\/\/mcp.expo.dev\/mcp"
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "expo": {
+      "oauth": {},
+      "type": "remote",
+      "url": "https://mcp.expo.dev/mcp"
     },
-    "linear" : {
-      "oauth" : {
-
-      },
-      "type" : "remote",
-      "url" : "https:\/\/mcp.linear.app\/mcp"
+    "linear": {
+      "oauth": {},
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp"
     },
-    "superset" : {
-      "type" : "remote",
-      "url" : "https:\/\/api.superset.sh\/api\/agent\/mcp"
+    "superset": {
+      "type": "remote",
+      "url": "https://api.superset.sh/api/agent/mcp"
+    },
+    "pencil": {
+      "command": [
+        "/Applications/Pen.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
+        "--app",
+        "desktop",
+        "--agent",
+        "openCodeCLI"
+      ],
+      "enabled": true,
+      "type": "local"
     }
   },
-  "plugin" : [
-    ".\/plugins\/cmux-session.js"
+  "plugin": [
+    "./plugins/cmux-session.js"
   ]
 }

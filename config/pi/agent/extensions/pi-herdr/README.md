@@ -6,6 +6,8 @@ Interactive sessions name their tab from the first prompt. Title generation runs
 
 Generated titles use at most four words and 28 characters. Pi saves the title as the session name, restores it on resume, and mirrors manual `/name` changes to Herdr. Headless sessions do not rename tabs. Session shutdown cancels pending title work. If both providers fail, Pi shows a warning and leaves the name unchanged.
 
+`/worktree <branch>` creates a Herdr worktree and moves the current Pi session into it. The current transcript is forked (`pi --fork`) so the new session file lives under the worktree's own session directory, then the successor Pi closes the source tab once it is up. A bare name gets a `daniel/` prefix; pass `owner/name` to control the branch. The command needs a saved transcript and only runs in the interactive TUI.
+
 The extension talks directly to Herdr's newline-delimited socket API. Protocol request and response types in `generated/` come from the JSON Schema bundled with the installed Herdr binary; they are not maintained by hand.
 
 ```bash

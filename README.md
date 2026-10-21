@@ -1,131 +1,84 @@
 # RestartDK dotfiles
 
-Nix-native dotfiles and host configuration for Daniel's machines.
+One flake describes every machine I run, and the tool config those machines read.
 
-The canonical editable checkout is:
+```mermaid
+flowchart TB
+  subgraph repo["this repo, one flake"]
+    flake["flake.nix"]
+    modules["modules/<br/>NixOS and Home Manager"]
+    config["config/<br/>canonical tool config"]
+  end
 
-```text
-~/.config/dotfiles
+  generation["one generation per machine"]
+  flake --> generation
+  modules --> generation
+  config -->|"copied into the store at build time"| generation
+
+  generation --> server["server<br/>headless NixOS, deployed from CI"]
+  generation --> laptop["laptop I work on<br/>nix-darwin, rebuilt locally"]
+  generation --> managed["managed machine<br/>Home Manager only"]
+
+  subgraph layers["three layers on every machine"]
+    direction LR
+    canonical["canonical<br/>read-only, from the store"]
+    local["local<br/>mine, writable, untracked"]
+    state["state<br/>tool-written, never managed"]
+  end
+  server --> layers
+  laptop --> layers
+  managed --> layers
 ```
 
-Remote:
+## The three layers
+
+| Layer | Owned by | A change takes effect |
+| --- | --- | --- |
+| canonical | Nix, from `config/` | on rebuild or deploy |
+| local | me, on the machine, untracked | immediately |
+| state | the tool itself | never managed |
+
+Nix owns the canonical layer, and a path Nix owns is never writable. The tool owns the state layer, and a path a tool writes is never managed. The local layer sits between them, and it is where work in progress goes without a rebuild and without a pull request:
 
 ```text
-https://github.com/RestartDK/dotfiles
+~/.config/zsh/local.zsh             sourced last by the generated zshrc
+~/.config/nvim/lua/local/init.lua   loaded by config/nvim/init.lua
+~/.agents/skills/<name>/            a local skill beside the canonical ones
+<project>/.pi/settings.json         a project-scoped pi override
 ```
 
-## Hosts
+Directories that hold config are linked recursively, so the target is a real directory whose entries are store symlinks and a local file can sit beside them. `tests/live-checkout.sh` fails when delivered config reads the authoring checkout or reaches outside the store with an out-of-store symlink.
 
-```text
-hosts/srv-nana/                      # NixOS workstation
-hosts/twin/                          # reusable Home Manager dev profile
-hosts/dkumlin-macbook-pro/           # personal nix-darwin MacBook config
-hosts/dkumlin-twin-macbook-pro/      # work nix-darwin MacBook config
-```
-
-## Apply configs
-
-Use the `traitor` wrapper from the repo:
+## Changing something
 
 ```bash
-cd ~/.config/dotfiles
-./bin/traitor re
+./bin/traitor re                            # rebuild this machine
+./bin/traitor check                         # run the flake checks
+./bin/traitor deploy <host> --remote-build  # deploy a host from here
+./bin/traitor update                        # update the flake inputs
+./bin/traitor rollback                      # go back one generation
 ```
 
-Convenience commands:
+Raw rebuilds work when the wrapper is not available:
 
 ```bash
-traitor re          # rebuild current host
-traitor check       # run flake checks
-traitor update      # update flake inputs
-traitor upgrade     # update, then rebuild
-traitor rollback    # roll back current host generation
-traitor twin        # apply the Home Manager-only twin profile
-traitor nana        # rebuild srv-nana explicitly
-traitor mac         # rebuild dkumlin-macbook-pro explicitly
-traitor work-mac    # rebuild dkumlin-twin-macbook-pro explicitly
+sudo nixos-rebuild switch --flake .#<host>
+darwin-rebuild switch --flake .#<host>
 ```
 
-Raw commands still work when needed:
+`hosts/` composes each machine and `nix flake show` lists them. A machine that only consumes config needs no checkout. `traitor sync` keeps a checkout rebased on the machines that author it.
 
-```bash
-sudo nixos-rebuild switch --flake ~/.config/dotfiles#srv-nana
-darwin-rebuild switch --flake ~/.config/dotfiles#dkumlin-macbook-pro
-darwin-rebuild switch --flake ~/.config/dotfiles#dkumlin-twin-macbook-pro
-nix run github:nix-community/home-manager/release-26.05 -- switch --flake ~/.config/dotfiles#twin -b hm-backup
-```
+## Where the rest lives
 
-This repo is flake-only; there is intentionally no legacy `configuration.nix` entrypoint.
-
-## Layout
-
-```text
-flake.nix                            # flake outputs and inputs
-bin/traitor                          # local operations wrapper
-hosts/                               # machine-specific host composition
-profiles/home/                       # reusable Home Manager bridge profiles
-modules/nixos/                       # NixOS reusable modules
-modules/home/                        # shared Home Manager modules
-  shell/ editors/ terminal/ agents/ desktop/
-config/                              # source app dotfiles formerly in dotfiles/
-  agents/skills-global/              # portable skills safe to enable broadly
-  agents/skills-personal/            # personal-only skills such as homelab/Dokploy
-  agents/skills-all/                 # symlink farm combining global + personal skills
-packages/                            # local package definitions
-```
-
-## Dotfile model
-
-The repo itself is the dotfiles checkout. App config source lives under `config/`:
-
-```text
-~/.config/dotfiles/config/ghostty
-~/.config/dotfiles/config/nvim
-~/.config/dotfiles/config/pi
-```
-
-Home Manager links selected files into their runtime locations, for example:
-
-```text
-~/.config/ghostty
-~/.config/nvim
-~/.pi/agent/settings.json
-```
-
-High-churn dev and agent config is still managed with explicit out-of-store symlinks:
-
-```nix
-config.lib.file.mkOutOfStoreSymlink "/absolute/path/to/repo/file"
-```
-
-That keeps those files editable in the Git checkout and avoids copying them into `/nix/store`. Editing a file under `config/` can take effect immediately for live-symlinked apps; rebuilding is needed when changing Nix modules, package lists, services, users, or the set of symlinked paths.
-
-## Cobb bridge profile
-
-This flake exports a reusable Home Manager module for Cobb:
-
-```nix
-inputs.daniel-dotfiles.homeManagerModules.cobb-daniel
-```
-
-The module lives at:
-
-```text
-profiles/home/cobb-daniel.nix
-```
-
-It is intended for Cobb's `nix/hosts/profiles/daniel.nix` to import, while Cobb remains responsible for system users, services, networking, and host-level config. Cobb's NixOS Home Manager module remains the sole activator. The bridge contributes Daniel's development packages and network-namespace wrappers, and points high-churn config at:
-
-```text
-/home/daniel/.config/dotfiles
-```
-
-The package and live-config layers only enable on Cobb dev hosts (`monster`, `titan`, `titan-2`).
+| Topic | File |
+| --- | --- |
+| CI, the deploy workflow, and the deploy account | [docs/deployment.md](docs/deployment.md) |
+| Server install, disks, and runtime secrets | [hosts/srv-hatchi/INSTALL.md](hosts/srv-hatchi/INSTALL.md) |
+| Pi key provisioning on the personal machines | [tests/personal-secrets.md](tests/personal-secrets.md) |
+| The Home Manager bridge for a work repository | [docs/work-bridge.md](docs/work-bridge.md) |
 
 ## Rules
 
-- Commit Nix modules and portable dotfiles.
-- Do not commit secrets, auth files, tokens, SSH private keys, browser profiles, app databases, sessions, logs, caches, sockets, or generated state.
-- Use Home Manager for packages and explicit out-of-store symlink declarations.
-- Use NixOS / nix-darwin modules for host/system services.
+- Do not commit secrets, tokens, private keys, sessions, logs, caches, or generated state.
 - Add new Nix files with `git add` before rebuilding; flakes only see tracked files.
+- Put a machine-specific tweak in a local layer, never in a second copy of a tracked path.

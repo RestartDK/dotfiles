@@ -4,7 +4,7 @@
   imports = [
     ../../modules/home/cobb-forwarding.nix
     ../../modules/home/dev-packages.nix
-    ../../modules/home/live-symlinks.nix
+    ../../modules/home/groups.nix
     ../../modules/home/ssh.nix
   ];
 
@@ -18,10 +18,14 @@
     ];
   };
 
+  my.ai.profile = "personal";
+
   my.liveConfig = {
     enable = true;
-    repoRoot = "/Users/danielkumlin/.config/dotfiles";
-    piSettingsFile = "config/pi/agent/settings-twin.json";
+    sync = {
+      enable = true;
+      checkout = "/Users/danielkumlin/.config/dotfiles";
+    };
     groups = {
       shell = true;
       git = true;

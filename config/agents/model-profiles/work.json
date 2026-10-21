@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "profile": "work",
+  "parent": "sol",
+  "routes": {
+    "astra": [
+      {
+        "kind": "pi",
+        "model": "openai-codex/gpt-6-astra",
+        "thinking": "xhigh"
+      }
+    ],
+    "deepseek": [
+      {
+        "kind": "pi",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "thinking": "max"
+      }
+    ],
+    "glm": [
+      {
+        "kind": "pi",
+        "model": "openrouter/z-ai/glm-5.3-flash",
+        "thinking": "max"
+      }
+    ],
+    "opus": [
+      {
+        "kind": "pi",
+        "model": "anthropic/claude-opus-5-5",
+        "thinking": "xhigh"
+      }
+    ],
+    "sol": [
+      {
+        "kind": "pi",
+        "model": "openai-codex/gpt-6.1-sol",
+        "thinking": "xhigh"
+      }
+    ]
+  },
+  "roles": {
+    "feature": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "refactoring": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "swarm-workers": {
+      "kind": "single",
+      "route": "astra"
+    },
+    "bug-fix": {
+      "kind": "single",
+      "route": "sol"
+    },
+    "perf-issue": {
+      "kind": "single",
+      "route": "sol"
+    },
+    "hillclimb": {
+      "kind": "single",
+      "route": "sol"
+    },
+    "reflect-tooling": {
+      "kind": "single",
+      "route": "sol"
+    },
+    "fast-code": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "why-investigators": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "precise-code": {
+      "kind": "single",
+      "route": "sol"
+    },
+    "prose": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "judgment": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "review": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "hardest": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "how-explainer": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "why-synthesizer": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "reflect-judgment": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "reflect-divergent": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "reflect-synthesizer": {
+      "kind": "single",
+      "route": "opus"
+    },
+    "how-explorer": {
+      "kind": "single",
+      "route": "deepseek"
+    },
+    "how-critics": {
+      "kind": "panel",
+      "members": [
+        "opus"
+      ]
+    },
+    "arena-runners": {
+      "kind": "panel",
+      "members": [
+        "opus",
+        "sol",
+        "deepseek"
+      ]
+    },
+    "arena-cross-judge": {
+      "kind": "panel",
+      "members": [
+        "opus",
+        "sol"
+      ]
+    },
+    "architect-runners": {
+      "kind": "panel",
+      "members": [
+        "opus",
+        "sol",
+        "glm"
+      ]
+    },
+    "interrogate-reviewers": {
+      "kind": "panel",
+      "members": [
+        "opus",
+        "sol",
+        "glm"
+      ]
+    }
+  },
+  "providers": [
+    "openrouter",
+    "openai",
+    "openai-codex",
+    "anthropic",
+    "ollama"
+  ]
+}

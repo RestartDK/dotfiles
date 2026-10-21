@@ -7,6 +7,9 @@ const SEGMENT_SEPARATOR = "";
 const FOLDER_ICON = "\u{F115}";
 const MODEL_COLOR = "#d787af";
 const PATH_COLOR = "#00afaf";
+const BAR_WIDTH = 12;
+const BAR_FILLED = "━";
+const BAR_EMPTY = "─";
 
 export interface StatusLineInput {
   model: string;
@@ -14,6 +17,7 @@ export interface StatusLineInput {
   thinkingLevel: string;
   cwd: string;
   contextPercent: number | null;
+  contextTokens: number | null;
   contextWindow: number;
   cost: number;
   netns?: string;
@@ -62,6 +66,30 @@ function formatTokens(count: number): string {
   return `${Math.round(count / 1_000_000)}M`;
 }
 
+export function renderBar(theme: Theme, percent: number, color: ThemeColor): string {
+  const filled = Math.round((Math.min(100, Math.max(0, percent)) / 100) * BAR_WIDTH);
+  const filledCells = theme.fg(color, BAR_FILLED.repeat(filled));
+  const emptyCells = theme.fg("dim", BAR_EMPTY.repeat(BAR_WIDTH - filled));
+  return `${filledCells}${emptyCells}`;
+}
+
+function gaugeColor(percent: number): ThemeColor {
+  if (percent >= 90) return "error";
+  if (percent >= 70) return "warning";
+  if (percent >= 50) return "accent";
+  return "success";
+}
+
+function contextGauge(input: StatusLineInput, theme: Theme): string {
+  if (input.contextPercent === null || input.contextTokens === null) {
+    return `${theme.fg("dim", BAR_EMPTY.repeat(BAR_WIDTH))} ${theme.fg("dim", "?")}`;
+  }
+  const percent = Math.min(100, Math.max(0, input.contextPercent));
+  const counts = `${formatTokens(input.contextTokens)}/${formatTokens(input.contextWindow)}`;
+  const text = `${Math.round(percent)}% ${counts}`;
+  return `${renderBar(theme, percent, gaugeColor(percent))} ${theme.fg("dim", text)}`;
+}
+
 function buildLine(input: StatusLineInput, theme: Theme): string {
   const segments: string[] = [theme.fg("accent", osIcon())];
 
@@ -74,11 +102,7 @@ function buildLine(input: StatusLineInput, theme: Theme): string {
 
   segments.push(hexFg(PATH_COLOR, `${FOLDER_ICON} ${basename(resolve(input.cwd)) || input.cwd}`));
 
-  const percent = input.contextPercent;
-  const contextText = `${percent === null ? "?" : percent.toFixed(1)}%/${formatTokens(input.contextWindow)}`;
-  const contextColor: ThemeColor =
-    percent === null ? "dim" : percent > 90 ? "error" : percent > 70 ? "warning" : "dim";
-  segments.push(theme.fg(contextColor, contextText));
+  segments.push(contextGauge(input, theme));
 
   if (input.netns) {
     segments.push(theme.fg("accent", input.netns));

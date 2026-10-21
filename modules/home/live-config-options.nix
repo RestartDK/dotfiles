@@ -1,13 +1,29 @@
 { lib, ... }:
 
 {
-  options.my.liveConfig = {
-    enable = lib.mkEnableOption "live out-of-store dotfile symlinks";
+  options.my.ai.profile = lib.mkOption {
+    type = lib.types.enum [
+      "work"
+      "personal"
+    ];
+    default = "personal";
+    description = "Global billing policy for native Pi sessions and delegated workers.";
+  };
 
-    repoRoot = lib.mkOption {
-      type = lib.types.str;
-      description = "Absolute path to the editable dotfiles checkout on this host.";
-    };
+  options.my.ai.openrouterKeyFile = lib.mkOption {
+    type = lib.types.nullOr (lib.types.strMatching "/.+");
+    default = null;
+    description = "Runtime file that holds the OpenRouter key. Null links the repository model catalogue unchanged.";
+  };
+
+  options.my.ai.opencodeKeyFile = lib.mkOption {
+    type = lib.types.nullOr (lib.types.strMatching "/.+");
+    default = null;
+    description = "Runtime file that holds the OpenCode Go key. Null leaves the opencode-go provider on its environment variable.";
+  };
+
+  options.my.liveConfig = {
+    enable = lib.mkEnableOption "the host's dotfiles configuration layers";
 
     piSettingsFile = lib.mkOption {
       type = lib.types.str;
@@ -18,7 +34,23 @@
     piSkillsPath = lib.mkOption {
       type = lib.types.str;
       default = "config/pi/agent/skills";
-      description = "Repo-relative Pi-specific skills directory to link as ~/.pi/agent/skills when shared agent skills are disabled.";
+      description = "Repo-relative Pi-specific skills directory to link as ~/.agents/skills when shared agent skills are disabled.";
+    };
+
+    sync = {
+      enable = lib.mkEnableOption "automatic synchronization of the editable dotfiles checkout";
+
+      checkout = lib.mkOption {
+        type = lib.types.nullOr (lib.types.strMatching "/.+");
+        default = null;
+        description = "Absolute path to the authoring checkout this host keeps rebased. Only hosts that author the config need one.";
+      };
+
+      intervalSeconds = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 900;
+        description = "Seconds between attempts to rebase the checkout onto its configured upstream.";
+      };
     };
 
     groups = {
@@ -30,9 +62,7 @@
       wayland = lib.mkEnableOption "Wayland desktop config";
       multiplexer = lib.mkEnableOption "terminal multiplexer config (Herdr)";
       agents = lib.mkEnableOption "all AI agent config";
-      agentSkills = lib.mkEnableOption "all shared AI agent skills config";
-      agentSkillsGlobal = lib.mkEnableOption "global AI agent skills config";
-      agentSkillsPersonal = lib.mkEnableOption "personal AI agent skills config";
+      agentSkills = lib.mkEnableOption "shared AI agent skills config";
       codex = lib.mkEnableOption "Codex config";
       claude = lib.mkEnableOption "Claude config";
       opencode = lib.mkEnableOption "OpenCode config";

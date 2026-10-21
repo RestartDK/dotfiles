@@ -157,5 +157,15 @@
   },
   "model": "opus[1m]",
   "skipDangerousModePermissionPrompt": true,
-  "theme": "light"
+  "statusLine": {
+    "type": "command",
+    "command": "python3 $HOME/.claude/hooks/usage-statusline.py",
+    "refreshInterval": 60
+  },
+  "theme": "light",
+  "permissions": {
+    "allow": [
+      "mcp__pencil"
+    ]
+  }
 }

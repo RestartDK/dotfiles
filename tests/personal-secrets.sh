@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+export HOME="$work/home"
+export PI_CODING_AGENT_DIR="$HOME/.pi/agent"
+export PI_OFFLINE=1 PI_TELEMETRY=0
+export XDG_CONFIG_HOME="$HOME/.config"
+mkdir -p "$XDG_CONFIG_HOME/dstack"
+cp "$MODEL_POLICY" "$XDG_CONFIG_HOME/dstack/models.json"
+unset OPENROUTER_API_KEY
+mkdir -p "$PI_CODING_AGENT_DIR"
+cd "$work"
+
+secret="$HOME/.opnix-openrouter-api-key"
+opencode_secret="$HOME/.opnix-opencode-api-key"
+jq \
+  --arg source "$SECRET_PATH" --arg target "$secret" \
+  --arg opencodeSource "$OPENCODE_SECRET_PATH" --arg opencodeTarget "$opencode_secret" '
+  .providers.openrouter.apiKey |= (split($source) | join($target))
+  | .providers["opencode-go"].apiKey |= (split($opencodeSource) | join($opencodeTarget))
+' "$MODELS_FILE" >"$PI_CODING_AGENT_DIR/models.json"
+jq -e --slurpfile base "$BASE_MODELS" '
+  del(.providers.openrouter.apiKey)
+  | if .providers.openrouter == {} then del(.providers.openrouter) else . end
+  | del(.providers["opencode-go"].apiKey)
+  | if .providers["opencode-go"] == {} then del(.providers["opencode-go"]) else . end
+  == $base[0]
+' "$PI_CODING_AGENT_DIR/models.json" >/dev/null
+printf '%s\n' '{"anthropic":{"type":"api_key","key":"unrelated-fixture"}}' >"$PI_CODING_AGENT_DIR/auth.json"
+cp "$PI_CODING_AGENT_DIR/auth.json" "$work/auth-before.json"
+
+printf '%s\n' 'opnix-test-key-one' >"$secret"
+printf '%s\n' 'opnix-opencode-key-one' >"$opencode_secret"
+chmod 0400 "$secret" "$opencode_secret"
+pi auth print-api-key --provider openrouter >"$work/actual"
+cmp "$secret" "$work/actual"
+pi auth print-api-key --provider opencode-go >"$work/actual"
+cmp "$opencode_secret" "$work/actual"
+
+chmod 0600 "$secret"
+printf '%s\n' 'opnix-test-key-two' >"$secret"
+chmod 0400 "$secret"
+pi auth print-api-key --provider openrouter >"$work/actual"
+cmp "$secret" "$work/actual"
+
+export OPENROUTER_API_KEY=environment-fixture
+pi auth print-api-key --provider openrouter >"$work/actual"
+cmp "$secret" "$work/actual"
+unset OPENROUTER_API_KEY
+
+rm "$secret"
+if pi auth print-api-key --provider openrouter >"$work/actual" 2>"$work/error"; then
+  echo 'Pi accepted a missing secret file' >&2
+  exit 1
+fi
+: >"$secret"
+chmod 0400 "$secret"
+if pi auth print-api-key --provider openrouter >"$work/actual" 2>"$work/error"; then
+  echo 'Pi accepted an empty secret file' >&2
+  exit 1
+fi
+cmp "$work/auth-before.json" "$PI_CODING_AGENT_DIR/auth.json"
+
+printf '%s\n' 'PASS: Pi reads both file-backed keys, sees rotation, preserves logins, and rejects missing or empty keys'

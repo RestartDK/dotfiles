@@ -102,14 +102,8 @@ fi
 # such as codex/claude. Invoke those wrappers explicitly if needed.
 # path_prepend "$HOME/.superset/bin"
 
-# Dotfiles checkout helpers. The canonical checkout is ~/.config/dotfiles.
-export DOTFILES="${DOTFILES:-$HOME/.config/dotfiles}"
-export DOTFILES_BIN="${DOTFILES_BIN:-$DOTFILES/bin}"
-path_prepend "$DOTFILES_BIN"
-
 # User-local tools
 path_append "$HOME/.lmstudio/bin"
-path_append "$HOME/.local/bin"
 path_append "$HOME/.pi/agent/bin"
 path_prepend "$HOME/.rbenv/bin"
 path_prepend "$HOME/.bun/bin"
@@ -123,13 +117,6 @@ path_append "$HOME/.greptile/bin"
 # Flutter: common Homebrew cask location on this machine.
 path_append "/opt/homebrew/Caskroom/flutter/3.32.4/flutter/bin"
 
-# Go workspace/tool installs. Keep Go state out of $HOME and put installed
-# binaries in the standard user-local bin directory.
-export GOPATH="${GOPATH:-$HOME/.local/share/go}"
-export GOBIN="${GOBIN:-$HOME/.local/bin}"
-export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
-export GOCACHE="${GOCACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/go-build}"
-path_prepend "$GOBIN"
 [[ -n "${GOROOT:-}" ]] && path_prepend "$GOROOT/bin"
 
 # fnm config

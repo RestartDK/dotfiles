@@ -35,8 +35,7 @@ choice="$({
     "󰢬  Printers" \
     "󰾲  NVIDIA" \
     "󰍛  System Info" \
-    "  Power" \
-    "  NixOS Config"
+    "  Power"
 } | "$launcher" --dmenu --quiet)" || exit 0
 
 case "$choice" in
@@ -49,6 +48,5 @@ case "$choice" in
   *NVIDIA*) launch nvidia-settings ;;
   *"System Info"*) launch hyprsysteminfo ;;
   *Power*) launch wlogout ;;
-  *"NixOS Config"*) launch xdg-open /home/dkumlin/.config/dotfiles ;;
   *) exit 0 ;;
 esac

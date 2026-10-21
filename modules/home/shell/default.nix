@@ -7,16 +7,26 @@
 
 let
   cfg = config.my.liveConfig;
-  link = path: config.lib.file.mkOutOfStoreSymlink "${cfg.repoRoot}/${path}";
-  file = path: {
-    source = link path;
+  file = source: {
+    inherit source;
     force = true;
+  };
+  goEnv = {
+    GOPATH = "${config.xdg.dataHome}/go";
+    GOBIN = config.xdg.binHome;
+    GOCACHE = "${config.xdg.cacheHome}/go-build";
   };
 in
 {
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       (lib.mkIf cfg.groups.shell {
+        programs.go = {
+          enable = true;
+          package = null;
+          env = goEnv;
+        };
+        home.sessionVariables = goEnv;
         home.packages = [
           (pkgs.runCommandLocal "repo-exec" { } ''
             mkdir -p "$out/bin"
@@ -36,15 +46,24 @@ in
               [[ -d "$HOME/.local/share/zsh/site-functions" ]] && fpath=("$HOME/.local/share/zsh/site-functions" $fpath)
             '')
             (lib.mkOrder 1000 ''
-              source "${cfg.repoRoot}/config/shell/zshrc"
+              source "${../../../config/shell/zshrc}"
+            '')
+            (lib.mkOrder 1001 ''
+              source "${../../../config/shell/agent-refresh.zsh}"
+            '')
+            (lib.mkOrder 1100 ''
+              [[ -r "$HOME/.config/zsh/local.zsh" ]] && source "$HOME/.config/zsh/local.zsh"
             '')
           ];
         };
-        xdg.configFile."starship.toml" = file "config/shell/starship.toml";
+        xdg = {
+          localBinInPath = true;
+          configFile."starship.toml" = file ../../../config/shell/starship.toml;
+        };
       })
 
       (lib.mkIf cfg.groups.git {
-        xdg.configFile."git/ignore" = file "config/git/ignore";
+        xdg.configFile."git/ignore" = file ../../../config/git/ignore;
       })
     ]
   );

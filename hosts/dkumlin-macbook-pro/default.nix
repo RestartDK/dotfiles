@@ -1,7 +1,9 @@
-{ pkgs, ... }:
+{ inputs, pkgs, ... }:
 
 {
   imports = [
+    inputs.opnix.darwinModules.default
+    (import ../../profiles/personal-secrets.nix { userName = "danielkumlin"; })
     ../../modules/darwin/determinate-nix.nix
     ../../modules/darwin/spotlight-hotkeys.nix
   ];

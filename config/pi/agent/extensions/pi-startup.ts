@@ -21,6 +21,20 @@ const art = String.raw`          :#@@+  +@@#:
           *@@@+  +@@@*
           :#@@+  +@@#:`;
 
+const builtInExtensionNames = ["mcp", "llama.cpp", "codemode", "tool-search"];
+
+function applyBuiltInExtensionEntries(counted: Set<string>, entries: unknown): void {
+  if (!Array.isArray(entries)) return;
+  for (const entry of entries) {
+    if (typeof entry !== "string") continue;
+    const match = /^([+-]?)builtin:(.+)$/.exec(entry);
+    if (!match) continue;
+    const [, sign, name] = match;
+    if (sign === "-") counted.delete(`builtin:${name}`);
+    else counted.add(`builtin:${name}`);
+  }
+}
+
 function countFiles(paths: string[]): number {
   return paths.filter((path) => existsSync(path)).length;
 }
@@ -108,7 +122,7 @@ function readStartupConfig(cwd: string): StartupConfig {
 
 function countExtensionEntries(cwd: string): number {
   const home = homedir();
-  const counted = new Set<string>();
+  const counted = new Set<string>(builtInExtensionNames.map((name) => `builtin:${name}`));
 
   for (const settingsPath of [
     join(home, ".pi", "agent", "settings.json"),
@@ -117,6 +131,7 @@ function countExtensionEntries(cwd: string): number {
     try {
       if (!existsSync(settingsPath)) continue;
       const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+      applyBuiltInExtensionEntries(counted, settings?.extensions);
       const packages = Array.isArray(settings?.packages) ? settings.packages : [];
       for (const pkg of packages) {
         const source = typeof pkg === "string" ? pkg : pkg?.source;

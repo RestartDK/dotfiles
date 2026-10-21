@@ -1,0 +1,236 @@
+import { describe, expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  backendModel,
+  loadPolicy,
+  parsePolicy,
+  resolveRoute,
+} from "../../config/pi/agent/lib/model-policy";
+
+const root = join(import.meta.dir, "../../config/agents/model-profiles");
+const policy = (profile: string) =>
+  parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
+
+describe("profile routing", () => {
+  test("work resolves Codex, Anthropic and OpenRouter routes", () => {
+    const work = policy("work");
+    expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
+      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+    ]);
+    expect(resolveRoute(work, { role: "precise-code" }).chain).toEqual([
+      { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
+    ]);
+    expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
+      { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "max" },
+    ]);
+    expect(resolveRoute(work, { role: "review" }).chain).toEqual([
+      { kind: "pi", provider: "anthropic", id: "claude-opus-5-5", thinking: "xhigh" },
+    ]);
+  });
+
+  test("personal dispatch uses declared routes and rejects undeclared raw targets", () => {
+    const personal = policy("personal");
+    const deepseek = resolveRoute(personal, { role: "feature" }).chain;
+    expect(deepseek).toEqual([
+      { kind: "pi", provider: "opencode-go", id: "deepseek-v4.1-flash", thinking: "high" },
+      { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "high" },
+    ]);
+    expect(personal.parent).toEqual(deepseek[0]);
+    expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
+      "opencode-go/glm-5.3-flash",
+    ]);
+    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
+      "not allowed",
+    );
+    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
+      "not allowed",
+    );
+  });
+
+  test("panels require an explicit member or seat", () => {
+    const work = policy("work");
+    expect(() => resolveRoute(work, { role: "arena-runners" })).toThrow("member or seat");
+    expect(
+      backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
+    ).toBe("openai-codex/gpt-6.1-sol");
+    expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
+      "openrouter/deepseek/deepseek-v4.1-flash",
+    );
+    for (const input of [
+      { role: "review", model: "x" },
+      { role: "review", thinking: "high" },
+      { role: "review", seat: 0 },
+      { role: "arena-runners", seat: 0, member: "fable" },
+    ]) {
+      expect(() => resolveRoute(work, input)).toThrow();
+    }
+  });
+
+  test.each(["work", "personal"])("%s complete effective role matrix", (profile) => {
+    const selected = policy(profile);
+    const work = profile === "work";
+    const expected = new Map<string, string>();
+    const group = (roles: string, route: string) => {
+      for (const role of roles.split(" ")) expected.set(role, route);
+    };
+    group("feature refactoring swarm-workers", work ? "astra" : "deepseek");
+    group("bug-fix perf-issue hillclimb reflect-tooling precise-code", work ? "sol" : "deepseek");
+    group("why-investigators fast-code how-explorer", "deepseek");
+    group("prose review", work ? "opus" : "glm");
+    group(
+      "judgment hardest how-explainer why-synthesizer reflect-judgment reflect-divergent reflect-synthesizer",
+      work ? "opus" : "deepseek",
+    );
+    for (const [role, member] of expected)
+      expect(resolveRoute(selected, { role }).selection).toEqual({ kind: "role", role, member });
+    const panels: Record<string, [string, ...string[]]> = {
+      "how-critics": work ? ["opus"] : ["glm", "muse"],
+      "arena-runners": work ? ["opus", "sol", "deepseek"] : ["deepseek", "muse", "mimo"],
+      "arena-cross-judge": work ? ["opus", "sol"] : ["glm", "muse"],
+      "architect-runners": work ? ["opus", "sol", "glm"] : ["deepseek", "muse", "mimo"],
+      "interrogate-reviewers": work ? ["opus", "sol", "glm"] : ["glm", "muse", "mimo"],
+    };
+    for (const [role, members] of Object.entries(panels)) {
+      expect(selected.roles.get(role)).toEqual({ kind: "panel", members });
+      members.forEach((member, seat) =>
+        expect(resolveRoute(selected, { role, seat }).selection).toEqual({
+          kind: "role",
+          role,
+          member,
+        }),
+      );
+    }
+    expect([...selected.roles.keys()].sort()).toEqual(
+      [...expected.keys(), ...Object.keys(panels)].sort(),
+    );
+  });
+
+  test("personal never declares max effort", () => {
+    const offenders = [...policy("personal").routes].flatMap(([route, chain]) =>
+      chain
+        .filter((backend) => backend.thinking === "max")
+        .map((backend) => `${route}:${backendModel(backend)}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  test("raw requests preserve declared chains and effort", () => {
+    const work = policy("work");
+    expect(resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
+    expect(() => resolveRoute(work, { model: "openai-codex/undeclared:xhigh" })).toThrow(
+      "not allowed",
+    );
+    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:high" })).toThrow(
+      "not allowed",
+    );
+  });
+
+  test("global policy is reloaded and honors XDG_CONFIG_HOME", () => {
+    const directory = mkdtempSync(join(tmpdir(), "profile-policy-"));
+    const original = process.env.XDG_CONFIG_HOME;
+    try {
+      mkdirSync(join(directory, "dstack"));
+      process.env.XDG_CONFIG_HOME = directory;
+      const path = join(directory, "dstack/models.json");
+      writeFileSync(path, readFileSync(join(root, "personal.json")));
+      expect(loadPolicy().profile).toBe("personal");
+      writeFileSync(path, readFileSync(join(root, "work.json")));
+      expect(loadPolicy().profile).toBe("work");
+      writeFileSync(path, "{");
+      expect(() => loadPolicy()).toThrow("dispatch blocked");
+    } finally {
+      if (original === undefined) delete process.env.XDG_CONFIG_HOME;
+      else process.env.XDG_CONFIG_HOME = original;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("shared dstack instructions contain no executable model slugs", () => {
+    const directory = join(import.meta.dir, "../../config/agents/skills/dstack");
+    for (const path of readdirSync(directory, { recursive: true, encoding: "utf8" })) {
+      if (path.endsWith(".md"))
+        expect(readFileSync(join(directory, path), "utf8")).not.toMatch(
+          /(?:anthropic|openai|openai|openrouter|fireworks)\/(?:claude-|gpt-|deepseek\/|z-ai\/|accounts\/fireworks\/models\/)/,
+        );
+    }
+  });
+
+  test("missing and malformed policy fail closed", () => {
+    expect(() => loadPolicy("/nonexistent-profile-config")).toThrow("models.json");
+    const personal = policy("personal");
+    const valid = {
+      version: 1,
+      profile: personal.profile,
+      parent: "deepseek",
+      routes: Object.fromEntries(
+        [...personal.routes].map(([name, chain]) => [
+          name,
+          chain.map((backend) => ({
+            kind: backend.kind,
+            model: backendModel(backend),
+            thinking: backend.thinking,
+          })),
+        ]),
+      ),
+      roles: Object.fromEntries(personal.roles),
+    };
+    const malformed = [
+      { ...valid, version: 2 },
+      { ...valid, parent: "missing-route" },
+      { ...valid, fallback: "auto" },
+      { ...valid, routes: { ...valid.routes, fable: [] } },
+      {
+        ...valid,
+        routes: {
+          ...valid.routes,
+          astra: [
+            { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
+            { thinking: "high", model: "openai-codex/gpt-6-astra", kind: "pi" },
+          ],
+        },
+      },
+      {
+        ...valid,
+        roles: { ...valid.roles, review: { kind: "single", route: "fable", members: ["astra"] } },
+      },
+      { ...valid, roles: { ...valid.roles, review: { kind: "single", route: "missing" } } },
+      { ...valid, roles: { ...valid.roles, "arena-runners": { kind: "panel", members: [] } } },
+    ];
+    for (const value of [
+      null,
+      {},
+      { version: 1, profile: "personal", routes: {}, roles: {} },
+      ...malformed,
+    ]) {
+      expect(() => parsePolicy(value)).toThrow();
+    }
+  });
+});
+
+test.each(["mistral/mistral-large", "google/gemini-3-pro"])(
+  "policy rejects unsupported provider in %s",
+  (model) => {
+    const input = JSON.parse(readFileSync(join(root, "personal.json"), "utf8"));
+    input.routes.astra = [{ kind: "pi", model, thinking: "xhigh" }];
+    expect(() => parsePolicy(input)).toThrow(
+      "Invalid dstack model policy: unsupported native Pi provider",
+    );
+  },
+);
+
+test.each([
+  ["settings.json", "personal"],
+  ["settings-work.json", "work"],
+])("%s keeps the %s profile startup model and thinking level", (settingsFile, profileName) => {
+  const settings = JSON.parse(
+    readFileSync(join(import.meta.dir, "../../config/pi/agent", settingsFile), "utf8"),
+  );
+  const active = policy(profileName);
+  expect(settings.defaultProvider).toBe(active.parent.provider);
+  expect(settings.defaultModel).toBe(active.parent.id);
+  expect(settings.modelThinkingLevels).toEqual({
+    [backendModel(active.parent)]: profileName === "personal" ? "high" : "xhigh",
+  });
+});
