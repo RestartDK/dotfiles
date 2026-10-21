@@ -284,6 +284,12 @@ assert lib.hasInfix "install -Dm600 %d/config" (
   builtins.head cfg.systemd.services.qbittorrent.serviceConfig.ExecStartPre
 );
 assert cfg.services.grafana.settings.security.cookie_secure;
+assert cfg.services.miniflux.enable;
+assert cfg.services.miniflux.config.LISTEN_ADDR == "127.0.0.1:12000";
+assert cfg.services.miniflux.createDatabaseLocally;
+assert
+  toString cfg.services.miniflux.adminCredentialsFile == "/run/hatchi-onepassword/minifluxAdmin";
+assert builtins.elem "miniflux" cfg.my.hatchi.stateUnits;
 assert cfg.services.couchdb.configFile == "/run/couchdb/local.ini";
 assert lib.hasSuffix cfg.services.couchdb.configFile
   cfg.systemd.services.couchdb.environment.ERL_FLAGS;

@@ -299,7 +299,7 @@ pkgs.testers.runNixOSTest {
     hatchi.succeed("systemctl reset-failed; systemctl start srv.mount")
     hatchi.wait_for_unit("srv.mount")
     assert hatchi.succeed("findmnt -n -o LABEL,FSTYPE --mountpoint /srv").split() == ["hatchi-data", "ext4"]
-    units = ["adguardhome", "caddy", "glance", "komga", "mangy-db-setup", "mangy-migrate", "mangy-server", "mangy-worker", "jellyfin", "seerr", "radarr", "sonarr", "prowlarr", "qbittorrent", "nextcloud-admin", "nextcloud-setup", "nextcloud-cron", "nextcloud-update-db", "phpfpm-nextcloud", "nginx", "postgresql", "postgresql-setup", "redis-nextcloud", "couchdb", "prometheus", "grafana"]
+    units = ["adguardhome", "caddy", "glance", "komga", "mangy-db-setup", "mangy-migrate", "mangy-server", "mangy-worker", "jellyfin", "seerr", "radarr", "sonarr", "prowlarr", "qbittorrent", "nextcloud-admin", "nextcloud-setup", "nextcloud-cron", "nextcloud-update-db", "phpfpm-nextcloud", "miniflux", "nginx", "postgresql", "postgresql-setup", "redis-nextcloud", "couchdb", "prometheus", "grafana"]
     hatchi.succeed("systemctl reset-failed; systemctl start " + " ".join(unit + ".service" for unit in units if unit not in ["nextcloud-cron", "nextcloud-update-db"]))
     for unit in units:
         if unit in ["nextcloud-setup", "postgresql-setup", "nextcloud-update-db", "nextcloud-cron"]:
@@ -307,15 +307,17 @@ pkgs.testers.runNixOSTest {
         hatchi.wait_for_unit(unit + ".service", timeout=600)
     hatchi.wait_for_unit("prometheus-node-exporter.service")
     hatchi.succeed("test $(stat -c %U:%G:%a /var/lib/sonarr) = sonarr:media:700")
-    for port in [53, 80, 443, 2019, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100]:
+    for port in [53, 80, 443, 2019, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 12000, 5984, 3001, 9090, 9100]:
         hatchi.wait_for_open_port(port, "127.0.0.1", timeout=600)
     hatchi.succeed("test $(systemctl show nextcloud-setup.service -p ExecMainStatus --value) = 0")
     hatchi.succeed("test $(systemctl show mangy-migrate.service -p ExecMainStatus --value) = 0")
+    hatchi.succeed("test $(systemctl show miniflux-dbsetup.service -p ExecMainStatus --value) = 0")
+    hatchi.succeed("curl -fsS http://127.0.0.1:12000/healthcheck | grep -qx OK")
 
     inventory = json.loads(r'${builtins.toJSON (builtins.fromJSON (builtins.readFile ./inventory.json))}')
-    assert len(inventory) == 17
-    assert len([entry for entry in inventory if entry["unit"] is not None]) == 16
-    assert len({entry["source"] for entry in inventory}) == 17
+    assert len(inventory) == 19
+    assert len([entry for entry in inventory if entry["unit"] is not None]) == 18
+    assert len({entry["source"] for entry in inventory}) == 19
     assert [entry["source"] for entry in inventory if entry["unit"] is None] == ["portainer"]
     assert "open-webui" not in {entry["source"] for entry in inventory}
     names = [entry["route"] for entry in inventory if entry["route"] is not None] + ["ollama", "opencode"]
@@ -369,6 +371,10 @@ pkgs.testers.runNixOSTest {
     assert response("qbittorrent", "/api/v2/app/version", "-f -b /tmp/qb-cookies").strip() == "v${self.nixosConfigurations.srv-hatchi.config.services.qbittorrent.package.version}"
     assert "version" in json.loads(response("seerr", "/api/v1/status"))
     assert json.loads(response("couchdb", "/_up", "-f -u daniel:fixture-password"))["status"] == "ok"
+    assert response("miniflux", "/healthcheck", "-f").strip() == "OK"
+    assert 'type="password"' in response("miniflux", "/", "-f -L")
+    assert json.loads(response("miniflux", "/v1/me", "-f -u daniel:fixture-password"))["username"] == "daniel"
+    assert response("miniflux", "/v1/me", "-o /dev/null -w '%{http_code}' -u daniel:wrong").strip() == "401"
     for name in ["ollama", "opencode"]:
         assert json.loads(response(name, "/api/version", "-f"))["marker"] == f"fixture-{name}"
     assert json.loads(response("grafana", "/api/health", "-f"))["database"] == "ok"
@@ -379,20 +385,20 @@ pkgs.testers.runNixOSTest {
     for address in ["192.168.1.10", "fd00:1::10"]:
         for port in [53, 80, 443]:
             client.succeed(f"nc -z -w 2 {address} {port}")
-        for port in [22, 2019, 4369, 5986, 9101, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100, 5432, 6379, 6881]:
+        for port in [22, 2019, 4369, 5986, 9101, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 12000, 5984, 3001, 9090, 9100, 5432, 6379, 6881]:
             client.fail(f"nc -z -w 1 {address} {port}")
     for address in ["192.168.1.10", "fd00:1::10"]:
         admin.succeed(f"ssh-keyscan -T 3 {address} 2>/dev/null | grep -q ssh-ed25519")
-        for port in [53, 80, 443, 2019, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 5984, 3001, 9090, 9100, 5432, 6379]:
+        for port in [53, 80, 443, 2019, 3000, 3002, 8081, 25600, 8096, 7878, 8989, 9696, 8080, 5055, 11000, 12000, 5984, 3001, 9090, 9100, 5432, 6379]:
             admin.fail(f"nc -z -w 1 {address} {port}")
         admin.fail(f"dig @{address} dashboard.{domain} +time=1 +tries=1")
     for address in ["192.168.2.10", "fd00:2::10"]:
-        for port in [22, 53, 80, 443, 3000, 8080, 9100, 5432, 6379]:
+        for port in [22, 53, 80, 443, 3000, 8080, 9100, 12000, 5432, 6379]:
             outsider.fail(f"nc -z -w 1 {address} {port}")
         outsider.fail(f"dig @{address} dashboard.{domain} +time=1 +tries=1")
     client.succeed(f"dig @fd00:1::10 dashboard.{domain} +short | grep -Fx 192.168.1.10")
     listeners = [line.split()[3].rsplit(":", 1) for line in hatchi.succeed("ss -H -ltn").splitlines()]
-    for port in [3000, 3002, 8081, 25600, 7878, 8989, 9696, 8080, 11000, 5984, 3001, 9090, 9100]:
+    for port in [3000, 3002, 8081, 25600, 7878, 8989, 9696, 8080, 11000, 12000, 5984, 3001, 9090, 9100]:
         addresses = [host.strip("[]") for host, number in listeners if number == str(port)]
         assert addresses, (port, listeners)
         for host in addresses:

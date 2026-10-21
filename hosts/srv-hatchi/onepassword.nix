@@ -17,6 +17,7 @@ let
     grafanaKey = null;
     grafanaPassword = null;
     homelabSshKey = null;
+    minifluxAdmin = null;
     nextcloudPassword = null;
     qbittorrentPasswordHash = null;
     runnerAccessToken = null;
