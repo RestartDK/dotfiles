@@ -94,12 +94,36 @@ in
         ) (lib.filterAttrs (_: reference: reference != null) cfg.references);
       };
       systemd.services.opnix-secrets = {
+        # The resolver is Tailscale's MagicDNS, and activation restarts
+        # tailscaled in the same transaction. Without the ordering and the wait,
+        # the first start races that restart, fails to resolve
+        # my.1password.com, and latches the unit's two-start limit, which aborts
+        # the deployment and rolls the host back.
+        after = [ "tailscaled.service" ];
+        path = [
+          pkgs.coreutils
+          pkgs.getent
+        ];
         preStart = ''
           test -s ${lib.escapeShellArg config.services.onepassword-secrets.tokenFile}
+          for attempt in $(seq 1 30); do
+            if getent hosts my.1password.com > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
         '';
         postStart = lib.concatMapStringsSep "\n" (path: "test -s ${lib.escapeShellArg path}") (
           builtins.attrValues paths
         );
+        # Upstream allows two starts per hour with a fifteen minute backoff, so
+        # one failed fetch blocks every later attempt until the hour clears.
+        # This keeps a rate bound while letting a transient failure recover.
+        unitConfig = {
+          StartLimitBurst = lib.mkForce 10;
+          StartLimitIntervalSec = lib.mkForce "10min";
+        };
+        serviceConfig.RestartSec = lib.mkForce "20s";
       };
       systemd.services.hatchi-secret-files = {
         description = "Substitute Hatchi password hashes into declared configuration";
