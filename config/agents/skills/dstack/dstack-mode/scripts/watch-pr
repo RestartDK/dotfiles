@@ -60,8 +60,17 @@ REPO_ARGS=(--repo "$REPO")
 OWNER="${REPO%%/*}" NAME="${REPO##*/}"
 
 snapshot() {
-	local view threads
-	view=$(gh pr view "$PR" "${REPO_ARGS[@]}" --json state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,isDraft)
+	local view checks check_status=0 threads
+	view=$(gh pr view "$PR" "${REPO_ARGS[@]}" --json state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,isDraft) || return
+	if jq -e '.statusCheckRollup == []' <<<"$view" >/dev/null; then
+		checks='[]'
+	else
+		checks=$(gh pr checks "$PR" "${REPO_ARGS[@]}" --json name,bucket) || check_status=$?
+		case "$check_status" in
+		0 | 1 | 8) ;;
+		*) return "$check_status" ;;
+		esac
+	fi
 	threads=$(gh api graphql -f query="
     query(\$owner:String!,\$name:String!,\$pr:Int!){
       repository(owner:\$owner,name:\$name){
@@ -69,16 +78,21 @@ snapshot() {
           reviewThreads(first:100){pageInfo{hasNextPage} nodes{id isResolved isOutdated comments(first:50){pageInfo{hasNextPage} nodes{id url body createdAt updatedAt author{login __typename} reactions(first:50){pageInfo{hasNextPage} nodes{id content createdAt user{login}}}}}}}
         }
       }
-    }" -F owner="$OWNER" -F name="$NAME" -F pr="$PR")
+    }" -F owner="$OWNER" -F name="$NAME" -F pr="$PR") || return
 
-	jq -cn --argjson v "$view" --argjson t "$threads" --arg me "$ME" --arg agent "$AGENT_LOGIN" --arg agent_prefix "$AGENT_PREFIX" --arg marker "$MARKER" --arg fixed "$FIXED_PREFIX" --arg pr "$PR" --arg repo "$REPO" '
+	jq -cn --argjson v "$view" --argjson c "$checks" --argjson check_status "$check_status" --argjson t "$threads" --arg me "$ME" --arg agent "$AGENT_LOGIN" --arg agent_prefix "$AGENT_PREFIX" --arg marker "$MARKER" --arg fixed "$FIXED_PREFIX" --arg pr "$PR" --arg repo "$REPO" '
     ($t.errors // []) as $errors
     | if ($errors | length) > 0 then error($errors[0].message) else . end
-    | ($v.statusCheckRollup // []) as $checks
-    | [$checks[] | select((.conclusion // .state // "") as $c
-        | ($c=="FAILURE" or $c=="ERROR" or $c=="TIMED_OUT" or $c=="ACTION_REQUIRED"))] as $failed
-    | [$checks[] | select((.status // "") as $s | ($s=="IN_PROGRESS" or $s=="QUEUED" or $s=="PENDING")
-        or ((.state // "")=="PENDING"))] as $pending
+    | (if ($c | type) != "array" then error("Invalid check observation")
+       elif all($c[]; type == "object"
+         and (.name | type == "string" and length > 0)
+         and (.bucket | IN("pass", "fail", "pending", "skipping", "cancel"))) then $c
+       else error("Invalid check observation") end) as $checks
+    | [$checks[] | select(.bucket == "fail" or .bucket == "cancel")] as $failed
+    | [$checks[] | select(.bucket == "pending")] as $pending
+    | if ($check_status == 1 and ($failed | length) == 0)
+         or ($check_status == 8 and ($pending | length) == 0)
+      then error("Check query failed without matching check state") else . end
     | ($t.data.repository.pullRequest.reviewThreads) as $connection
     | if $connection.pageInfo.hasNextPage != false
          or any($connection.nodes[]; .comments.pageInfo.hasNextPage != false
@@ -150,7 +164,7 @@ snapshot() {
        merge_state:$v.mergeStateStatus, review:$v.reviewDecision,
        unresolved_threads:($threads|length),
        human_pending:([$threads[] | select(.kind == "human" and .decision == "pending")]|length),
-       failing_checks:[$failed[].name // $failed[].context],
+       failing_checks:[$failed[].name],
        pending_checks:($pending|length),
        complete:true, threads:$threads, resolved_threads:[$all_threads[] | select(.resolved == true)]}'
 }

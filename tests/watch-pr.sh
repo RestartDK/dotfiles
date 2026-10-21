@@ -25,6 +25,20 @@ case "$*" in
     cat "$WATCH_PR_TEST_CASE_DIR/view.json"
   fi
   ;;
+"pr checks 42 --repo twin-so/cobb --json name,bucket")
+  if [[ -f "$WATCH_PR_TEST_CASE_DIR/checks-error" ]]; then
+    cat "$WATCH_PR_TEST_CASE_DIR/checks-error" >&2
+  fi
+  if [[ -f "$WATCH_PR_TEST_CASE_DIR/poll" ]]; then
+    read -r poll <"$WATCH_PR_TEST_CASE_DIR/poll"
+    if [[ -f "$WATCH_PR_TEST_CASE_DIR/checks-$poll.json" ]]; then
+      cat "$WATCH_PR_TEST_CASE_DIR/checks-$poll.json"
+      exit "$(<"$WATCH_PR_TEST_CASE_DIR/checks-$poll.status")"
+    fi
+  fi
+  cat "$WATCH_PR_TEST_CASE_DIR/checks.json"
+  exit "$(<"$WATCH_PR_TEST_CASE_DIR/checks-status")"
+  ;;
 "api graphql "*) cat "$WATCH_PR_TEST_CASE_DIR/threads.json" ;;
 *)
   printf 'unexpected gh call: %s\n' "$*" >&2
@@ -38,6 +52,11 @@ export PATH="$test_dir/bin:$PATH"
 fixture_dir=""
 view() {
   cat >"$fixture_dir/view.json"
+}
+
+checks() {
+  cat >"$fixture_dir/checks.json"
+  printf '%s\n' "${1:-0}" >"$fixture_dir/checks-status"
 }
 
 threads() {
@@ -59,7 +78,13 @@ fixture() {
   mkdir -p "$fixture_dir"
   export WATCH_PR_TEST_CASE_DIR=$fixture_dir
   view <<'JSON'
-{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"APPROVED","statusCheckRollup":[],"isDraft":false}
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"APPROVED","statusCheckRollup":[{"name":"build","conclusion":"SUCCESS"}],"isDraft":false}
+JSON
+  checks <<'JSON'
+[{"name":"build","state":"SUCCESS","bucket":"pass"}]
+JSON
+  threads <<'JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}
 JSON
 }
 
@@ -110,6 +135,97 @@ assert_jq() {
   local expected=$1 filter=$2 label=$3
   assert_eq "$expected" "$(jq -r "$filter" <<<"$last_output")" "$label"
 }
+
+fixture current_checks
+view <<'JSON'
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"name":"build","status":"COMPLETED","conclusion":"FAILURE"},{"name":"build","status":"COMPLETED","conclusion":"SUCCESS"},{"name":"retired","status":"QUEUED"}],"isDraft":false}
+JSON
+checks <<'JSON'
+[{"name":"build","state":"SUCCESS","bucket":"pass"},{"name":"optional","state":"SKIPPED","bucket":"skipping"}]
+JSON
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "current passing checks with required review status"
+assert_jq REVIEW '.verdict' "superseded failure cannot hide required review"
+assert_jq '[]' '.failing_checks | tojson' "superseded failures are absent"
+assert_jq 0 '.pending_checks' "superseded queued checks are absent"
+jq '.reviewDecision = "APPROVED" | .mergeStateStatus = "CLEAN"' "$fixture_dir/view.json" >"$fixture_dir/approved.json"
+mv "$fixture_dir/approved.json" "$fixture_dir/view.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "current passing checks with approval status"
+assert_jq READY '.verdict' "current passing checks permit readiness only after review"
+
+fixture no_checks
+view <<'JSON'
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"APPROVED","statusCheckRollup":[],"isDraft":false}
+JSON
+checks 1 <<'JSON'
+JSON
+printf "no checks reported on the 'feature' branch\n" >"$fixture_dir/checks-error"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "no-check PR status"
+assert_jq READY '.verdict' "no-check PR can be ready"
+jq '.reviewDecision = "REVIEW_REQUIRED" | .mergeStateStatus = "BLOCKED"' "$fixture_dir/view.json" >"$fixture_dir/changed.json"
+mv "$fixture_dir/changed.json" "$fixture_dir/view.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "no-check required review status"
+assert_jq REVIEW '.verdict' "no-check PR still requires review"
+for state in MERGED CLOSED; do
+  jq --arg state "$state" '.state = $state' "$fixture_dir/view.json" >"$fixture_dir/changed.json"
+  mv "$fixture_dir/changed.json" "$fixture_dir/view.json"
+  invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+  assert_status 0 "no-check $state status"
+  assert_jq "$state" '.verdict' "no-check PR preserves $state"
+done
+
+while read -r state bucket status verdict; do
+  fixture "check-$state-$status"
+  jq -cn --arg state "$state" --arg bucket "$bucket" '[{name:"build",state:$state,bucket:$bucket}]' | checks "$status"
+  invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+  assert_status 0 "$state with gh exit $status status"
+  assert_jq "$verdict" '.verdict' "$state with gh exit $status verdict"
+  case $verdict in
+  CI_FAIL) assert_jq '["build"]' '.failing_checks | tojson' "current failing check name" ;;
+  WAITING) assert_jq 1 '.pending_checks' "current pending check count" ;;
+  esac
+done <<'CASES'
+FAILURE fail 1 CI_FAIL
+ERROR fail 0 CI_FAIL
+IN_PROGRESS pending 8 WAITING
+PENDING pending 0 WAITING
+CANCELLED cancel 0 CI_FAIL
+NEUTRAL skipping 0 READY
+CASES
+
+while IFS='|' read -r label status payload; do
+  fixture "check-error-$label"
+  printf '%s' "$payload" | checks "$status"
+  if [[ $label == auth ]]; then
+    printf 'check query authentication failed\n' >"$fixture_dir/checks-error"
+  fi
+  invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+  assert_status 5 "$label check observation fails closed"
+  assert_contains 'watch-pr: status snapshot failed' "$last_output" "$label snapshot failure is explicit"
+  if [[ $label == auth ]]; then
+    assert_contains 'check query authentication failed' "$last_output" "original check query error stays visible"
+  fi
+  if [[ $last_output == *'"verdict":'* ]]; then
+    printf 'FAIL %s emitted a verdict for an invalid check observation\n%s\n' "$label" "$last_output" >&2
+    exit 1
+  fi
+done <<'CASES'
+auth|1|
+transport|4|[]
+failed-without-failures|1|[{"name":"build","state":"SUCCESS","bucket":"pass"}]
+pending-without-pending|8|[]
+empty-output|0|
+invalid-json|0|not json
+null|0|null
+object|0|{}
+missing-fields|0|[{}]
+unknown-bucket|0|[{"name":"build","state":"SUCCESS","bucket":"unknown"}]
+missing-bucket|0|[{"name":"build"}]
+empty-name|0|[{"name":"","state":"SUCCESS","bucket":"pass"}]
+CASES
 
 fixture bot
 threads <<'JSON'
@@ -314,8 +430,11 @@ assert_jq 1 '.human_pending' "mixed threads human pending count"
 assert_eq '["human","bot"]' "$(jq -c '[.threads[].kind]' <<<"$last_output")" "mixed threads kinds"
 
 fixture conflict
+checks 1 <<'JSON'
+[{"name":"build","state":"FAILURE","bucket":"fail"}]
+JSON
 view <<'JSON'
-{"state":"OPEN","mergeable":"CONFLICTING","mergeStateStatus":"DIRTY","reviewDecision":"APPROVED","statusCheckRollup":[],"isDraft":false}
+{"state":"OPEN","mergeable":"CONFLICTING","mergeStateStatus":"DIRTY","reviewDecision":"APPROVED","statusCheckRollup":[{"name":"build","conclusion":"FAILURE"}],"isDraft":false}
 JSON
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
@@ -329,6 +448,9 @@ assert_status 0 "conflict status"
 assert_jq CONFLICT '.verdict' "conflict beats threads"
 
 fixture merged
+checks 1 <<'JSON'
+[{"name":"build","state":"FAILURE","bucket":"fail"}]
+JSON
 view <<'JSON'
 {"state":"MERGED","mergeable":"UNKNOWN","mergeStateStatus":"UNKNOWN","reviewDecision":"APPROVED","statusCheckRollup":[{"name":"build","conclusion":"FAILURE"}],"isDraft":false}
 JSON
@@ -342,6 +464,11 @@ JSON
 invoke 42 --me RestartDK --repo twin-so/cobb --status-only
 assert_status 0 "merged status"
 assert_jq MERGED '.verdict' "merged beats everything"
+jq '.state = "CLOSED"' "$fixture_dir/view.json" >"$fixture_dir/closed.json"
+mv "$fixture_dir/closed.json" "$fixture_dir/view.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "closed status"
+assert_jq CLOSED '.verdict' "closed beats failing checks and threads"
 
 fixture truncation
 long_body=$(printf 'x%.0s' {1..500})
@@ -437,7 +564,7 @@ for waiting in READY REVIEW_REQUIRED; do
 JSON
     if [[ $waiting == REVIEW_REQUIRED ]]; then
       view <<'JSON'
-{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[],"isDraft":false}
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"name":"build","conclusion":"SUCCESS"}],"isDraft":false}
 JSON
     fi
     cp "$fixture_dir/view.json" "$fixture_dir/view-1.json"
@@ -448,7 +575,9 @@ JSON
       verdict=$outcome
       ;;
     CI_FAIL)
-      jq '.statusCheckRollup = [{"name":"build","conclusion":"FAILURE"}]' "$fixture_dir/view.json" >"$fixture_dir/view-3.json"
+      cp "$fixture_dir/view.json" "$fixture_dir/view-3.json"
+      printf '%s\n' '[{"name":"build","state":"FAILURE","bucket":"fail"}]' >"$fixture_dir/checks-3.json"
+      printf '1\n' >"$fixture_dir/checks-3.status"
       verdict=CI_FAIL
       ;;
     CHANGES_REQUESTED)
