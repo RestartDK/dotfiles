@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,6 +10,7 @@ import {
   LaunchAttempt,
   managedShellEnvironment,
   processBirth,
+  shellQuote,
   type LaunchOptions,
 } from "./launch-attempt.ts";
 import { HandoffReadiness } from "./worktree-state.ts";
@@ -233,12 +234,19 @@ test("shell startup exit is distinguished from environment failure", async (t) =
 
 test("missing payload executable reports startup immediately rather than consuming its deadline", async (t) => {
   const f = await fixture(t);
-  const process = f.start("exec /missing-pi-fixture");
+  const command = `exec ${shellQuote(join(f.directory, "missing-pi-fixture"))}`;
+  const expectedCode = spawnSync("sh", ["-c", command], { stdio: "ignore", timeout: 1_000 }).status;
+  assert.ok(expectedCode === 126 || expectedCode === 127);
+  await f.launch.pulse();
+  const process = f.start(command);
   await process.exited;
   const state = await f.launch.read();
   assert.equal(state.kind, "exited");
   assert.equal(state.phase, "startup");
-  if (state.kind === "exited") assert.equal(state.code, 127);
+  if (state.kind === "exited") {
+    assert.equal(state.code, expectedCode, process.stderr());
+    assert.equal(state.reason, "failed");
+  }
 });
 
 test("uncertain reservation ownership is retained until cleanup can be arbitrated", async (t) => {

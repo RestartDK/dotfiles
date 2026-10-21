@@ -53,16 +53,21 @@ async function open(cwd: string) {
   );
   tabs.push(result.tab.tab_id);
   const paneId = result.root_pane.pane_id;
+  await waitIdle(paneId);
+  return paneId;
+}
+
+async function waitIdle(paneId: string) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     const info = expectResult(
       await client.call("pane.process_info", { pane_id: paneId }),
       "pane_process_info",
     ).process_info;
-    if ((await observePaneForeground(info)).kind === "idle") return paneId;
+    if ((await observePaneForeground(info)).kind === "idle") return;
     await delay(20);
   }
-  throw new Error(`New fixture shell ${paneId} did not become idle`);
+  throw new Error(`Fixture shell ${paneId} did not become idle`);
 }
 
 async function run(pane: string, command: string, signal?: AbortSignal) {
@@ -237,6 +242,7 @@ try {
       join(fixture, ".zshrc"),
       `${rc}repo_env_providers+=(${shellQuote(repo)} lorri)\n`,
     );
+    await waitIdle(pane);
     assert.equal(
       await run(pane, 'test "$TEST_REPO_VALUE" = cold-ready && repo-env-cold-tool > cold-payload'),
       0,

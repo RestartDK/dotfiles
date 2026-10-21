@@ -111,7 +111,7 @@ function client(options: { cwd?: string; grouped?: boolean; fail?: boolean } = {
   return { herdr, calls, requests };
 }
 async function repository(t: test.TestContext) {
-  const dir = await mkdtemp(join(tmpdir(), "fwt-"));
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "fwt-")));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const repo = join(dir, "repo");
   await mkdir(repo);

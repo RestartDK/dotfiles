@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test, { type TestContext } from "node:test";
@@ -95,7 +95,7 @@ const sourcePane = {
 };
 
 async function fixture(t: TestContext) {
-  const dir = await mkdtemp(join(tmpdir(), "handoff-"));
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "handoff-")));
   t.after(() => rm(dir, { recursive: true, force: true }));
   await exec("git", ["init", "-q", dir]);
   await exec("git", [
