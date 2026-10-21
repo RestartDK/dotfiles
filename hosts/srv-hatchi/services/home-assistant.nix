@@ -1,11 +1,29 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 let
   inherit (config.my) domain;
   port = 8123;
+  python3Packages = pkgs.home-assistant.python3Packages;
+  pyaarlo = python3Packages.callPackage ../../../packages/pyaarlo/package.nix { };
+  aarlo = pkgs.callPackage ../../../packages/aarlo/package.nix {
+    inherit pyaarlo;
+    aiofiles = python3Packages.aiofiles;
+    unidecode = python3Packages.unidecode;
+  };
+  sonoff = pkgs.callPackage ../../../packages/sonoff/package.nix { };
 in
 {
   services.home-assistant = {
     enable = true;
+    # The module skips the install check in its own default package, so that is
+    # repeated here rather than lost when the patch is added.
+    package = pkgs.home-assistant.overrideAttrs (oldAttrs: {
+      doInstallCheck = false;
+      patches = (oldAttrs.patches or [ ]) ++ [ ./home-assistant-rtsps-timeout.patch ];
+    });
+    customComponents = [
+      aarlo
+      sonoff
+    ];
     extraComponents = [
       "assist_pipeline"
       "bluetooth"
@@ -34,6 +52,9 @@ in
       "usb"
       "zeroconf"
     ];
+    config.default_config = { };
+    # Sonos discovery never reaches these speakers, so they are listed by host.
+    config.sonos.media_player.hosts = config.my.network.sonos;
     config.http = {
       server_host = "127.0.0.1";
       server_port = port;

@@ -1,6 +1,6 @@
 # Enable personal Pi credentials
 
-This configuration enables opnix on both the personal Mac and Twin Mac, plus Nana. Hatchi keeps its existing secret provider. Twin Linux, Titan, and all Cobb profiles receive no new secret configuration.
+This configuration enables opnix on both the personal Mac and Twin Mac, plus Nana. Hatchi keeps its existing secret provider. Titan and all Cobb profiles receive no new secret configuration.
 
 ## Provision each personal machine
 
@@ -14,7 +14,7 @@ This configuration enables opnix on both the personal Mac and Twin Mac, plus Nan
    op read 'op://Developer/opnix-personal-mac/credential' | sudo opnix token set
    ```
 
-   The token goes to `/etc/opnix-token`. The service restricts access to root and an otherwise empty `onepassword-secrets` group. Never copy these tokens to Twin Linux or a Cobb host.
+   The token goes to `/etc/opnix-token`. The service restricts access to root and an otherwise empty `onepassword-secrets` group. Never copy these tokens to a Cobb host.
 5. Fetch the OpenRouter key by restarting the appropriate service:
 
    ```sh

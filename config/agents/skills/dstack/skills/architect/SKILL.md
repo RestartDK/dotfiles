@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Architect
 
+Use exploration for unresolved choices with materially different contracts or ownership. A small concrete fix or mechanical extension needs a named data shape and a brief local design. Record the skip reason and keep one writer. A function boundary alone is not a reason to launch a panel. Explicit requests for architecture exploration still run this workflow, subject to the active tool contract.
+
 Design before implementing. Sketch types, function signatures, class shapes, and module boundaries with `not implemented` bodies and pseudocode. Synthesize across multiple model perspectives, then fill in code against the chosen sketch. If implementation proves the sketch wrong, throw it out and redesign.
 
 ## Start

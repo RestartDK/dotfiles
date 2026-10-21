@@ -6,7 +6,7 @@
     "astra": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-6-astra",
+        "model": "openai/gpt-6-astra",
         "thinking": "xhigh"
       }
     ],
@@ -24,17 +24,10 @@
         "thinking": "max"
       }
     ],
-    "opus": [
-      {
-        "kind": "pi",
-        "model": "anthropic/claude-opus-5-5",
-        "thinking": "xhigh"
-      }
-    ],
     "sol": [
       {
         "kind": "pi",
-        "model": "openai-codex/gpt-6.1-sol",
+        "model": "openai/gpt-6.1-sol",
         "thinking": "xhigh"
       }
     ]
@@ -82,39 +75,39 @@
     },
     "prose": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "judgment": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "review": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "hardest": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "how-explainer": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "why-synthesizer": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "reflect-judgment": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "reflect-divergent": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "reflect-synthesizer": {
       "kind": "single",
-      "route": "opus"
+      "route": "sol"
     },
     "how-explorer": {
       "kind": "single",
@@ -122,47 +115,24 @@
     },
     "how-critics": {
       "kind": "panel",
-      "members": [
-        "opus"
-      ]
+      "members": ["sol"]
     },
     "arena-runners": {
       "kind": "panel",
-      "members": [
-        "opus",
-        "sol",
-        "deepseek"
-      ]
+      "members": ["sol", "deepseek"]
     },
     "arena-cross-judge": {
       "kind": "panel",
-      "members": [
-        "opus",
-        "sol"
-      ]
+      "members": ["sol"]
     },
     "architect-runners": {
       "kind": "panel",
-      "members": [
-        "opus",
-        "sol",
-        "glm"
-      ]
+      "members": ["sol", "glm"]
     },
     "interrogate-reviewers": {
       "kind": "panel",
-      "members": [
-        "opus",
-        "sol",
-        "glm"
-      ]
+      "members": ["sol", "glm"]
     }
   },
-  "providers": [
-    "openrouter",
-    "openai",
-    "openai-codex",
-    "anthropic",
-    "ollama"
-  ]
+  "providers": ["openrouter", "openai", "ollama"]
 }

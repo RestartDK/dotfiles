@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated from Herdr protocol 20, schema version 1.
+ * Generated from Herdr protocol 22, schema version 1.
  * Run `npm run generate` after updating Herdr. Do not edit by hand.
  */
 
@@ -44,6 +44,21 @@ export type Request = {
       [k: string]: unknown;
     }
   | {
+      method: "product_announcement.dismiss";
+      params: ProductAnnouncementDismissParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "release_notes.dismiss";
+      params: ReleaseNotesDismissParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "command.invoke";
+      params: CommandInvokeParams;
+      [k: string]: unknown;
+    }
+  | {
       method: "client.window_title.set";
       params: ClientWindowTitleSetParams;
       [k: string]: unknown;
@@ -51,6 +66,11 @@ export type Request = {
   | {
       method: "client.window_title.clear";
       params: EmptyParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "client_shell.surface.set";
+      params: ClientShellSurfaceSetParams;
       [k: string]: unknown;
     }
   | {
@@ -100,7 +120,7 @@ export type Request = {
     }
   | {
       method: "workspace.close";
-      params: WorkspaceTarget;
+      params: WorkspaceCloseParams;
       [k: string]: unknown;
     }
   | {
@@ -284,6 +304,31 @@ export type Request = {
       [k: string]: unknown;
     }
   | {
+      method: "pane.scroll";
+      params: PaneScrollParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "pane.edit_scrollback";
+      params: PaneTarget;
+      [k: string]: unknown;
+    }
+  | {
+      method: "pane.selection.read";
+      params: PaneSelectionReadParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "pane.copy_motion";
+      params: PaneCopyMotionParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "pane.copy_search";
+      params: PaneCopySearchParams;
+      [k: string]: unknown;
+    }
+  | {
       method: "pane.list";
       params: PaneListParams;
       [k: string]: unknown;
@@ -306,6 +351,16 @@ export type Request = {
   | {
       method: "pane.input.set";
       params: PaneInputSetParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "pane.link.activate";
+      params: PaneLinkActivateParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "pane.link.resolve";
+      params: PaneLinkActivateParams;
       [k: string]: unknown;
     }
   | {
@@ -396,6 +451,11 @@ export type Request = {
   | {
       method: "pane.wait_for_output";
       params: PaneWaitForOutputParams;
+      [k: string]: unknown;
+    }
+  | {
+      method: "integration.list";
+      params: EmptyParams;
       [k: string]: unknown;
     }
   | {
@@ -569,6 +629,18 @@ export type LayoutNode =
       type: "split";
       [k: string]: unknown;
     };
+export type PaneCopyMotion =
+  | "line_end"
+  | "first_non_blank"
+  | "next_word_start"
+  | "previous_word_start"
+  | "next_word_end"
+  | "next_big_word_start"
+  | "previous_big_word_start"
+  | "next_big_word_end"
+  | "previous_paragraph"
+  | "next_paragraph";
+export type PaneCopySearchDirection = "forward" | "backward";
 export type PaneRightClickTarget = "herdr" | "pane";
 export type PaneGraphicsFormat = "png" | "rgb" | "rgba" | "bgra";
 export type PaneAgentState = "idle" | "working" | "blocked" | "unknown";
@@ -843,8 +915,50 @@ export interface NotificationShowParams {
   title: string;
   [k: string]: unknown;
 }
+export interface ProductAnnouncementDismissParams {
+  id: string;
+  version: string;
+  [k: string]: unknown;
+}
+export interface ReleaseNotesDismissParams {
+  version: string;
+  [k: string]: unknown;
+}
+export interface CommandInvokeParams {
+  /**
+   * Opaque endpoint-issued command identifier from the client-shell projection.
+   */
+  command_id: string;
+  pane_id?: string | null;
+  /**
+   * Client-owned selection coordinates, validated against the pane's content revision.
+   */
+  selection?: PaneSelectionReadParams | null;
+  tab_id?: string | null;
+  workspace_id?: string | null;
+  [k: string]: unknown;
+}
+export interface PaneSelectionReadParams {
+  anchor: PaneTextPoint;
+  content_revision?: number | null;
+  cursor: PaneTextPoint;
+  pane_id: string;
+  [k: string]: unknown;
+}
+export interface PaneTextPoint {
+  col: number;
+  row: number;
+  [k: string]: unknown;
+}
 export interface ClientWindowTitleSetParams {
   title: string;
+  [k: string]: unknown;
+}
+/**
+ * Updates whether the requesting client shell receives and controls pane presentation.
+ */
+export interface ClientShellSurfaceSetParams {
+  active: boolean;
   [k: string]: unknown;
 }
 export interface WorkspaceCreateParams {
@@ -854,6 +968,10 @@ export interface WorkspaceCreateParams {
   };
   focus?: boolean;
   label?: string | null;
+  /**
+   * Workspace whose focused pane supplies the `follow` cwd policy.
+   */
+  source_workspace_id?: string | null;
   [k: string]: unknown;
 }
 export interface WorkspaceTarget {
@@ -885,8 +1003,14 @@ export interface WorkspaceReportMetadataParams {
   workspace_id: string;
   [k: string]: unknown;
 }
+export interface WorkspaceCloseParams {
+  close_group?: boolean;
+  workspace_id: string;
+  [k: string]: unknown;
+}
 export interface WorktreeListParams {
   cwd?: string | null;
+  trust_repository?: boolean;
   workspace_id?: string | null;
   [k: string]: unknown;
 }
@@ -897,6 +1021,7 @@ export interface WorktreeCreateParams {
   focus?: boolean;
   label?: string | null;
   path?: string | null;
+  trust_repository?: boolean;
   workspace_id?: string | null;
   [k: string]: unknown;
 }
@@ -906,11 +1031,13 @@ export interface WorktreeOpenParams {
   focus?: boolean;
   label?: string | null;
   path?: string | null;
+  trust_repository?: boolean;
   workspace_id?: string | null;
   [k: string]: unknown;
 }
 export interface WorktreeRemoveParams {
   force?: boolean;
+  trust_repository?: boolean;
   workspace_id: string;
   [k: string]: unknown;
 }
@@ -1087,6 +1214,36 @@ export interface PaneResizeParams {
   pane_id?: string | null;
   [k: string]: unknown;
 }
+export interface PaneScrollParams {
+  offset_from_bottom: number;
+  pane_id: string;
+  [k: string]: unknown;
+}
+export interface PaneTarget {
+  pane_id: string;
+  [k: string]: unknown;
+}
+export interface PaneCopyMotionParams {
+  content_revision?: number | null;
+  cursor: PaneTextPoint;
+  motion: PaneCopyMotion;
+  pane_id: string;
+  [k: string]: unknown;
+}
+export interface PaneCopySearchParams {
+  content_revision: number;
+  cursor: PaneTextPoint;
+  direction: PaneCopySearchDirection;
+  pane_id: string;
+  previous?: PaneTextRange | null;
+  query: string;
+  [k: string]: unknown;
+}
+export interface PaneTextRange {
+  end: PaneTextPoint;
+  start: PaneTextPoint;
+  [k: string]: unknown;
+}
 export interface PaneListParams {
   workspace_id?: string | null;
   [k: string]: unknown;
@@ -1095,13 +1252,17 @@ export interface PaneCurrentParams {
   caller_pane_id?: string | null;
   [k: string]: unknown;
 }
-export interface PaneTarget {
-  pane_id: string;
-  [k: string]: unknown;
-}
 export interface PaneInputSetParams {
   pane_id: string;
   right_click: PaneRightClickTarget;
+  [k: string]: unknown;
+}
+export interface PaneLinkActivateParams {
+  col: number;
+  content_revision?: number | null;
+  offset_from_bottom?: number | null;
+  pane_id: string;
+  viewport_row: number;
   [k: string]: unknown;
 }
 export interface PaneRenameParams {

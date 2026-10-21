@@ -520,9 +520,18 @@ export type WatchResult =
 export function watch(root: string, id: string): WatchResult {
   const holder = findLeaseById(root, id);
   if (holder) {
+    if (holder.state === "blocked" && !holder.cancelRequested) {
+      const retained = readAttempt(root, id);
+      if (retained) return { kind: "settled", attempt: retained };
+    }
     if (!groupConfirmedAbsent(holder.pgid)) return { kind: "running", holder };
     const recorded = readStatus(root, holder.id);
     if (recorded !== undefined) return { kind: "settled", attempt: settle(root, holder, recorded) };
+    if (holder.cancelRequested) {
+      const retained = readAttempt(root, id);
+      if (retained?.exitCode !== undefined)
+        return { kind: "settled", attempt: settle(root, holder, retained.exitCode) };
+    }
     return {
       kind: "settled",
       attempt: quarantine(
@@ -577,16 +586,33 @@ export type CancelResult =
   | { kind: "missing" };
 
 export function cancelAttempt(root: string, id: string): CancelResult {
-  const holder = findLeaseById(root, id);
-  if (!holder) {
-    const attempt = readAttempt(root, id);
-    return attempt ? { kind: "settled", attempt } : { kind: "missing" };
+  const observed = watch(root, id);
+  if (observed.kind === "missing") return observed;
+  let holder: Holder;
+  if (observed.kind === "settled") {
+    const retained = findLeaseById(root, id);
+    if (!retained || retained.pgid === undefined || groupConfirmedAbsent(retained.pgid))
+      return observed;
+    holder = retained;
+  } else holder = observed.holder;
+  if (holder.pgid === undefined) {
+    return {
+      kind: "settled",
+      attempt: quarantine(
+        root,
+        holder,
+        "No process group was recorded; cancellation cannot be confirmed. Inspect the resource before resolving",
+      ),
+    };
   }
-  if (holder.pgid === undefined) return { kind: "missing" };
   try {
     process.kill(-holder.pgid, "SIGTERM");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    if (typeof error !== "object" || error === null || !("code" in error) || error.code !== "ESRCH")
+      throw error;
+    const ended = watch(root, id);
+    if (ended.kind === "settled" || ended.kind === "missing") return ended;
+    throw new Error("Cancellation could not confirm the command outcome; inspect the resource");
   }
   const blocked: Holder = {
     ...holder,
@@ -609,8 +635,8 @@ export function resolveBlocked(root: string, id: string, options: { inspected: b
   const attempt = attemptOf(holder, {
     finishedAt: new Date().toISOString(),
     outcome: "unknown",
-    state: "blocked",
-    reason: "Operator acknowledged inspection; outcome remains unknown",
+    state: "settled",
+    reason: "Operator acknowledged inspection and released the resource; outcome remains unknown",
   });
   writeAttempt(root, attempt);
   rmSync(leaseDir(root, holder.resource), { recursive: true, force: true });

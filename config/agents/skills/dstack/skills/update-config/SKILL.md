@@ -52,7 +52,6 @@ traitor test       # rebuild current host with test
 traitor update     # update flake inputs
 traitor upgrade    # update all inputs, then rebuild current host
 traitor rollback   # roll back current host generation
-traitor twin       # apply Home Manager-only twin profile
 traitor nana       # rebuild srv-nana explicitly
 traitor mac        # rebuild dkumlin-macbook-pro explicitly
 traitor work-mac   # rebuild dkumlin-twin-macbook-pro explicitly
@@ -80,7 +79,7 @@ hosts/<host>/                     # NixOS/nix-darwin host composition
 hosts/<host>/home.nix             # host-specific Home Manager config
 modules/home/                     # reusable Home Manager feature modules
 modules/nixos/                    # reusable NixOS modules
-profiles/home/                    # reusable Home Manager profiles/bridges
+profiles/home/                    # the portable Home Manager module
 config/                           # live-editable source dotfiles
 packages/                         # local package definitions
 overlays/                         # overlays
@@ -121,16 +120,16 @@ Every skill lives in one tree, dstack included:
 config/agents/skills/<skill-name>/SKILL.md
 ```
 
-`modules/home/agents/default.nix` links that directory once at `~/.agents/skills` when `my.liveConfig.groups.agents` or `agentSkills` is on; Pi, Codex, and opencode all read it there. Claude Code reads only `~/.claude/skills`, so it gets its own link. When both groups are off, Pi links `my.liveConfig.piSkillsPath` instead. Twin points that at the empty `config/pi/agent/skills-twin` stub; the Cobb dev hosts point it at this shared tree so the dstack references in `~/.pi/agent/AGENTS.md` resolve. `.system/` is Codex's regenerated system skills and is not hand-edited.
+`modules/home/agents/default.nix` links that directory once at `~/.agents/skills` when `my.liveConfig.groups.agents` or `agentSkills` is on; Pi, Codex, and opencode all read it there. Claude Code reads only `~/.claude/skills`, so it gets its own link. When both groups are off, Pi links `my.liveConfig.piSkillsPath` instead. The Cobb dev hosts point it at this shared tree so the dstack references in `~/.pi/agent/AGENTS.md` resolve. `.system/` is Codex's regenerated system skills and is not hand-edited.
 
 ### Cobb bridge changes
 
-Cobb owns Cobb machines. Do not copy Daniel's dotfiles into Cobb. Cobb should consume the dotfiles flake/profile.
+Cobb owns Cobb machines. Do not copy Daniel's dotfiles into Cobb. Cobb consumes the portable Home Manager module and keeps its own host gate.
 
 Dotfiles side:
 
 ```text
-profiles/home/cobb-daniel.nix
+profiles/home/portable.nix      # exported as homeManagerModules.default
 ```
 
 Cobb side:
@@ -138,6 +137,8 @@ Cobb side:
 ```text
 /Users/danielkumlin/Projects/cobb/nix/hosts/profiles/daniel.nix
 ```
+
+That file imports `inputs.daniel-dotfiles.homeManagerModules.default` only on development hosts, and sets `my.ai.profile = "work"`. The module contributes packages and config groups only; it never touches users, services, or networking.
 
 Validate Cobb against a local dotfiles checkout before the remote/lock is updated:
 
@@ -162,7 +163,6 @@ traitor check
 For targeted diagnostics:
 
 ```bash
-nix eval --raw .#homeConfigurations.twin.activationPackage.drvPath --no-write-lock-file --allow-dirty
 nix eval --raw .#darwinConfigurations.dkumlin-macbook-pro.config.system.build.toplevel.drvPath --no-write-lock-file --allow-dirty
 nix eval --raw .#darwinConfigurations.dkumlin-twin-macbook-pro.config.system.build.toplevel.drvPath --no-write-lock-file --allow-dirty
 nix eval --raw .#nixosConfigurations.srv-nana.config.system.build.toplevel.drvPath --no-write-lock-file --allow-dirty

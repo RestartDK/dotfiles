@@ -20,7 +20,7 @@ Search both roots recursively for `**/*-mode/SKILL.md` matching the user's handl
 - Start fresh (rare; ask why before doing it)
 
 Update mode changes the rest of the flow:
-- Step 1 mines only history since the skill was last edited (`git log -1 --format=%cI <path>`), per source. A source with no prior coverage gets an agreed baseline window instead of the file date.
+- Step 1 uses a recorded reviewed-through timestamp per approved host, harness, and workspace. Without a coverage record, use the skill's last edit (`git log -1 --format=%cI <path>`) or an agreed baseline for a previously unreviewed source. Record the chosen bounds and any gaps; a capped or unavailable source is not reviewed-through.
 - Step 2 asks what's changed or missing, not what to capture from zero.
 - Step 4 edits the existing file in place. Preserve sections the user hasn't contradicted; revise ones with new evidence; add new sections only for genuinely new rules.
 
@@ -32,7 +32,9 @@ On one machine, pi sessions live at `~/.pi/agent/sessions/<cwd-slug>/` (slug = a
 
 Across machines, use the **fleet** skill (`~/.agents/skills/dstack/skills/fleet/SKILL.md`) for target selection and transport: `fleet list --json`, `fleet check TARGET... --json`, then a `--dry-run` you inspect before `--execute`. Fleet carries argv commands, not files, and reachability is not proof that the payload succeeded. Extract a bounded digest per host with an argv payload over an approved glob (a `jq` or `rg` command printing dates, slugs, and user-authored text), mine the digest locally, and report unavailable hosts rather than substituting another.
 
-Survey the digest for recurring patterns. Split the history into slices by host, workspace, and time, so one busy repository cannot fill every slice. Run parallel subagents, one per slice (3-4 is usually enough). Each slice mining subagent reads the paths the parent provides, looks for the signals below, and returns a short structured list of patterns it saw with evidence pointers. Cap each slice (for example, the most recent N sessions per workspace) so a large history cannot blow the context window. Default signals worth hunting:
+Before mining, build a bounded source manifest with the approved root, session path, original entry id, timestamp, provenance, and coverage window. Deduplicate forked copies by original entry id plus timestamp within the approved host/harness, not by text. Separate human prompts from expanded skills, worker briefs, completion notices, and synthetic user messages. Preserve uncertain provenance as uncertain. Verify any quoted evidence against its original entry before promotion, and count unique human prompts separately from transport records.
+
+Survey the digest for recurring patterns. Split the history into slices by host, workspace, and time, so one busy repository cannot fill every slice. Use parallel read-only miners only when the active tool contract permits delegation and the slices justify it. Otherwise mine bounded slices locally and report that limitation. Each slice mining subagent reads the paths the parent provides, looks for the signals below, and returns a short structured list of patterns it saw with evidence pointers. Cap each slice (for example, the most recent N sessions per workspace) so a large history cannot blow the context window. Default signals worth hunting:
 
 - Response preferences (length, tone, format, "dumb it down" corrections)
 - Delegation habits (subagents, models, specialized workflows, parallelism)

@@ -14,8 +14,20 @@ in
     lib.mkMerge [
       (lib.mkIf cfg.groups.wayland {
         xdg.configFile = {
-          "hypr" = {
-            source = ../../../config/hypr;
+          "hypr/hypridle.conf" = {
+            source = ../../../config/hypr/hypridle.conf;
+            force = true;
+          };
+          "hypr/hyprlauncher.conf" = {
+            source = ../../../config/hypr/hyprlauncher.conf;
+            force = true;
+          };
+          "hypr/hyprtoolkit.conf" = {
+            source = ../../../config/hypr/hyprtoolkit.conf;
+            force = true;
+          };
+          "hypr/scripts" = {
+            source = ../../../config/hypr/scripts;
             recursive = true;
             force = true;
           };
@@ -52,10 +64,6 @@ in
       })
 
       (lib.mkIf cfg.groups.macos {
-        home.file.".hammerspoon/init.lua" = {
-          source = ../../../config/hammerspoon/init.lua;
-          force = true;
-        };
         xdg.configFile = {
           "aerospace/aerospace.toml" = {
             source = ../../../config/aerospace/aerospace.toml;

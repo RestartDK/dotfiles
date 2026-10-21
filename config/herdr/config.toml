@@ -93,6 +93,12 @@ command = "daniel.scatterer.review-toggle"
 description = "toggle Review pane"
 
 [[keys.command]]
+key = "prefix+shift+o"
+type = "shell"
+command = 'HERDR_ENV=1 HERDR_PANE_ID="$HERDR_ACTIVE_PANE_ID" HERDR_TAB_ID="$HERDR_ACTIVE_TAB_ID" HERDR_WORKSPACE_ID="$HERDR_ACTIVE_WORKSPACE_ID" dstack herdr'
+description = "open Jobs"
+
+[[keys.command]]
 key = "prefix+shift+f"
 type = "pane"
 command = "yazi"

@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ inputs, network, ... }:
 
 {
   imports = [
@@ -14,6 +14,8 @@
     ../../modules/nixos/numtide-cache.nix
     ../../modules/nixos/desktop.nix
     ../../modules/nixos/hyprland.nix
+    ../../modules/theme/options.nix
+    ../../modules/theme/system.nix
     ../../modules/nixos/ssh.nix
     ../../modules/nixos/tailscale.nix
     ../../modules/nixos/docker.nix
@@ -21,6 +23,8 @@
     ../../modules/nixos/nvidia.nix
     ../../modules/nixos/rustdesk.nix
   ];
+
+  my.theme.active = "tokyo-dark";
 
   my.host = {
     hostName = "srv-nana";
@@ -33,7 +37,13 @@
     linger = true;
     openssh.authorizedKeys.keyFiles = [
       ../../config/ssh/public-keys/nana.pub
+      ../../config/ssh/public-keys/homelab-ssh.pub
     ];
+  };
+
+  my.secrets.keys.homelabSshKey = {
+    reference = network.personalSecretReferences.homelabSshKey;
+    path = "/run/onepassword-ssh/id_ed25519";
   };
 
   boot.loader.grub = {

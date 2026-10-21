@@ -1,27 +1,14 @@
 {
-  "defaultModel": "accounts/fireworks/routers/kimi-k3-fast",
-  "defaultProvider": "fireworks",
-  "defaultThinkingLevel": "xhigh",
-  "shellPath": "~/.config/dotfiles/bin/repo-bash",
   "extensions": [
-    "-extensions/pi-prompt/index.ts"
+    "-extensions/pi-prompt/index.ts",
+    "-extensions/pi-coordination/index.ts"
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,
-  "lastChangelogVersion": "0.84.2",
-  "subagents": {
-    "maxParallel": 4,
-    "defaultTools": [
-      "read",
-      "grep",
-      "find",
-      "ls",
-      "bash"
-    ]
-  },
+  "lastChangelogVersion": "0.99.1",
   "packages": [
-    "./packages/pi-mcp-adapter",
-    "./packages/pi-web-access"
+    "./packages/pi-web-access",
+    "./packages/pi-artifacts"
   ],
   "powerline": {
     "preset": "default",
@@ -45,9 +32,20 @@
     "greeting": "hey twin :)"
   },
   "quietStartup": true,
-  "skills": [
-    "~/.claude/skills"
-  ],
   "theme": "Tokyo Night Day/Tokyo Night",
-  "tuiMode": "fullscreen"
+  "tuiMode": "fullscreen",
+  "terminal": {
+    "images": "kitty"
+  },
+  "enabledModels": [
+    "openai/gpt-6.1-sol",
+    "anthropic/claude-fable-5-1",
+    "openai/gpt-6-astra",
+    "openrouter/**"
+  ],
+  "defaultProvider": "openai",
+  "defaultModel": "gpt-6.1-sol",
+  "modelThinkingLevels": {
+    "openai/gpt-6.1-sol": "xhigh"
+  }
 }

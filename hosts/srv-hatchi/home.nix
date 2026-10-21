@@ -3,6 +3,7 @@
   imports = [
     ../../modules/home/dev-packages.nix
     ../../modules/home/groups.nix
+    ../../modules/home/ssh.nix
   ];
 
   home = {

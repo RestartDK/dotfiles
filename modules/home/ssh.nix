@@ -1,5 +1,30 @@
-{ lib, network, ... }:
+{
+  lib,
+  pkgs,
+  network,
+  ...
+}:
 
+let
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+  agentIdentities =
+    keys:
+    if isDarwin then
+      {
+        IdentityFile = keys;
+        IdentitiesOnly = true;
+      }
+    else
+      { };
+  fleetIdentity =
+    if isDarwin then
+      { }
+    else
+      {
+        IdentityFile = "/run/onepassword-ssh/id_ed25519";
+        IdentitiesOnly = true;
+      };
+in
 {
   programs.ssh = {
     enable = true;
@@ -18,46 +43,50 @@
         header = "Host nana srv-nana";
         HostName = network.hosts.nana.tailnet;
         User = "dkumlin";
-        IdentityFile = [
-          "~/.ssh/nana.pub"
-          "~/.ssh/ci-deploy.pub"
-        ];
-        IdentitiesOnly = true;
-      };
+      }
+      // agentIdentities [
+        "~/.ssh/nana.pub"
+        "~/.ssh/ci-deploy.pub"
+      ]
+      // fleetIdentity;
 
       hatchi = {
         header = "Host hatchi srv-hatchi";
         HostName = network.hosts.hatchi.tailnet;
         User = "dkumlin";
-        IdentityFile = [
-          "~/.ssh/hatchi.pub"
-          "~/.ssh/ci-deploy.pub"
-        ];
-        IdentitiesOnly = true;
-      };
+      }
+      // agentIdentities [
+        "~/.ssh/hatchi.pub"
+        "~/.ssh/ci-deploy.pub"
+      ]
+      // fleetIdentity;
 
       titan = {
         HostName = "titan";
         Port = 2222;
         User = "daniel";
-        IdentityFile = "~/.ssh/titan.pub";
-        IdentitiesOnly = true;
         ForwardAgent = true;
-      };
+      }
+      // agentIdentities [ "~/.ssh/titan.pub" ];
 
       "titan-2" = {
         HostName = "titan-2";
         Port = 2222;
         User = "daniel";
-        IdentityFile = "~/.ssh/titan.pub";
-        IdentitiesOnly = true;
         ForwardAgent = true;
-      };
-
-      "*" = {
-        IdentityAgent = "\"~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock\"";
-      };
-    };
+      }
+      // agentIdentities [ "~/.ssh/titan.pub" ];
+    }
+    // (
+      if isDarwin then
+        {
+          "*" = {
+            IdentityAgent = "\"~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock\"";
+          };
+        }
+      else
+        { }
+    );
   };
 
   home.file = {
@@ -67,8 +96,14 @@
     ".ssh/ci-deploy.pub".source = ../../config/ssh/public-keys/ci-deploy.pub;
   };
 
-  xdg.configFile."1Password/ssh/agent.toml".text = ''
-    [[ssh-keys]]
-    vault = "Developer"
-  '';
+  xdg.configFile =
+    if isDarwin then
+      {
+        "1Password/ssh/agent.toml".text = ''
+          [[ssh-keys]]
+          vault = "Developer"
+        '';
+      }
+    else
+      { };
 }

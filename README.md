@@ -66,7 +66,7 @@ sudo nixos-rebuild switch --flake .#<host>
 darwin-rebuild switch --flake .#<host>
 ```
 
-`hosts/` composes each machine and `nix flake show` lists them. A machine that only consumes config needs no checkout. `traitor sync` keeps a checkout rebased on the machines that author it.
+`hosts/` composes each machine and `nix flake show` lists them. A machine that only consumes config needs no checkout. `traitor sync` rebases a checkout on the machines that author it, and is run by hand.
 
 ## Where the rest lives
 
@@ -75,7 +75,7 @@ darwin-rebuild switch --flake .#<host>
 | CI, the deploy workflow, and the deploy account | [docs/deployment.md](docs/deployment.md) |
 | Server install, disks, and runtime secrets | [hosts/srv-hatchi/INSTALL.md](hosts/srv-hatchi/INSTALL.md) |
 | Pi key provisioning on the personal machines | [tests/personal-secrets.md](tests/personal-secrets.md) |
-| The Home Manager bridge for a work repository | [docs/work-bridge.md](docs/work-bridge.md) |
+| The portable Home Manager module | [docs/portable-home.md](docs/portable-home.md) |
 
 ## Rules
 

@@ -41,11 +41,7 @@
         Preferences = {
           "WebUI\\Address" = "127.0.0.1";
           "WebUI\\Username" = "daniel";
-          "WebUI\\Password_PBKDF2" =
-            if config.my.hatchi.onepassword.enable then
-              "@hatchi-qbittorrent-hash@"
-            else
-              config.sops.placeholder.qbittorrent-password;
+          "WebUI\\Password_PBKDF2" = "@hatchi-qbittorrent-hash@";
           "WebUI\\ServerDomains" = "qbittorrent.${config.my.domain}";
           "WebUI\\LocalHostAuth" = true;
           "WebUI\\AuthSubnetWhitelistEnabled" = false;
@@ -68,11 +64,6 @@
       "qbittorrent.${config.my.domain}".extraConfig =
         "reverse_proxy 127.0.0.1:${toString config.services.qbittorrent.webuiPort}";
     };
-  };
-  sops.secrets.qbittorrent-password = lib.mkIf (!config.my.hatchi.onepassword.enable) { };
-  sops.templates."qBittorrent.conf" = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-    content = lib.generators.toINI { } config.services.qbittorrent.serverConfig;
-    restartUnits = [ "qbittorrent.service" ];
   };
   my.hatchi = {
     stateUnits = [

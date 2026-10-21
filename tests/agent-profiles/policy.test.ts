@@ -14,19 +14,19 @@ const policy = (profile: string) =>
   parsePolicy(JSON.parse(readFileSync(join(root, `${profile}.json`), "utf8")));
 
 describe("profile routing", () => {
-  test("work resolves Codex, Anthropic and OpenRouter routes", () => {
+  test("work resolves OpenAI and OpenRouter routes", () => {
     const work = policy("work");
     expect(resolveRoute(work, { role: "feature" }).chain).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-6-astra", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6-astra", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "precise-code" }).chain).toEqual([
-      { kind: "pi", provider: "openai-codex", id: "gpt-6.1-sol", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6.1-sol", thinking: "xhigh" },
     ]);
     expect(resolveRoute(work, { role: "how-explorer" }).chain).toEqual([
       { kind: "pi", provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", thinking: "max" },
     ]);
     expect(resolveRoute(work, { role: "review" }).chain).toEqual([
-      { kind: "pi", provider: "anthropic", id: "claude-opus-5-5", thinking: "xhigh" },
+      { kind: "pi", provider: "openai", id: "gpt-6.1-sol", thinking: "xhigh" },
     ]);
   });
 
@@ -41,10 +41,10 @@ describe("profile routing", () => {
     expect(resolveRoute(personal, { role: "review" }).chain.map(backendModel)).toEqual([
       "opencode-go/glm-5.3-flash",
     ]);
-    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
+    expect(() => resolveRoute(personal, { model: "openai/gpt-6-astra:xhigh" })).toThrow(
       "not allowed",
     );
-    expect(() => resolveRoute(personal, { model: "openai-codex/gpt-5.6-sol:xhigh" })).toThrow(
+    expect(() => resolveRoute(personal, { model: "openai/gpt-5.6-sol:xhigh" })).toThrow(
       "not allowed",
     );
   });
@@ -54,8 +54,8 @@ describe("profile routing", () => {
     expect(() => resolveRoute(work, { role: "arena-runners" })).toThrow("member or seat");
     expect(
       backendModel(resolveRoute(work, { role: "arena-runners", member: "sol" }).chain[0]),
-    ).toBe("openai-codex/gpt-6.1-sol");
-    expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 2 }).chain[0])).toBe(
+    ).toBe("openai/gpt-6.1-sol");
+    expect(backendModel(resolveRoute(work, { role: "arena-runners", seat: 1 }).chain[0])).toBe(
       "openrouter/deepseek/deepseek-v4.1-flash",
     );
     for (const input of [
@@ -78,19 +78,19 @@ describe("profile routing", () => {
     group("feature refactoring swarm-workers", work ? "astra" : "deepseek");
     group("bug-fix perf-issue hillclimb reflect-tooling precise-code", work ? "sol" : "deepseek");
     group("why-investigators fast-code how-explorer", "deepseek");
-    group("prose review", work ? "opus" : "glm");
+    group("prose review", work ? "sol" : "glm");
     group(
       "judgment hardest how-explainer why-synthesizer reflect-judgment reflect-divergent reflect-synthesizer",
-      work ? "opus" : "deepseek",
+      work ? "sol" : "deepseek",
     );
     for (const [role, member] of expected)
       expect(resolveRoute(selected, { role }).selection).toEqual({ kind: "role", role, member });
     const panels: Record<string, [string, ...string[]]> = {
-      "how-critics": work ? ["opus"] : ["glm", "muse"],
-      "arena-runners": work ? ["opus", "sol", "deepseek"] : ["deepseek", "muse", "mimo"],
-      "arena-cross-judge": work ? ["opus", "sol"] : ["glm", "muse"],
-      "architect-runners": work ? ["opus", "sol", "glm"] : ["deepseek", "muse", "mimo"],
-      "interrogate-reviewers": work ? ["opus", "sol", "glm"] : ["glm", "muse", "mimo"],
+      "how-critics": work ? ["sol"] : ["glm"],
+      "arena-runners": work ? ["sol", "deepseek"] : ["deepseek"],
+      "arena-cross-judge": work ? ["sol"] : ["glm"],
+      "architect-runners": work ? ["sol", "glm"] : ["deepseek"],
+      "interrogate-reviewers": work ? ["sol", "glm"] : ["glm"],
     };
     for (const [role, members] of Object.entries(panels)) {
       expect(selected.roles.get(role)).toEqual({ kind: "panel", members });
@@ -107,6 +107,39 @@ describe("profile routing", () => {
     );
   });
 
+  test.each(["work", "personal"])("%s rejects Mimo dispatch", (profile) => {
+    const selected = policy(profile);
+    for (const chain of selected.routes.values()) {
+      for (const backend of chain) expect(backend.id).not.toMatch(/(^|\/)mimo(?:[-/]|$)/i);
+    }
+    for (const model of [
+      "opencode-go/mimo-v2.6-flash:xhigh",
+      "openrouter/xiaomi/mimo-v2.6-flash:xhigh",
+    ]) {
+      expect(() => resolveRoute(selected, { model })).toThrow("not allowed");
+    }
+    expect(() => resolveRoute(selected, { role: "arena-runners", member: "mimo" })).toThrow(
+      "member or seat",
+    );
+  });
+
+  test.each(["work", "personal"])("%s rejects Opus dispatch", (profile) => {
+    const selected = policy(profile);
+    expect(selected.providers.has("anthropic")).toBe(false);
+    for (const chain of selected.routes.values()) {
+      for (const backend of chain) expect(backend.id).not.toMatch(/claude-opus/i);
+    }
+    expect(() => resolveRoute(selected, { model: "anthropic/claude-opus-5-5:xhigh" })).toThrow(
+      "not allowed",
+    );
+    expect(() =>
+      resolveRoute(selected, { model: "openrouter/anthropic/claude-opus-5-5:xhigh" }),
+    ).toThrow("not allowed");
+    expect(() => resolveRoute(selected, { role: "arena-runners", member: "opus" })).toThrow(
+      "member or seat",
+    );
+  });
+
   test("personal never declares max effort", () => {
     const offenders = [...policy("personal").routes].flatMap(([route, chain]) =>
       chain
@@ -118,11 +151,10 @@ describe("profile routing", () => {
 
   test("raw requests preserve declared chains and effort", () => {
     const work = policy("work");
-    expect(resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
-    expect(() => resolveRoute(work, { model: "openai-codex/undeclared:xhigh" })).toThrow(
-      "not allowed",
-    );
-    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:high" })).toThrow(
+    expect(resolveRoute(work, { model: "openai/gpt-6-astra:xhigh" }).chain).toHaveLength(1);
+    expect(() => resolveRoute(work, { model: "openai/undeclared:xhigh" })).toThrow("not allowed");
+    expect(() => resolveRoute(work, { model: "openai/gpt-6-astra:high" })).toThrow("not allowed");
+    expect(() => resolveRoute(work, { model: "openai-codex/gpt-6-astra:xhigh" })).toThrow(
       "not allowed",
     );
   });
@@ -186,8 +218,8 @@ describe("profile routing", () => {
         routes: {
           ...valid.routes,
           astra: [
-            { kind: "pi", model: "openai-codex/gpt-6-astra", thinking: "xhigh" },
-            { thinking: "high", model: "openai-codex/gpt-6-astra", kind: "pi" },
+            { kind: "pi", model: "openai/gpt-6-astra", thinking: "xhigh" },
+            { thinking: "high", model: "openai/gpt-6-astra", kind: "pi" },
           ],
         },
       },

@@ -25,6 +25,20 @@ case "$*" in
     cat "$WATCH_PR_TEST_CASE_DIR/view.json"
   fi
   ;;
+"pr checks 42 --repo twin-so/cobb --json name,bucket")
+  if [[ -f "$WATCH_PR_TEST_CASE_DIR/checks-error" ]]; then
+    cat "$WATCH_PR_TEST_CASE_DIR/checks-error" >&2
+  fi
+  if [[ -f "$WATCH_PR_TEST_CASE_DIR/poll" ]]; then
+    read -r poll <"$WATCH_PR_TEST_CASE_DIR/poll"
+    if [[ -f "$WATCH_PR_TEST_CASE_DIR/checks-$poll.json" ]]; then
+      cat "$WATCH_PR_TEST_CASE_DIR/checks-$poll.json"
+      exit "$(<"$WATCH_PR_TEST_CASE_DIR/checks-$poll.status")"
+    fi
+  fi
+  cat "$WATCH_PR_TEST_CASE_DIR/checks.json"
+  exit "$(<"$WATCH_PR_TEST_CASE_DIR/checks-status")"
+  ;;
 "api graphql "*) cat "$WATCH_PR_TEST_CASE_DIR/threads.json" ;;
 *)
   printf 'unexpected gh call: %s\n' "$*" >&2
@@ -40,8 +54,23 @@ view() {
   cat >"$fixture_dir/view.json"
 }
 
+checks() {
+  cat >"$fixture_dir/checks.json"
+  printf '%s\n' "${1:-0}" >"$fixture_dir/checks-status"
+}
+
 threads() {
-  cat >"$fixture_dir/threads.json"
+  jq '
+    if .data.repository.pullRequest.reviewThreads != null then
+      .data.repository.pullRequest.reviewThreads |= (
+        .pageInfo //= {hasNextPage:false}
+        | .nodes |= map(.comments |= (
+          .pageInfo //= {hasNextPage:false}
+          | .nodes |= map(.reactions.pageInfo //= {hasNextPage:false})
+        ))
+      )
+    else . end
+  ' >"$fixture_dir/threads.json"
 }
 
 fixture() {
@@ -49,7 +78,13 @@ fixture() {
   mkdir -p "$fixture_dir"
   export WATCH_PR_TEST_CASE_DIR=$fixture_dir
   view <<'JSON'
-{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"APPROVED","statusCheckRollup":[],"isDraft":false}
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"APPROVED","statusCheckRollup":[{"name":"build","conclusion":"SUCCESS"}],"isDraft":false}
+JSON
+  checks <<'JSON'
+[{"name":"build","state":"SUCCESS","bucket":"pass"}]
+JSON
+  threads <<'JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}
 JSON
 }
 
@@ -100,6 +135,97 @@ assert_jq() {
   local expected=$1 filter=$2 label=$3
   assert_eq "$expected" "$(jq -r "$filter" <<<"$last_output")" "$label"
 }
+
+fixture current_checks
+view <<'JSON'
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"name":"build","status":"COMPLETED","conclusion":"FAILURE"},{"name":"build","status":"COMPLETED","conclusion":"SUCCESS"},{"name":"retired","status":"QUEUED"}],"isDraft":false}
+JSON
+checks <<'JSON'
+[{"name":"build","state":"SUCCESS","bucket":"pass"},{"name":"optional","state":"SKIPPED","bucket":"skipping"}]
+JSON
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "current passing checks with required review status"
+assert_jq REVIEW '.verdict' "superseded failure cannot hide required review"
+assert_jq '[]' '.failing_checks | tojson' "superseded failures are absent"
+assert_jq 0 '.pending_checks' "superseded queued checks are absent"
+jq '.reviewDecision = "APPROVED" | .mergeStateStatus = "CLEAN"' "$fixture_dir/view.json" >"$fixture_dir/approved.json"
+mv "$fixture_dir/approved.json" "$fixture_dir/view.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "current passing checks with approval status"
+assert_jq READY '.verdict' "current passing checks permit readiness only after review"
+
+fixture no_checks
+view <<'JSON'
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"APPROVED","statusCheckRollup":[],"isDraft":false}
+JSON
+checks 1 <<'JSON'
+JSON
+printf "no checks reported on the 'feature' branch\n" >"$fixture_dir/checks-error"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "no-check PR status"
+assert_jq READY '.verdict' "no-check PR can be ready"
+jq '.reviewDecision = "REVIEW_REQUIRED" | .mergeStateStatus = "BLOCKED"' "$fixture_dir/view.json" >"$fixture_dir/changed.json"
+mv "$fixture_dir/changed.json" "$fixture_dir/view.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "no-check required review status"
+assert_jq REVIEW '.verdict' "no-check PR still requires review"
+for state in MERGED CLOSED; do
+  jq --arg state "$state" '.state = $state' "$fixture_dir/view.json" >"$fixture_dir/changed.json"
+  mv "$fixture_dir/changed.json" "$fixture_dir/view.json"
+  invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+  assert_status 0 "no-check $state status"
+  assert_jq "$state" '.verdict' "no-check PR preserves $state"
+done
+
+while read -r state bucket status verdict; do
+  fixture "check-$state-$status"
+  jq -cn --arg state "$state" --arg bucket "$bucket" '[{name:"build",state:$state,bucket:$bucket}]' | checks "$status"
+  invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+  assert_status 0 "$state with gh exit $status status"
+  assert_jq "$verdict" '.verdict' "$state with gh exit $status verdict"
+  case $verdict in
+  CI_FAIL) assert_jq '["build"]' '.failing_checks | tojson' "current failing check name" ;;
+  WAITING) assert_jq 1 '.pending_checks' "current pending check count" ;;
+  esac
+done <<'CASES'
+FAILURE fail 1 CI_FAIL
+ERROR fail 0 CI_FAIL
+IN_PROGRESS pending 8 WAITING
+PENDING pending 0 WAITING
+CANCELLED cancel 0 CI_FAIL
+NEUTRAL skipping 0 READY
+CASES
+
+while IFS='|' read -r label status payload; do
+  fixture "check-error-$label"
+  printf '%s' "$payload" | checks "$status"
+  if [[ $label == auth ]]; then
+    printf 'check query authentication failed\n' >"$fixture_dir/checks-error"
+  fi
+  invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+  assert_status 5 "$label check observation fails closed"
+  assert_contains 'watch-pr: status snapshot failed' "$last_output" "$label snapshot failure is explicit"
+  if [[ $label == auth ]]; then
+    assert_contains 'check query authentication failed' "$last_output" "original check query error stays visible"
+  fi
+  if [[ $last_output == *'"verdict":'* ]]; then
+    printf 'FAIL %s emitted a verdict for an invalid check observation\n%s\n' "$label" "$last_output" >&2
+    exit 1
+  fi
+done <<'CASES'
+auth|1|
+transport|4|[]
+failed-without-failures|1|[{"name":"build","state":"SUCCESS","bucket":"pass"}]
+pending-without-pending|8|[]
+empty-output|0|
+invalid-json|0|not json
+null|0|null
+object|0|{}
+missing-fields|0|[{}]
+unknown-bucket|0|[{"name":"build","state":"SUCCESS","bucket":"unknown"}]
+missing-bucket|0|[{"name":"build"}]
+empty-name|0|[{"name":"","state":"SUCCESS","bucket":"pass"}]
+CASES
 
 fixture bot
 threads <<'JSON'
@@ -179,8 +305,8 @@ fixture thumb_up
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}}
   ]}}
 ]}}}}}
 JSON
@@ -193,8 +319,8 @@ fixture thumb_down
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T02:00:00Z","user":{"login":"RestartDK"}}]}}
   ]}}
 ]}}}}}
 JSON
@@ -207,8 +333,8 @@ fixture reaction_latest
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T11:00:00Z","user":{"login":"RestartDK"}},{"content":"THUMBS_UP","createdAt":"2026-01-01T10:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T09:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T09:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_DOWN","createdAt":"2026-01-01T11:00:00Z","user":{"login":"RestartDK"}},{"content":"THUMBS_UP","createdAt":"2026-01-01T10:00:00Z","user":{"login":"RestartDK"}}]}}
   ]}}
 ]}}}}}
 JSON
@@ -249,12 +375,28 @@ assert_jq HUMAN_PENDING '.verdict' "fixed in verdict"
 assert_jq pending '.threads[0].decision' "fixed in reply is not direction"
 assert_jq 1 '.human_pending' "fixed in human pending count"
 
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[2].body = "[🫩 Daniel\u0027s Agent]\nFixed in abc123: renamed the field"' "$fixture_dir/threads.json" >"$fixture_dir/prefixed.json"
+mv "$fixture_dir/prefixed.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq pending '.threads[0].decision' "agent-prefixed fix reply is not author direction"
+
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[0].reactions.nodes = [{content:"THUMBS_UP",createdAt:"2026-01-01T00:30:00Z",user:{login:"RestartDK"}}]' "$fixture_dir/threads.json" >"$fixture_dir/old-reaction.json"
+mv "$fixture_dir/old-reaction.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq pending '.threads[0].decision' "approval before the gated verdict cannot authorize code changes"
+
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.pageInfo.hasNextPage = true' "$fixture_dir/threads.json" >"$fixture_dir/incomplete.json"
+mv "$fixture_dir/incomplete.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_failure "truncated comments cannot preserve obsolete approval"
+assert_contains "Incomplete review observation" "$last_output" "pagination error stays visible"
+
 fixture direction_reaction
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
   {"id":"T1","isResolved":false,"isOutdated":false,"comments":{"nodes":[
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T03:00:00Z","user":{"login":"RestartDK"}}]}},
-    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r1","body":"Is this reachable?","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","__typename":"User"},"reactions":{"nodes":[]}},
+    {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r2","body":"Checking with the author before changing anything","createdAt":"2026-01-01T01:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[{"content":"THUMBS_UP","createdAt":"2026-01-01T03:00:00Z","user":{"login":"RestartDK"}}]}},
     {"url":"https://github.com/twin-so/cobb/pull/42#discussion_r3","body":"Rename the field\nto x","createdAt":"2026-01-01T02:00:00Z","author":{"login":"RestartDK","__typename":"User"},"reactions":{"nodes":[]}}
   ]}}
 ]}}}}}
@@ -263,6 +405,10 @@ invoke 42 --me RestartDK --repo twin-so/cobb --status-only
 assert_status 0 "direction reaction status"
 assert_jq implement '.threads[0].decision' "direction reaction decision"
 assert_jq 'Rename the field to x' '.threads[0].direction' "direction reaction body"
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[2].createdAt = "2026-01-01T04:00:00Z"' "$fixture_dir/threads.json" >"$fixture_dir/new-direction.json"
+mv "$fixture_dir/new-direction.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq direction '.threads[0].decision' "later author direction supersedes an earlier reaction"
 
 fixture mixed
 threads <<'JSON'
@@ -284,8 +430,11 @@ assert_jq 1 '.human_pending' "mixed threads human pending count"
 assert_eq '["human","bot"]' "$(jq -c '[.threads[].kind]' <<<"$last_output")" "mixed threads kinds"
 
 fixture conflict
+checks 1 <<'JSON'
+[{"name":"build","state":"FAILURE","bucket":"fail"}]
+JSON
 view <<'JSON'
-{"state":"OPEN","mergeable":"CONFLICTING","mergeStateStatus":"DIRTY","reviewDecision":"APPROVED","statusCheckRollup":[],"isDraft":false}
+{"state":"OPEN","mergeable":"CONFLICTING","mergeStateStatus":"DIRTY","reviewDecision":"APPROVED","statusCheckRollup":[{"name":"build","conclusion":"FAILURE"}],"isDraft":false}
 JSON
 threads <<'JSON'
 {"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[
@@ -299,6 +448,9 @@ assert_status 0 "conflict status"
 assert_jq CONFLICT '.verdict' "conflict beats threads"
 
 fixture merged
+checks 1 <<'JSON'
+[{"name":"build","state":"FAILURE","bucket":"fail"}]
+JSON
 view <<'JSON'
 {"state":"MERGED","mergeable":"UNKNOWN","mergeStateStatus":"UNKNOWN","reviewDecision":"APPROVED","statusCheckRollup":[{"name":"build","conclusion":"FAILURE"}],"isDraft":false}
 JSON
@@ -312,6 +464,11 @@ JSON
 invoke 42 --me RestartDK --repo twin-so/cobb --status-only
 assert_status 0 "merged status"
 assert_jq MERGED '.verdict' "merged beats everything"
+jq '.state = "CLOSED"' "$fixture_dir/view.json" >"$fixture_dir/closed.json"
+mv "$fixture_dir/closed.json" "$fixture_dir/view.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "closed status"
+assert_jq CLOSED '.verdict' "closed beats failing checks and threads"
 
 fixture truncation
 long_body=$(printf 'x%.0s' {1..500})
@@ -340,6 +497,57 @@ assert_status 0 "bot suffix status"
 assert_jq THREADS '.verdict' "bot suffix verdict"
 assert_jq bot '.threads[0].kind' "bot suffix kind"
 
+for kind in bot owner; do
+  fixture "author-update-$kind"
+  login=bugbot typename=Bot
+  if [[ $kind == owner ]]; then login=RestartDK typename=User; fi
+  jq -cn --arg login "$login" --arg typename "$typename" '
+    {data:{repository:{pullRequest:{reviewThreads:{nodes:[{id:"T1",isResolved:false,isOutdated:false,comments:{nodes:[
+      {id:"C1",url:"https://example.invalid/root",body:"Fix the predicate",createdAt:"2026-01-01T00:00:00Z",author:{login:$login,__typename:$typename},reactions:{nodes:[]}}
+    ]}}]}}}}}' | threads
+  invoke 42 --me RestartDK --agent-login RestartDK --repo twin-so/cobb --status-only
+  before_authority=$(jq -c '.threads[0].approval' <<<"$last_output")
+  jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes += [
+    {id:"C2",url:"https://example.invalid/direction",body:"Do not implement this.",createdAt:"2026-01-01T01:00:00Z",updatedAt:"2026-01-01T02:00:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[],pageInfo:{hasNextPage:false}}}
+  ]' "$fixture_dir/threads.json" >"$fixture_dir/changed.json"
+  mv "$fixture_dir/changed.json" "$fixture_dir/threads.json"
+  invoke 42 --me RestartDK --agent-login RestartDK --repo twin-so/cobb --status-only
+  assert_status 0 "$kind author withdrawal status"
+  assert_jq 'Do not implement this.' '.threads[0].approval.author_updates[-1].body' "$kind full author direction is bound"
+  if [[ $(jq -c '.threads[0].approval' <<<"$last_output") == "$before_authority" ]]; then
+    printf 'FAIL %s author withdrawal did not change authority\n' "$kind" >&2
+    exit 1
+  fi
+  jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes += [
+    {id:"C3",url:"https://example.invalid/agent",body:"[🫩 Daniel\u0027s Agent]\nOperational reply",createdAt:"2026-01-01T03:00:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[],pageInfo:{hasNextPage:false}}}
+  ]' "$fixture_dir/threads.json" >"$fixture_dir/changed.json"
+  mv "$fixture_dir/changed.json" "$fixture_dir/threads.json"
+  authority=$(jq -c '.threads[0].approval' <<<"$last_output")
+  invoke 42 --me RestartDK --agent-login RestartDK --repo twin-so/cobb --status-only
+  assert_eq "$authority" "$(jq -c '.threads[0].approval' <<<"$last_output")" "$kind agent reply is not author withdrawal"
+done
+
+fixture edited_long_direction
+jq -cn '
+  {data:{repository:{pullRequest:{reviewThreads:{nodes:[{id:"T1",isResolved:false,isOutdated:false,comments:{nodes:[
+    {id:"C1",url:"https://example.invalid/root",body:"Fix code",createdAt:"2026-01-01T00:00:00Z",author:{login:"alice",__typename:"User"},reactions:{nodes:[]}},
+    {id:"C2",url:"https://example.invalid/gate",body:"[🫩 Daniel\u0027s Agent]\nChecking with the author before changing anything",createdAt:"2026-01-01T01:00:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[{id:"R1",content:"THUMBS_UP",createdAt:"2026-01-01T02:00:00Z",user:{login:"RestartDK"}}]}},
+    {id:"C3",url:"https://example.invalid/direction",body:(("x"*420)+" implement"),createdAt:"2026-01-01T01:30:00Z",updatedAt:"2026-01-01T01:30:00Z",author:{login:"RestartDK",__typename:"User"},reactions:{nodes:[]}}
+  ]}}]}}}}}' | threads
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_jq implement '.threads[0].decision' "later reaction precedence"
+authority=$(jq -c '.threads[0].approval' <<<"$last_output")
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes[2] |= (.body = (("x"*420)+" do not implement") | .updatedAt="2026-01-01T03:00:00Z")' "$fixture_dir/threads.json" >"$fixture_dir/changed.json"
+mv "$fixture_dir/changed.json" "$fixture_dir/threads.json"
+invoke 42 --me RestartDK --repo twin-so/cobb --status-only
+assert_status 0 "edited long direction status"
+assert_jq direction '.threads[0].decision' "direction edit takes precedence over old reaction"
+assert_jq true '.threads[0].approval.author_updates[-1].body | endswith("do not implement")' "full direction beyond display limit is bound"
+if [[ $(jq -c '.threads[0].approval' <<<"$last_output") == "$authority" ]]; then
+  printf 'FAIL edited long direction did not change authority\n' >&2
+  exit 1
+fi
+
 fixture graphql_error
 threads <<'JSON'
 {"errors":[{"message":"MAX_NODE_LIMIT_EXCEEDED"}]}
@@ -356,7 +564,7 @@ for waiting in READY REVIEW_REQUIRED; do
 JSON
     if [[ $waiting == REVIEW_REQUIRED ]]; then
       view <<'JSON'
-{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[],"isDraft":false}
+{"state":"OPEN","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[{"name":"build","conclusion":"SUCCESS"}],"isDraft":false}
 JSON
     fi
     cp "$fixture_dir/view.json" "$fixture_dir/view-1.json"
@@ -367,7 +575,9 @@ JSON
       verdict=$outcome
       ;;
     CI_FAIL)
-      jq '.statusCheckRollup = [{"name":"build","conclusion":"FAILURE"}]' "$fixture_dir/view.json" >"$fixture_dir/view-3.json"
+      cp "$fixture_dir/view.json" "$fixture_dir/view-3.json"
+      printf '%s\n' '[{"name":"build","state":"FAILURE","bucket":"fail"}]' >"$fixture_dir/checks-3.json"
+      printf '1\n' >"$fixture_dir/checks-3.status"
       verdict=CI_FAIL
       ;;
     CHANGES_REQUESTED)

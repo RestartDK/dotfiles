@@ -4,6 +4,9 @@
   imports = [
     ../../modules/home/dev-packages.nix
     ../../modules/home/groups.nix
+    ../../modules/home/desktop/hyprland.nix
+    ../../modules/home/desktop/stylix.nix
+    ../../modules/home/ssh.nix
   ];
 
   home.username = "dkumlin";
@@ -160,10 +163,6 @@
 
   my.liveConfig = {
     enable = true;
-    sync = {
-      enable = true;
-      checkout = "/home/dkumlin/.config/dotfiles";
-    };
     groups = {
       shell = true;
       git = true;

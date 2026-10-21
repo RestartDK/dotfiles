@@ -3,18 +3,18 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+    stylix.url = "github:nix-community/stylix/release-26.05";
+    stylix.inputs.nixpkgs.follows = "nixpkgs";
 
     disko.url = "github:nix-community/disko/ff8702b4de27f72b4c78573dfb89ec74e36abdf1";
     disko.inputs.nixpkgs.follows = "nixpkgs";
     nixos-anywhere.url = "github:nix-community/nixos-anywhere/9df41112343713520ba071674cf8e45e91c25845";
     nixos-anywhere.inputs.nixpkgs.follows = "nixpkgs";
     nixos-anywhere.inputs.disko.follows = "disko";
-    sops-nix.url = "github:Mic92/sops-nix";
-    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
     opnix.url = "github:brizzbuzz/opnix/0ea3a9e6a94fdd0c444aa7729b98e568a0588222";
     opnix.inputs.nixpkgs.follows = "nixpkgs";
     deploy-rs.url = "github:serokell/deploy-rs/414ac5f35d79aabe5a0bf52451d8cf61eadf6c88";
@@ -93,11 +93,16 @@
           };
         }
       );
-      sshSettings = (import ./modules/home/ssh.nix { inherit (home-manager) lib; }).programs.ssh.settings;
+      sshSettings =
+        (import ./modules/home/ssh.nix {
+          inherit (home-manager) lib;
+          pkgs = pkgsFor linuxSystem;
+          network = privateValues;
+        }).programs.ssh.settings;
       fleetInventory = {
         schemaVersion = 1;
         hosts = map (name: { inherit name; }) (
-          builtins.attrNames (nixpkgs.lib.filterAttrs (_: settings: settings ? IdentityFile) sshSettings)
+          builtins.attrNames (nixpkgs.lib.filterAttrs (_: settings: settings ? User) sshSettings)
         );
       };
       mkFleetPackage =
@@ -127,6 +132,15 @@
             chmod +x $out/bin/traitor
           '';
         };
+      mkHaDevicesPackage =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "ha-devices";
+          runtimeInputs = [ pkgs.python3 ];
+          text = ''
+            exec python3 ${./bin/ha-devices} "$@"
+          '';
+        };
       mkPiPackageUpdater =
         pkgs:
         pkgs.writeShellApplication {
@@ -139,7 +153,13 @@
             pkgs.nodejs
           ];
           text = ''
-            packages=(${nixpkgs.lib.escapeShellArgs piPackageNames})
+            packages=(${
+              nixpkgs.lib.escapeShellArgs (
+                builtins.filter (
+                  name: !(self.packages.${pkgs.stdenv.hostPlatform.system}.${name}.isLocalPiPackage or false)
+                ) piPackageNames
+              )
+            })
             backup_dir="$(mktemp -d)"
 
             restore() {
@@ -208,10 +228,6 @@
             rm -rf "$backup_dir"
           '';
         };
-      twinPkgs = import inputs.nixpkgs-unstable {
-        system = linuxSystem;
-        config.allowUnfree = true;
-      };
       privateValues = import inputs.private;
       homeSpecialArgs = {
         inherit inputs;
@@ -238,13 +254,20 @@
         piPackages
         // {
           inherit fleet traitor;
+          ha-devices = mkHaDevicesPackage pkgs;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
           nixos-anywhere = inputs.nixos-anywhere.packages.${system}.default;
           opnix = inputs.opnix.packages.${system}.default;
           pi = inputs.llm-agents.packages.${system}.pi;
           pi-package-updater = piPackageUpdater;
+          herdr = inputs.llm-agents.packages.${system}.herdr;
           default = traitor;
+        }
+        // nixpkgs.lib.optionalAttrs (system == linuxSystem) {
+          dstack = pkgs.callPackage ./packages/dstack/package.nix {
+            pi = self.packages.${system}.pi;
+          };
         }
       );
 
@@ -252,6 +275,10 @@
         fleet = {
           type = "app";
           program = "${self.packages.${system}.fleet}/bin/fleet";
+        };
+        ha-devices = {
+          type = "app";
+          program = "${self.packages.${system}."ha-devices"}/bin/ha-devices";
         };
         traitor = {
           type = "app";
@@ -308,6 +335,19 @@
                 FLEET_BIN=${./bin/fleet} FLEET_TEST_BASH=${(pkgsFor system).bash}/bin/bash bash ${./tests/fleet.sh}
                 touch $out
               '';
+          fleet-inventory =
+            (pkgsFor system).runCommand "fleet-inventory-check"
+              {
+                nativeBuildInputs = [ (pkgsFor system).jq ];
+              }
+              ''
+                jq -e '
+                  .schemaVersion == 1 and
+                  (.hosts | type == "array" and length > 0) and
+                  all(.hosts[]; (.name | type == "string") and (.name | length > 0))
+                ' <<< ${nixpkgs.lib.escapeShellArg (builtins.toJSON fleetInventory)} >/dev/null
+                touch $out
+              '';
           skills =
             (pkgsFor system).runCommand "skills-tests"
               {
@@ -334,14 +374,24 @@
                 WATCH_PR_BIN=${./config/agents/skills/dstack/dstack-mode/scripts/watch-pr} bash ${./tests/watch-pr.sh}
                 touch $out
               '';
-          pi-no-offers =
-            (pkgsFor system).runCommand "pi-no-offers-tests"
+          completion-delivery =
+            (pkgsFor system).runCommand "completion-delivery-tests"
               {
                 nativeBuildInputs = [ (pkgsFor system).bun ];
               }
               ''
                 export HOME=$TMPDIR
-                bun test ${./config/pi/agent/extensions/pi-no-offers}
+                bun test ${./config/pi/agent/lib}
+                touch $out
+              '';
+          pi-todos =
+            (pkgsFor system).runCommand "pi-todos-tests"
+              {
+                nativeBuildInputs = [ (pkgsFor system).bun ];
+              }
+              ''
+                export HOME=$TMPDIR
+                bun test ${./config/pi/agent/extensions/pi-todos}
                 touch $out
               '';
           pi-vim =
@@ -357,7 +407,13 @@
           pi-coordination =
             (pkgsFor system).runCommand "pi-coordination-tests"
               {
-                nativeBuildInputs = [ (pkgsFor system).bun ];
+                nativeBuildInputs = [
+                  (pkgsFor system).bun
+                ]
+                ++ nixpkgs.lib.optionals (pkgsFor system).stdenv.hostPlatform.isLinux [
+                  self.packages.${system}.dstack
+                  self.checks.${system}.watch-pr
+                ];
               }
               ''
                 export HOME=$TMPDIR
@@ -420,6 +476,10 @@
             pkgs = pkgsFor system;
             inherit self inputs;
           };
+          home-sources-outside-flake-tree = import ./tests/home-sources-outside-flake-tree.nix {
+            pkgs = pkgsFor system;
+            inherit self;
+          };
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) (
           nixpkgs.lib.concatMapAttrs (
@@ -429,6 +489,7 @@
             ) (inputs.deploy-rs.lib.${linuxSystem}.deployChecks (self.deploy // { nodes.${nodeName} = node; }))
           ) self.deploy.nodes
           // {
+            dstack = self.packages.${system}.dstack;
             srv-nana-policy = import ./tests/srv-nana/policy.nix {
               pkgs = pkgsFor system;
               inherit self;
@@ -449,16 +510,16 @@
 
       homeManagerModules =
         let
-          withDotfilesInputs = module: extraImports: { ... }: {
-            # Keep the embedding flake's generic `inputs` argument intact. Cobb
-            # passes its own inputs through Home Manager extraSpecialArgs.
+          withDotfilesInputs = module: { ... }: {
+            # Keep the embedding flake's generic `inputs` argument intact. A
+            # consumer passes its own inputs through Home Manager
+            # extraSpecialArgs.
             _module.args.dotfilesInputs = inputs;
-            imports = [ module ] ++ extraImports;
+            imports = [ module ];
           };
         in
         {
-          groups = withDotfilesInputs ./modules/home/groups.nix [ ];
-          cobb-daniel = withDotfilesInputs ./profiles/home/cobb-daniel.nix [ ];
+          default = withDotfilesInputs ./profiles/home/portable.nix;
         };
 
       deploy = {
@@ -558,6 +619,7 @@
         };
         modules = [
           ./hosts/srv-nana
+          inputs.stylix.nixosModules.stylix
           home-manager.nixosModules.home-manager
           {
             home-manager = {
@@ -571,15 +633,6 @@
         ];
       };
 
-      # Dev-only profile for existing NixOS/Linux target machines. This is
-      # intentionally Home Manager only: it does not change DNS, SSH, users,
-      # groups, Docker, bootloader, or other host-level settings.
-      homeConfigurations.twin = home-manager.lib.homeManagerConfiguration {
-        pkgs = twinPkgs;
-        extraSpecialArgs = homeSpecialArgs;
-        modules = [ ./hosts/twin/home.nix ];
-      };
-
       darwinConfigurations."dkumlin-macbook-pro" = nix-darwin.lib.darwinSystem {
         system = darwinSystem;
         specialArgs = {
@@ -588,6 +641,7 @@
         };
         modules = [
           ./hosts/dkumlin-macbook-pro
+          inputs.stylix.darwinModules.stylix
           home-manager.darwinModules.home-manager
           {
             home-manager = {
@@ -609,6 +663,7 @@
         };
         modules = [
           ./hosts/dkumlin-twin-macbook-pro
+          inputs.stylix.darwinModules.stylix
           home-manager.darwinModules.home-manager
           {
             home-manager = {

@@ -1,6 +1,5 @@
 {
   lib,
-  pkgs,
   self,
   ...
 }:
@@ -27,15 +26,8 @@
       "mode=0755"
     ];
   };
-  my.hatchi.onepassword = {
-    enable = true;
-    references = {
-      glanceKey = lib.mkDefault null;
-      grafanaKey = lib.mkDefault null;
-    };
+  my.hatchi.onepassword.references = {
+    glanceKey = lib.mkDefault null;
+    grafanaKey = lib.mkDefault null;
   };
-  environment.systemPackages = [
-    pkgs.sops
-    pkgs.age
-  ];
 }

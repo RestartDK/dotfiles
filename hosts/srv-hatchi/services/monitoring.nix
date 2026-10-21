@@ -1,4 +1,4 @@
-{ config, lib, ... }:
+{ config, ... }:
 {
   services.prometheus = {
     enable = true;
@@ -55,14 +55,6 @@
         }
       ];
     };
-  };
-  sops.secrets.grafana-password = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-    owner = "grafana";
-    restartUnits = [ "grafana.service" ];
-  };
-  sops.secrets.grafana-key = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-    owner = "grafana";
-    restartUnits = [ "grafana.service" ];
   };
   services.caddy.virtualHosts."grafana.${config.my.domain}".extraConfig =
     "reverse_proxy 127.0.0.1:${toString config.services.grafana.settings.server.http_port}";

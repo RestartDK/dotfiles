@@ -45,3 +45,19 @@ jobs:
           cat "config/ssh/known_hosts/$TARGET" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
       - run: ./bin/traitor deploy "$TARGET" --remote-build --skip-checks
+      - name: Require the edge to answer
+        if: always() && matrix.host == 'srv-hatchi'
+        run: |
+          for attempt in {1..6}; do
+            if ssh "deploy@$TARGET" 'systemctl is-active --quiet caddy adguardhome && ss -ltn | grep -q ":443"'; then
+              exit 0
+            fi
+            if [[ $attempt -lt 6 ]]; then
+              sleep 10
+            fi
+          done
+          echo "The edge is down on $TARGET after a successful deploy."
+          echo "Remedy: ssh deploy@$TARGET sudo systemctl start caddy adguardhome"
+          ssh "deploy@$TARGET" 'systemctl is-active caddy adguardhome' || true
+          ssh "deploy@$TARGET" 'systemctl --failed --no-legend' || true
+          exit 1

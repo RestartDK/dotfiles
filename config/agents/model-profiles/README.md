@@ -1,20 +1,22 @@
 # Agent model profiles
 
-Nix selects `work.json` or `personal.json` with `my.ai.profile`. The standard Mac uses personal. Twin Mac, Twin Home Manager and the Cobb bridge use work. The selected file is live-linked at `$XDG_CONFIG_HOME/dstack/models.json`, or `~/.config/dstack/models.json` when XDG_CONFIG_HOME is unset.
+Nix selects `work.json` or `personal.json` with `my.ai.profile`. The standard Mac uses personal. Twin Mac and the Cobb bridge use work. The selected file is live-linked at `$XDG_CONFIG_HOME/dstack/models.json`, or `~/.config/dstack/models.json` when XDG_CONFIG_HOME is unset.
 
 `/subagents` shows the active profile, roles, panel members and backend chains. The dispatcher reloads this global file for each call. Project settings cannot replace it. Missing, malformed or incomplete policy stops dispatch.
 
 ```json
 {"agent":"dstack-agent","role":"feature","task":"Implement the scoped change"}
-{"agent":"dstack-agent","role":"arena-runners","member":"fable","task":"Review the design"}
+{"agent":"dstack-agent","role":"arena-runners","member":"deepseek","task":"Review the design"}
 {"agent":"comment-sicko","role":"review","task":"Review the current diff"}
 ```
 
 Panels require `member` or a zero-based `seat`, never both. Managed dstack agents require roles. Ad-hoc `model` requests must match a declared route including effort. `thinking` overrides and combined `role`/`model` inputs are rejected.
 
+The work profile uses its existing `sol` route for prose, judgment, review and synthesis. Neither profile declares a Mimo or Opus route or allows the native Anthropic provider.
+
 ## Native Pi parents
 
-The parent uses the profile's parent route. Work uses `sol` (`openai-codex/gpt-6.1-sol` at `xhigh`); personal uses `deepseek` (`opencode-go/deepseek-v4.1-flash` at `high`, falling back to `openrouter/deepseek/deepseek-v4.1-flash`). The parent uses the head of its native Pi route; the rest of the chain is the fallback used by role dispatch. Session-local compatible thinking changes remain available to parents. Each worker runs the exact target its role resolves to. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`; implicit parent downgrades and unrelated effective levels are blocked.
+The parent uses the profile's parent route. Work uses `sol` (`openai/gpt-6.1-sol` at `xhigh`); personal uses `deepseek` (`opencode-go/deepseek-v4.1-flash` at `high`, falling back to `openrouter/deepseek/deepseek-v4.1-flash`). The parent uses the head of its native Pi route; the rest of the chain is the fallback used by role dispatch. Session-local compatible thinking changes remain available to parents. Each worker runs the exact target its role resolves to. Pi may normalize a capability gap upward, such as GLM `xhigh` to `max`; implicit parent downgrades and unrelated effective levels are blocked.
 
 `packages/pi-profiled` patches Pi 0.99.1 before compiling its Bun executable. The core runtime checks native requests even with extensions disabled, including retries, compaction and branch summaries. It rejects replacement transports, incompatible endpoints and transformed wire models. This is not a sandbox for arbitrary extension or shell code making its own requests.
 
@@ -24,7 +26,7 @@ The JSON policy stays live-editable. Changes to the compiled policy library or c
 
 ## Worker sessions
 
-Fable resolves to Pi Codex Astra in the work profile. The personal profile has no astra route; its Codex work runs on `sol` (`openai-codex/gpt-6.1-sol`). A worker runs as an in-process Pi SDK session with its route's provider, model and effort, the preset system prompt, the requested tools and `codemode`. Workers load no user extensions, skills, prompt templates or themes. Results report the actual model and every attempt.
+The work profile's Astra and Sol routes use `openai`. The personal profile declares no OpenAI worker routes; manual OpenAI selections use `openai`. A worker runs as an in-process Pi SDK session with its route's provider, model and effort, the preset system prompt, the requested tools and `codemode`. Workers load no user extensions, skills, prompt templates or themes. Results report the actual model and every attempt.
 
 Recognized native HTTP and provider error envelopes classify as auth, quota or unavailable. Fallback requires a matching terminal provider failure before any tool use. Any tool use, including a read, closes fallback. Task/test failures, unknown errors, scope mismatches and cancellation never advance. The parent must reconcile partial work before retrying. Output is bounded to 50 KiB.
 

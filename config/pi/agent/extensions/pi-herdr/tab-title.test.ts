@@ -3,11 +3,11 @@ import test from "node:test";
 import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { normalizeTabTitle, requestTabTitle } from "./tab-title.ts";
 
-const codex: Model<"openai-codex-responses"> = {
+const openai: Model<"openai-responses"> = {
   id: "gpt-5.6-luna",
   name: "GPT-5.6 Luna",
-  provider: "openai-codex",
-  api: "openai-codex-responses",
+  provider: "openai",
+  api: "openai-responses",
   baseUrl: "https://example.invalid",
   reasoning: true,
   input: ["text"],
@@ -15,7 +15,6 @@ const codex: Model<"openai-codex-responses"> = {
   contextWindow: 272000,
   maxTokens: 128000,
 };
-const openai: Model<"openai-responses"> = { ...codex, provider: "openai", api: "openai-responses" };
 
 function response(
   text: string,
@@ -24,9 +23,9 @@ function response(
   return {
     content: [{ type: "text", text }],
     role: "assistant",
-    provider: codex.provider,
-    model: codex.id,
-    api: codex.api,
+    provider: openai.provider,
+    model: openai.id,
+    api: openai.api,
     stopReason,
     timestamp: 0,
     usage: {
@@ -46,7 +45,8 @@ function registry(complete: Registry["complete"]): Registry {
   return {
     find(provider, modelId) {
       assert.equal(modelId, "gpt-5.6-luna");
-      return provider === "openai-codex" ? codex : openai;
+      assert.equal(provider, "openai");
+      return openai;
     },
     complete,
   };
@@ -61,7 +61,7 @@ test("titles have at most four words and 28 Unicode code points", () => {
   assert.equal(normalizeTabTitle(" \n\t"), "");
 });
 
-test("Codex is first and success does not call OpenAI", async () => {
+test("title generation uses OpenAI without a Codex fallback", async () => {
   const calls: string[] = [];
   const title = await requestTabTitle(
     registry(async (model, context, options) => {
@@ -78,44 +78,51 @@ test("Codex is first and success does not call OpenAI", async () => {
     new AbortController().signal,
   );
   assert.equal(title, "Fix login redirect");
-  assert.deepEqual(calls, ["openai-codex"]);
+  assert.deepEqual(calls, ["openai"]);
 });
 
 for (const failure of ["throw", "error", "empty", "aborted"]) {
-  test(`OpenAI fallback handles Codex ${failure}`, async () => {
+  test(`OpenAI ${failure} is terminal without a Codex fallback`, async () => {
     const calls: string[] = [];
-    const title = await requestTabTitle(
-      registry(async (model) => {
-        calls.push(model.provider);
-        if (model.provider === "openai") return response("Fix login redirect");
-        if (failure === "throw") throw new Error("Quota exhausted");
-        if (failure === "empty") return response("");
-        return response("", failure === "error" ? "error" : "aborted");
-      }),
-      "Fix login",
-      new AbortController().signal,
+    await assert.rejects(
+      requestTabTitle(
+        registry(async (model) => {
+          calls.push(model.provider);
+          if (failure === "throw") throw new Error("Quota exhausted");
+          if (failure === "empty") return response("");
+          return response("", failure === "error" ? "error" : "aborted");
+        }),
+        "Fix login",
+        new AbortController().signal,
+      ),
+      failure === "throw"
+        ? /Quota exhausted/
+        : failure === "empty"
+          ? /empty title/
+          : /Title generation failed/,
     );
-    assert.equal(title, "Fix login redirect");
-    assert.deepEqual(calls, ["openai-codex", "openai"]);
+    assert.deepEqual(calls, ["openai"]);
   });
 }
 
-test("missing Codex model falls back to OpenAI", async () => {
-  const title = await requestTabTitle(
-    {
-      find: (provider) => (provider === "openai" ? openai : undefined),
-      complete: async (model) => {
-        assert.equal(model.provider, "openai");
-        return response("Fix login");
+test("missing OpenAI model fails without a Codex fallback", async () => {
+  await assert.rejects(
+    requestTabTitle(
+      {
+        find(provider) {
+          assert.equal(provider, "openai");
+          return undefined;
+        },
+        complete: async () => assert.fail("Missing OpenAI model must not complete"),
       },
-    },
-    "Fix login",
-    new AbortController().signal,
+      "Fix login",
+      new AbortController().signal,
+    ),
+    /Model unavailable/,
   );
-  assert.equal(title, "Fix login");
 });
 
-test("both provider failures are reported", async () => {
+test("OpenAI credential failures are reported", async () => {
   await assert.rejects(
     requestTabTitle(
       registry(async () => {
@@ -124,11 +131,11 @@ test("both provider failures are reported", async () => {
       "Fix login",
       new AbortController().signal,
     ),
-    /openai-codex: No credentials; openai: No credentials/,
+    /No credentials/,
   );
 });
 
-test("session cancellation prevents fallback", async () => {
+test("session cancellation stops title generation", async () => {
   const controller = new AbortController();
   const calls: string[] = [];
   await assert.rejects(
@@ -143,7 +150,7 @@ test("session cancellation prevents fallback", async () => {
     ),
     /Session changed/,
   );
-  assert.deepEqual(calls, ["openai-codex"]);
+  assert.deepEqual(calls, ["openai"]);
 });
 
 test("late successful responses cannot rename an abandoned session", async () => {

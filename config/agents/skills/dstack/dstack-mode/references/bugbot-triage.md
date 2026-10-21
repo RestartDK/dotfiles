@@ -2,7 +2,7 @@
 
 Use this reference when the Babysit playbook (`~/.agents/skills/dstack/dstack-mode/playbooks/babysit.md`) handles Bugbot or review-automation comments. The goal is not to ignore Bugbot by default. The goal is to stop treating every comment as a required code change.
 
-Greptile findings are also available locally before the bot posts on the PR: `greptile review --agent` reviews the current branch against its base with plain output (`npx greptile@latest review --agent` when the binary is not installed; `--json` for machine-readable comments, `--instructions` to focus). Classify what it returns with the rubric below. When a finding is wrong, pair the dismissal with a re-review request carrying the same explanation. Reply `@greptile <why it is wrong>` on the thread through the fixed `gh api` call, or re-run locally with `greptile review --instructions "..."`. Dismissing the thread alone does not move the published score; only the re-review does.
+When repository policy selects local Greptile review, run one pass on the finished diff with the task’s intent and acceptance criteria. `greptile review --agent` provides plain output (`npx greptile@latest review --agent` if the binary is absent; `--json` for machine-readable comments; `--instructions` for task context). Classify findings with the rubric below, fix verified issues, then push when authorized and verify the remote review. Do not repeat unchanged local review or edit code to raise a score. Scores are diagnostic unless `AGENTS.md` makes one a gate. For a false finding, post the concrete disproof and request remote re-review through the fixed `gh api` call. A dismissed thread is not evidence that the bot reconsidered it.
 
 ## Human review threads
 

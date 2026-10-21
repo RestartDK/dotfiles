@@ -4,6 +4,8 @@
   imports = [
     ../../modules/home/dev-packages.nix
     ../../modules/home/groups.nix
+    ../../modules/home/desktop/stylix.nix
+    ../../modules/theme/macos-observer.nix
     ../../modules/home/ssh.nix
   ];
 
@@ -15,10 +17,6 @@
 
   my.liveConfig = {
     enable = true;
-    sync = {
-      enable = true;
-      checkout = "/Users/danielkumlin/.config/dotfiles";
-    };
     groups = {
       shell = true;
       git = true;

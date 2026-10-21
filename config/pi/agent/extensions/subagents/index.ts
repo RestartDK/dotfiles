@@ -886,7 +886,7 @@ export default function (pi: ExtensionAPI) {
       "Managed dstack agents must select role, never model. Panels require member or zero-based seat. Thinking overrides are rejected.",
       "Workers run native Pi sessions with the route's exact provider, model and effort; the codemode tool is always available and output is bounded to 50 KiB.",
       describePolicy(),
-      "Use this only when the user explicitly asks for subagents, delegation, orchestration, parallel workers, or a second model opinion.",
+      "Use when the user requests delegation or an active dstack playbook selects a bounded, justified worker. Do not delegate casual turns or concrete small fixes by default; use independent reviewers for high-risk work.",
       "The current Pi session/model is the orchestrator; this tool runs child workers with their own models/tools/prompts and returns their outputs.",
       "Prefer parallel read-only scouts/reviewers/planners, then at most one write-capable worker.",
       "With background=true every worker starts immediately and the call returns run handles right away; collect results later with the subagents_runs tool (join, status, stop).",

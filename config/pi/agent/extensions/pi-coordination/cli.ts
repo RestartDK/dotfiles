@@ -1,4 +1,5 @@
-import { parseArgs } from "node:util";
+import { parseArgs, type ParseArgsConfig } from "node:util";
+import { attemptExitCode } from "./attempt-exit.ts";
 import { resolve } from "node:path";
 import {
   cancelAttempt,
@@ -32,7 +33,23 @@ const usage = `pi-coordinator [--dir PATH] COMMAND [OPTIONS] [-- PROGRAM ARGS...
 One lease per resource key. A command that ends while its process group still
 holds the key leaves the key blocked until someone inspects it and resolves it.`;
 
-function spec(values: Record<string, unknown>, command: string[]): JobSpec {
+const options = {
+  dir: { type: "string" },
+  id: { type: "string" },
+  resource: { type: "string" },
+  owner: { type: "string" },
+  label: { type: "string" },
+  revision: { type: "string" },
+  cwd: { type: "string" },
+  limit: { type: "string" },
+  wait: { type: "string" },
+  inspected: { type: "boolean" },
+  help: { type: "boolean" },
+} satisfies NonNullable<ParseArgsConfig["options"]>;
+type Values = ReturnType<typeof parseArgs<{ options: typeof options; strict: true }>>["values"];
+const defaultOwner = process.env.PI_SESSION_ID ?? "local-operator";
+
+function spec(values: Values, command: string[]): JobSpec {
   const resource = values.resource;
   if (typeof resource !== "string") throw new Error("--resource is required");
   return {
@@ -41,10 +58,7 @@ function spec(values: Record<string, unknown>, command: string[]): JobSpec {
       typeof values.id === "string"
         ? values.id
         : `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`,
-    owner:
-      typeof values.owner === "string"
-        ? values.owner
-        : (process.env.PI_SESSION_ID ?? "local-operator"),
+    owner: typeof values.owner === "string" ? values.owner : defaultOwner,
     label: typeof values.label === "string" ? values.label : "unspecified",
     revision: typeof values.revision === "string" ? values.revision : "unversioned",
     cwd: resolve(typeof values.cwd === "string" ? values.cwd : process.cwd()),
@@ -62,19 +76,7 @@ async function main(): Promise<number> {
     args: Bun.argv.slice(2),
     allowPositionals: true,
     strict: true,
-    options: {
-      dir: { type: "string" },
-      id: { type: "string" },
-      resource: { type: "string" },
-      owner: { type: "string" },
-      label: { type: "string" },
-      revision: { type: "string" },
-      cwd: { type: "string" },
-      limit: { type: "string" },
-      wait: { type: "string" },
-      inspected: { type: "boolean" },
-      help: { type: "boolean" },
-    },
+    options,
   });
   const [action, ...command] = positionals;
   if (values.help || action === undefined) {
@@ -110,13 +112,9 @@ async function main(): Promise<number> {
         waitMs: Number.isFinite(waitMs) ? waitMs : 0,
         onWait: (state) => console.error(`Waiting for ${job.resource}: ${state.kind}`),
       });
-      if (result.kind === "settled") {
+      if (result.kind === "settled" || result.kind === "existing") {
         console.log(describe(result.attempt));
-        return result.attempt.exitCode ?? 1;
-      }
-      if (result.kind === "existing") {
-        console.log(describe(result.attempt));
-        return result.attempt.exitCode ?? 0;
+        return attemptExitCode(result.attempt);
       }
       if (result.kind === "failed") {
         console.error(describe(result.attempt));
@@ -133,7 +131,7 @@ async function main(): Promise<number> {
         const state = watch(root, values.id);
         if (state.kind === "settled") {
           console.log(describe(state.attempt));
-          return state.attempt.outcome === "completed" ? 0 : 1;
+          return attemptExitCode(state.attempt);
         }
         if (state.kind === "missing") return refuse(`No attempt ${values.id} is present`);
         await Bun.sleep(POLL_MS);

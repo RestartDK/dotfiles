@@ -72,19 +72,6 @@ in
         group = "caddy";
       };
     };
-    sops.secrets = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-      cloudflare.restartUnits = [ "acme-${domain}.service" ];
-      adguard-password = { };
-    };
-    sops.templates."AdGuardHome.yaml" = lib.mkIf (!config.my.hatchi.onepassword.enable) {
-      content = builtins.toJSON (
-        config.services.adguardhome.settings
-        // {
-          http.address = "${config.services.adguardhome.host}:${toString config.services.adguardhome.port}";
-        }
-      );
-      restartUnits = [ "adguardhome.service" ];
-    };
     services.adguardhome = {
       enable = true;
       host = "127.0.0.1";
@@ -94,11 +81,7 @@ in
         users = [
           {
             name = "daniel";
-            password =
-              if config.my.hatchi.onepassword.enable then
-                "@hatchi-adguard-hash@"
-              else
-                config.sops.placeholder.adguard-password;
+            password = "@hatchi-adguard-hash@";
           }
         ];
         dns = {
@@ -136,7 +119,7 @@ in
         (_: {
           requires = [ config.my.hatchi.secretService ];
           after = [ config.my.hatchi.secretService ];
-          partOf = lib.optional config.my.hatchi.onepassword.enable config.my.hatchi.secretService;
+          partOf = [ config.my.hatchi.secretService ];
         })
       // {
         adguardhome = {
@@ -149,10 +132,7 @@ in
           '';
         };
       };
-    my.hatchi.stateUnits = [
-      "adguardhome"
-      "caddy"
-    ];
+    my.hatchi.stateUnits = [ "adguardhome" ];
     networking.nftables.enable = true;
     networking.firewall = {
       enable = true;
@@ -169,6 +149,7 @@ in
         ${ingress networks.clientNetworks "tcp, udp" "53"}
         ${ingress networks.clientNetworks "tcp" "80, 443"}
         ${ingress networks.clientNetworks "udp" "443"}
+        ${ingress networks.clientNetworks "tcp" "1400-1500"}
         ${ingress networks.adminNetworks "tcp" "22"}
         udp dport ${toString config.services.tailscale.port} accept
       '';

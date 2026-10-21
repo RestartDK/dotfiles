@@ -1,6 +1,6 @@
 # Disposable fixtures
 
-`age-key.txt` is deliberately public and decrypts only `synthetic-secrets.sops.yaml`. Every password is synthetic. Never use this identity or ciphertext for production.
+`synthetic-secrets.json` holds the public synthetic credentials that the service VMs deliver through their test opnix fixture. Every password and hash is synthetic. Never use these values for production.
 
 The nginx fixture in `../services.nix` serves separate Ollama, OpenCode, and Glance-agent markers on ports 8000, 8001, and 8002. It never contacts Nana.
 

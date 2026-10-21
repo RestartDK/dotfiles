@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated from Herdr protocol 20, schema version 1.
+ * Generated from Herdr protocol 22, schema version 1.
  * Run `npm run generate` after updating Herdr. Do not edit by hand.
  */
 
@@ -189,6 +189,29 @@ export type ResponseResult =
       [k: string]: unknown;
     }
   | {
+      pane_id: string;
+      text: string;
+      type: "pane_selection";
+      [k: string]: unknown;
+    }
+  | {
+      content_revision: number;
+      cursor: PaneTextPoint;
+      pane_id: string;
+      type: "pane_copy_motion";
+      [k: string]: unknown;
+    }
+  | {
+      content_revision: number;
+      current?: number | null;
+      current_global?: number | null;
+      matches: PaneTextRange[];
+      pane_id: string;
+      total: number;
+      type: "pane_copy_search";
+      [k: string]: unknown;
+    }
+  | {
       revision: number;
       sequence: number;
       type: "pane_graphics_frame_ack";
@@ -247,6 +270,11 @@ export type ResponseResult =
       changed: boolean;
       reason: ClientWindowTitleReason;
       type: "client_window_title";
+      [k: string]: unknown;
+    }
+  | {
+      integrations: IntegrationInfo[];
+      type: "integration_list";
       [k: string]: unknown;
     }
   | {
@@ -312,6 +340,17 @@ export type ResponseResult =
       [k: string]: unknown;
     }
   | {
+      regions: PaneLinkRegion[];
+      type: "pane_link_resolved";
+      [k: string]: unknown;
+    }
+  | {
+      handled: boolean;
+      type: "pane_link_activated";
+      url?: string | null;
+      [k: string]: unknown;
+    }
+  | {
       logs: PluginCommandLogInfo[];
       type: "plugin_log_list";
       [k: string]: unknown;
@@ -335,6 +374,12 @@ export type ResponseResult =
       diagnostics: string[];
       status: ConfigReloadStatus;
       type: "config_reload";
+      [k: string]: unknown;
+    }
+  | {
+      active: boolean;
+      projection_revision: number;
+      type: "client_shell_surface_set";
       [k: string]: unknown;
     }
   | {
@@ -575,6 +620,7 @@ export type EventKind =
   | "layout_updated";
 export type NotificationShowReason = "shown" | "disabled" | "rate_limited" | "no_foreground_client" | "busy";
 export type ClientWindowTitleReason = "set" | "cleared" | "no_foreground_client";
+export type IntegrationState = "not_installed" | "current" | "outdated";
 export type IntegrationTarget =
   | "pi"
   | "omp"
@@ -606,7 +652,19 @@ export interface SuccessResponse {
 }
 export interface ServerCapabilities {
   detached_server_daemon?: boolean;
+  /**
+   * Stable client-owned endpoint generation supported by this server.
+   */
+  endpoint_protocol_generation?: number | null;
+  /**
+   * Whether this server supports endpoint health probes.
+   */
+  health_check?: boolean;
   live_handoff: boolean;
+  /**
+   * Whether this server supports explicit client-shell surface interest.
+   */
+  surface_interest?: boolean;
   [k: string]: unknown;
 }
 export interface SessionSnapshot {
@@ -876,9 +934,27 @@ export interface PaneReadResult {
   workspace_id: string;
   [k: string]: unknown;
 }
+export interface PaneTextPoint {
+  col: number;
+  row: number;
+  [k: string]: unknown;
+}
+export interface PaneTextRange {
+  end: PaneTextPoint;
+  start: PaneTextPoint;
+  [k: string]: unknown;
+}
 export interface EventEnvelope {
   data: EventData;
   event: EventKind;
+  [k: string]: unknown;
+}
+export interface IntegrationInfo {
+  available: boolean;
+  command: string;
+  label: string;
+  state: IntegrationState;
+  target: IntegrationTarget;
   [k: string]: unknown;
 }
 export interface IntegrationInstallResult {
@@ -1022,6 +1098,15 @@ export interface PluginCommandLogInfo {
   status: PluginCommandStatus;
   stderr?: string | null;
   stdout?: string | null;
+  [k: string]: unknown;
+}
+/**
+ * Inclusive display-cell columns on a pane's current viewport.
+ */
+export interface PaneLinkRegion {
+  end_col: number;
+  row: number;
+  start_col: number;
   [k: string]: unknown;
 }
 export interface PluginPaneInfo {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   acquire,
+  cancelAttempt,
   encodeKey,
   groupConfirmedAbsent,
   readAttempt,
@@ -12,6 +13,7 @@ import {
   runInForeground,
   startDetached,
   watch,
+  type Holder,
   type JobSpec,
   type WatchResult,
 } from "../core.ts";
@@ -225,6 +227,90 @@ test("a surviving descendant keeps the key blocked after the command exits", asy
     spec(directory, { id: "blocked-contender", resource: job.resource }),
   );
   expect(contender.ok).toBe(false);
+});
+
+test("cancel can stop live descendants of an already completed command", async () => {
+  const directory = root();
+  const job = spec(directory, {
+    id: "cancel-descendant",
+    resource: "test:cancel-descendant",
+    command: ["/bin/sh", "-c", "sleep 30 & exit 0"],
+  });
+  const ended = await runInForeground(directory, job);
+  if (ended.kind !== "settled") throw new Error("The parent command did not end");
+  expect(ended.attempt.state).toBe("blocked");
+  const state = readLease(directory, job.resource);
+  if (state.kind !== "blocked" || state.holder?.pgid === undefined)
+    throw new Error("The descendant group was not retained");
+  const pgid = state.holder.pgid;
+  groups.push(pgid);
+  expect(groupConfirmedAbsent(pgid)).toBe(false);
+  expect(cancelAttempt(directory, job.id).kind).toBe("cancelled");
+  await waitFor(() => groupConfirmedAbsent(pgid));
+  const settled = watch(directory, job.id);
+  if (settled.kind !== "settled") throw new Error("Cancellation did not settle");
+  expect(settled.attempt.outcome).toBe("cancelled");
+  expect(readLease(directory, job.resource).kind).toBe("free");
+});
+
+async function abandoned(directory: string, id: string): Promise<Holder> {
+  const acquired = await acquire(directory, spec(directory, { id }));
+  if (!acquired.ok) throw new Error("Fixture lease was not acquired");
+  const pgid = 1_000_000_000;
+  if (!groupConfirmedAbsent(pgid)) throw new Error("Fixture process group is not absent");
+  const holder: Holder = { ...acquired.holder, pgid, state: "running" };
+  writeFileSync(
+    join(directory, "leases", encodeKey(holder.resource), "holder"),
+    JSON.stringify(holder),
+  );
+  return holder;
+}
+
+test("cancel reports an already absent group as an unknown blocked outcome, not a sent signal", async () => {
+  const directory = root();
+  const holder = await abandoned(directory, "absent-cancel");
+  const result = cancelAttempt(directory, holder.id);
+  expect(result.kind).toBe("settled");
+  if (result.kind !== "settled")
+    throw new Error("Cancellation did not report the observed outcome");
+  expect(result.attempt.outcome).toBe("unknown");
+  expect(result.attempt.state).toBe("blocked");
+  expect(readLease(directory, holder.resource).kind).toBe("blocked");
+});
+
+test("cancel reconciles a recorded exit before deciding whether to signal", async () => {
+  const directory = root();
+  const holder = await abandoned(directory, "recorded-cancel");
+  writeFileSync(join(directory, "attempts", `${holder.id}.status`), "7\n");
+  const result = cancelAttempt(directory, holder.id);
+  expect(result.kind).toBe("settled");
+  if (result.kind !== "settled") throw new Error("Recorded completion was not reconciled");
+  expect(result.attempt.exitCode).toBe(7);
+  expect(result.attempt.outcome).toBe("failed");
+  expect(readLease(directory, holder.resource).kind).toBe("free");
+});
+
+test("repeated watches preserve a retained blocked outcome instead of inventing a new completion", async () => {
+  const directory = root();
+  const holder = await abandoned(directory, "blocked-watch");
+  const first = watch(directory, holder.id);
+  if (first.kind !== "settled") throw new Error("Unknown completion was not retained");
+  const retained = { ...first.attempt, finishedAt: "2026-01-01T00:00:00.000Z" };
+  writeFileSync(join(directory, "attempts", `${holder.id}.json`), JSON.stringify(retained));
+  const next = watch(directory, holder.id);
+  expect(next.kind).toBe("settled");
+  if (next.kind !== "settled") throw new Error("Retained completion was lost");
+  expect(next.attempt).toEqual(retained);
+});
+
+test("inspected release settles the lease while preserving an unknown outcome", async () => {
+  const directory = root();
+  const holder = await abandoned(directory, "inspected-release");
+  watch(directory, holder.id);
+  const result = resolveBlocked(directory, holder.id, { inspected: true });
+  expect(result.state).toBe("settled");
+  expect(result.outcome).toBe("unknown");
+  expect(readLease(directory, holder.resource).kind).toBe("free");
 });
 
 test("an unreadable or unknown-version lease record never reads as free", async () => {
