@@ -68,7 +68,7 @@ let
           inherit inputs;
           storage = physicalStorage;
         })
-        { inherit lib; }
+          { inherit lib; }
       ) true
     );
   validPhysicalPlatform = evaluatePhysicalPlatform {

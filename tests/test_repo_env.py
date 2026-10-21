@@ -1,5 +1,6 @@
 import os
 import json
+import fcntl
 import pty
 import select
 import time
@@ -9,6 +10,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import termios
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,13 +88,20 @@ class RepoEnvironmentTests(unittest.TestCase):
             rc.write(f'prepare_custom() {{ print $$ > {shlex.quote(str(marker))}; '
                      f'IFS= read -r release < {shlex.quote(str(gate))}; }}\n'
                      'repo_env_hooks+=(prepare_custom)\n')
+        def attach_terminal():
+            os.setsid()
+            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
         child = subprocess.Popen([str(LAUNCHER), "true"], cwd=self.repo, env=self.env,
-                                 stdin=slave, stdout=slave, stderr=slave)
+                                 stdin=slave, stdout=slave, stderr=slave,
+                                 preexec_fn=attach_terminal)
         try:
             deadline = time.monotonic() + 5
+            output = b""
             while not marker.exists() and time.monotonic() < deadline:
-                select.select([], [], [], 0.01)
-            self.assertTrue(marker.exists(), "Preparation never reached its gate")
+                readable, _, _ = select.select([master], [], [], 0.01)
+                if readable:
+                    output = (output + os.read(master, 4096))[-8192:]
+            self.assertTrue(marker.exists(), f"Preparation never reached its gate: {output!r}")
             shell_pid = int(marker.read_text())
             identity = subprocess.check_output(
                 ["ps", "-p", str(shell_pid), "-o", "ppid=,pgid="], text=True).split()
