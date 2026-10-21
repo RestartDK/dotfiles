@@ -146,10 +146,10 @@ Apply these on top of the general standards whenever the diff touches Rust or fr
 
 ### Frontend / TypeScript
 
-1. **Types come from Rust codegen, period.**
-   - Types must flow from Rust through WASM/TS codegen so the frontend is fully typed end to end.
-   - If a needed type is missing from the generated TS declarations, the fix is to add/type it on the Rust side and regenerate — never to hand-write a parallel TS interface or cast around the gap.
-   - Flag any hand-maintained frontend type that duplicates a backend shape, and any `as` cast or brand manufactured by assertion instead of real parsing at the ingress boundary.
+1. **Derive shared contract types from their authority.**
+   - For backend-owned contracts in a Rust application, use its WASM/TS codegen. Add missing shared fields on the Rust side and regenerate, rather than maintaining a parallel frontend shape.
+   - Frontend-local state and TypeScript-only tools belong in their own typed domain models. They do not need a Rust authority.
+   - Flag duplicated backend shapes and any `as` cast or brand manufactured by assertion instead of real parsing at ingress. Parse external data once, preserve meaningful error variants, and model lifecycle transitions with discriminated unions.
 
 2. **Use the design system, not raw HTML.**
    - Always use existing atoms, molecules, and organisms from the repo's component library. Raw tags like `<button>`, `<input>`, or `<select>` in feature code are a blocker.
