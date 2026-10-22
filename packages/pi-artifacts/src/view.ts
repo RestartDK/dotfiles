@@ -9,6 +9,8 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
   type Component,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
 import { loadThumbnail, snapshotPath } from "./store.js";
 import type { ArtifactSnapshot, SnapshotImage } from "./model.js";
@@ -18,6 +20,7 @@ interface Row {
   captions: string;
   image: Image;
   missing: string[];
+  indexes: number[];
 }
 
 type Thumbnail = { kind: "ready"; base64: string } | { kind: "missing"; path: string };
@@ -39,6 +42,9 @@ function raster(svg: string): Buffer {
 export class ArtifactView implements Component {
   showImages = true;
   expanded = false;
+  onOpen: ((index: number) => void) | undefined;
+  isCovered: (() => boolean) | undefined;
+  private hitboxes: { x: number; y: number; width: number; height: number; index: number }[] = [];
   private readonly thumbnails = new Map<string, Thumbnail>();
   private layout: { key: string; rows: Row[] } | undefined;
 
@@ -66,7 +72,27 @@ export class ArtifactView implements Component {
     return thumbnail;
   }
 
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (
+      !this.onOpen ||
+      event.button !== "left" ||
+      (event.type !== "press" && event.type !== "click")
+    )
+      return;
+    const hit = this.hitboxes.find(
+      (box) =>
+        event.x >= box.x &&
+        event.x < box.x + box.width &&
+        event.y >= box.y &&
+        event.y < box.y + box.height,
+    );
+    if (!hit) return;
+    if (event.type === "click") this.onOpen(hit.index);
+    return { handled: true, render: false };
+  }
+
   render(width: number): string[] {
+    this.hitboxes = [];
     if (width < 1) return [];
     if (!this.showImages || !getCapabilities().images) {
       return [
@@ -79,11 +105,13 @@ export class ArtifactView implements Component {
     }
     const { columns, tileWidth } = layoutGeometry(width, this.snapshot.maxWidthCells);
     const cell = getCellDimensions();
-    const cellWidth = Math.max(1, Math.min(32, cell.widthPx));
-    const cellHeight = Math.max(1, Math.min(64, cell.heightPx));
+    const resolution = Math.min(1, 32 / cell.widthPx, 64 / cell.heightPx);
+    const cellWidth = cell.widthPx * resolution;
+    const cellHeight = cell.heightPx * resolution;
     const key = `${columns}:${tileWidth}:${cellWidth}:${cellHeight}:${getCapabilities().images}`;
     if (this.layout?.key !== key) {
       const rows: Row[] = [];
+      let groupIndex = 0;
       for (const group of this.snapshot.groups) {
         for (let offset = 0; offset < group.images.length; offset += columns) {
           const images = group.images.slice(offset, offset + columns);
@@ -130,16 +158,31 @@ export class ArtifactView implements Component {
               { widthPx: rowWidth, heightPx: height },
             ),
             missing,
+            indexes: images.map((_image, index) => groupIndex + offset + index),
           });
         }
+        groupIndex += group.images.length;
       }
       this.layout = { key, rows };
     }
     const lines: string[] = [];
     for (const row of this.layout.rows) {
       if (row.title) lines.push(truncateToWidth(this.theme.fg("accent", row.title), width));
-      lines.push(truncateToWidth(this.theme.fg("muted", row.captions), width));
-      lines.push(...row.image.render(width));
+      const top = lines.length;
+      lines.push(truncateToWidth(this.theme.fg("muted", row.captions), width, ""));
+      const imageLines = row.image.render(width);
+      const covered = this.isCovered?.() ?? false;
+      lines.push(...(covered ? imageLines.map(() => "") : imageLines));
+      for (const [column, index] of covered ? [] : row.indexes.entries()) {
+        const x = column * (tileWidth + 2);
+        this.hitboxes.push({
+          x,
+          y: top,
+          width: Math.max(0, Math.min(tileWidth, width - x)),
+          height: imageLines.length + 1,
+          index,
+        });
+      }
       for (const message of row.missing)
         lines.push(...wrapTextWithAnsi(this.theme.fg("muted", message), width));
       lines.push("");
