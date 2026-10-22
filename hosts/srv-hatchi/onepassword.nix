@@ -94,23 +94,27 @@ in
         ) (lib.filterAttrs (_: reference: reference != null) cfg.references);
       };
       systemd.services.opnix-secrets = {
-        # The resolver is Tailscale's MagicDNS, and activation restarts
-        # tailscaled in the same transaction. Without the ordering and the wait,
-        # the first start races that restart, fails to resolve
-        # my.1password.com, and latches the unit's two-start limit, which aborts
-        # the deployment and rolls the host back.
-        after = [ "tailscaled.service" ];
+        # Activation restarts the units that carry Hatchi's network, so the
+        # resolver is gone for up to two minutes while a new generation comes
+        # up. The first fetch then cannot resolve my.1password.com, and since
+        # every secret consumer depends on it, one failed attempt aborts the
+        # activation and rolls the host back.
+        after = [
+          "dhcpcd.service"
+          "tailscaled.service"
+        ];
         path = [
           pkgs.coreutils
-          pkgs.getent
+          pkgs.dig
+          pkgs.gnugrep
         ];
         preStart = ''
           test -s ${lib.escapeShellArg config.services.onepassword-secrets.tokenFile}
-          for attempt in $(seq 1 30); do
-            if getent hosts my.1password.com > /dev/null; then
+          for attempt in $(seq 1 60); do
+            if dig +short +time=3 +tries=1 my.1password.com | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
               break
             fi
-            sleep 2
+            sleep 3
           done
         '';
         postStart = lib.concatMapStringsSep "\n" (path: "test -s ${lib.escapeShellArg path}") (
