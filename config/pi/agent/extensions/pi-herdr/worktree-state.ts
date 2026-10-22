@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { link, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { withHandoffLock } from "./worktree-lock.ts";
-import type { HandoffLaunch } from "./worktree-launch.ts";
+import type { LaunchAttempt, LaunchState } from "./launch-attempt.ts";
 import { setTimeout as delay } from "node:timers/promises";
 import { Type, type Static } from "typebox";
 import { Check } from "typebox/value";
@@ -128,11 +128,15 @@ export class HandoffReadiness {
     );
   }
 
-  async decide(decision: "ready" | "stopped"): Promise<"ready" | "stopped"> {
+  async decide(
+    decision: "ready" | "stopped",
+    launch?: LaunchAttempt,
+  ): Promise<"ready" | "stopped"> {
     return withHandoffLock(dirname(this.path), "wait", async () => {
       const owner: unknown = JSON.parse(await readFile(join(dirname(this.path), "owner"), "utf8"));
       if (!Check(HandoffOwner, owner) || owner.id !== this.id)
         throw new Error(`Handoff reservation ownership changed at ${dirname(this.path)}.`);
+      if (decision === "ready") await launch?.assertAccepting();
       const candidate = `${this.path}-${randomUUID()}`;
       await writeFile(candidate, decision === "ready" ? `ready:${this.id}` : "stopped", {
         flag: "wx",
@@ -151,12 +155,21 @@ export class HandoffReadiness {
     });
   }
 
-  async wait(timeoutMs = 60_000, signal?: AbortSignal, launch?: HandoffLaunch): Promise<void> {
+  async wait(
+    timeoutMs = 60_000,
+    signal?: AbortSignal,
+    launch?: LaunchAttempt,
+    onUpdate?: (state: LaunchState) => void,
+  ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (true) {
       signal?.throwIfAborted();
+      await launch?.pulse();
       const decision = await this.read();
-      if (decision === "ready") return;
+      if (decision === "ready") {
+        await launch?.transfer();
+        return;
+      }
       if (decision === "stopped")
         throw new Error(`Handoff stopped. Inspect the reservation at ${this.path}.`);
       const status = launch ? await launch.read() : undefined;
@@ -164,7 +177,12 @@ export class HandoffReadiness {
         throw new Error(
           `Successor exited with status ${status.code} during ${status.phase} startup before readiness. Diagnostics at ${launch?.directory}.`,
         );
-      if (Date.now() >= deadline) {
+      if (status) onUpdate?.(status);
+      if (status?.kind === "stopping" || status?.kind === "recoveryRequired")
+        throw new Error(
+          `Launch ${status.kind} during ${status.phase}. Inspect ${launch?.directory}.`,
+        );
+      if (Date.now() >= (status?.deadline ?? deadline)) {
         if ((await this.decide("stopped")) === "ready") return;
         throw new Error(
           `Pi did not acknowledge readiness. Last launch phase: ${status?.kind ?? "unknown"}. Inspect the destination pane and reservation at ${this.path} before recovery.${launch ? ` Diagnostics at ${launch.directory}.` : ""}`,

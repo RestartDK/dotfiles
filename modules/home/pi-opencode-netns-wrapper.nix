@@ -88,6 +88,10 @@ let
       export PI_NETNS_SELECTED="$target_namespace"
       export PI_NETNS_RUN_DEV_NETNS="$run_dev_netns"
 
+      if [ "$(${pkgs.coreutils}/bin/readlink /proc/self/ns/net)" = "net:[$(${pkgs.coreutils}/bin/stat -Lc %i "/var/run/netns/$target_namespace")]" ]; then
+        exec ${realPi} "$@"
+      fi
+
       /run/wrappers/bin/sudo -n -E "$run_dev_netns" "$target_namespace" \
         ${realPi} "$@"
     }

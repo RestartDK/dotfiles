@@ -11,12 +11,7 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "*.ts",
-    "generated/*.ts"
-  ]
+  "include": ["*.ts", "generated/*.ts", "../../../../../tests/herdr-*.ts"]
 }

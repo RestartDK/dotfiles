@@ -111,7 +111,7 @@ function client(options: { cwd?: string; grouped?: boolean; fail?: boolean } = {
   return { herdr, calls, requests };
 }
 async function repository(t: test.TestContext) {
-  const dir = await mkdtemp(join(tmpdir(), "fwt-"));
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "fwt-")));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const repo = join(dir, "repo");
   await mkdir(repo);
@@ -159,6 +159,25 @@ test("create adds a real Git checkout and only a plain workspace; open reuses it
   const grouped = client({ cwd: path, grouped: true });
   await presentWorktree(grouped.herdr, { action: "open", cwd: repo, path });
   assert.deepEqual(grouped.calls, ["workspace.list", "workspace.create"]);
+});
+test("open resolves symlink aliases only to registered Git checkouts", async (t) => {
+  const { dir, repo } = await repository(t);
+  const path = join(dir, "task");
+  await exec("git", ["-C", repo, "worktree", "add", "-b", "daniel/task", path]);
+  const alias = join(dir, "alias");
+  await symlink(path, alias, "dir");
+  const fake = client();
+  const opened = await presentWorktree(fake.herdr, { action: "open", cwd: repo, path: alias });
+  assert.equal(opened.worktree.path, await realpath(path));
+  assert.deepEqual(fake.calls, ["workspace.list", "workspace.create"]);
+  const outside = join(dir, "outside");
+  await mkdir(outside);
+  const unregistered = join(dir, "unregistered");
+  await symlink(outside, unregistered, "dir");
+  await assert.rejects(
+    presentWorktree(fake.herdr, { action: "open", cwd: repo, path: unregistered }),
+    /No matching Git checkout/,
+  );
 });
 test("default and checkout-relative bases resolve against the requested linked checkout", async (t) => {
   const { dir, repo } = await repository(t);

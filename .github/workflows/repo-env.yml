@@ -1,0 +1,56 @@
+name: Repo environment
+
+on:
+  pull_request:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "bin/repo-*"
+      - "config/shell/**"
+      - "config/pi/agent/extensions/pi-herdr/**"
+      - "tests/**"
+      - ".github/workflows/repo-env.yml"
+  push:
+    branches: [main]
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "bin/repo-*"
+      - "config/shell/**"
+      - "config/pi/agent/extensions/pi-herdr/**"
+      - "tests/**"
+      - ".github/workflows/repo-env.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      TMPDIR: /tmp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh direnv
+      - if: runner.os == 'macOS'
+        run: brew install zsh direnv
+      - run: python3 -m unittest discover -s tests -p 'test_repo_env.py'
+      - run: npm ci --ignore-scripts
+        working-directory: config/pi/agent/extensions/pi-herdr
+      - run: npm test && npm run typecheck
+        working-directory: config/pi/agent/extensions/pi-herdr
+      - uses: DeterminateSystems/determinate-nix-action@v3.21.9
+        with:
+          extra-conf: |
+            extra-substituters = https://cache.numtide.com
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
+      - name: Check generated types against pinned Herdr
+        run: nix shell .#herdr --command npm --prefix config/pi/agent/extensions/pi-herdr run check-generated

@@ -19,6 +19,8 @@ import {
   type HandoffDestination,
 } from "./worktree-state.ts";
 import { withHandoffLock } from "./worktree-lock.ts";
+import { LaunchAttempt, managedShellEnvironment } from "./launch-attempt.ts";
+import { handoffLaunchDirectory } from "./worktree-launch.ts";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -143,6 +145,7 @@ async function openWorkspace(
     await herdr.call(
       "workspace.create",
       {
+        env: managedShellEnvironment(),
         cwd: path,
         label: request.label ?? request.branch ?? basename(path),
         focus: request.focus ?? false,
@@ -230,9 +233,10 @@ export async function presentWorktree(
     const listing = (await git(root, ["worktree", "list", "--porcelain", "-z"], request.signal))
       .split("\0\0")
       .map((record) => record.split("\0"));
+    const requested = request.path ? await canonicalPath(resolve(cwd, request.path)) : undefined;
     const match = listing.find((fields) =>
-      request.path
-        ? fields.includes(`worktree ${resolve(cwd, request.path)}`)
+      requested
+        ? fields.includes(`worktree ${requested}`)
         : fields.includes(`branch refs/heads/${request.branch}`),
     );
     const checkout = match?.find((field) => field.startsWith("worktree "))?.slice(9);
@@ -347,6 +351,21 @@ export async function claimCheckout(
         )
           throw new Error("The previous launch is not confirmed stopped or complete.");
         await options.assertAvailable(state.destination);
+        let launch: LaunchAttempt | undefined;
+        try {
+          launch = await LaunchAttempt.open(handoffLaunchDirectory(claimPath, owner.id));
+        } catch (error) {
+          if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+        }
+        if (launch) {
+          const status = await launch.read();
+          if (
+            launch.options.id !== owner.id ||
+            launch.options.cwd !== path ||
+            status.kind !== "exited"
+          )
+            throw new Error(`Previous launch cleanup is ${status.kind}; recovery is required.`);
+        }
         await removeClaim({ ...owner, path: claimPath });
         await mkdir(claimPath);
       } catch (cause) {

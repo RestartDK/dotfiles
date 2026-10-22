@@ -14,7 +14,8 @@ import { basename, resolve } from "node:path";
 
 import { expectResult, HerdrClient, HerdrRequestError } from "./client.ts";
 import { registerTabTitle } from "./tab-title.ts";
-import { parseCommandExit } from "./command-exit.ts";
+import { LaunchAttempt, managedShellEnvironment, type LaunchState } from "./launch-attempt.ts";
+import { observePaneForeground } from "./pane-foreground.ts";
 import { registerWorktreeHandoff } from "./worktree-handoff.ts";
 import { presentWorktree } from "./worktree.ts";
 import {
@@ -35,7 +36,6 @@ type ToolReadSource = "visible" | "recent" | "recent-unwrapped";
 
 const DEFAULT_COMPLETION_TIMEOUT_MS = 600_000;
 const NOTIFIER_MAX_ELAPSED_MS = 6 * 60 * 60 * 1000;
-const SHELL_PROCESS_PATTERN = /^(zsh|bash|fish|sh|starship)$/;
 
 interface ManagedPane {
   paneId: string;
@@ -47,7 +47,7 @@ interface PendingRun {
   paneLabel: string;
   runId: string;
   command: string;
-  marker: string | null;
+  launch: LaunchAttempt;
   startedAt: number;
   abort: AbortController;
   notifying: boolean;
@@ -157,6 +157,13 @@ export default function (pi: ExtensionAPI) {
   const managedPanes = new Map<string, ManagedPane>();
   const aliasOrder: string[] = [];
   const pendingRuns = new Map<string, PendingRun>();
+  const preparing = new Map<string, LaunchAttempt>();
+  const submitting = new Set<string>();
+  const launchSession = new AbortController();
+  pi.on("session_shutdown", async () => {
+    launchSession.abort();
+    await Promise.allSettled([...preparing.values()].map((attempt) => attempt.stop("sourceLost")));
+  });
   const receipts = new CompletionReceipts("herdr");
   let activeContext: ExtensionContext | undefined;
   const lastCommandByPane = new Map<string, string>();
@@ -326,43 +333,64 @@ export default function (pi: ExtensionAPI) {
     return source === "recent-unwrapped" ? "recent_unwrapped" : (source ?? "recent");
   }
 
-  function shellQuote(value: string): string {
-    return `'${value.replace(/'/g, `'\\''`)}'`;
-  }
-
   function selectedPiNetns(): string | null {
     const value = process.env.PI_NETNS_SELECTED?.trim();
     return value ? value : null;
   }
 
-  function piRunDevNetns(): string {
-    const value = process.env.PI_NETNS_RUN_DEV_NETNS?.trim();
-    return value || "/run/current-system/sw/bin/run-dev-netns";
-  }
-
-  function buildEnterPiNetnsCommand(namespace: string): string {
-    const runDevNetns = piRunDevNetns();
-    return [
-      `export PI_NETNS=${shellQuote(namespace)}`,
-      `export PI_NETNS_SELECTED=${shellQuote(namespace)}`,
-      `export PI_NETNS_RUN_DEV_NETNS=${shellQuote(runDevNetns)}`,
-      `exec /run/wrappers/bin/sudo -n -E ${shellQuote(runDevNetns)} ${shellQuote(namespace)} "\${SHELL:-/bin/sh}" -l`,
-    ].join("; ");
-  }
-
-  async function enterPiNetnsInPane(paneId: string, signal?: AbortSignal): Promise<string | null> {
-    const namespace = selectedPiNetns();
-    if (!namespace) return null;
-    expectResult(
-      await herdr.call(
-        "pane.send_input",
-        { pane_id: paneId, text: buildEnterPiNetnsCommand(namespace), keys: ["Enter"] },
-        { signal },
-      ),
-      "ok",
-    );
-    await sleep(800, signal);
-    return namespace;
+  async function submitPrepared(
+    pane: PaneInfo,
+    cwd: string,
+    command: string,
+    signal?: AbortSignal,
+    onUpdate?: (state: LaunchState) => void,
+  ): Promise<LaunchAttempt> {
+    if (submitting.has(pane.pane_id)) throw new Error("This pane already has a launch submission.");
+    submitting.add(pane.pane_id);
+    signal = signal ? AbortSignal.any([signal, launchSession.signal]) : launchSession.signal;
+    let attempt: LaunchAttempt | undefined;
+    try {
+      signal.throwIfAborted();
+      const previous = preparing.get(pane.pane_id);
+      if (previous && (await previous.read()).kind !== "exited")
+        throw new Error(`Previous launch requires recovery at ${previous.directory}.`);
+      if (pane.agent) throw new Error("Use send for agent input; run requires an idle shell.");
+      const info = expectResult(
+        await herdr.call("pane.process_info", { pane_id: pane.pane_id }, { signal }),
+        "pane_process_info",
+      ).process_info;
+      if ((await observePaneForeground(info)).kind !== "idle")
+        throw new Error("The target pane is not an idle shell. No launch input was sent.");
+      signal.throwIfAborted();
+      attempt = await LaunchAttempt.create(cwd, selectedPiNetns());
+      preparing.set(pane.pane_id, attempt);
+      signal.throwIfAborted();
+      expectResult(
+        await herdr.call(
+          "pane.send_input",
+          {
+            pane_id: pane.pane_id,
+            text: attempt.command(["bash", "-c", command]),
+            keys: ["Enter"],
+          },
+          { signal },
+        ),
+        "ok",
+      );
+      await attempt.waitForStartup(signal, onUpdate);
+      return attempt;
+    } catch (error) {
+      if (!attempt) throw error;
+      const stopped = await attempt.stop(signal.aborted ? "cancelled" : "failed");
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} Pane ${pane.pane_id} retained; cleanup ${stopped.kind}. Diagnostics at ${attempt.directory}.`,
+        { cause: error },
+      );
+    } finally {
+      const state = await attempt?.read().catch(() => undefined);
+      if (state?.kind === "exited" || state?.kind === "transferred") preparing.delete(pane.pane_id);
+      submitting.delete(pane.pane_id);
+    }
   }
 
   async function getCurrentPaneInfo(signal?: AbortSignal): Promise<PaneInfo> {
@@ -572,10 +600,7 @@ export default function (pi: ExtensionAPI) {
       "pane_process_info",
     ).process_info;
     const names = (processInfo.foreground_processes ?? []).map((process) => process.name);
-    const shellPid = processInfo.shell_pid;
-    const done =
-      (shellPid != null && processInfo.foreground_process_group_id === shellPid) ||
-      (shellPid == null && names.every((name) => SHELL_PROCESS_PATTERN.test(name)));
+    const done = (await observePaneForeground(processInfo)).kind === "idle";
     return { done, foreground: names.length ? names.join(",") : null };
   }
 
@@ -593,27 +618,16 @@ export default function (pi: ExtensionAPI) {
       { source: "visible", lines, raw: false },
       signal,
     );
-    const exitCode = parseCommandExit(output, pendingRun.marker);
-    if (pendingRun.marker && exitCode == null) {
-      return {
-        kind: "running",
-        foreground: `${foreground ?? "unknown"}; exit marker not printed yet`,
-        elapsedMs,
-      };
-    }
+    const state = await pendingRun.launch.read();
+    if (state.kind !== "exited")
+      return { kind: "running", foreground: `${state.kind}/${state.phase}`, elapsedMs };
+    const exitCode = state.code;
     return {
       kind: "done",
       exitCode,
       elapsedMs,
-      tail: formatReadOutput(stripMarkerLines(output)),
+      tail: formatReadOutput(output),
     };
-  }
-
-  function stripMarkerLines(output: string): string {
-    return output
-      .split("\n")
-      .filter((line) => !/^__pi_rc_(?:[0-9a-f]{6}|[0-9a-f]{32})=\d+\s*$/.test(line))
-      .join("\n");
   }
 
   async function waitForCompletion(
@@ -921,8 +935,8 @@ export default function (pi: ExtensionAPI) {
       "Group related processes in one dedicated work tab. If that workflow needs more panes, use `pane_split` on the root pane alias or another pane in that work tab; never split a pane in Pi's own tab, except a browser preview opened by the browser skill, which belongs beside Pi.",
       "Remember every transient work tab and process you create. Before finishing the task, terminate processes you started and use `tab_close` to tear down their dedicated tabs, unless the user explicitly asked to leave a service or agent running.",
       "Use a new workspace instead of a tab when the work needs a separate Git worktree or broader isolation.",
-      "When you want to submit a line or prompt to a pane, prefer `run` over `send` + `Enter` so text and Enter happen atomically.",
-      "Use `send` only for low-level literal text or key injection when you do not want command-style submission semantics.",
+      "Use `run` for a command in an idle shell. For a prompt to an existing agent, use `send` with the prompt in `text` and `Enter` in `keys` so submission is atomic.",
+      "Use `send` for agent prompts, literal text, or key injection. It does not prepare a shell environment.",
       "Preserve the current UI focus by default. Create work tabs and panes with focus disabled unless the user explicitly asks to view them or the workflow truly requires visible interaction there.",
       "Pane actions like run, read, watch, wait, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. `pane_split` requires a source pane in a dedicated work tab, or Pi's own pane for a browser preview with `allowPiTab`.",
       "Use `herdr` workspace, worktree, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
@@ -937,7 +951,7 @@ export default function (pi: ExtensionAPI) {
       "Use `recent-unwrapped` when you need log matching or reads that ignore soft wrapping. Giving `lines` switches any read or watch to the visible screen, because herdr's recent sources exclude text that has not scrolled off yet.",
       "Pane references can be either friendly aliases you created earlier or real herdr pane ids from `list`.",
       "Use `tab_create` with `pane` set to a friendly root-pane alias as the default way to establish a target for current-project background work. `pane_split` requires an existing pane alias/id outside Pi's tab, unless `allowPiTab` is set for a browser preview, and defaults its direction to right. `run` only works with an existing pane alias or pane id.",
-      "When PI_NETNS_SELECTED is set, newly split panes automatically enter that network namespace before later commands are run in them.",
+      "When PI_NETNS_SELECTED is set, `run` prepares and executes commands in that namespace. Creating a managed pane does not itself claim namespace entry or environment readiness.",
       "Use friendly pane aliases like `server`, `reviewer`, or `tests` so later reads, watches, sends, and cleanup can reuse them across the session.",
       "When starting a fresh pi instance in another pane and the model matters, either specify `--model` explicitly or ask the user which model/provider they want.",
     ],
@@ -1101,6 +1115,7 @@ export default function (pi: ExtensionAPI) {
             await herdr.call(
               "workspace.create",
               {
+                env: managedShellEnvironment(),
                 cwd: absolutePath(params.cwd, requestCwd),
                 label: params.label,
                 focus: params.focus === true,
@@ -1333,6 +1348,7 @@ export default function (pi: ExtensionAPI) {
             await herdr.call(
               "tab.create",
               {
+                env: managedShellEnvironment(),
                 workspace_id: workspaceId,
                 cwd: absolutePath(params.cwd, requestCwd),
                 label: params.label,
@@ -1461,6 +1477,7 @@ export default function (pi: ExtensionAPI) {
             await herdr.call(
               "pane.split",
               {
+                env: managedShellEnvironment(),
                 target_pane_id: sourcePane.pane.pane_id,
                 direction,
                 cwd: absolutePath(params.cwd, requestCwd),
@@ -1473,16 +1490,13 @@ export default function (pi: ExtensionAPI) {
           if (params.newPane) {
             recordAlias(params.newPane, splitPane.pane_id, splitPane.workspace_id);
           }
-          const enteredNetns = await enterPiNetnsInPane(splitPane.pane_id, signal);
-
           const sourceLabel = sourcePane.alias || paneRef;
           const aliasText = params.newPane ? `, aliased as '${params.newPane}'` : "";
-          const netnsText = enteredNetns ? `, entered network namespace '${enteredNetns}'` : "";
           return {
             content: [
               {
                 type: "text",
-                text: `Created pane '${splitPane.pane_id}' by splitting '${sourceLabel}' ${direction}${aliasText}${netnsText}`,
+                text: `Created pane '${splitPane.pane_id}' by splitting '${sourceLabel}' ${direction}${aliasText}`,
               },
             ],
             details: withSnapshot({
@@ -1493,7 +1507,6 @@ export default function (pi: ExtensionAPI) {
               newPaneId: splitPane.pane_id,
               direction,
               workspaceId: splitPane.workspace_id,
-              enteredNetns,
             }),
           };
         }
@@ -1508,17 +1521,25 @@ export default function (pi: ExtensionAPI) {
           const targetPane = await requirePaneRef(paneRef, signal);
           const paneId = targetPane.pane.pane_id;
           const paneLabel = targetPane.alias || paneRef;
-          abortPendingRun(paneId);
+          const launchUpdate = (state: LaunchState) =>
+            onUpdate?.({
+              content: [
+                {
+                  type: "text",
+                  text: `${paneLabel}: ${state.phase} ${Math.floor((Date.now() - state.phaseAt) / 1000)}s`,
+                },
+              ],
+              details: withSnapshot({ action: "run", paneId, launch: state }),
+            });
+          const cwd = targetPane.pane.foreground_cwd ?? targetPane.pane.cwd;
+          if (!cwd)
+            throw new Error(
+              "Herdr did not report the target working directory. No launch input was sent.",
+            );
 
           if (params.wait !== true && params.notify !== true) {
-            expectResult(
-              await herdr.call(
-                "pane.send_input",
-                { pane_id: paneId, text: command, keys: ["Enter"] },
-                { signal },
-              ),
-              "ok",
-            );
+            await submitPrepared(targetPane.pane, cwd, command, signal, launchUpdate);
+            abortPendingRun(paneId);
             lastCommandByPane.set(paneId, command);
 
             await sleep(800, signal);
@@ -1552,30 +1573,27 @@ export default function (pi: ExtensionAPI) {
           const normalizedCommand = command.trim().replace(/;+$/, "").trimEnd();
           if (!normalizedCommand) throw new Error("'command' is required for run");
           const runId = randomBytes(16).toString("hex");
-          const marker = normalizedCommand.endsWith("&") ? null : `__pi_rc_${runId}`;
-          const submittedCommand = marker
-            ? `{ ${normalizedCommand}; }; echo "${marker}=$?"`
-            : normalizedCommand;
+          const startedAt = Date.now();
+          const launch = await submitPrepared(
+            targetPane.pane,
+            cwd,
+            normalizedCommand,
+            signal,
+            launchUpdate,
+          );
+          abortPendingRun(paneId);
           const pendingRun: PendingRun = {
             paneId,
             paneLabel,
             runId,
             command: normalizedCommand,
-            marker,
-            startedAt: Date.now(),
+            launch,
+            startedAt,
             abort: new AbortController(),
             notifying: false,
             origin: completionOrigin(ctx.sessionManager),
           };
 
-          expectResult(
-            await herdr.call(
-              "pane.send_input",
-              { pane_id: paneId, text: submittedCommand, keys: ["Enter"] },
-              { signal },
-            ),
-            "ok",
-          );
           lastCommandByPane.set(paneId, normalizedCommand);
           pendingRuns.set(paneId, pendingRun);
 
@@ -1662,14 +1680,17 @@ export default function (pi: ExtensionAPI) {
 
           const pendingRun = pendingRuns.get(resolved.pane.pane_id);
           if (pendingRun) {
-            const exitCode = parseCommandExit(output, pendingRun.marker);
-            if (exitCode !== null && (await readForeground(pendingRun.paneId, signal)).done) {
+            const status = await pendingRun.launch.read();
+            if (
+              status.kind === "exited" &&
+              (await readForeground(pendingRun.paneId, signal)).done
+            ) {
               abortPendingRun(pendingRun.paneId);
               return doneResult("read", pendingRun, {
                 kind: "done",
-                exitCode,
+                exitCode: status.code,
                 elapsedMs: Date.now() - pendingRun.startedAt,
-                tail: formatReadOutput(stripMarkerLines(output)),
+                tail: formatReadOutput(output),
               });
             }
           }

@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.my.liveConfig;
@@ -6,6 +11,14 @@ let
     inherit source;
     force = true;
   };
+  repoCommands = pkgs.runCommandLocal "repo-exec" { } ''
+    mkdir -p "$out/bin"
+    cp ${../../../bin/repo-exec} "$out/bin/repo-exec"
+    cp ${../../../bin/repo-bash} "$out/bin/repo-bash"
+    substituteInPlace "$out/bin/repo-exec" \
+      --replace-fail 'exec python3 "$(dirname "$0")/../config/shell/repo-launch.py"' 'exec ${pkgs.python3}/bin/python3 ${../../../config/shell/repo-launch.py}'
+    chmod +x "$out/bin/repo-exec" "$out/bin/repo-bash"
+  '';
   goEnv = {
     GOPATH = "${config.xdg.dataHome}/go";
     GOBIN = config.xdg.binHome;
@@ -15,6 +28,11 @@ in
 {
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
+      (lib.mkIf (cfg.groups.shell || cfg.groups.agents || cfg.groups.pi) {
+        home.packages = [ repoCommands ];
+        home.file.".local/bin/repo-exec".source = "${repoCommands}/bin/repo-exec";
+        home.file.".local/bin/repo-bash".source = "${repoCommands}/bin/repo-bash";
+      })
       (lib.mkIf cfg.groups.shell {
         programs.go = {
           enable = true;
@@ -35,6 +53,7 @@ in
               [[ -d "$HOME/.local/share/zsh/site-functions" ]] && fpath=("$HOME/.local/share/zsh/site-functions" $fpath)
             '')
             (lib.mkOrder 1000 ''
+              source "${../../../config/shell/repo-env.zsh}"
               source "${../../../config/shell/zshrc}"
             '')
             (lib.mkOrder 1001 ''

@@ -7,7 +7,12 @@ import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { resolve } from "node:path";
-import { HandoffLaunch, buildPiHandoffCommand, handoffResourceArgs } from "./worktree-launch.ts";
+import {
+  handoffLaunchDirectory,
+  buildPiHandoffCommand,
+  handoffResourceArgs,
+} from "./worktree-launch.ts";
+import { LaunchAttempt, managedShellEnvironment, type StopReason } from "./launch-attempt.ts";
 
 import { expectResult, HerdrRequestError, type HerdrClient } from "./client.ts";
 import {
@@ -28,6 +33,7 @@ import {
   worktreeState,
   type EnterRequest,
   type HandoffDestination,
+  type HandoffRequest,
   type ResolvedHandoffRequest,
   type WorktreeState,
 } from "./worktree-state.ts";
@@ -51,6 +57,10 @@ type LaunchPhase =
       claim: CheckoutClaim;
       destination: HandoffDestination;
     };
+
+type SourceSettlement =
+  | { kind: "transferred" }
+  | { kind: "stopped" | "recoveryRequired"; reason: string };
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -138,6 +148,7 @@ export async function handoffPane(
           cwd: checkout.worktree.path,
           label: "Pi",
           focus: false,
+          env: managedShellEnvironment(),
         },
         { timeoutMs: 5000, signal },
       ),
@@ -156,6 +167,7 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
   const sourceNamespace = process.env.PI_NETNS_SELECTED?.trim();
   let pending: { handoff: ResolvedHandoffRequest; toolCallId: string } | undefined;
   let continuing: Exclude<WorktreeState, { kind: "requested" | "stopped" }> | undefined;
+  let activeLaunch: LaunchAttempt | undefined;
 
   async function request(
     params: EnterRequest,
@@ -198,9 +210,69 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
     );
   }
 
+  function transferSource(
+    handoff: HandoffRequest,
+    destination: HandoffDestination,
+    ctx: ExtensionContext,
+  ): void {
+    if (ctx.sessionManager.getSessionId() !== handoff.sourceSessionId)
+      throw new Error(
+        "Source session changed after successor acceptance. Resume the original source to reconcile ownership.",
+      );
+    const current = worktreeState(ctx.sessionManager.getBranch());
+    if (current?.kind === "transferred" && current.id === handoff.id) return;
+    try {
+      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
+        ...handoff,
+        kind: "transferred",
+        destination,
+      });
+    } finally {
+      ctx.shutdown();
+    }
+  }
+
+  async function settleSourceLaunch(
+    handoff: HandoffRequest,
+    destination: HandoffDestination,
+    reason: string,
+    stopReason: StopReason,
+    attempt?: LaunchAttempt,
+  ): Promise<SourceSettlement> {
+    const readiness = new HandoffReadiness(destination.claimPath, handoff.id);
+    let decision: "ready" | "stopped" | undefined;
+    try {
+      decision = await readiness.decide("stopped");
+    } catch (error) {
+      reason += ` Readiness recovery required (${errorMessage(error)}).`;
+    }
+    if (decision === "ready") return { kind: "transferred" };
+    try {
+      const runtime =
+        attempt?.options.id === handoff.id
+          ? attempt
+          : await LaunchAttempt.open(handoffLaunchDirectory(destination.claimPath, handoff.id));
+      if (runtime.options.id !== handoff.id) throw new Error("Launch ownership changed.");
+      const stopped = await runtime.stop(stopReason);
+      if (stopped.phase === "transferred") return { kind: "transferred" };
+      reason += ` Ownership cleanup ${stopped.kind}.`;
+    } catch (error) {
+      reason += ` Ownership cleanup recoveryRequired (${errorMessage(error)}).`;
+    }
+    if (decision !== "stopped") {
+      try {
+        decision = await readiness.read();
+      } catch (error) {
+        reason += ` Readiness remains uncertain (${errorMessage(error)}).`;
+      }
+    }
+    if (decision === "ready") return { kind: "transferred" };
+    return { kind: decision === "stopped" ? "stopped" : "recoveryRequired", reason };
+  }
+
   async function launch(handoff: ResolvedHandoffRequest, ctx: ExtensionContext): Promise<void> {
     let phase: LaunchPhase = { kind: "preparing" };
-    let launchReceipt: HandoffLaunch | undefined;
+    let launchReceipt: LaunchAttempt | undefined;
     const signal = ctx.signal;
     try {
       signal?.throwIfAborted();
@@ -238,12 +310,20 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
       } satisfies WorktreeState;
       pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, state);
       if (!ctx.model) throw new Error("The selected model is no longer available.");
-      const receipt = new HandoffLaunch(claim.path, handoff.id);
+      const receipt = new LaunchAttempt(handoffLaunchDirectory(claim.path, handoff.id), {
+        id: handoff.id,
+        cwd: destination.path,
+        namespace: sourceNamespace ?? null,
+        claimPath: claim.path,
+        environmentMs: 600_000,
+        startupMs: 60_000,
+        leaseMs: 5_000,
+      });
       await receipt.prepare();
       launchReceipt = receipt;
+      activeLaunch = receipt;
       const command = buildPiHandoffCommand({
         launch: launchReceipt,
-        namespace: sourceNamespace,
         sessionFile: handoff.sourceSessionFile,
         sessionName: pi.getSessionName(),
         successorId: handoff.id,
@@ -296,11 +376,17 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         ),
         "ok",
       );
-      await new HandoffReadiness(claim.path, handoff.id).wait(60_000, signal, launchReceipt);
-      pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
-        ...state,
-        kind: "transferred",
-      });
+      await new HandoffReadiness(claim.path, handoff.id).wait(
+        60_000,
+        signal,
+        launchReceipt,
+        (status) => {
+          ctx.ui.setStatus(
+            "worktree-launch",
+            `${status.phase} ${Math.floor((Date.now() - status.phaseAt) / 1000)}s`,
+          );
+        },
+      );
       try {
         await herdr.call("tab.focus", { tab_id: pane.tab_id }, { timeoutMs: 5000, signal });
       } catch (error) {
@@ -310,18 +396,10 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         `Continuing in ${destination.path}. This Pi will exit; its tab is left intact.`,
         "info",
       );
-      ctx.shutdown();
+      transferSource(handoff, destination, ctx);
     } catch (error) {
       let reason = errorMessage(error);
-      if (launchReceipt && phase.kind !== "preparing") {
-        try {
-          await launchReceipt.capture(herdr, phase.destination.paneId);
-          if (!reason.includes(launchReceipt.directory))
-            reason += ` Diagnostics at ${launchReceipt.directory}.`;
-        } catch (captureError) {
-          reason += ` Could not capture destination output: ${errorMessage(captureError)}. Diagnostics at ${launchReceipt.directory}.`;
-        }
-      }
+      if (launchReceipt) reason += ` Diagnostics at ${launchReceipt.directory}.`;
       if (phase.kind === "reserved") {
         try {
           await releaseCheckout(phase.claim);
@@ -333,29 +411,25 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         }
       }
       if (phase.kind === "submitted") {
-        const { destination } = phase;
-        try {
-          const decision = await new HandoffReadiness(destination.claimPath, handoff.id).decide(
-            "stopped",
-          );
-          if (decision === "ready") {
-            pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
-              ...handoff,
-              kind: "transferred",
-              destination,
-            });
-            ctx.ui.notify(
-              `Successor already acknowledged readiness in ${destination.paneId}. Use that session.`,
-              "warning",
-            );
-            return;
-          }
-        } catch (stopError) {
+        const outcome = await settleSourceLaunch(
+          handoff,
+          phase.destination,
+          reason,
+          signal?.aborted ? "cancelled" : "failed",
+          launchReceipt,
+        );
+        if (outcome.kind === "transferred") {
+          transferSource(handoff, phase.destination, ctx);
+          return;
+        }
+        if (outcome.kind === "recoveryRequired") {
           ctx.ui.notify(
-            `Could not cancel successor readiness: ${errorMessage(stopError)}`,
+            `Handoff ownership recovery required; source remains fenced. ${outcome.reason}`,
             "error",
           );
+          return;
         }
+        reason = outcome.reason;
       }
       stopSource({
         ...handoff,
@@ -364,6 +438,9 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
         reason,
       });
       ctx.ui.notify(`Worktree handoff stopped: ${reason}`, "error");
+    } finally {
+      activeLaunch = undefined;
+      ctx.ui.setStatus("worktree-launch", undefined);
     }
   }
 
@@ -498,20 +575,25 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
     )
       return;
     if (state.kind === "launching") {
-      try {
-        if (
-          (await new HandoffReadiness(state.destination.claimPath, state.id).decide("stopped")) ===
-          "ready"
-        ) {
-          pi.appendEntry<WorktreeState>(HANDOFF_ENTRY, {
-            ...state,
-            kind: "transferred",
-          });
-          return;
-        }
-      } catch (error) {
-        ctx.ui.notify(`Could not cancel successor readiness: ${errorMessage(error)}`, "error");
+      const outcome = await settleSourceLaunch(
+        state,
+        state.destination,
+        reason,
+        "sourceLost",
+        activeLaunch,
+      );
+      if (outcome.kind === "transferred") {
+        transferSource(state, state.destination, ctx);
+        return;
       }
+      if (outcome.kind === "recoveryRequired") {
+        ctx.ui.notify(
+          `Handoff ownership recovery required; source remains fenced. ${outcome.reason}`,
+          "error",
+        );
+        return;
+      }
+      reason = outcome.reason;
     }
     stopSource({
       ...state,
@@ -607,8 +689,12 @@ export function registerWorktreeHandoff(pi: ExtensionAPI, deps: WorktreeHandoffD
       const source = worktreeState(SessionManager.open(state.sourceSessionFile).getBranch());
       if (source?.kind !== "launching" || source.id !== state.id)
         throw new Error("Source stopped before successor readiness.");
+      const attempt = await LaunchAttempt.open(
+        handoffLaunchDirectory(state.destination.claimPath, state.id),
+      );
       const decision = await new HandoffReadiness(state.destination.claimPath, state.id).decide(
         "ready",
+        attempt,
       );
       if (decision !== "ready") throw new Error("Source stopped before successor readiness.");
     } catch (error) {
