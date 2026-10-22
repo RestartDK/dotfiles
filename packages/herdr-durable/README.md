@@ -1,9 +1,11 @@
 # Optional Herdr Durable host
 
-This Linux-only downstream packet patches configured Herdr 0.9.5. It does not
-contact upstream or enable a host. `flake.nix` routes the existing Linux `herdr`
-export through this package. `modules/home/terminal/default.nix` already consumes
-that export, so this is not an unused alternate package. Darwin stays upstream.
+This downstream packet patches configured Herdr 0.9.5. Each configured platform
+uses the same API declaration so generated client types do not depend on the
+build platform. Only the Linux export packages the matching `dstack-host` backend
+and supplies its default executable. Darwin builds the patched API but has no
+packaged backend or runtime qualification. Nothing contacts upstream or enables
+a host. `modules/home/terminal/default.nix` consumes the existing `herdr` export.
 The package asserts version 0.9.5; an input update needs a fresh source review.
 
 The base is `/nix/store/m46g1ic5khx688hfy0mlhcsm7hg1vzs4-source`, not the user's
@@ -19,9 +21,9 @@ set to an absolute JSON file path. This is a boot-time setting, not reloadable
 configuration. The guardian pins the exact configuration bytes with SHA-256 for
 its lifetime. Each child verifies that digest before constructing model runtime or
 opening stores. Any file edit requires an ordinary server restart, including edits
-that keep identity fields unchanged. The package supplies
-`HERDR_DURABLE_HOST_EXECUTABLE` as a default pointing to its matching `dstack-host`. An explicit override is useful for isolated
-offline tests. Missing or invalid optional backends do not stop terminals.
+that keep identity fields unchanged. On Linux, the package supplies
+`HERDR_DURABLE_HOST_EXECUTABLE` as a default pointing to its matching `dstack-host`.
+An explicit override is useful for isolated offline tests. Missing or invalid optional backends do not stop terminals.
 
 Example configuration, with paths chosen for the deployment rather than supplied
 by RPC callers:

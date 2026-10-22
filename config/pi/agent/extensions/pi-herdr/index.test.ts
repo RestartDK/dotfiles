@@ -181,7 +181,12 @@ test("workspace-created aliases and explicit pane IDs work outside Pi's workspac
     assert.deepEqual(result.content, [{ type: "text", text: "remote output" }]);
   }
   assert.deepEqual(
-    f.calls.filter((call) => call.method === "pane.read").map((call) => call.params.pane_id),
+    f.calls
+      .filter((call) => call.method === "pane.read")
+      .map((call) => {
+        assert.ok("pane_id" in call.params);
+        return call.params.pane_id;
+      }),
     [remote.pane_id, remote.pane_id],
   );
 });
@@ -196,7 +201,10 @@ test("closing a remote tab clears its aliases but preserves other remote tabs", 
   });
   assert.ok(
     f.calls.some(
-      (call) => call.method === "pane.list" && call.params.workspace_id === remote.workspace_id,
+      (call) =>
+        call.method === "pane.list" &&
+        "workspace_id" in call.params &&
+        call.params.workspace_id === remote.workspace_id,
     ),
   );
   assert.deepEqual(f.calls.find((call) => call.method === "tab.close")?.params, {
