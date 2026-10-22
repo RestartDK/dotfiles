@@ -4,8 +4,21 @@ import { Type } from "typebox";
 import { limits, parseInput, parseSnapshot, safeText } from "./model.js";
 import { createSnapshot, snapshotPath, stateDirectory } from "./store.js";
 import { ArtifactView } from "./view.js";
+import { ArtifactGallerySession } from "./gallery.js";
 
 export default function (pi: ExtensionAPI): void {
+  const galleries = new ArtifactGallerySession();
+  pi.on("session_start", (_event, ctx) => galleries.attach(ctx));
+  pi.on("session_tree", (_event, ctx) => galleries.attach(ctx));
+  pi.on("session_before_switch", () => galleries.close());
+  pi.on("session_before_fork", () => galleries.close());
+  pi.on("session_before_tree", () => galleries.close());
+  pi.on("session_shutdown", () => galleries.detach());
+  pi.registerCommand("artifacts", {
+    description: "Open the latest saved artifact gallery on this branch",
+    handler: async () => galleries.openLatest(),
+  });
+
   pi.registerTool({
     name: "show_artifacts",
     label: "Show artifacts",
@@ -83,6 +96,8 @@ export default function (pi: ExtensionAPI): void {
           context.lastComponent instanceof ArtifactView
             ? context.lastComponent
             : new ArtifactView(parseSnapshot(result.details), stateDirectory(), theme);
+        view.onOpen = galleries.opener(view.snapshot);
+        view.isCovered = () => galleries.isOpen;
         view.theme = theme;
         view.showImages = context.showImages;
         view.expanded = expanded;

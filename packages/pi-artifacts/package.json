@@ -16,7 +16,8 @@
     "fonts"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "npm run build && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@resvg/resvg-js": "2.6.2",
