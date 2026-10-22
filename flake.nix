@@ -261,7 +261,14 @@
           opnix = inputs.opnix.packages.${system}.default;
           pi = inputs.llm-agents.packages.${system}.pi;
           pi-package-updater = piPackageUpdater;
-          herdr = inputs.llm-agents.packages.${system}.herdr;
+          herdr =
+            if system == linuxSystem then
+              pkgs.callPackage ./packages/herdr-durable/package.nix {
+                upstream = inputs.llm-agents.packages.${system}.herdr;
+                dstack = self.packages.${system}.dstack;
+              }
+            else
+              inputs.llm-agents.packages.${system}.herdr;
           default = traitor;
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) {

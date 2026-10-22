@@ -195,3 +195,40 @@ The proof registers a timer through the native tool, becomes idle, restarts its 
 Isolated real Herdr and Pi sessions verified Jobs pane reuse, the hotkey, stale metadata rejection, TTL expiry, narrow and wide output, offline state, and viewer disconnect. These UI checks used a private typed snapshot fixture.
 
 Independent Sol reviews covered authority, effect recovery, process ownership, and Jobs startup. Mimo and GLM review credentials were unavailable; no routes were substituted. Full `traitor check --no-build` was blocked by an existing private flake input returning 404. Targeted package and quality checks are separate from host activation; no live configuration was applied.
+
+## Optional Herdr-owned file host
+
+`dstack-host <config.json>` is the version-1 stdio backend for the downstream
+Herdr package in `packages/herdr-durable`. It is separate from `dstackd`, PR
+publishing, and `jobs.sqlite`. Nothing enables it automatically.
+
+The host uses official Durable 1.1.0 Harness, SQLite storage, and `read`, `write`,
+and `edit` tools. It does not register bash, PowerShell, codemode, or command
+execution. Filesystem access is trusted-user access, not a sandbox. A model can
+read and write files accessible to that user; a worktree is not a security boundary.
+
+The root index pins deployment, domain, node, and canonical root path. Workspace
+IDs map to SHA-256-named private directories below that root. Their canonical cwd
+cannot change. Each workspace retains one official root conversation. Transport
+boot IDs change on process restart; workspace and conversation IDs do not.
+
+External mutation IDs are host-scoped. An admission journal binds the full parsed
+payload before submission. Changed payloads are rejected, including after restart.
+Recovery resubmits only journaled payloads with their original SDK request IDs.
+Durable owns scheduling and receipts. The journal is not another task scheduler.
+A lost acknowledgement means reconcile with `status` or retry the exact request,
+not invent a new request ID. Retained admission records are never pruned by this host.
+
+Frames are newline-delimited UTF-8 JSON, version 1, at most 256 KiB before the
+newline. The Node reader processes one request at a time and awaits stdout writes.
+There are at most 16 open workspaces and 32 unsettled inputs per workspace.
+Snapshots return the newest 20 entries and `hasMore`; oversized responses return
+`response_too_large`. Admission may already have succeeded when a response fails.
+EOF seals admission and closes every Harness, joining its model/tool invocations
+before releasing SQLite and locks. ModelRuntime 1.1.0 has no separate close API;
+network catalog refresh is disabled and Harness owns active model requests.
+
+Run `npm run build` then `DSTACK_TEST_NODE=<node24> bun test tests/host.test.ts`.
+The process proof imports shipped host modules, uses a faux provider, and includes
+SIGKILL at both admission journal and acknowledgement boundaries. It is not a
+production-model proof.

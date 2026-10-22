@@ -1,0 +1,1029 @@
+--- a/docs/next/api/herdr-api.schema.json
++++ b/docs/next/api/herdr-api.schema.json
+@@ -1759,6 +1759,124 @@
+           ],
+           "type": "object"
+         },
++        "DurableHostOperation": {
++          "oneOf": [
++            {
++              "additionalProperties": false,
++              "properties": {
++                "op": {
++                  "const": "health",
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "op": {
++                  "const": "discover",
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "cwd": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "create",
++                  "type": "string"
++                },
++                "requestId": {
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "requestId",
++                "workspaceId",
++                "cwd"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "op": {
++                  "const": "snapshot",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "content": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "submit",
++                  "type": "string"
++                },
++                "requestId": {
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "requestId",
++                "workspaceId",
++                "content"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "op": {
++                  "const": "status",
++                  "type": "string"
++                },
++                "requestId": {
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "requestId"
++              ],
++              "type": "object"
++            }
++          ]
++        },
+         "EmptyParams": {
+           "type": "object"
+         },
+@@ -4689,6 +4807,22 @@
+             },
+             "params": {
+               "$ref": "#/schemas/request/$defs/PingParams"
++            }
++          },
++          "required": [
++            "method",
++            "params"
++          ],
++          "type": "object"
++        },
++        {
++          "properties": {
++            "method": {
++              "const": "durable.host.v1",
++              "type": "string"
++            },
++            "params": {
++              "$ref": "#/schemas/request/$defs/DurableHostOperation"
+             }
+           },
+           "required": [
+@@ -9169,6 +9303,20 @@
+           "oneOf": [
+             {
+               "properties": {
++                "type": {
++                  "const": "durable_host",
++                  "type": "string"
++                },
++                "value": true
++              },
++              "required": [
++                "type",
++                "value"
++              ],
++              "type": "object"
++            },
++            {
++              "properties": {
+                 "capabilities": {
+                   "anyOf": [
+                     {
+--- a/src/api/schema/response.rs
++++ b/src/api/schema/response.rs
+@@ -42,6 +42,9 @@
+ #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+ #[serde(tag = "type", rename_all = "snake_case")]
+ pub enum ResponseResult {
++    DurableHost {
++        value: serde_json::Value,
++    },
+     Pong {
+         version: String,
+         protocol: u32,
+--- a/src/api/schema/server.rs
++++ b/src/api/schema/server.rs
+@@ -37,3 +37,32 @@
+     #[serde(default)]
+     pub ssh_agent_registration: bool,
+ }
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
++#[serde(
++    tag = "op",
++    rename_all = "lowercase",
++    rename_all_fields = "camelCase",
++    deny_unknown_fields
++)]
++pub enum DurableHostOperation {
++    Health,
++    Discover,
++    Create {
++        request_id: String,
++        workspace_id: String,
++        cwd: String,
++    },
++    Snapshot {
++        workspace_id: String,
++    },
++    Submit {
++        request_id: String,
++        workspace_id: String,
++        content: String,
++    },
++    Status {
++        workspace_id: String,
++        request_id: String,
++    },
++}
+--- a/src/api/schema.rs
++++ b/src/api/schema.rs
+@@ -47,6 +47,8 @@
+ pub enum Method {
+     #[serde(rename = "ping")]
+     Ping(PingParams),
++    #[serde(rename = "durable.host.v1")]
++    DurableHost(DurableHostOperation),
+     #[serde(rename = "server.stop")]
+     ServerStop(EmptyParams),
+     #[serde(rename = "server.live_handoff")]
+--- a/src/api/server.rs
++++ b/src/api/server.rs
+@@ -604,6 +604,7 @@
+ pub(crate) fn api_method_name(method: &Method) -> &'static str {
+     match method {
+         Method::Ping(_) => "ping",
++        Method::DurableHost(_) => "durable.host.v1",
+         Method::ServerStop(_) => "server.stop",
+         Method::ServerLiveHandoff(_) => "server.live_handoff",
+         Method::ServerReloadConfig(_) => "server.reload_config",
+--- a/src/app/api.rs
++++ b/src/app/api.rs
+@@ -953,6 +953,13 @@
+                     "SSH agent registration requires a persistent local JSON API connection",
+                 );
+             }
++            Method::DurableHost(_) => {
++                return responses::encode_error(
++                    request.id,
++                    "durable_host_unavailable",
++                    "Durable host requires the headless server",
++                );
++            }
+             Method::ServerLiveHandoff(_) => {
+                 let response = ErrorResponse {
+                     id: request.id,
+--- a/src/cli/api.rs
++++ b/src/cli/api.rs
+@@ -11,6 +11,7 @@
+     match subcommand {
+         "schema" => api_schema(&args[1..]),
+         "snapshot" => api_snapshot(&args[1..]),
++        "durable" => api_durable(&args[1..]),
+         "help" | "--help" | "-h" => {
+             print_api_help();
+             Ok(0)
+@@ -51,6 +52,22 @@
+         }
+     }
+     Ok(0)
++}
++
++fn api_durable(args: &[String]) -> std::io::Result<i32> {
++    let [operation] = args else {
++        eprintln!("usage: herdr api durable '<operation-json>'");
++        return Ok(2);
++    };
++    if operation.len() > 128 * 1024 {
++        eprintln!("durable operation exceeds byte limit");
++        return Ok(2);
++    }
++    let operation = serde_json::from_str(operation)?;
++    super::print_response(&super::send_request(&Request {
++        id: "cli:api:durable".into(),
++        method: Method::DurableHost(operation),
++    })?)
+ }
+
+ fn api_snapshot(args: &[String]) -> std::io::Result<i32> {
+@@ -99,6 +116,7 @@
+ fn print_api_help() {
+     eprintln!("herdr api commands:");
+     eprintln!("  herdr api snapshot");
++    eprintln!("  herdr api durable '<operation-json>'");
+     eprintln!("  herdr api schema [--json | --output PATH]");
+ }
+
+--- /dev/null
++++ b/src/server/durable_host.rs
+@@ -0,0 +1,613 @@
++use std::io::{self, Read};
++use std::path::PathBuf;
++use std::process::Stdio;
++use std::sync::{Arc, Mutex};
++use std::time::Duration;
++
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
++use tokio::process::{Child, ChildStdin, ChildStdout, Command};
++use tokio::sync::{mpsc, oneshot};
++use tokio::time::{timeout, Instant};
++
++use crate::api::schema::{
++    DurableHostOperation, ErrorBody, ErrorResponse, ResponseResult, SuccessResponse,
++};
++use crate::api::ApiRequestMessage;
++
++const VERSION: u32 = 1;
++const MAX_FRAME_BYTES: usize = 256 * 1024;
++const QUEUE_CAPACITY: usize = 16;
++const MAX_ATTEMPTS: u32 = 3;
++const RPC_TIMEOUT: Duration = Duration::from_secs(2);
++const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
++
++#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
++#[serde(rename_all = "camelCase", deny_unknown_fields)]
++struct Identity {
++    deployment_id: String,
++    domain: Domain,
++    node_id: String,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
++#[serde(rename_all = "lowercase")]
++enum Domain {
++    Work,
++    Personal,
++}
++
++#[derive(Deserialize)]
++struct HostConfig {
++    identity: Identity,
++}
++
++struct BootConfig {
++    path: PathBuf,
++    identity: Identity,
++    sha256: String,
++}
++
++#[derive(Debug, Deserialize, Serialize)]
++#[serde(rename_all = "camelCase", deny_unknown_fields)]
++struct Ready {
++    v: u32,
++    #[serde(rename = "type")]
++    kind: String,
++    identity: Identity,
++    boot_id: String,
++    max_frame_bytes: usize,
++    max_in_flight: usize,
++    tools: Vec<String>,
++}
++
++impl Ready {
++    fn verify(&self, identity: &Identity) -> io::Result<()> {
++        if self.v != VERSION
++            || self.kind != "ready"
++            || &self.identity != identity
++            || self.boot_id.is_empty()
++            || self.boot_id.len() > 200
++            || self.max_frame_bytes != MAX_FRAME_BYTES
++            || self.max_in_flight != 1
++            || self.tools != ["read", "write", "edit"]
++        {
++            return Err(io::Error::other("durable host readiness contract mismatch"));
++        }
++        Ok(())
++    }
++}
++
++#[derive(Debug, Serialize)]
++#[serde(tag = "phase", rename_all = "snake_case")]
++enum Status {
++    Disabled,
++    Starting { attempt: u32 },
++    Ready { ready: Ready },
++    Unavailable { attempts: u32, reason: String },
++    Stopped,
++}
++
++struct Pending {
++    message: ApiRequestMessage,
++    operation: DurableHostOperation,
++    deadline: Instant,
++}
++
++pub(crate) struct Guardian {
++    status: Arc<Mutex<Status>>,
++    requests: Option<mpsc::Sender<Pending>>,
++    stop: Option<oneshot::Sender<()>>,
++    thread: Option<std::thread::JoinHandle<()>>,
++}
++
++impl Default for Guardian {
++    fn default() -> Self {
++        Self {
++            status: Arc::new(Mutex::new(Status::Disabled)),
++            requests: None,
++            stop: None,
++            thread: None,
++        }
++    }
++}
++
++fn set_status(status: &Mutex<Status>, value: Status) {
++    match status.lock() {
++        Ok(mut current) => *current = value,
++        Err(error) => *error.into_inner() = value,
++    }
++}
++
++impl Guardian {
++    pub(crate) fn from_environment() -> Self {
++        let Some(config_path) = std::env::var_os("HERDR_DURABLE_HOST_CONFIG") else {
++            return Self::default();
++        };
++        let mut guardian = Self::default();
++        set_status(&guardian.status, Status::Starting { attempt: 1 });
++        let config_path = PathBuf::from(config_path);
++        let loaded = (|| -> io::Result<BootConfig> {
++            if !config_path.is_absolute() {
++                return Err(io::Error::other(
++                    "durable host config path must be absolute",
++                ));
++            }
++            if !std::fs::metadata(&config_path)?.is_file() {
++                return Err(io::Error::other(
++                    "durable host config must be a regular file",
++                ));
++            }
++            let mut bytes = Vec::new();
++            std::fs::File::open(&config_path)?
++                .take(65537)
++                .read_to_end(&mut bytes)?;
++            if bytes.len() > 65536 {
++                return Err(io::Error::other("durable host config is too large"));
++            }
++            let config: HostConfig = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
++            Ok(BootConfig {
++                path: config_path.clone(),
++                identity: config.identity,
++                sha256: format!("{:x}", Sha256::digest(&bytes)),
++            })
++        })();
++        let config = match loaded {
++            Ok(config) => config,
++            Err(error) => {
++                set_status(
++                    &guardian.status,
++                    Status::Unavailable {
++                        attempts: 0,
++                        reason: error.to_string(),
++                    },
++                );
++                return guardian;
++            }
++        };
++        let executable = std::env::var_os("HERDR_DURABLE_HOST_EXECUTABLE")
++            .unwrap_or_else(|| "dstack-host".into());
++        let (requests, receiver) = mpsc::channel(QUEUE_CAPACITY);
++        let (stop, stopped) = oneshot::channel();
++        let status = guardian.status.clone();
++        set_status(&status, Status::Starting { attempt: 1 });
++        let spawned = std::thread::Builder::new()
++            .name("herdr-durable-host".into())
++            .spawn(move || {
++                let runtime = tokio::runtime::Builder::new_current_thread()
++                    .enable_all()
++                    .build();
++                match runtime {
++                    Ok(runtime) => runtime.block_on(supervise(
++                        executable.into(),
++                        config,
++                        status,
++                        receiver,
++                        stopped,
++                    )),
++                    Err(error) => set_status(
++                        &status,
++                        Status::Unavailable {
++                            attempts: 0,
++                            reason: error.to_string(),
++                        },
++                    ),
++                }
++            });
++        match spawned {
++            Ok(thread) => {
++                guardian.requests = Some(requests);
++                guardian.stop = Some(stop);
++                guardian.thread = Some(thread);
++            }
++            Err(error) => set_status(
++                &guardian.status,
++                Status::Unavailable {
++                    attempts: 0,
++                    reason: error.to_string(),
++                },
++            ),
++        }
++        guardian
++    }
++
++    #[cfg(test)]
++    pub(super) fn enabled_for_test() -> Self {
++        let guardian = Self::default();
++        set_status(&guardian.status, Status::Starting { attempt: 1 });
++        guardian
++    }
++
++    pub(crate) fn enabled(&self) -> bool {
++        !matches!(
++            *self
++                .status
++                .lock()
++                .unwrap_or_else(|error| error.into_inner()),
++            Status::Disabled
++        )
++    }
++
++    pub(crate) fn handle(&self, message: ApiRequestMessage, operation: DurableHostOperation) {
++        if matches!(operation, DurableHostOperation::Health) {
++            let status = self
++                .status
++                .lock()
++                .unwrap_or_else(|error| error.into_inner());
++            respond(
++                message,
++                Ok(json!({"status": *status, "method": "durable.host.v1",
++                "operations": if matches!(*status, Status::Ready { .. }) { vec!["create", "discover", "snapshot", "submit", "status"] } else { vec![] },
++                "queueCapacity": QUEUE_CAPACITY})),
++            );
++            return;
++        }
++        let status = self
++            .status
++            .lock()
++            .unwrap_or_else(|error| error.into_inner());
++        let ready = matches!(*status, Status::Ready { .. });
++        if !ready {
++            respond(
++                message,
++                Err(failure(
++                    "durable_host_unavailable",
++                    "Optional durable host is not ready",
++                )),
++            );
++            return;
++        }
++        let Some(requests) = &self.requests else {
++            respond(
++                message,
++                Err(failure(
++                    "durable_host_unavailable",
++                    "Optional durable host is not running",
++                )),
++            );
++            return;
++        };
++        let request = Pending {
++            message,
++            operation,
++            deadline: Instant::now() + Duration::from_secs(4),
++        };
++        if let Err(error) = requests.try_send(request) {
++            let (request, code) = match error {
++                mpsc::error::TrySendError::Full(request) => (request, "durable_host_busy"),
++                mpsc::error::TrySendError::Closed(request) => (request, "durable_host_unavailable"),
++            };
++            respond(
++                request.message,
++                Err(failure(code, "Durable host request was not sent")),
++            );
++        }
++    }
++
++    pub(crate) fn stop(&mut self) {
++        self.requests.take();
++        if let Some(stop) = self.stop.take() {
++            let _ = stop.send(());
++        }
++        if let Some(thread) = self.thread.take() {
++            if thread.join().is_err() {
++                tracing::warn!("durable host guardian panicked");
++            }
++        }
++    }
++}
++
++impl Drop for Guardian {
++    fn drop(&mut self) {
++        self.stop();
++    }
++}
++
++fn failure(code: &str, message: &str) -> ErrorBody {
++    ErrorBody {
++        code: code.into(),
++        message: message.into(),
++    }
++}
++
++fn respond(message: ApiRequestMessage, result: Result<Value, ErrorBody>) {
++    let encoded = match result {
++        Ok(value) => serde_json::to_string(&SuccessResponse {
++            id: message.request.id,
++            result: ResponseResult::DurableHost { value },
++        }),
++        Err(error) => serde_json::to_string(&ErrorResponse {
++            id: message.request.id,
++            error,
++        }),
++    };
++    if let Ok(encoded) = encoded {
++        let _ = message.respond_to.send(encoded);
++    }
++}
++
++fn encode_request(id: &str, operation: &DurableHostOperation) -> io::Result<Vec<u8>> {
++    let mut frame = serde_json::to_vec(&json!({"v": VERSION, "id": id, "operation": operation}))?;
++    if frame.len() > MAX_FRAME_BYTES {
++        return Err(io::Error::other("host request exceeds byte limit"));
++    }
++    frame.push(b'\n');
++    Ok(frame)
++}
++
++struct Worker {
++    child: Child,
++    input: Option<ChildStdin>,
++    output: BufReader<ChildStdout>,
++}
++
++impl Worker {
++    fn spawn(executable: &PathBuf, config: &BootConfig) -> io::Result<Self> {
++        let mut child = Command::new(executable)
++            .arg(&config.path)
++            .env("HERDR_DURABLE_HOST_CONFIG_SHA256", &config.sha256)
++            .stdin(Stdio::piped())
++            .stdout(Stdio::piped())
++            .stderr(Stdio::inherit())
++            .kill_on_drop(true)
++            .spawn()?;
++        let input = child
++            .stdin
++            .take()
++            .ok_or_else(|| io::Error::other("missing host stdin"))?;
++        let output = child
++            .stdout
++            .take()
++            .ok_or_else(|| io::Error::other("missing host stdout"))?;
++        Ok(Self {
++            child,
++            input: Some(input),
++            output: BufReader::new(output),
++        })
++    }
++
++    async fn exchange(&mut self, id: &str, frame: &[u8]) -> io::Result<Result<Value, ErrorBody>> {
++        self.input
++            .as_mut()
++            .ok_or_else(|| io::Error::other("host stdin closed"))?
++            .write_all(frame)
++            .await?;
++        let response: Reply = serde_json::from_slice(&read_frame(&mut self.output).await?)?;
++        match response {
++            Reply::Success {
++                v,
++                id: reply_id,
++                result,
++            } if v == VERSION && reply_id == id => Ok(Ok(result)),
++            Reply::Failure {
++                v,
++                id: reply_id,
++                error,
++            } if v == VERSION && reply_id == id => Ok(Err(error)),
++            _ => Err(io::Error::other(
++                "host response version or request ID mismatch",
++            )),
++        }
++    }
++
++    async fn close(&mut self) {
++        self.input.take();
++        if timeout(SHUTDOWN_TIMEOUT, self.child.wait()).await.is_err() {
++            tracing::warn!("durable host exceeded graceful shutdown deadline; killing and reaping");
++            let _ = self.child.kill().await;
++            let _ = self.child.wait().await;
++        }
++    }
++}
++
++#[derive(Deserialize)]
++#[serde(untagged, deny_unknown_fields)]
++enum Reply {
++    Success {
++        v: u32,
++        id: String,
++        result: Value,
++    },
++    Failure {
++        v: u32,
++        id: String,
++        error: ErrorBody,
++    },
++}
++
++async fn read_frame<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> io::Result<Vec<u8>> {
++    let mut frame = Vec::new();
++    loop {
++        let bytes = reader.fill_buf().await?;
++        if bytes.is_empty() {
++            return Err(io::Error::new(
++                io::ErrorKind::UnexpectedEof,
++                "host stdout closed",
++            ));
++        }
++        let newline = bytes.iter().position(|byte| *byte == b'\n');
++        let count = newline.unwrap_or(bytes.len());
++        if frame.len() + count > MAX_FRAME_BYTES {
++            return Err(io::Error::other("host frame exceeds byte limit"));
++        }
++        frame.extend_from_slice(&bytes[..count]);
++        reader.consume(count + usize::from(newline.is_some()));
++        if newline.is_some() {
++            return Ok(frame);
++        }
++    }
++}
++
++async fn supervise(
++    executable: PathBuf,
++    config: BootConfig,
++    status: Arc<Mutex<Status>>,
++    mut requests: mpsc::Receiver<Pending>,
++    mut stop: oneshot::Receiver<()>,
++) {
++    let mut sequence = 0u64;
++    for attempt in 1..=MAX_ATTEMPTS {
++        set_status(&status, Status::Starting { attempt });
++        let outcome = match Worker::spawn(&executable, &config) {
++            Err(error) => error.to_string(),
++            Ok(mut worker) => {
++                let outcome = tokio::select! {
++                    _ = &mut stop => { worker.close().await; set_status(&status, Status::Stopped); return; }
++                    result = timeout(Duration::from_secs(10), read_frame(&mut worker.output)) => {
++                        match result {
++                            Ok(Ok(bytes)) => serde_json::from_slice::<Ready>(&bytes).map_err(io::Error::other).and_then(|ready| { ready.verify(&config.identity)?; Ok(ready) }),
++                            Ok(Err(error)) => Err(error),
++                            Err(error) => Err(io::Error::other(error)),
++                        }
++                    }
++                };
++                let reason = match outcome {
++                    Err(error) => error.to_string(),
++                    Ok(ready) => {
++                        set_status(&status, Status::Ready { ready });
++                        loop {
++                            tokio::select! {
++                                _ = &mut stop => { worker.close().await; set_status(&status, Status::Stopped); return; }
++                                exited = worker.child.wait() => { break format!("host exited: {exited:?}"); }
++                                request = requests.recv() => {
++                                    let Some(request) = request else { worker.close().await; set_status(&status, Status::Stopped); return; };
++                                    if Instant::now() >= request.deadline {
++                                        respond(request.message, Err(failure("durable_host_busy", "Request expired before sending")));
++                                        continue;
++                                    }
++                                    sequence += 1;
++                                    let id = sequence.to_string();
++                                    let frame = match encode_request(&id, &request.operation) {
++                                        Ok(frame) => frame,
++                                        Err(error) => {
++                                            respond(request.message, Err(failure("invalid_request", &error.to_string())));
++                                            continue;
++                                        }
++                                    };
++                                    let result = tokio::select! {
++                                        _ = &mut stop => {
++                                            respond(request.message, Err(failure("durable_host_ack_lost", "Host stopped; reconcile by request ID before retrying")));
++                                            worker.close().await; set_status(&status, Status::Stopped); return;
++                                        }
++                                        result = timeout(RPC_TIMEOUT.min(request.deadline.saturating_duration_since(Instant::now())), worker.exchange(&id, &frame)) => result,
++                                    };
++                                    match result {
++                                        Ok(Ok(response)) => respond(request.message, response),
++                                        error => {
++                                            respond(request.message, Err(failure("durable_host_ack_lost", "Acknowledgement lost; reconcile by request ID before retrying")));
++                                            break format!("host RPC failed: {error:?}");
++                                        }
++                                    }
++                                }
++                            }
++                        }
++                    }
++                };
++                set_status(
++                    &status,
++                    Status::Unavailable {
++                        attempts: attempt,
++                        reason: reason.clone(),
++                    },
++                );
++                while let Ok(request) = requests.try_recv() {
++                    respond(
++                        request.message,
++                        Err(failure(
++                            "durable_host_unavailable",
++                            "Host exited before sending request",
++                        )),
++                    );
++                }
++                worker.close().await;
++                reason
++            }
++        };
++        tracing::warn!(attempt, reason = %outcome, "durable host unavailable");
++        set_status(
++            &status,
++            Status::Unavailable {
++                attempts: attempt,
++                reason: outcome,
++            },
++        );
++        while let Ok(request) = requests.try_recv() {
++            respond(
++                request.message,
++                Err(failure(
++                    "durable_host_unavailable",
++                    "Host exited before sending request",
++                )),
++            );
++        }
++        if attempt < MAX_ATTEMPTS {
++            tokio::select! {
++                _ = &mut stop => { set_status(&status, Status::Stopped); return; }
++                _ = tokio::time::sleep(Duration::from_millis(250 * u64::from(attempt))) => {}
++            }
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[tokio::test]
++    async fn durable_host_frames_are_bounded_and_require_newlines() {
++        let mut exact = vec![b'x'; MAX_FRAME_BYTES];
++        exact.push(b'\n');
++        assert_eq!(
++            read_frame(&mut exact.as_slice()).await.unwrap().len(),
++            MAX_FRAME_BYTES
++        );
++        assert!(read_frame(&mut vec![b'x'; MAX_FRAME_BYTES + 1].as_slice())
++            .await
++            .is_err());
++        assert!(read_frame(&mut b"{}".as_slice()).await.is_err());
++        assert!(read_frame(&mut b"".as_slice()).await.is_err());
++    }
++
++    #[test]
++    fn durable_host_request_size_is_checked_before_io() {
++        let oversized = DurableHostOperation::Submit {
++            workspace_id: "workspace".into(),
++            request_id: "retry".into(),
++            content: "x".repeat(MAX_FRAME_BYTES),
++        };
++        assert!(encode_request("1", &oversized).is_err());
++        let valid = DurableHostOperation::Discover;
++        let frame = encode_request("2", &valid).unwrap();
++        assert_eq!(frame.last(), Some(&b'\n'));
++    }
++
++    #[test]
++    fn durable_host_ready_requires_fixed_identity_version_and_file_tools() {
++        let identity = Identity {
++            deployment_id: "proof".into(),
++            domain: Domain::Work,
++            node_id: "node".into(),
++        };
++        let mut ready = Ready {
++            v: VERSION,
++            kind: "ready".into(),
++            identity: identity.clone(),
++            boot_id: "boot".into(),
++            max_frame_bytes: MAX_FRAME_BYTES,
++            max_in_flight: 1,
++            tools: vec!["read".into(), "write".into(), "edit".into()],
++        };
++        ready.verify(&identity).unwrap();
++        ready.identity.domain = Domain::Personal;
++        assert!(ready.verify(&identity).is_err());
++        ready.identity = identity.clone();
++        ready.v = 2;
++        assert!(ready.verify(&identity).is_err());
++        ready.v = VERSION;
++        ready.tools.push("bash".into());
++        assert!(ready.verify(&identity).is_err());
++        assert!(!Guardian::default().enabled());
++    }
++}
+--- a/src/server/headless/bootstrap.rs
++++ b/src/server/headless/bootstrap.rs
+@@ -84,6 +84,8 @@
+             Err(err) => return Err(err),
+         };
+
++        server.durable_host = crate::server::durable_host::Guardian::from_environment();
++
+         info!(
+             api_socket = %api::socket_path().display(),
+             client_socket = %client_socket_path().display(),
+@@ -133,6 +135,11 @@
+ #[cfg(unix)]
+ fn run_handoff_import_server(socket_path: &Path, token: &str) -> io::Result<()> {
+     let loaded_config = config::Config::load();
++    if std::env::var_os("HERDR_DURABLE_HOST_CONFIG").is_some() {
++        return Err(io::Error::other(
++            "durable host does not support live handoff import",
++        ));
++    }
+     let mut received = crate::server::handoff::receive(socket_path, token)?;
+     crate::server::handoff::log_import_result(received.manifest.panes.len());
+
+--- a/src/server/headless/lifecycle.rs
++++ b/src/server/headless/lifecycle.rs
+@@ -26,6 +26,9 @@
+         &mut self,
+         params: crate::api::schema::ServerLiveHandoffParams,
+     ) -> io::Result<()> {
++        if self.durable_host.enabled() {
++            return Err(io::Error::other("live handoff is unavailable while the durable host is enabled; use an ordinary restart"));
++        }
+         info!("starting live handoff");
+         let import_exe = params.import_exe.as_deref().map(std::path::PathBuf::from);
+         let socket_path = crate::server::handoff::handoff_socket_path();
+@@ -335,6 +338,7 @@
+     /// close client connections, remove socket files, and clean up.
+     pub(super) async fn complete_shutdown(&mut self) -> io::Result<()> {
+         info!("completing server shutdown");
++        self.durable_host.stop();
+         self.reject_late_client_connections().await;
+
+         // Send ServerShutdown to all remaining clients.
+--- a/src/server/headless/tests/mod.rs
++++ b/src/server/headless/tests/mod.rs
+@@ -99,6 +99,7 @@
+     let headless_size = app.state.headless_size;
+
+     HeadlessServer {
++        durable_host: Default::default(),
+         app,
+         #[cfg(unix)]
+         api_tx: None,
+@@ -8333,3 +8334,22 @@
+         bypass_lines.join("\n  ")
+     );
+ }
++
++#[cfg(unix)]
++#[test]
++fn durable_host_refuses_handoff_before_runtime_or_client_mutation() {
++    let mut server = test_headless_server();
++    server.durable_host = crate::server::durable_host::Guardian::enabled_for_test();
++    let clients = server.clients.len();
++    let terminals = server.app.terminal_runtimes.len();
++    let persistence = server.app.policy.persist_session;
++    assert!(server
++        .perform_live_handoff(Default::default())
++        .unwrap_err()
++        .to_string()
++        .contains("durable host"));
++    assert_eq!(server.clients.len(), clients);
++    assert_eq!(server.app.terminal_runtimes.len(), terminals);
++    assert_eq!(server.app.policy.persist_session, persistence);
++    assert!(!server.handoff_in_progress);
++}
+--- a/src/server/headless.rs
++++ b/src/server/headless.rs
+@@ -190,6 +190,7 @@
+
+ /// The headless server — runs the herdr event loop without a real terminal.
+ pub struct HeadlessServer {
++    durable_host: crate::server::durable_host::Guardian,
+     app: app::App,
+     #[cfg(unix)]
+     api_tx: Option<api::ApiRequestSender>,
+@@ -349,6 +350,7 @@
+         #[cfg(not(unix))]
+         let _ = api_tx;
+         Ok(Self {
++            durable_host: Default::default(),
+             app,
+             #[cfg(unix)]
+             api_tx,
+@@ -2918,6 +2920,12 @@
+             return false;
+         }
+
++        if let api::schema::Method::DurableHost(operation) = &msg.request.method {
++            let operation = operation.clone();
++            self.durable_host.handle(msg, operation);
++            return false;
++        }
++
+         let frozen_alt_screen_read = match self.alt_screen_read_conflict(&msg.request) {
+             AltScreenReadConflict::None => None,
+             AltScreenReadConflict::Frozen(snapshot) => Some(snapshot),
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -9,6 +9,7 @@
+ pub(crate) mod client_transport;
+ pub(crate) mod clients;
+ pub(crate) mod clipboard_image;
++pub(crate) mod durable_host;
+ #[cfg(unix)]
+ pub(crate) mod handoff;
+ pub mod headless;
