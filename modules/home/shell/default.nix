@@ -11,14 +11,7 @@ let
     inherit source;
     force = true;
   };
-  repoCommands = pkgs.runCommandLocal "repo-exec" { } ''
-    mkdir -p "$out/bin"
-    cp ${../../../bin/repo-exec} "$out/bin/repo-exec"
-    cp ${../../../bin/repo-bash} "$out/bin/repo-bash"
-    substituteInPlace "$out/bin/repo-exec" \
-      --replace-fail 'exec python3 "$(dirname "$0")/../config/shell/repo-launch.py"' 'exec ${pkgs.python3}/bin/python3 ${../../../config/shell/repo-launch.py}'
-    chmod +x "$out/bin/repo-exec" "$out/bin/repo-bash"
-  '';
+  repoCommands = pkgs.callPackage ../../../packages/repo-exec { };
   goEnv = {
     GOPATH = "${config.xdg.dataHome}/go";
     GOBIN = config.xdg.binHome;

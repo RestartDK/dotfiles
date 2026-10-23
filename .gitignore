@@ -26,6 +26,7 @@ node_modules/
 **/automatic_backups/
 **/__pycache__/
 **/*.pyc
+/packages/repo-exec/target/
 /packages/pi-artifacts/dist/
 /packages/pi-artifacts/fonts/
 

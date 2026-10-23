@@ -252,6 +252,16 @@ test.each(["mistral/mistral-large", "google/gemini-3-pro"])(
   },
 );
 
+test.each(["settings.json", "settings-work.json"])(
+  "%s uses the native SDK shell default before activation",
+  (settingsFile) => {
+    const settings: unknown = JSON.parse(
+      readFileSync(join(import.meta.dir, "../../config/pi/agent", settingsFile), "utf8"),
+    );
+    expect(settings).not.toHaveProperty("shellPath");
+  },
+);
+
 test.each([
   ["settings.json", "personal"],
   ["settings-work.json", "work"],

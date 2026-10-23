@@ -49,6 +49,75 @@ let
     export function parseFrontmatter() { throw new Error("pi-coding-agent is a resolution stub"); }
     EOF
   '';
+  repoCommands = pkgs.callPackage ../packages/repo-exec { };
+  settingsChecks =
+    pkgs.lib.concatMapStringsSep "\n"
+      (
+        { profile, file }:
+        let
+          home =
+            (inputs.home-manager.lib.homeManagerConfiguration {
+              inherit pkgs;
+              extraSpecialArgs.dotfilesInputs = inputs;
+              modules = [
+                ../modules/home/live-config-options.nix
+                ../modules/home/shell
+                ../modules/home/agents
+                {
+                  my.ai.profile = profile;
+                  my.liveConfig = {
+                    enable = true;
+                    piSettingsFile = file;
+                    groups.pi = true;
+                  };
+                  home = {
+                    username = "profile-test";
+                    homeDirectory = "/home/profile-test";
+                    stateVersion = "26.05";
+                  };
+                }
+              ];
+            }).config;
+          settings = home.home.file.".pi/agent/settings.json".source;
+          settingsClosure = pkgs.closureInfo { rootPaths = [ settings ]; };
+          base = ../. + "/${file}";
+          baseSettings = builtins.fromJSON (builtins.readFile base);
+          usesPackagedShell = !(baseSettings ? shellPath);
+          expectedShell = baseSettings.shellPath or "${repoCommands}/bin/repo-bash";
+        in
+        assert home.home.file.".local/bin/repo-bash".source == "${repoCommands}/bin/repo-bash";
+        assert home.home.file.".local/bin/repo-exec".source == "${repoCommands}/bin/repo-exec";
+        assert builtins.any (package: package.drvPath == repoCommands.drvPath) home.home.packages;
+        ''
+          echo "Checking generated ${profile} settings from ${file}"
+          jq --exit-status --arg shell "${expectedShell}" \
+            '.shellPath == $shell' ${settings}
+          jq --exit-status --slurpfile base ${base} \
+            'del(.shellPath) == ($base[0] | del(.shellPath))' ${settings}
+          ${pkgs.lib.optionalString usesPackagedShell ''
+            test -x "$(jq --raw-output '.shellPath' ${settings})"
+            grep -Fx -- "${repoCommands}" ${settingsClosure}/store-paths
+          ''}
+          if grep -Fx -- "${builtins.unsafeDiscardStringContext self.outPath}" ${settingsClosure}/store-paths; then
+            echo "Pi settings closure includes the whole flake source" >&2
+            exit 1
+          fi
+        ''
+      )
+      [
+        {
+          profile = "personal";
+          file = "config/pi/agent/settings.json";
+        }
+        {
+          profile = "work";
+          file = "config/pi/agent/settings-work.json";
+        }
+        {
+          profile = "personal";
+          file = "tests/agent-profiles/settings-override.json";
+        }
+      ];
   personalMcp = builtins.fromJSON (builtins.readFile ../config/pi/agent/mcp.json);
   workMcp = builtins.fromJSON (builtins.readFile ../config/pi/agent/mcp-work.json);
   owners = [
@@ -125,11 +194,13 @@ pkgs.runCommand "agent-profile-tests"
   {
     nativeBuildInputs = [
       pkgs.bun
+      pkgs.jq
       self.packages.${pkgs.stdenv.hostPlatform.system}.pi
     ];
   }
   ''
     export HOME=$TMPDIR
+    ${settingsChecks}
     cp -R ${../config} $TMPDIR/config
     cp -R ${../tests} $TMPDIR/tests
     cp -R ${piAiStub}/node_modules $TMPDIR/

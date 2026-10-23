@@ -168,7 +168,11 @@ test("cancellation during authorization validation cannot grant a generic payloa
   const running = f.start();
   await assert.rejects(f.launch.waitForStartup(abort.signal), /Cleanup exited/);
   await running.exited;
-  await assert.rejects(readFile(join(f.launch.directory, "transferred")), { code: "ENOENT" });
+  assert.equal(
+    await readFile(join(f.launch.directory, "transferred"), "utf8"),
+    `stopped:${f.launch.options.id}`,
+  );
+  await assert.rejects(f.launch.transfer(), /Launch authorization ownership changed/);
   await assert.rejects(readFile(join(f.directory, "payload")), { code: "ENOENT" });
 });
 
