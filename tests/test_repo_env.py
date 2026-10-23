@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 import shutil
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
@@ -14,7 +15,7 @@ import termios
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / "bin/repo-exec"
+LAUNCHER = Path(os.environ.get("REPO_EXEC", ROOT / "bin/repo-exec"))
 ZSH = shutil.which("zsh")
 DIRENV = shutil.which("direnv")
 
@@ -124,7 +125,39 @@ class RepoEnvironmentTests(unittest.TestCase):
     def test_failed_status_publication_does_not_strand_generic_authorization(self):
         self.check_publication_failure(launch="generic", failure="once")
 
-    def check_publication_failure(self, *, launch, failure):
+    def test_persistent_status_failure_does_not_trap_a_completed_payload(self):
+        self.check_publication_failure(launch="handoff", failure="through-exit")
+
+    def test_stopping_closes_generic_authorization_before_teardown(self):
+        control, _, attempt_id = self.prepare_attempt(launch="generic")
+        marker = self.home / "must-not-start"
+        child = subprocess.Popen(
+            [str(LAUNCHER), "touch", str(marker)], cwd=self.repo,
+            env={**self.env, "REPO_LAUNCH_DIRECTORY": str(control)},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            deadline = time.monotonic() + 5
+            while True:
+                status = control / "status"
+                if status.exists() and json.loads(status.read_text())["phase"] == "startup":
+                    break
+                self.assertIsNone(child.poll(), "Launch exited before startup")
+                self.assertLess(time.monotonic(), deadline, "Launch did not prepare")
+                select.select([], [], [], 0.01)
+            candidate = control / "stale-authorization"
+            candidate.write_text(attempt_id)
+            (control / "source").write_text("invalid source identity")
+            _, stderr = child.communicate(timeout=5)
+            self.assertEqual(child.returncode, 70, stderr)
+            self.assertFalse(marker.exists())
+            with self.assertRaises(FileExistsError):
+                os.link(candidate, control / "transferred")
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.communicate(timeout=5)
+
+    def prepare_attempt(self, *, launch):
         control = self.home / "attempt"
         claim = self.home / "claim"
         control.mkdir()
@@ -145,42 +178,32 @@ class RepoEnvironmentTests(unittest.TestCase):
             birth = "ps:" + identity.split(maxsplit=1)[1].strip()
         (control / "source").write_text(json.dumps({"pid": os.getpid(), "birth": birth}))
         (control / "lease").write_text(str(int(time.time() * 1000)))
+        return control, claim, attempt_id
+
+    def check_publication_failure(self, *, launch, failure):
+        control, claim, attempt_id = self.prepare_attempt(launch=launch)
         gate = self.home / "accepted-gate"
         started = self.home / "accepted-started"
         completed = self.home / "accepted-completed"
-        fault = self.home / "publication-faults"
         os.mkfifo(gate)
         gate_fd = os.open(gate, os.O_RDWR | os.O_NONBLOCK)
-        driver = r'''
-import errno, importlib.util, sys
-from pathlib import Path
-spec = importlib.util.spec_from_file_location('repo_launch', sys.argv[1])
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-original = module.atomic_json
-fault = Path(sys.argv[2])
-failure = sys.argv[3]
-count = 0
-def fail_transferred(path, state):
-    global count
-    if state['kind'] == 'transferred':
-        count += 1
-        fault.write_text(str(count))
-        if failure == 'persistent' or count == 1:
-            raise OSError(errno.ENOSPC, 'injected publication failure')
-    original(path, state)
-module.atomic_json = fail_transferred
-sys.argv = ['repo-exec', *sys.argv[4:]]
-sys.exit(module.main())
-'''
         payload = (f'touch {shlex.quote(str(started))}; '
                    f'IFS= read -r release < {shlex.quote(str(gate))}; '
                    f'touch {shlex.quote(str(completed))}')
         child = subprocess.Popen(
-            [sys.executable, "-c", driver, str(ROOT / "config/shell/repo-launch.py"),
-             str(fault), failure, "sh", "-c", payload], cwd=self.repo,
+            [str(LAUNCHER), "sh", "-c", payload], cwd=self.repo,
             env={**self.env, "REPO_LAUNCH_DIRECTORY": str(control)},
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        paused = False
+        diagnostic = b""
+        saved_status = control / "saved-status"
+
+        def restore_status():
+            status = control / "status"
+            if status.is_dir():
+                status.rename(control / "blocked-status")
+                saved_status.rename(status)
+
         try:
             deadline = time.monotonic() + 5
             ready = False
@@ -192,25 +215,42 @@ sys.exit(module.main())
                     break
                 select.select([], [], [], 0.01)
             self.assertTrue(ready, "Launch never reached its authorization boundary")
+            os.kill(child.pid, signal.SIGSTOP)
+            paused = True
+            _, wait_status = os.waitpid(child.pid, os.WUNTRACED)
+            self.assertTrue(os.WIFSTOPPED(wait_status))
             if launch == "handoff":
                 (claim / "decision").write_text(f"ready:{attempt_id}")
             candidate = control / "authorization-candidate"
             candidate.write_text(attempt_id)
             os.link(candidate, control / "transferred")
+            status = control / "status"
+            status.rename(saved_status)
+            status.mkdir()
+            (status / "obstruction").touch()
+            os.kill(child.pid, signal.SIGCONT)
+            paused = False
             deadline = time.monotonic() + 5
-            while child.poll() is None and time.monotonic() < deadline:
-                if fault.exists() and int(fault.read_text() or "0") >= 2:
-                    break
-                select.select([], [], [], 0.01)
-            self.assertTrue(fault.exists() and int(fault.read_text() or "0") >= 2,
-                            "Supervisor did not preserve accepted ownership after publication failed")
+            while not diagnostic and child.poll() is None and time.monotonic() < deadline:
+                readable, _, _ = select.select([child.stderr], [], [], 0.01)
+                if readable:
+                    diagnostic += os.read(child.stderr.fileno(), 4096)
+            self.assertTrue(diagnostic, "Publication failure was not reported")
+            self.assertTrue((control / "status").is_dir())
+            self.assertEqual(json.loads(saved_status.read_text())["phase"], "startup")
             self.assertIsNone(child.poll(), "Publication failure killed the accepted payload")
+            if failure == "once":
+                restore_status()
             deadline = time.monotonic() + 5
             while not started.exists() and time.monotonic() < deadline:
                 select.select([], [], [], 0.01)
             self.assertTrue(started.exists(), "Authorized payload remained blocked on its grant")
             self.assertFalse(completed.exists())
         finally:
+            if failure != "through-exit":
+                restore_status()
+            if paused:
+                os.kill(child.pid, signal.SIGCONT)
             os.write(gate_fd, b"release\n")
             try:
                 _, stderr = child.communicate(timeout=5)
@@ -218,10 +258,13 @@ sys.exit(module.main())
                 child.kill()
                 _, stderr = child.communicate()
             os.close(gate_fd)
-        self.assertEqual(child.returncode, 0, stderr)
+        self.assertEqual(child.returncode, 0, diagnostic.decode(errors="replace") + stderr)
         self.assertTrue(completed.exists())
-        receipt = json.loads((control / "status").read_text())
-        self.assertEqual((receipt["kind"], receipt["cleanup"]), ("exited", "confirmed"))
+        if failure == "through-exit":
+            self.assertTrue((control / "status").is_dir())
+        else:
+            receipt = json.loads((control / "status").read_text())
+            self.assertEqual((receipt["kind"], receipt["cleanup"]), ("exited", "confirmed"))
 
     def test_allowed_parent_environment(self):
         self.allow('export TEST_REPO_VALUE=loaded\n')
@@ -255,6 +298,25 @@ sys.exit(module.main())
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "command payload")
+
+    def test_non_utf8_arguments_survive_without_lossy_conversion(self):
+        value = b"raw-\xff-\xfe space ' ; $()\nnext"
+        result = subprocess.run(
+            [os.fsencode(LAUNCHER), b"printf", b"%s", value],
+            cwd=self.repo, env=self.env, capture_output=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, value)
+
+    def test_payload_preserves_managed_identity_but_removes_launch_metadata(self):
+        result = self.run_command(
+            "sh", "-c", 'printf "%s:%s:%s:%s" "$REPO_ENV_MANAGED" '
+            '"${REPO_ENV_LAUNCH-unset}" "${REPO_ENV_EVENT_FD-unset}" '
+            '"${REPO_ENV_GRANT_FD-unset}"',
+            env={**self.env, "REPO_ENV_MANAGED": "1"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "1:unset:unset:unset")
 
     def test_argv_and_exit_code(self):
         value = "space ' quote ; $(touch never)\nnext line"

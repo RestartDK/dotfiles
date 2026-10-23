@@ -1,0 +1,11 @@
+{
+  "shellPath": "/custom/bash",
+  "defaultProvider": "custom-provider",
+  "defaultModel": "custom-model",
+  "extensions": ["./custom-extension.ts"],
+  "packages": [],
+  "customSetting": {
+    "enabled": false,
+    "values": [1, null, "preserved"]
+  }
+}
