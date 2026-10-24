@@ -36,7 +36,7 @@
   };
   sourceRoot = "source/packages/dstack";
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-d6dOgM4dwEAE8MIVjOL3ptW8K/FtcVHi6/JD0niD0zM=";
+  npmDepsHash = "sha256-FzVVhO93Xy5tXjhWLTEHT2u9ehuKwRm4uADx9TDketQ=";
   npmFlags = [ "--ignore-scripts" ];
   npmPackFlags = [ "--ignore-scripts" ];
   nativeBuildInputs = [
@@ -81,6 +81,9 @@
           ]
         }
     done
+    makeWrapper ${nodejs_24}/bin/node "$out/bin/dstack-host" \
+      --add-flags "$out/libexec/dstack/dist/host-main.js" \
+      --set DSTACK_FLOCK ${util-linux}/bin/flock
     runHook postInstall
   '';
   meta = {

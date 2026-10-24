@@ -297,11 +297,16 @@ async function modelReopenProof(): Promise<void> {
   const both = createModels();
   both.setProvider(runtime.faux.provider);
   both.setProvider(next.provider);
-  const owner = await CodingWorkspaceOwner.open({ ...runtime.options, models: both }, BACKGROUND_CONTEXT);
+  const owner = await CodingWorkspaceOwner.open({
+    ...runtime.options,
+    models: both,
+    initialThinkingLevel: "xhigh",
+  }, BACKGROUND_CONTEXT);
   const rootId = owner.conversation.id;
   const provider = await owner.harness.snapshot(ProviderDoc, rootId, BACKGROUND_CONTEXT);
   try {
-    await owner.conversation.configure({ model: reference }, BACKGROUND_CONTEXT);
+    assert.equal((await owner.conversation.agent(BACKGROUND_CONTEXT)).thinkingLevel, "xhigh");
+    await owner.conversation.configure({ model: reference, thinkingLevel: "high" }, BACKGROUND_CONTEXT);
   } finally {
     await owner.close();
   }
@@ -310,10 +315,12 @@ async function modelReopenProof(): Promise<void> {
   const reopened = await CodingWorkspaceOwner.open({
     ...runtime.options,
     models: onlyNext,
+    initialThinkingLevel: "off",
   }, BACKGROUND_CONTEXT);
   try {
     assert.equal(reopened.conversation.id, rootId);
     assert.deepEqual((await reopened.conversation.agent(BACKGROUND_CONTEXT)).model, reference);
+    assert.equal((await reopened.conversation.agent(BACKGROUND_CONTEXT)).thinkingLevel, "high");
     assert.deepEqual(await reopened.harness.snapshot(ProviderDoc, rootId, BACKGROUND_CONTEXT), provider);
   } finally {
     await reopened.close();
@@ -340,6 +347,7 @@ async function modelReopenProof(): Promise<void> {
   }, BACKGROUND_CONTEXT);
   try {
     assert.deepEqual((await valid.conversation.agent(BACKGROUND_CONTEXT)).model, runtime.options.model);
+    assert.equal((await valid.conversation.agent(BACKGROUND_CONTEXT)).thinkingLevel, "off");
   } finally {
     await valid.close();
   }
