@@ -1,2 +1,2 @@
 #!/bin/sh
-exec python3 "$(dirname "$0")/../config/shell/repo-launch.py" "$@"
+exec "$(dirname "$0")/../packages/repo-exec/target/release/repo-exec" "$@"

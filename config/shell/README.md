@@ -6,11 +6,22 @@ Exports survive preparation. Startup output goes to stderr, and startup cannot
 consume the command's stdin. Arguments and command exit status are preserved.
 A missing executable, missing preparation function, or failed hook stops launch.
 
-Home Manager packages the launcher, its Python supervisor, and the shell
-integration in the Nix store. Neither the launcher nor the delivered zsh
-configuration reads the authoring checkout. Pi uses
-`~/.local/bin/repo-bash` through its `shellPath` setting. Profiles without the
-dotfiles zsh configuration must provide their own `repo_env_prepare` function.
+Home Manager packages the Rust supervisor and shell integration in the Nix
+store. The installed supervisor is a native executable, with `repo-bash` as an
+alias that prepends the payload command `bash`. Neither entrypoint requires
+Python, compiles code at runtime, or reads the authoring checkout. The public
+`~/.local/bin/repo-exec` and `~/.local/bin/repo-bash` entrypoints remain available.
+The executable still needs the configured shell and `ps` for group inspection.
+
+Home Manager generates Pi's settings from `my.liveConfig.piSettingsFile`.
+It defaults `shellPath` to the exact matching packaged `repo-bash` store path.
+Explicit settings, including a custom `shellPath`, remain unchanged. The default
+settings and their runtime dependency advance together with the Home Manager
+generation. The checked-in source profiles omit `shellPath` and use Pi's native
+SDK default before activation.
+Profiles without the dotfiles zsh configuration must provide their own
+`repo_env_prepare` function. Selecting the packaged wrapper never falls back to
+an unprepared command.
 
 ## Preparation providers
 
@@ -63,6 +74,8 @@ that group. It never signals a saved PID or an unrelated pane's foreground job. 
 source loss, and deadlines stop that group before releasing ownership. Source
 identity and a five-second heartbeat detect source death and stalled supervision.
 The shell waits for explicit authorization before a generic payload starts.
+Generic authorization and stopping compete for one no-replace decision slot,
+so a stale authorization cannot commit after teardown begins.
 A successor accepts the original task only through the existing owner, session,
 checkout, pane, and ready-versus-stopped arbitration.
 
@@ -91,12 +104,36 @@ daemons are not stopped. A provider must keep its owned helpers in the launch
 process group; detached helpers are outside the cleanup contract. Run servers
 in the foreground with `notify: true`, not with a trailing `&`.
 
-## Verification
+## Development
 
-The isolated suite needs Python 3, zsh, direnv, and Node 22 with type transforms.
-It makes no model calls.
+The Rust crate lives in `packages/repo-exec`. Use its pinned development shell
+without rebuilding or activating a host:
 
 ```sh
+nix develop .#repo-exec
+cargo run --manifest-path packages/repo-exec/Cargo.toml -- printf '%s\n' ready
+cargo test --locked --manifest-path packages/repo-exec/Cargo.toml
+nix run .#repo-exec -- printf '%s\n' ready
+```
+
+Running the supervisor still requires a configured interactive shell with
+`repo_env_prepare`. The development shell supplies Rust tools, not environment
+approval or a replacement preparation policy. The checkout's `bin/repo-*`
+entrypoints run the prebuilt release executable, so build it before using those
+entrypoints. Installed commands use the Nix-built executable directly.
+
+## Verification
+
+The isolated suite needs Rust, Python 3, zsh, direnv, and Node 22 with type
+transforms. Python is only the test harness. The suite makes no model calls.
+Publication-failure cases obstruct the actual receipt path rather than
+monkeypatching an implementation.
+
+```sh
+cargo fmt --manifest-path packages/repo-exec/Cargo.toml -- --check
+cargo clippy --locked --release --manifest-path packages/repo-exec/Cargo.toml --all-targets -- -D warnings
+cargo test --locked --release --manifest-path packages/repo-exec/Cargo.toml
+cargo build --locked --release --manifest-path packages/repo-exec/Cargo.toml
 python3 -m unittest discover -s tests -p 'test_repo_env.py'
 cd config/pi/agent/extensions/pi-herdr
 npm ci --ignore-scripts

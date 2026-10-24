@@ -1,2 +1,2 @@
 #!/bin/sh
-exec "$(dirname "$0")/repo-exec" bash "$@"
+exec "$(dirname "$0")/../packages/repo-exec/target/release/repo-exec" bash "$@"

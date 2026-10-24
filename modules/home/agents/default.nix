@@ -21,6 +21,7 @@ let
     else
       ../../../config/pi/agent/mcp.json;
   piPackages = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system};
+  repoCommands = pkgs.callPackage ../../../packages/repo-exec { };
   # One store copy of the whole agent tree. Home Manager links each
   # subdirectory separately, and the extensions import ../../lib/model-policy,
   # which only resolves while lib stays a sibling inside the same copy.
@@ -30,6 +31,9 @@ let
   # whole tree an input to the produced derivation, which uncaches every host
   # on every commit.
   configPath = relative: ../../../. + "/${relative}";
+  piSettings = builtins.fromJSON (
+    builtins.readFile (pkgs.copyPathToStore (configPath cfg.piSettingsFile))
+  );
   piPackage = name: {
     source = "${piPackages.${name}}/lib/node_modules/${name}";
     recursive = false;
@@ -173,7 +177,9 @@ in
           force = true;
         };
         home.file.".pi/agent/settings.json" = {
-          source = configPath cfg.piSettingsFile;
+          source = (pkgs.formats.json { }).generate "pi-settings.json" (
+            { shellPath = "${repoCommands}/bin/repo-bash"; } // piSettings
+          );
           force = true;
         };
         home.file.".pi/agent/models.json" = modelsFile;

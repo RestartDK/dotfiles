@@ -6,6 +6,7 @@ on:
       - "flake.nix"
       - "flake.lock"
       - "bin/repo-*"
+      - "packages/repo-exec/**"
       - "config/shell/**"
       - "config/pi/agent/extensions/pi-herdr/**"
       - "tests/**"
@@ -16,6 +17,7 @@ on:
       - "flake.nix"
       - "flake.lock"
       - "bin/repo-*"
+      - "packages/repo-exec/**"
       - "config/shell/**"
       - "config/pi/agent/extensions/pi-herdr/**"
       - "tests/**"
@@ -42,6 +44,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y zsh direnv
       - if: runner.os == 'macOS'
         run: brew install zsh direnv
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check and build the native launcher
+        run: |
+          cargo fmt --manifest-path packages/repo-exec/Cargo.toml -- --check
+          cargo clippy --locked --release --manifest-path packages/repo-exec/Cargo.toml --all-targets -- -D warnings
+          cargo test --locked --release --manifest-path packages/repo-exec/Cargo.toml
+          cargo build --locked --release --manifest-path packages/repo-exec/Cargo.toml
       - run: python3 -m unittest discover -s tests -p 'test_repo_env.py'
       - run: npm ci --ignore-scripts
         working-directory: config/pi/agent/extensions/pi-herdr
