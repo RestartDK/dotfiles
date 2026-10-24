@@ -10,6 +10,7 @@ Set each `my.hatchi.onepassword.references` option to a field containing the fol
 | --- | --- |
 | `cloudflare` | An ACME environment file containing `CF_DNS_API_TOKEN=<token>` |
 | `adguardPasswordHash` | The complete bcrypt password hash for `daniel` |
+| `adguardGlanceAuth` | The complete `Authorization` header value for AdGuard Home's stats API, `Basic ` followed by base64 of `daniel:<password>` |
 | `couchdbAdmin` | An INI fragment with an `[admins]` section and the administrator's `username = password` entry |
 | `glanceKey` | A base64-encoded 64-byte session-signing key |
 | `glancePassword` | The normal Glance login password |
@@ -18,6 +19,7 @@ Set each `my.hatchi.onepassword.references` option to a field containing the fol
 | `nextcloudPassword` | The initial Nextcloud administrator password |
 | `mangyEnv` | An environment file with `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` |
 | `minifluxAdmin` | An environment file with `ADMIN_USERNAME` and `ADMIN_PASSWORD` for Miniflux's first login |
+| `minifluxApiKey` | A Miniflux API token, created under Settings, API keys |
 | `qbittorrentPasswordHash` | The complete qBittorrent `@ByteArray(base64-salt:base64-digest)` value for `daniel`, using PBKDF2-HMAC-SHA512 with 100000 iterations |
 
 Production references point to the `nixos-acme-environment`, `nixos-admin-config`, `nixos-password-hash`, and `nixos-secret-key` fields in the existing Homelab items. These fields were prepared for a fresh installation. Do not point the formatted credential options at plain-token or plain-password fields. Store only credentials and their required wrappers, not entire application configurations.
@@ -38,7 +40,7 @@ NixOS's native pre-switch check rejects a missing or empty token file before cha
 
 ```text
 1Password service-account token
-  → opnix-secrets.service fetches ten credential files
+  → opnix-secrets.service fetches sixteen credential files
   → hatchi-secret-files.service substitutes two stored hashes
   → dependent services start
 ```

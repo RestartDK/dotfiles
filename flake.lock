@@ -832,11 +832,11 @@
     "private": {
       "flake": false,
       "locked": {
-        "lastModified": 1792601332,
-        "narHash": "sha256-0TXm8Z07QwSSP1L77Vsjeb17A7wuOSZkT6hmVcDmh1Q=",
+        "lastModified": 1792856362,
+        "narHash": "sha256-qIN0h5bxZIItLlszbvXgvYGP/Phw/Km1JU5vscuL8E8=",
         "owner": "RestartDK",
         "repo": "dotfiles-private",
-        "rev": "812a8312abc2909b50800f6a1605ab9f8b4d66d3",
+        "rev": "8fa47454c422aa76bf37491e9e0b620ec8ede025",
         "type": "github"
       },
       "original": {
