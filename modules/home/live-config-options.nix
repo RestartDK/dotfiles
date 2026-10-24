@@ -28,7 +28,11 @@
     piSettingsFile = lib.mkOption {
       type = lib.types.str;
       default = "config/pi/agent/settings.json";
-      description = "Repo-relative Pi settings JSON file to link as ~/.pi/agent/settings.json.";
+      description = ''
+        Repo-relative Pi settings JSON used to generate ~/.pi/agent/settings.json.
+        Home Manager defaults shellPath to the matching packaged repo-bash store path.
+        Explicit settings, including a custom shellPath, remain unchanged.
+      '';
     };
 
     piSkillsPath = lib.mkOption {

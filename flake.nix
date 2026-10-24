@@ -254,6 +254,7 @@
         piPackages
         // {
           inherit fleet traitor;
+          repo-exec = pkgs.callPackage ./packages/repo-exec { };
           ha-devices = mkHaDevicesPackage pkgs;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
@@ -307,6 +308,14 @@
           pkgs = pkgsFor system;
         in
         {
+          repo-exec = pkgs.mkShell {
+            packages = [
+              pkgs.cargo
+              pkgs.rustc
+              pkgs.rustfmt
+              pkgs.clippy
+            ];
+          };
           default = pkgs.mkShell {
             inherit (lefthookEval.${system}) shellHook;
             packages = [ treefmtEval.${system}.config.build.wrapper ];
@@ -322,6 +331,7 @@
       checks = forAllSystems (
         system:
         {
+          repo-exec = self.packages.${system}.repo-exec;
           fleet =
             (pkgsFor system).runCommand "fleet-tests"
               {

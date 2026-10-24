@@ -67,6 +67,10 @@ in
       ];
       useEditorConfig = true;
     };
+    rustfmt = {
+      enable = true;
+      edition = "2021";
+    };
     stylua.enable = true;
     taplo.enable = true;
   };

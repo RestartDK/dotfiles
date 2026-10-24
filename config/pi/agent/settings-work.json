@@ -1,5 +1,4 @@
 {
-  "shellPath": "~/.local/bin/repo-bash",
   "extensions": [
     "-extensions/pi-prompt/index.ts",
     "-extensions/pi-coordination/index.ts"
