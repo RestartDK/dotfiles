@@ -2,10 +2,10 @@
 {
   my.hatchi.onepassword = {
     tokenFile = "/var/lib/opnix/token";
-    references = builtins.removeAttrs network.hatchiOnepasswordReferences [ "hermesEnv" ];
+    references = network.hatchiOnepasswordReferences;
   };
 
-  my.hatchi.hermes.environmentReference = network.hatchiOnepasswordReferences.hermesEnv or null;
+  my.hatchi.hermes.apiKeyReference = network.personalSecretReferences.opencodeApiKey;
 
   assertions = [
     {

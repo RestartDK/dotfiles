@@ -513,7 +513,7 @@
             };
             srv-hatchi-hermes = import ./tests/srv-hatchi/hermes.nix {
               pkgs = pkgsFor system;
-              inherit self;
+              inherit self privateValues;
             };
             srv-hatchi-onepassword = import ./tests/srv-hatchi/onepassword.nix {
               pkgs = pkgsFor system;

@@ -17,6 +17,12 @@ let
   # so a broken edge reads as the edge instead of as every service failing.
   sites = [
     {
+      title = "Hermes";
+      url = url "hermes";
+      check-url = "http://127.0.0.1:9119/api/health";
+      icon = "mdi:robot";
+    }
+    {
       title = "AdGuard";
       url = url "adguard";
       check-url = "http://127.0.0.1:3000/login.html";
@@ -138,6 +144,7 @@ let
       {
         title = "Everything else";
         links = map link [
+          "hermes"
           "nextcloud"
           "homeassistant"
           "miniflux"
