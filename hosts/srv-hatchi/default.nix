@@ -9,6 +9,7 @@
     ./storage.nix
     ./iot-link.nix
     ./services/dashboard.nix
+    ./services/hermes.nix
     ./services/books.nix
     ./services/media.nix
     ./services/miniflux.nix

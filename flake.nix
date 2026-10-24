@@ -24,6 +24,8 @@
 
     llm-agents.url = "github:numtide/llm-agents.nix";
 
+    hermes-agent.url = "github:NousResearch/hermes-agent/v0.22.5";
+
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -269,6 +271,7 @@
           dstack = pkgs.callPackage ./packages/dstack/package.nix {
             pi = self.packages.${system}.pi;
           };
+          hermes-agent = inputs.hermes-agent.packages.${system}.minimal;
         }
       );
 
@@ -507,6 +510,10 @@
             srv-hatchi-services = import ./tests/srv-hatchi/services.nix {
               pkgs = pkgsFor system;
               inherit self inputs;
+            };
+            srv-hatchi-hermes = import ./tests/srv-hatchi/hermes.nix {
+              pkgs = pkgsFor system;
+              inherit self;
             };
             srv-hatchi-onepassword = import ./tests/srv-hatchi/onepassword.nix {
               pkgs = pkgsFor system;
