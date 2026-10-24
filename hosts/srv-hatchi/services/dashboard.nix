@@ -13,70 +13,85 @@ let
     url = url name;
   };
 
+  # Each site links to the service's own hostname and checks its loopback port,
+  # so a broken edge reads as the edge instead of as every service failing.
   sites = [
     {
       title = "AdGuard";
-      url = "http://127.0.0.1:3000/login.html";
+      url = url "adguard";
+      check-url = "http://127.0.0.1:3000/login.html";
       icon = "sh:adguard-home";
     }
     {
       title = "Jellyfin";
-      url = "http://127.0.0.1:8096/health";
+      url = url "jellyfin";
+      check-url = "http://127.0.0.1:8096/health";
       icon = "sh:jellyfin";
     }
     {
       title = "Seerr";
-      url = "http://127.0.0.1:5055/api/v1/status";
+      url = url "seerr";
+      check-url = "http://127.0.0.1:5055/api/v1/status";
       icon = "sh:jellyseerr";
     }
     {
       title = "Radarr";
-      url = "http://127.0.0.1:7878/ping";
+      url = url "radarr";
+      check-url = "http://127.0.0.1:7878/ping";
       icon = "sh:radarr";
     }
     {
       title = "Sonarr";
-      url = "http://127.0.0.1:8989/ping";
+      url = url "sonarr";
+      check-url = "http://127.0.0.1:8989/ping";
       icon = "sh:sonarr";
     }
     {
       title = "Prowlarr";
-      url = "http://127.0.0.1:9696/ping";
+      url = url "prowlarr";
+      check-url = "http://127.0.0.1:9696/ping";
       icon = "sh:prowlarr";
     }
     {
       title = "qBittorrent";
-      url = "http://127.0.0.1:8080/";
+      url = url "qbittorrent";
+      check-url = "http://127.0.0.1:8080/";
       icon = "sh:qbittorrent";
     }
     {
       title = "Komga";
-      url = "http://127.0.0.1:25600/";
+      url = url "komga";
+      check-url = "http://127.0.0.1:25600/";
       icon = "sh:komga";
     }
     {
       title = "Mangy";
-      url = "http://127.0.0.1:3002/";
+      url = url "mangy";
+      check-url = "http://127.0.0.1:3002/";
       icon = "mdi:book-open-page-variant-outline";
     }
     {
       title = "Nextcloud";
-      url = "http://127.0.0.1:11000/status.php";
+      url = url "nextcloud";
+      check-url = "http://127.0.0.1:11000/status.php";
       icon = "sh:nextcloud";
     }
     {
       title = "Miniflux";
-      url = "http://127.0.0.1:12000/healthcheck";
+      url = url "miniflux";
+      check-url = "http://127.0.0.1:12000/healthcheck";
       icon = "sh:miniflux";
     }
     {
       title = "Home Assistant";
-      url = "http://127.0.0.1:8123/";
+      url = url "homeassistant";
+      check-url = "http://127.0.0.1:8123/";
       icon = "sh:home-assistant";
     }
     {
       title = "Grafana";
-      url = "http://127.0.0.1:3001/api/health";
+      url = url "grafana";
+      check-url = "http://127.0.0.1:3001/api/health";
       icon = "sh:grafana";
     }
   ];
@@ -101,7 +116,7 @@ let
   servicesMonitor = {
     type = "monitor";
     title = "Services";
-    sites = sites;
+    inherit sites;
   };
 
   bookmarks = {
