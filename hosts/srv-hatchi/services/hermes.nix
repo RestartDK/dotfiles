@@ -7,15 +7,39 @@
 }:
 let
   cfg = config.my.hatchi.hermes;
-  environmentFile = "/run/hatchi-onepassword/hermesEnv";
+  hermes = config.services.hermes-agent;
+  common = import "${inputs.hermes-agent}/nix/moduleCommon.nix" { inherit lib; };
+  keyFile = "/run/hatchi-onepassword/hermesGoKey";
+  hostname = "hermes.${config.my.domain}";
+  units = {
+    hermes-agent = {
+      environment = { };
+      argv = common.gatewayArgv hermes;
+      credentials.OPENCODE_GO_API_KEY = keyFile;
+    };
+    hermes-backend = {
+      environment = {
+        HERMES_DASHBOARD_PUBLIC_URL = "https://${hostname}";
+        HERMES_DASHBOARD_BASIC_AUTH_USERNAME = "daniel";
+      };
+      argv = common.backendArgv {
+        inherit pkgs;
+        cfg = hermes;
+      };
+      credentials = {
+        OPENCODE_GO_API_KEY = keyFile;
+        HERMES_DASHBOARD_BASIC_AUTH_PASSWORD = config.my.hatchi.secretFiles.glancePassword;
+      };
+    };
+  };
 in
 {
   imports = [ inputs.hermes-agent.nixosModules.default ];
 
-  options.my.hatchi.hermes.environmentReference = lib.mkOption {
+  options.my.hatchi.hermes.apiKeyReference = lib.mkOption {
     type = lib.types.nullOr (lib.types.strMatching "op://.+/.+/.+");
     default = null;
-    description = "1Password field containing Hermes's provider environment file.";
+    description = "Existing OpenCode Go API-key field, fetched by Hatchi's service account.";
   };
 
   config = {
@@ -32,8 +56,8 @@ in
       };
       settings = {
         model = {
-          provider = "openrouter";
-          default = "deepseek/deepseek-v4.1-flash";
+          provider = "opencode-go";
+          default = "glm-5.3-flash";
         };
         terminal.backend = "local";
         approvals = {
@@ -45,10 +69,16 @@ in
       };
     };
 
-    services.onepassword-secrets.secrets = lib.optionalAttrs (cfg.environmentReference != null) {
-      hermesEnv = {
-        reference = cfg.environmentReference;
-        path = environmentFile;
+    services.caddy.virtualHosts.${hostname}.extraConfig = ''
+      reverse_proxy 127.0.0.1:${toString hermes.backend.port} {
+        header_up -X-Forwarded-Prefix
+      }
+    '';
+
+    services.onepassword-secrets.secrets = lib.optionalAttrs (cfg.apiKeyReference != null) {
+      hermesGoKey = {
+        reference = cfg.apiKeyReference;
+        path = keyFile;
         owner = "root";
         group = "root";
         mode = "0400";
@@ -66,13 +96,24 @@ in
           "skills"
         ];
 
-    systemd.services = lib.genAttrs [ "hermes-agent" "hermes-backend" ] (_: {
+    systemd.services = lib.mapAttrs (name: unit: {
+      inherit (unit) environment;
       requires = [ config.my.hatchi.secretService ];
       after = [ config.my.hatchi.secretService ];
       partOf = [ config.my.hatchi.secretService ];
-      unitConfig.ConditionPathExists = environmentFile;
+      unitConfig.ConditionPathExists = keyFile;
       serviceConfig = {
-        EnvironmentFile = [ environmentFile ];
+        LoadCredential = lib.mapAttrsToList (variable: path: "${variable}:${path}") unit.credentials;
+        ExecStart = lib.mkForce (
+          pkgs.writeShellScript "${name}-credentials" ''
+            set -euo pipefail
+            ${lib.concatMapStringsSep "\n" (variable: ''
+              ${variable}="$(${pkgs.coreutils}/bin/cat "$CREDENTIALS_DIRECTORY/${variable}")"
+              export ${variable}
+            '') (builtins.attrNames unit.credentials)}
+            exec ${lib.escapeShellArgs unit.argv}
+          ''
+        );
         UMask = lib.mkForce "0077";
         ProtectHome = lib.mkForce false;
         InaccessiblePaths = [
@@ -86,6 +127,6 @@ in
         RestrictSUIDSGID = true;
         CapabilityBoundingSet = "";
       };
-    });
+    }) units;
   };
 }
