@@ -74,6 +74,7 @@ darwin-rebuild switch --flake .#<host>
 | --- | --- |
 | CI, the deploy workflow, and the deploy account | [docs/deployment.md](docs/deployment.md) |
 | Server install, disks, and runtime secrets | [hosts/srv-hatchi/INSTALL.md](hosts/srv-hatchi/INSTALL.md) |
+| Hermes assistant and private dashboard | [docs/hermes.md](docs/hermes.md) |
 | Pi key provisioning on the personal machines | [tests/personal-secrets.md](tests/personal-secrets.md) |
 | The portable Home Manager module | [docs/portable-home.md](docs/portable-home.md) |
 
