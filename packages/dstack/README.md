@@ -100,9 +100,13 @@ The Nix source must include these cross-root sources during bundling:
 
 All files in `dist`, including `worker-guard.js`, belong together. The native Pi executable must remain available through the immutable wrapper or `DSTACK_PI`.
 
+## Durable coding component
+
+The separate [coding workspace library](docs/coding-workspaces.md) runs full Pi Durable coding conversations with private SQLite state and immutable workspace bindings. It is not wired into the PR controller or a Herdr-managed backend yet. Native extension compatibility and command-cleanup limits are documented there.
+
 ## Durable state and external effects
 
-`pi-durable` 1.1.0 owns the custom task and document storage. No durable worker conversation or provider request is created. Waiting uses saved deadlines, ordinary timers, and bounded observations. Defaults are a 60-second observation interval, a 30-second subprocess deadline, eight worker runs, and ten minutes per worker. Observation failures back off to five minutes.
+`pi-durable` 1.1.0 owns the PR controller's custom task and document storage. That controller creates no durable worker conversation or provider request. Waiting uses saved deadlines, ordinary timers, and bounded observations. Defaults are a 60-second observation interval, a 30-second subprocess deadline, eight worker runs, and ten minutes per worker. Observation failures back off to five minutes.
 
 `dstack.watches` v1 and `dstack.watch` share the same Harness and `jobs.sqlite` as `dstack.jobs` v1 and `dstack.pr`. Existing PR records require no migration or backfill. No rows are removed. GitHub admission queries have a recovery scope tied to the state directory and a separate token per subprocess. Startup quiesces queries left by a previous daemon before it accepts requests.
 
@@ -178,7 +182,7 @@ Run the manual native proof outside the automatic suite. It uses real Pi SDK lif
 ```sh
 cd packages/dstack
 npm run build
-node_modules/.bin/esbuild tests/wake-proof.ts --bundle --platform=node --format=esm --packages=external '--external:./node_modules/*' --outfile=dist/wake-proof.js
+node_modules/.bin/esbuild tests/wake-proof.ts --bundle --platform=node --format=esm --packages=external --external:@earendil-works/pi-coding-agent --outfile=dist/wake-proof.js
 node dist/wake-proof.js
 ```
 
