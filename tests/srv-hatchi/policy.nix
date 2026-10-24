@@ -284,6 +284,19 @@ assert lib.hasInfix "install -Dm600 %d/config" (
   builtins.head cfg.systemd.services.qbittorrent.serviceConfig.ExecStartPre
 );
 assert cfg.services.grafana.settings.security.cookie_secure;
+assert builtins.length cfg.services.glance.settings.pages == 4;
+assert
+  map (page: page.name) cfg.services.glance.settings.pages == [
+    "Home"
+    "Infra"
+    "House"
+    "Feeds"
+  ];
+assert withAppSecrets.services.onepassword-secrets.secrets.adguardGlanceAuth.owner == "root";
+assert lib.hasPrefix "/run/hatchi-onepassword/" (
+  toString cfg.my.hatchi.secretFiles.adguardGlanceAuth
+);
+assert lib.hasPrefix "/run/hatchi-onepassword/" (toString cfg.my.hatchi.secretFiles.minifluxApiKey);
 assert cfg.services.miniflux.enable;
 assert cfg.services.miniflux.config.LISTEN_ADDR == "127.0.0.1:12000";
 assert cfg.services.miniflux.createDatabaseLocally;

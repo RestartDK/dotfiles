@@ -11,6 +11,7 @@ let
   references = {
     cloudflare = null;
     adguardPasswordHash = null;
+    adguardGlanceAuth = null;
     couchdbAdmin = null;
     glanceKey = null;
     glancePassword = null;
@@ -22,6 +23,7 @@ let
     qbittorrentPasswordHash = null;
     runnerAccessToken = null;
     mangyEnv = null;
+    minifluxApiKey = null;
     wifiPsk = null;
   };
   adguardConfig = pkgs.writeText "AdGuardHome.yaml" (
