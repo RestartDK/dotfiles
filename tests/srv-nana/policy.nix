@@ -86,6 +86,13 @@ assert builtins.any (
 assert lib.getName home.gtk.iconTheme.package == "papirus-icon-theme";
 assert home.home.pointerCursor.name == "Adwaita";
 assert lib.getName home.home.pointerCursor.package == "adwaita-icon-theme";
+assert
+  cfg.networking.nameservers == [
+    cfg.my.hosts.hatchi.lan
+    cfg.my.hosts.hatchi.tailnet
+    "1.1.1.1"
+    "9.9.9.9"
+  ];
 pkgs.runCommand "srv-nana-policy" { } ''
   touch $out
 ''
