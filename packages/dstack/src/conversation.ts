@@ -16,6 +16,9 @@ import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, realpath } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import { ExecutionRootDoc } from "./execution-binding.js";
+import { executionRootBytes, parseExecutionRoot, type ExecutionRoot } from "./execution-wire.js";
 import { acquireLock } from "./lock.js";
 import type { Command } from "./process.js";
 import { isIdentityName } from "./workspace-identity.js";
@@ -42,8 +45,10 @@ export type OpenCodingWorkspaceOptions = {
   readonly initialThinkingLevel?: ModelThinkingLevel;
   readonly execution: "trusted-user";
   readonly lockCommand: Command;
-  readonly registry?: Registry;
-};
+} & (
+  | { readonly registry?: Registry; readonly management?: undefined }
+  | { readonly registry: Registry; readonly management: { readonly root: ExecutionRoot; readonly initialization: "new" | "existing" } }
+);
 
 function parseWorkspace(value: unknown): CodingWorkspace {
   if (
@@ -127,9 +132,16 @@ export class CodingWorkspaceOwner {
     if (options.execution !== "trusted-user")
       throw new Error("Node execution requires explicit trusted-user access; it is not a sandbox");
     const requested = parseWorkspace(options.workspace);
+    const management = options.management === undefined ? undefined : {
+      root: parseExecutionRoot(executionRootBytes(options.management.root)), initialization: options.management.initialization,
+    };
+    if (management !== undefined && options.registry === undefined)
+      throw new Error("Managed coding workspaces require an explicit tool registry");
     const cwd = await realpath(requested.cwd);
     if (!(await lstat(cwd)).isDirectory()) throw new Error("Coding workspace cwd must be a directory");
     const workspace: CodingWorkspace = Object.freeze({ ...requested, cwd });
+    if (management !== undefined && !isDeepStrictEqual(management.root.workspace, workspace))
+      throw new Error("Managed execution root differs from its coding workspace");
     const stateDirectory = await privateStateDirectory(options.stateDirectory);
     const unlock = await acquireLock(stateDirectory, options.lockCommand, {
       name: "conversation.lock",
@@ -180,6 +192,17 @@ export class CodingWorkspaceOwner {
       await harness.commit(async (tx) => {
         const conversations = await tx.scanConversations({}, 1);
         const doc = await tx.doc(CodingWorkspaceDoc);
+        const execution = await tx.doc(ExecutionRootDoc);
+        if (management === undefined) {
+          if (execution.rootJson !== null)
+            throw new Error("Managed coding workspace requires execution ownership");
+        } else if (management.initialization === "new") {
+          if (execution.rootJson !== null || doc.workspace !== null || conversations.items.length !== 0)
+            throw new Error("Refusing to initialize execution ownership in an existing coding store");
+          execution.rootJson = executionRootBytes(management.root);
+        } else if (execution.rootJson !== executionRootBytes(management.root) || doc.workspace === null || conversations.items.length === 0) {
+          throw new Error("Managed coding execution identity is missing or changed");
+        }
         if (doc.workspace === null) {
           if (conversations.items.length !== 0)
             throw new Error("Refusing to bind an existing unbound conversation store");
@@ -218,7 +241,7 @@ export class CodingWorkspaceOwner {
         conversation,
         closeResources,
       );
-      harness.resume();
+      if (management === undefined) harness.resume();
       return owner;
     } catch (error) {
       try {

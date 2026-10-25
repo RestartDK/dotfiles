@@ -269,6 +269,7 @@
           default = traitor;
         }
         // nixpkgs.lib.optionalAttrs (system == linuxSystem) {
+          herdr-command = pkgs.callPackage ./packages/herdr-command { };
           dstack = pkgs.callPackage ./packages/dstack/package.nix {
             pi = self.packages.${system}.pi;
           };
