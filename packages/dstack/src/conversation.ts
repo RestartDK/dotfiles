@@ -12,7 +12,8 @@ import {
   type Storage,
 } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
-import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
+import { openNodeSqliteDatabase } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, realpath } from "node:fs/promises";
@@ -243,8 +244,15 @@ export class CodingWorkspaceOwner {
     })();
     try {
       await privateDatabase(databasePath, initialization);
-      const storage = await openNodeSqliteStorage(databasePath);
+      const database = await openNodeSqliteDatabase(databasePath);
+      closeStorage = () => database.close();
+      await database.exec("PRAGMA synchronous = FULL");
+      const storage = await SqliteStorage.open(database);
       closeStorage = () => storage.close(BACKGROUND_CONTEXT);
+      const journal = await database.get<{ journal_mode: unknown }>("PRAGMA journal_mode");
+      const synchronization = await database.get<{ synchronous: unknown }>("PRAGMA synchronous");
+      if (journal?.journal_mode !== "wal" || (synchronization?.synchronous !== 2 && synchronization?.synchronous !== 3))
+        throw new Error("Coding storage requires WAL SQLite with FULL synchronization");
       await inspectCodingStorage(storage, workspace, management, context);
       const registry = options.registry ?? createRegistry();
       if (options.registry === undefined) registry.install(CodingTools);

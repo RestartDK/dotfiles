@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { createModels, fauxProvider } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Harness } from "@earendil-works/pi-durable";
+import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { DurableHost, type TrustedHostCommandOperation } from "#durable-host";
 import { parseHostConfig, parseOperation } from "#host-protocol";
 import { hostCommandRuntime } from "../src/host-runtime.js";
@@ -9,7 +10,21 @@ import { hostCommandRuntime } from "../src/host-runtime.js";
 const configPath = process.argv[2];
 if (configPath === undefined || process.send === undefined) throw new Error("Owned proof fixture requires private config and IPC");
 const models = createModels();
-models.setProvider(fauxProvider({ api: "host-command-fixture", provider: "host-command-fixture", models: [{ id: "idle", input: ["text"] }] }).provider);
+const faux = fauxProvider({ api: "host-command-fixture", provider: "host-command-fixture", models: [{ id: "idle", input: ["text"] }] });
+models.setProvider(faux.provider);
+if (process.argv[3] === "file-hold") {
+  const heldPath = process.argv[4];
+  if (heldPath === undefined) throw new Error("Explicit held file required");
+  faux.setResponses([fauxAssistantMessage(fauxToolCall("write", { path: heldPath, content: "must not replay\n" }), { stopReason: "toolUse" })]);
+  const write = NodeExecutionEnv.prototype.writeFile;
+  NodeExecutionEnv.prototype.writeFile = async function (this: NodeExecutionEnv, ...args: Parameters<NodeExecutionEnv["writeFile"]>) {
+    if (args[0] === heldPath) {
+      process.send?.({ event: "file-held", path: args[0] });
+      await new Promise<void>(() => undefined);
+    }
+    return write.apply(this, args);
+  };
+}
 const config = parseHostConfig(JSON.parse(await readFile(configPath, "utf8")));
 const commands = await hostCommandRuntime();
 if (process.argv[3] === "hold-launch") {
@@ -23,9 +38,18 @@ if (process.argv[3] === "hold-launch") {
 }
 const openHarness = Harness.open;
 let inspectTasks: (() => Promise<unknown>) | undefined;
+let abortConversation: (() => Promise<void>) | undefined;
 Harness.open = async (storage, options, context) => {
   const harness = await openHarness(storage, options, context);
-  inspectTasks = async () => ({ inspection: await harness.inspect(BACKGROUND_CONTEXT), tasks: (await storage.scanTasks({}, 128, undefined, BACKGROUND_CONTEXT)).items });
+  inspectTasks = async () => ({ inspection: await harness.inspect(BACKGROUND_CONTEXT), tasks: (await storage.scanTasks({}, 128, undefined, BACKGROUND_CONTEXT)).items, providerCalls: faux.state.callCount });
+  abortConversation = async () => {
+    const conversations = await storage.scanConversations({}, 2, undefined, BACKGROUND_CONTEXT);
+    if (conversations.items.length !== 1 || conversations.items[0] === undefined) throw new Error("One actual SDK conversation expected");
+    const conversation = await harness.conversation(conversations.items[0].id, BACKGROUND_CONTEXT);
+    if (conversation === undefined) throw new Error("Actual SDK conversation missing");
+    await conversation.abort(BACKGROUND_CONTEXT);
+    await conversation.waitForIdle(BACKGROUND_CONTEXT);
+  };
   if (process.argv[3] === "hold-scheduler") harness.resume = () => undefined;
   return harness;
 };
@@ -42,6 +66,11 @@ process.on("message", (message: unknown) => {
     if ("tasks" in message && message.tasks === true) {
       if (inspectTasks === undefined) throw new Error("SDK workspace unavailable");
       return inspectTasks();
+    }
+    if ("abort" in message && message.abort === true) {
+      if (abortConversation === undefined) throw new Error("SDK conversation unavailable");
+      await abortConversation();
+      return { providerCalls: faux.state.callCount };
     }
     if ("command" in message) {
       const command: unknown = message.command;
@@ -62,5 +91,5 @@ process.on("message", (message: unknown) => {
       }
     }
     throw new Error("Invalid fixture request");
-  })().then(value => process.send?.({ id, value }), () => process.send?.({ id, error: "Trusted fixture request refused" }));
+  })().then(value => process.send?.({ id, value }), (error: unknown) => process.send?.({ id, error: "Trusted fixture request refused", code: error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "fixture_error" }));
 });

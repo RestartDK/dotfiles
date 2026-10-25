@@ -17,7 +17,7 @@
   commandHelper ? callPackage ../herdr-command { },
 }:
 
-(buildNpmPackage.override { nodejs = nodejs_24; }) {
+(buildNpmPackage.override { nodejs = nodejs_24; }) (finalAttrs: {
   pname = "dstack-jobs";
   version = "0.1.0";
   src = lib.fileset.toSource {
@@ -93,9 +93,13 @@
       --set DSTACK_BUSCTL ${systemd}/bin/busctl
     runHook postInstall
   '';
+  passthru.tests.reboot = callPackage ./tests/host-reboot.nix {
+    dstack = finalAttrs.finalPackage;
+    inherit commandHelper;
+  };
   meta = {
     description = "Local durable PR monitoring with explicit repair authority";
     mainProgram = "dstack";
     platforms = lib.platforms.linux;
   };
-}
+})
