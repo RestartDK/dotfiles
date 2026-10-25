@@ -25,7 +25,7 @@ type Backend = {
   call(request: object): Promise<unknown>;
   event(name: string): Promise<Record<string, unknown>>;
 };
-async function start(mode: "hold-launch" | "normal"): Promise<Backend> {
+async function start(mode: "hold-launch" | "hold-scheduler" | "normal"): Promise<Backend> {
   const child = fork(fileURLToPath(new URL("./host-command-fixture.js", import.meta.url)), [configPath, mode], { execPath: node, stdio: ["ignore", "ignore", "pipe", "ipc"] });
   let errors = "", next = 0;
   child.stderr?.on("data", (chunk: Buffer) => { if (errors.length < 65536) errors += chunk.toString(); });
@@ -78,15 +78,15 @@ async function start(mode: "hold-launch" | "normal"): Promise<Backend> {
   catch (error) { child.kill("SIGKILL"); await exit; throw error; }
 }
 let backend: Backend | undefined;
-let namespaceRequested = false;
+let namespaceRequested = false, unattemptedAuthorized = false;
 const failures: unknown[] = [];
-async function command(op: string) {
-  assert.ok(backend !== undefined); return backend.call({ command: { op, workspaceId: "coding", intentId: "once" } });
+async function command(op: string, intentId = "once") {
+  assert.ok(backend !== undefined); return backend.call({ command: { op, workspaceId: "coding", intentId } });
 }
-async function adopted(): Promise<Record<string, unknown>> {
+async function adopted(intentId = "once"): Promise<Record<string, unknown>> {
   const deadline = performance.now() + 20000;
   while (performance.now() < deadline) {
-    const state = object(await command("adopt"));
+    const state = object(await command("adopt", intentId));
     if (object(state.phase).kind === "adopted") return state;
     await delay(25);
   }
@@ -141,7 +141,49 @@ try {
     assert.equal(records.filter(row => object(object(JSON.parse(String(row.record_json))).event).kind === "command.attempted").length, 1);
   } finally { verify.close(); }
   backend.child.disconnect(); assert.equal((await backend.exit).code, 0); backend = undefined;
-  const result = { path, helper, verdict: "composite-host-owned-command", originalInvocationId: original.activation.invocationId, realSdkTaskKey: task.taskKey, realSdkConversationKey: task.conversationKey, actualBackendSigkill: true, injectedLostPostLaunchAcknowledgment: true, receiptAdoptedWithoutReplay: true, oneDurableAttempt: true, originalCustodyReleased: true, modelCommandToolRegistered: false, providerGenerations: 0 };
+
+  backend = await start("hold-scheduler");
+  const forbidden = join(cwd, "must-not-run.txt");
+  await backend.call({ command: { op: "authorize", workspaceId: "coding", authorization: { intentId: "unattempted", argv: [node, "-e", "require('node:fs').writeFileSync(process.argv[1],'replayed',{flag:'wx'})", forbidden], timeoutSeconds: 10 } } });
+  unattemptedAuthorized = true;
+  const pendingTask = object(await command("start", "unattempted"));
+  const heldTasks = object(await backend.call({ tasks: true }));
+  assert.equal(object(heldTasks.inspection).scheduling, "paused");
+  assert.ok(Array.isArray(heldTasks.tasks));
+  const heldTask = heldTasks.tasks.map(object).find(record => String(record.id) === pendingTask.taskKey);
+  assert.ok(heldTask !== undefined); assert.equal(object(heldTask.state).status, "pending");
+  const unattempted = object(await command("describe", "unattempted"));
+  assert.equal(object(object(unattempted.command).phase).kind, "authorized");
+  assert.equal(unattempted.grant, "live");
+  backend.child.kill("SIGKILL"); assert.equal((await backend.exit).signal, "SIGKILL"); backend = undefined;
+  backend = await start("normal");
+  await assert.rejects(command("start", "unattempted"));
+  const expired = object(await command("describe", "unattempted"));
+  assert.equal(expired.grant, "expired"); assert.equal(object(object(expired.command).phase).kind, "authorized");
+  const expiryDeadline = performance.now() + 10000;
+  let terminal: Record<string, unknown> | undefined;
+  while (performance.now() < expiryDeadline) {
+    const view = object(await backend.call({ tasks: true })); assert.ok(Array.isArray(view.tasks));
+    const current = view.tasks.map(object).find(record => String(record.id) === pendingTask.taskKey);
+    if (current !== undefined && object(current.state).status === "terminal") { terminal = current; break; }
+    await delay(20);
+  }
+  assert.ok(terminal !== undefined, "Recovered owned task must fault terminally on its lost live grant");
+  const terminalState = object(terminal.state);
+  assert.equal(object(terminalState.outcome).status, "faulted");
+  assert.match(JSON.stringify(terminalState.outcome), /source grant is expired or revoked/);
+  await assert.rejects(readFile(forbidden), { code: "ENOENT" });
+  const noReplay = new DatabaseSync(join(stateRoot, "host.sqlite"), { readOnly: true });
+  try {
+    const rows = noReplay.prepare("SELECT record_json FROM herdr_execution_records ORDER BY sequence").all();
+    assert.equal(rows.length, 5);
+    assert.equal(rows.filter(row => object(object(JSON.parse(String(row.record_json))).event).kind === "command.attempted").length, 1);
+  } finally { noReplay.close(); }
+  await command("cancel", "unattempted");
+  assert.equal(object(await command("describe", "unattempted")).grant, "revoked");
+  unattemptedAuthorized = false;
+  backend.child.disconnect(); assert.equal((await backend.exit).code, 0); backend = undefined;
+  const result = { path, helper, verdict: "composite-host-owned-command", originalInvocationId: original.activation.invocationId, realSdkTaskKey: task.taskKey, realSdkConversationKey: task.conversationKey, actualBackendSigkill: true, injectedLostPostLaunchAcknowledgment: true, receiptAdoptedWithoutReplay: true, oneDurableAttempt: true, originalCustodyReleased: true, actualBackendSigkillBeforeAttempt: true, expiredGrantNeverRecaptured: true, recoveredUnattemptedTaskFaulted: true, unattemptedSdkTaskKey: pendingTask.taskKey, modelCommandToolRegistered: false, providerGenerations: 0 };
   await writeFile(join(path, "result.json"), JSON.stringify(result, null, 2), { flag: "wx", mode: 0o600 });
   console.log(JSON.stringify(result));
 } catch (error) { failures.push(error); }
@@ -150,6 +192,14 @@ try {
   if (namespaceRequested) {
     if (backend === undefined || backend.child.exitCode !== null || backend.child.signalCode !== null) backend = await start("normal");
     await command("cancel"); await adopted(); await command("release"); namespaceRequested = false;
+  }
+  if (unattemptedAuthorized) {
+    if (backend === undefined || backend.child.exitCode !== null || backend.child.signalCode !== null) backend = await start("normal");
+    const phase = object(object(object(await command("describe", "unattempted")).command).phase).kind;
+    if (phase === "authorized") await command("cancel", "unattempted");
+    else if (phase === "activated" || phase === "adopted") { await adopted("unattempted"); await command("release", "unattempted"); }
+    else throw new Error("Retain unknown unattempted-proof outcome");
+    unattemptedAuthorized = false;
   }
 } catch (error) { failures.push(error); }
 if (backend !== undefined) {

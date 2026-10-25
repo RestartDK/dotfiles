@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createModels, fauxProvider } from "@earendil-works/pi-ai";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { Harness } from "@earendil-works/pi-durable";
 import { DurableHost, type TrustedHostCommandOperation } from "#durable-host";
 import { parseHostConfig, parseOperation } from "#host-protocol";
 import { hostCommandRuntime } from "../src/host-runtime.js";
@@ -19,6 +21,14 @@ if (process.argv[3] === "hold-launch") {
     return evidence;
   };
 }
+const openHarness = Harness.open;
+let inspectTasks: (() => Promise<unknown>) | undefined;
+Harness.open = async (storage, options, context) => {
+  const harness = await openHarness(storage, options, context);
+  inspectTasks = async () => ({ inspection: await harness.inspect(BACKGROUND_CONTEXT), tasks: (await storage.scanTasks({}, 128, undefined, BACKGROUND_CONTEXT)).items });
+  if (process.argv[3] === "hold-scheduler") harness.resume = () => undefined;
+  return harness;
+};
 const host = await DurableHost.open(config, models, { commands, protectedPaths: [configPath] });
 process.send({ event: "ready" });
 let closing: Promise<void> | undefined;
@@ -29,6 +39,10 @@ process.on("message", (message: unknown) => {
   const id = message.id;
   void (async () => {
     if ("operation" in message) return host.handle(parseOperation(message.operation));
+    if ("tasks" in message && message.tasks === true) {
+      if (inspectTasks === undefined) throw new Error("SDK workspace unavailable");
+      return inspectTasks();
+    }
     if ("command" in message) {
       const command: unknown = message.command;
       if (typeof command !== "object" || command === null || !("op" in command) || typeof command.op !== "string" || !("workspaceId" in command) || typeof command.workspaceId !== "string")

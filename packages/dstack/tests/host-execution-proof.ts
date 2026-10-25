@@ -20,7 +20,14 @@ const models = createModels(); models.setProvider(faux.provider);
 const model = faux.getModel();
 const originalOpen = Harness.open;
 let harnessOpens = 0;
-Harness.open = async (...args) => { harnessOpens += 1; return originalOpen(...args); };
+const opened: { harness: Harness; storage: Parameters<typeof Harness.open>[0] }[] = [];
+const inferenceTrace: unknown[] = [];
+Harness.open = async (...args) => {
+  harnessOpens += 1;
+  const harness = await originalOpen(...args);
+  opened.push({ harness, storage: args[0] });
+  return harness;
+};
 let active: DurableHost | undefined;
 const failures: unknown[] = [];
 
@@ -59,12 +66,18 @@ function root(config: HostConfig, workspaceId: string) {
   } finally { db.close(); }
 }
 async function submissionDone(host: DurableHost, requestId: string): Promise<void> {
+  let last: unknown;
   for (let attempt = 0; attempt < 250; attempt += 1) {
     const result = object(await host.handle(parseOperation({ op: "status", workspaceId: "first", requestId })));
+    last = result;
     if (result.receipt !== null && object(result.receipt).status === "done") return;
     await delay(20);
   }
-  throw new Error(`Managed host submission did not settle: ${requestId}`);
+  const sdk = await Promise.all(opened.map(async ({ harness, storage }) => {
+    try { return { inspection: await harness.inspect(BACKGROUND_CONTEXT), tasks: (await storage.scanTasks({}, 32, undefined, BACKGROUND_CONTEXT)).items, submissions: (await storage.scanSubmissions({}, 32, undefined, BACKGROUND_CONTEXT)).items }; }
+    catch (error) { return { error: String(error) }; }
+  }));
+  throw new Error(`Managed host submission did not settle: ${requestId}\n${JSON.stringify({ last, modelCalls: faux.state.callCount, pendingResponses: faux.getPendingResponseCount(), inferenceTrace, sdk })}`);
 }
 async function refusesBeforeHarness(config: HostConfig) {
   const before = harnessOpens;
@@ -131,13 +144,38 @@ try {
   assert.ok(effectId, "Native mutation failure must retain its actual unresolved effect");
   await active.close(); active = undefined;
   assert.equal(await readFile(refusedFile, "utf8"), "preserved\n");
+  opened.length = 0;
   active = await DurableHost.open(recovery, models);
   assert.equal(faux.state.callCount, callsBeforeFailure + 1, "Unresolved mutation and reopen must not dispatch another inference");
   const blocked = object(await active.handle(parseOperation({ op: "execution.status", workspaceId: "first" })));
   assert.deepEqual(blocked.unresolved, [{ kind: "file", effectId }]);
-  await active.handle(parseOperation({ op: "file.reconcile", workspaceId: "first", effectId, reference: "operator inspected preserved file after owned SDK close" }));
+  let abortedInterruptedTurn = false;
+  for (const { harness, storage } of opened) {
+    const interrupted = (await storage.scanSubmissions({}, 32, undefined, BACKGROUND_CONTEXT)).items.find(submission => submission.requestId === "native-write-refusal");
+    if (interrupted === undefined) continue;
+    const conversation = await harness.conversation(interrupted.conversationId, BACKGROUND_CONTEXT);
+    assert.ok(conversation !== undefined);
+    await conversation.abort(BACKGROUND_CONTEXT);
+    await conversation.waitForIdle(BACKGROUND_CONTEXT);
+    abortedInterruptedTurn = true;
+  }
+  assert.ok(abortedInterruptedTurn, "Explicitly retire the interrupted SDK turn before asking for a fresh input");
+  assert.equal(faux.state.callCount, callsBeforeFailure + 1, "SDK abort cleanup under the unresolved gate must not infer");
+  assert.deepEqual(object(await active.handle(parseOperation({ op: "execution.status", workspaceId: "first" }))).unresolved, [{ kind: "file", effectId }]);
+  await active.handle(parseOperation({ op: "file.reconcile", workspaceId: "first", effectId, reference: "operator inspected preserved file after owned SDK close and explicit turn abort" }));
   assert.deepEqual(object(await active.handle(parseOperation({ op: "execution.status", workspaceId: "first" }))).unresolved, []);
-  faux.setResponses([fauxAssistantMessage(fauxToolCall("write", { path: "after-reconcile.txt", content: "new approved turn\n" }), { stopReason: "toolUse" }), fauxAssistantMessage("Done.")]);
+  faux.setResponses([
+    transcript => {
+      const users = transcript.messages.filter(message => message.role === "user").map(message => message.content);
+      inferenceTrace.push({ stage: "after-reconcile-write", users });
+      assert.ok(JSON.stringify(users.at(-1)).includes("explicit new input after reconciliation"), "The fresh turn, not a resumed old request, must own this write");
+      return fauxAssistantMessage(fauxToolCall("write", { path: "after-reconcile.txt", content: "new approved turn\n" }), { stopReason: "toolUse" });
+    },
+    transcript => {
+      inferenceTrace.push({ stage: "after-reconcile-done", users: transcript.messages.filter(message => message.role === "user").map(message => message.content) });
+      return fauxAssistantMessage("Done.");
+    },
+  ]);
   await active.handle(parseOperation({ op: "submit", requestId: "after-file-reconcile", workspaceId: "first", content: "explicit new input after reconciliation" }));
   await submissionDone(active, "after-file-reconcile");
   assert.equal(await readFile(join(recoveryCwd, "after-reconcile.txt"), "utf8"), "new approved turn\n");
@@ -181,7 +219,7 @@ try {
   await refusesBeforeHarness(catalogue);
   assert.ok((await lstat(`${index}.preserved`)).isFile());
 
-  process.stdout.write(`${JSON.stringify({ event: "pass", proof: "managed-host", path, actualSdkNativeMutation: true, actualSdkProtectedControlAndAuth: true, actualNativeFileFailureReopenedWithoutInference: true, explicitFileReconciliationWithoutCommandRuntime: true, multipleWorkspacesPreparedBeforeHarness: true, missingExpectedSdkNotAllocated: true, disabledAndMissingPairedEvidenceRefused: true, modelCommandRegistered: false, commandOwnerIntegrated: false, actualProcessKill: false })}\n`);
+  process.stdout.write(`${JSON.stringify({ event: "pass", proof: "managed-host", path, actualSdkNativeMutation: true, actualSdkProtectedControlAndAuth: true, actualNativeFileFailureReopenedWithoutInference: true, explicitSdkAbortWhileFileUnresolved: true, explicitFileReconciliationWithoutCommandRuntime: true, multipleWorkspacesPreparedBeforeHarness: true, missingExpectedSdkNotAllocated: true, disabledAndMissingPairedEvidenceRefused: true, modelCommandRegistered: false, commandOwnerIntegrated: false, actualProcessKill: false })}\n`);
 } catch (error) { failures.push(error); }
 Harness.open = originalOpen;
 try { await active?.close(); } catch (error) { failures.push(error); }
