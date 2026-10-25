@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   ...
 }:
 
@@ -11,8 +12,10 @@
     ];
   };
 
-  networking.nameservers = [
+  networking.nameservers = lib.mkForce [
+    config.my.hosts.hatchi.lan
     config.my.hosts.hatchi.tailnet
     "1.1.1.1"
+    "9.9.9.9"
   ];
 }
