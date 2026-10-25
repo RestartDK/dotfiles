@@ -69,8 +69,13 @@ assert cfg.users.users.hermes.isSystemUser;
 assert cfg.users.users.hermes.extraGroups == [ ];
 assert !(uncredentialed.services.onepassword-secrets.secrets ? hermesGoKey);
 assert !(cfg.services.onepassword-secrets.secrets ? hermesEnv);
+assert cfg.my.hatchi.hermes.apiKeyReference == privateValues.hatchiHermesApiKeyReference;
+assert lib.hasSuffix "/credential" cfg.my.hatchi.hermes.apiKeyReference;
 assert
-  cfg.my.hatchi.hermes.apiKeyReference == privateValues.personalSecretReferences.opencodeApiKey;
+  cfg.my.hatchi.hermes.apiKeyReference != privateValues.personalSecretReferences.opencodeApiKey;
+assert
+  builtins.elemAt (lib.splitString "/" cfg.my.hatchi.hermes.apiKeyReference) 2
+  == builtins.elemAt (lib.splitString "/" privateValues.hatchiOnepasswordReferences.glancePassword) 2;
 assert
   cfg.services.onepassword-secrets.secrets.hermesGoKey.reference
   == cfg.my.hatchi.hermes.apiKeyReference;

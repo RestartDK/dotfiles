@@ -936,11 +936,11 @@
     "private": {
       "flake": false,
       "locked": {
-        "lastModified": 1792924247,
-        "narHash": "sha256-eVsbPtOilTbf9ywGb3Fpr2x9Hf/NjA48hdI9sk+5RbQ=",
+        "lastModified": 1792930338,
+        "narHash": "sha256-JAYghaaQzjvHy5hDrckXhysEcj7GPSQteM8Hf4NjuOE=",
         "owner": "RestartDK",
         "repo": "dotfiles-private",
-        "rev": "276481eea2c0fd61e10c2abba27116a0bfef6f2e",
+        "rev": "89a9fc11114632f69cef35a84bc95af123aaf132",
         "type": "github"
       },
       "original": {

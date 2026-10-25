@@ -5,7 +5,7 @@
     references = network.hatchiOnepasswordReferences;
   };
 
-  my.hatchi.hermes.apiKeyReference = network.personalSecretReferences.opencodeApiKey;
+  my.hatchi.hermes.apiKeyReference = network.hatchiHermesApiKeyReference;
 
   assertions = [
     {
