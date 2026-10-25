@@ -24,6 +24,7 @@ let
       group = nana.users.users.dkumlin.group;
       secrets = [
         "homelabSshKey"
+        "mangyApiKey"
         "opencodeApiKey"
         "openrouterApiKey"
       ];
@@ -74,6 +75,7 @@ assert builtins.all (
     home = config.home-manager.users.${userName};
     homeDir = home.home.homeDirectory;
     fleetKey = cfg.secrets.homelabSshKey or null;
+    mangyKey = cfg.secrets.mangyApiKey or null;
   in
   cfg.enable
   && cfg.tokenFile == "/etc/opnix-token"
@@ -94,6 +96,17 @@ assert builtins.all (
       && fleetKey.owner == userName
       && fleetKey.group == group
       && fleetKey.mode == "0400"
+    )
+  )
+  && (
+    mangyKey == null
+    || (
+      mangyKey.reference == "op://Developer/Chateau mangy api key/credential"
+      && mangyKey.path == "${homeDir}/.opnix-mangy-api-key"
+      && cfg.secretPaths.mangyApiKey == mangyKey.path
+      && mangyKey.owner == userName
+      && mangyKey.group == group
+      && mangyKey.mode == "0400"
     )
   )
   &&

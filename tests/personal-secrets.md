@@ -28,6 +28,16 @@ This configuration enables opnix on both the personal Mac and Twin Mac, plus Nan
 6. Check that `~/.opnix-openrouter-api-key` is nonempty, owned by your user, and has mode `0400`. Do not print its contents. On macOS, use `stat -f '%Su %Sp' ~/.opnix-openrouter-api-key`. On Linux, use `stat -c '%U %a' ~/.opnix-openrouter-api-key`.
 7. Start Pi and select an OpenRouter model with `/model`. Send a short prompt to verify the authenticated request. Never use `pi auth print-api-key` to inspect a real credential in logs or chat.
 
+## Mangy API key on Nana
+
+Nana also renders the mangy API key that scripted clients send as `x-api-key` to `https://mangy.chateauducipieres.com`. The key comes from mangy's own settings screen, so it has to be minted from a logged-in session and then stored once:
+
+1. Mint a key in mangy under settings, API keys.
+2. Store it in the `Developer` vault as an API Credential item named `Chateau mangy api key`. That name and its `credential` field are the reference `op://Developer/Chateau mangy api key/credential` that Nana's configuration declares.
+3. Restart the secret service with the command above and check that `~/.opnix-mangy-api-key` is nonempty, owned by your user, and mode `0400`.
+
+The item must live in a vault Nana's service account can read, which is the same `Developer` vault as the other personal keys.
+
 ## Refresh or revoke access
 
 After rotating the OpenRouter key in 1Password, restart the secret service with the command above. Pi's model credential command reads the file at request time. Polling is not enabled.

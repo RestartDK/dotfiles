@@ -1,4 +1,9 @@
-{ inputs, network, ... }:
+{
+  config,
+  inputs,
+  network,
+  ...
+}:
 
 {
   imports = [
@@ -44,6 +49,11 @@
   my.secrets.keys.homelabSshKey = {
     reference = network.personalSecretReferences.homelabSshKey;
     path = "/run/onepassword-ssh/id_ed25519";
+  };
+
+  my.secrets.keys.mangyApiKey = {
+    reference = "op://Developer/Chateau mangy api key/credential";
+    path = "${config.my.host.homeDirectory}/.opnix-mangy-api-key";
   };
 
   boot.loader.grub = {
