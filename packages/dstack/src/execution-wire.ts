@@ -13,6 +13,8 @@ const path = Type.String({ pattern: "^/", maxLength: 4095 });
 const text = Type.String({ minLength: 1, maxLength: 1024, pattern: "\\S" });
 const json = Type.String({ maxLength: 32768 });
 const sdk = Type.Object({ taskKey: text, conversationKey: text, callId: text }, closed);
+const sdkTask = Type.Object({ kind: Type.Literal("task"), taskKey: text, conversationKey: text }, closed);
+const commandSdk = Type.Union([sdk, sdkTask]);
 const containment = Type.Object({
   source: Type.Literal("systemd-manager"), unit: Type.String({ pattern: "^hdj-[a-zA-Z0-9.-]+\\.service$", maxLength: 80 }),
   invocationId: Type.String({ pattern: "^[0-9a-f]{32}$" }),
@@ -30,7 +32,7 @@ const root = Type.Object({
 }, closed);
 const event = Type.Union([
   Type.Object({ kind: Type.Literal("command.authorized"), specJson: json, specSha256: hash, inputSha256: hash, sourceBootId: boot, captureEpoch: hash }, closed),
-  Type.Object({ kind: Type.Literal("command.attempted"), intentId: name, sdk }, closed),
+  Type.Object({ kind: Type.Literal("command.attempted"), intentId: name, sdk: commandSdk }, closed),
   Type.Object({ kind: Type.Literal("command.activated"), intentId: name, evidenceJson: json }, closed),
   Type.Object({ kind: Type.Literal("command.adopted"), intentId: name, receiptJson: json, containment }, closed),
   Type.Object({ kind: Type.Literal("command.cancel-requested"), intentId: name }, closed),
@@ -48,6 +50,7 @@ export type ExecutionRoot = Static<typeof root>;
 export type ExecutionEvent = Static<typeof event>;
 export type ExecutionRecord = Static<typeof record>;
 export type RecordedSdkCall = Static<typeof sdk>;
+export type RecordedCommandInvocation = Static<typeof commandSdk>;
 export const MAX_EXECUTION_RECORD_BYTES = 128 * 1024;
 
 export function executionDigest(bytes: string): string {
@@ -88,8 +91,9 @@ export function executionRootBytes(value: ExecutionRoot): string {
   });
 }
 
-function call(value: RecordedSdkCall): void {
-  for (const key of [value.taskKey, value.conversationKey, value.callId]) identity(key, 1024);
+function call(value: RecordedCommandInvocation): void {
+  for (const key of [value.taskKey, value.conversationKey]) identity(key, 1024);
+  if ("callId" in value) identity(value.callId, 1024);
 }
 
 function embedded(value: ExecutionEvent, root: ExecutionRoot): void {

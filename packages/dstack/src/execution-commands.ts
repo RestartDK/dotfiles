@@ -5,7 +5,7 @@ import { CommandDirectory } from "./command-store.js";
 import { parseCommandEvidence, parseCommandSpec, type CommandEvidence } from "./command-wire.js";
 import type { CommandState, ExecutionState } from "./execution-domain.js";
 import { ExecutionJournal } from "./execution-journal.js";
-import { executionDigest, parseExecutionEvent, type ExecutionEvent, type RecordedSdkCall } from "./execution-wire.js";
+import { executionDigest, parseExecutionEvent, type ExecutionEvent, type RecordedCommandInvocation } from "./execution-wire.js";
 
 type Work = { readonly kind: "open"; tail: Promise<void> } | { readonly kind: "closing"; readonly completion: Promise<void> };
 type Capture = { readonly kind: "live" | "retiring"; readonly source: CommandSource };
@@ -150,7 +150,7 @@ export class ExecutionCommands {
     });
   }
 
-  start(intentId: string, sdk: RecordedSdkCall): Promise<CommandState> {
+  start(intentId: string, sdk: RecordedCommandInvocation): Promise<CommandState> {
     const provenance = { ...sdk };
     return this.run(async () => {
       const command = await this.command(intentId);

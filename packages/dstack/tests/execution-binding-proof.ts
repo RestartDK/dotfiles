@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
@@ -25,7 +25,9 @@ let owner: CodingWorkspaceOwner | undefined;
 const failures: unknown[] = [];
 const originalOpen = Harness.open;
 let resumeCalls = 0;
+let openCalls = 0;
 Harness.open = async (...args) => {
+  openCalls += 1;
   const harness = await originalOpen(...args);
   const resume = harness.resume.bind(harness);
   harness.resume = (...args) => {
@@ -35,6 +37,13 @@ Harness.open = async (...args) => {
   return harness;
 };
 try {
+  const missing = { ...common, stateDirectory: join(path, "missing") };
+  await assert.rejects(CodingWorkspaceOwner.open({ ...missing, management: { root, initialization: "existing" } }, context));
+  await assert.rejects(lstat(missing.stateDirectory), { code: "ENOENT" }, "Expected-existing open must not allocate its missing state directory");
+  const missingDatabase = { ...common, stateDirectory: join(path, "missing-database") };
+  await mkdir(missingDatabase.stateDirectory, { mode: 0o700 });
+  await assert.rejects(CodingWorkspaceOwner.open({ ...missingDatabase, management: { root, initialization: "existing" } }, context));
+  await assert.rejects(lstat(join(missingDatabase.stateDirectory, "conversation.sqlite")), { code: "ENOENT" }, "Expected-existing open must not allocate its missing database");
   owner = await CodingWorkspaceOwner.open(legacy, context);
   const legacyConversation = owner.conversation.id;
   assert.equal(resumeCalls, 1);
@@ -56,16 +65,24 @@ try {
     assert.deepEqual(coding.workspace, workspace);
   }, context);
   await owner.close(); owner = undefined;
+  const beforeRefusal = openCalls;
   await assert.rejects(CodingWorkspaceOwner.open(managed, context), /requires execution ownership/);
+  assert.equal(openCalls, beforeRefusal, "Managed marker refusal must precede Harness.open");
   await assert.rejects(CodingWorkspaceOwner.open({ ...managed, management: { root, initialization: "new" } }, context), /existing coding store/);
   await assert.rejects(CodingWorkspaceOwner.open({ ...managed, management: { root: { ...root, token: "f".repeat(64) }, initialization: "existing" } }, context), /identity is missing or changed/);
+  const beforePreparation = openCalls;
+  const prepared = await CodingWorkspaceOwner.prepare({ ...managed, management: { root, initialization: "existing" } }, context);
+  assert.equal(openCalls, beforePreparation, "Preparing a coding store must not initialize or recover a Harness");
+  await prepared.close();
+  await assert.rejects(prepared.open(context), /prepared coding workspace is closed/i);
+  assert.equal(openCalls, beforePreparation);
   owner = await CodingWorkspaceOwner.open({ ...managed, management: { root, initialization: "existing" } }, context);
   assert.equal(owner.conversation.id, originalConversation);
   assert.equal(resumeCalls, legacyResumeCalls);
   await owner.harness.commit(async tx => { (await tx.doc(ExecutionRootDoc)).rootJson = null; }, context);
   await owner.close(); owner = undefined;
   await assert.rejects(CodingWorkspaceOwner.open({ ...managed, management: { root, initialization: "existing" } }, context), /identity is missing or changed/);
-  const result = { path, verdict: "sdk-execution-marker-component-only", legacyReopenPreserved: true, implicitM2UpgradeRefused: true, managedIdentityAndDisabledConfigurationRefused: true, missingMarkerRefusedWhenExpectedManaged: true, startupResumeDeferred: true, allProgressPathsGated: false, globalExecutionIndexImplemented: false, hostIntegrated: false, modelCommandToolRegistered: false, actualProcessKill: false };
+  const result = { path, verdict: "sdk-execution-marker-component-only", legacyReopenPreserved: true, implicitM2UpgradeRefused: true, managedIdentityAndDisabledConfigurationRefused: true, missingMarkerRefusedWhenExpectedManaged: true, startupResumeDeferred: true, preparationDefersHarnessOpen: true, missingExpectedStoreNotAllocated: true, allProgressPathsGated: false, globalExecutionIndexImplemented: false, hostIntegrated: false, modelCommandToolRegistered: false, actualProcessKill: false };
   await writeFile(join(path, "result.json"), JSON.stringify(result, null, 2), { flag: "wx", mode: 0o600 });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 } catch (error) { failures.push(error); }

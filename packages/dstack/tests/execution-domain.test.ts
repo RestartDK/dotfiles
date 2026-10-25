@@ -105,6 +105,18 @@ test("fresh and reused file/SDK effects cannot bypass an unresolved mutation", (
   expect(() => state([{ kind: "file.adopted", effectId: id }])).toThrow(/unresolved effect/);
 });
 
+test("owned SDK tasks have distinct provenance without a fabricated tool call ID", () => {
+  const invocation: ExecutionEvent = { kind: "command.attempted", intentId: "intent", sdk: { kind: "task", taskKey: "task", conversationKey: "conversation" } };
+  const reconciliation: ExecutionEvent = { kind: "command.reconciled", intentId: "intent", actor: "fixture", reference: "acknowledged unknown",
+    containment: { kind: "trusted-offline", reference: "fixture-only" } };
+  expect(state([authorize(), invocation]).commands.get("intent")?.phase.kind).toBe("attempted");
+  const second = authorize({ intentId: "second", executionId: "second", unit: "hdj-second.service", epoch: "b".repeat(64) });
+  expect(() => state([authorize(), invocation, reconciliation, second, { ...invocation, intentId: "second" }])).toThrow(/SDK call already owns/);
+  expect(state([authorize(), invocation, reconciliation, file({ sdk: { conversationKey: "task", taskKey: "conversation", callId: "task" } })]).files.size).toBe(1);
+  const encoded = history([authorize(), invocation])[1];
+  expect(() => parseExecutionRecord(JSON.stringify({ ...encoded, event: { ...invocation, sdk: { ...invocation.sdk, callId: "counterfeit" } } }), root)).toThrow(/schema/);
+});
+
 test("authorization requires a live-capture epoch reference and preserves NEL identities", () => {
   const { captureEpoch, ...withoutEpoch } = authorize();
   expect(captureEpoch).toHaveLength(64);

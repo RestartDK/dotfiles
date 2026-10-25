@@ -10,12 +10,14 @@ import type { WorkspacePaths } from "./workspace-paths.js";
 
 type Invocation =
   | { readonly kind: "read" }
+  | { readonly kind: "legacy-mutation" }
   | {
       readonly kind: "mutation";
       readonly tool: "write" | "edit";
       readonly journal: ExecutionJournal;
       readonly sdk: RecordedSdkCall;
       readonly argumentsSha256: string;
+      readonly beforeMutation?: () => Promise<void>;
     };
 
 export function recordedSdkCall(api: Pick<ToolExecutionApi, "taskId" | "conversationId" | "callId">): RecordedSdkCall {
@@ -88,9 +90,11 @@ class WorkspaceFileEnvironment extends NodeExecutionEnv {
   }
 
   override async writeFile(...[path, content, context]: Parameters<NodeExecutionEnv["writeFile"]>) {
-    if (this.invocation.kind !== "mutation") throw new Error("Read tool cannot mutate workspace files");
+    if (this.invocation.kind === "read") throw new Error("Read tool cannot mutate workspace files");
     const target = await this.checked(path, "write", context);
+    if (this.invocation.kind === "legacy-mutation") return super.writeFile(target, content, context);
     const { journal, sdk, tool, argumentsSha256 } = this.invocation;
+    await this.invocation.beforeMutation?.();
     const effectId = executionDigest(JSON.stringify([journal.root.rootId, sdk.conversationKey, sdk.taskKey, sdk.callId, tool]));
     await journal.append({ kind: "file.started", effectId, tool, path: target, argumentsSha256, sdk });
     const result = await super.writeFile(target, content, BACKGROUND_CONTEXT);
@@ -110,22 +114,41 @@ class WorkspaceFileEnvironment extends NodeExecutionEnv {
   override async watch(..._args: Parameters<NodeExecutionEnv["watch"]>): Promise<never> { throw new Error("Model file tools cannot install filesystem watchers"); }
 }
 
-export function executionFileTools(options: { readonly journal: ExecutionJournal; readonly paths: WorkspacePaths }) {
-  const { journal, paths } = options;
-  if (journal.root.workspace.cwd !== paths.cwd) throw new Error("Execution journal and file workspace differ");
+type FileOwnership =
+  | { readonly kind: "legacy" }
+  | { readonly kind: "managed"; readonly journal: ExecutionJournal; readonly beforeMutation?: () => Promise<void> };
+
+export function workspaceFileTools(options: { readonly paths: WorkspacePaths; readonly ownership: FileOwnership }) {
+  const { paths, ownership } = options;
+  if (ownership.kind === "managed" && ownership.journal.root.workspace.cwd !== paths.cwd)
+    throw new Error("Execution journal and file workspace differ");
   const read = createReadTool(), write = createWriteTool(), edit = createEditTool();
   function scoped<TDetails extends JsonValue>(api: ToolExecutionApi<TDetails>, invocation: Invocation): ToolExecutionApi<TDetails> {
     if (!(api.env instanceof NodeExecutionEnv) || api.env.cwd !== paths.cwd)
       throw new Error("Managed file tools require the workspace's local Node environment");
     return { ...api, env: new WorkspaceFileEnvironment(paths, invocation) };
   }
+  function mutation(tool: "write" | "edit", args: object, api: Pick<ToolExecutionApi, "taskId" | "conversationId" | "callId">): Invocation {
+    if (ownership.kind === "legacy") return { kind: "legacy-mutation" };
+    return { kind: "mutation", tool, journal: ownership.journal, sdk: recordedSdkCall(api), argumentsSha256: argumentsDigest(args), beforeMutation: ownership.beforeMutation };
+  }
   return defineExtension({
     name: "herdr-execution-files",
     tools: [read, write, edit],
     wraps: [
       wrapTool(read, tool => ({ ...tool, execute: (args, api, context) => tool.execute(args, scoped(api, { kind: "read" }), context) })),
-      wrapTool(write, tool => ({ ...tool, executionMode: "sequential", execute: (args, api, context) => tool.execute(args, scoped(api, { kind: "mutation", tool: "write", journal, sdk: recordedSdkCall(api), argumentsSha256: argumentsDigest(args) }), context) })),
-      wrapTool(edit, tool => ({ ...tool, executionMode: "sequential", execute: (args, api, context) => tool.execute(args, scoped(api, { kind: "mutation", tool: "edit", journal, sdk: recordedSdkCall(api), argumentsSha256: argumentsDigest(args) }), context) })),
+      wrapTool(write, tool => ({ ...tool, executionMode: "sequential", execute: async (args, api, context) => {
+        if (ownership.kind === "managed") await ownership.beforeMutation?.();
+        return tool.execute(args, scoped(api, mutation("write", args, api)), context);
+      } })),
+      wrapTool(edit, tool => ({ ...tool, executionMode: "sequential", execute: async (args, api, context) => {
+        if (ownership.kind === "managed") await ownership.beforeMutation?.();
+        return tool.execute(args, scoped(api, mutation("edit", args, api)), context);
+      } })),
     ],
   });
+}
+
+export function executionFileTools(options: { readonly journal: ExecutionJournal; readonly paths: WorkspacePaths }) {
+  return workspaceFileTools({ paths: options.paths, ownership: { kind: "managed", journal: options.journal } });
 }

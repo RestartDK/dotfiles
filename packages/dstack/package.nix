@@ -12,6 +12,9 @@
   openssh,
   pi,
   lib,
+  systemd,
+  callPackage,
+  commandHelper ? callPackage ../herdr-command { },
 }:
 
 (buildNpmPackage.override { nodejs = nodejs_24; }) {
@@ -83,7 +86,11 @@
     done
     makeWrapper ${nodejs_24}/bin/node "$out/bin/dstack-host" \
       --add-flags "$out/libexec/dstack/dist/host-main.js" \
-      --set DSTACK_FLOCK ${util-linux}/bin/flock
+      --set DSTACK_FLOCK ${util-linux}/bin/flock \
+      --set DSTACK_COMMAND_HELPER ${lib.getExe commandHelper} \
+      --set DSTACK_SYSTEMD_RUN ${systemd}/bin/systemd-run \
+      --set DSTACK_SYSTEMCTL ${systemd}/bin/systemctl \
+      --set DSTACK_BUSCTL ${systemd}/bin/busctl
     runHook postInstall
   '';
   meta = {

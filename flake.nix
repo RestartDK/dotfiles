@@ -272,6 +272,7 @@
           herdr-command = pkgs.callPackage ./packages/herdr-command { };
           dstack = pkgs.callPackage ./packages/dstack/package.nix {
             pi = self.packages.${system}.pi;
+            commandHelper = self.packages.${system}.herdr-command;
           };
         }
       );

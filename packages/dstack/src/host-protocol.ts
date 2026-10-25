@@ -24,6 +24,7 @@ export type HostConfig = {
   readonly thinkingLevel: ModelThinkingLevel;
   readonly authPath: string;
   readonly modelsPath: string;
+  readonly execution?: { readonly mode: "durable"; readonly maxRecords: number };
 };
 
 export type HostMutation =
@@ -102,13 +103,21 @@ function absolute(value: unknown, name: string): string {
 
 export function parseHostConfig(value: unknown): HostConfig {
   const config = object(value);
-  fields(config, ["identity", "stateRoot", "model", "thinkingLevel", "authPath", "modelsPath"]);
+  fields(config, ["identity", "stateRoot", "model", "thinkingLevel", "authPath", "modelsPath", "execution"]);
   const identity = object(config.identity);
   fields(identity, ["deploymentId", "domain", "nodeId"]);
   if (identity.domain !== "work" && identity.domain !== "personal")
     throw new HostError("invalid_request", "Invalid host domain");
   const model = object(config.model);
   fields(model, ["provider", "modelId"]);
+  let execution: HostConfig["execution"];
+  if (config.execution !== undefined) {
+    const requested = object(config.execution);
+    fields(requested, ["mode", "maxRecords"]);
+    if (requested.mode !== "durable" || typeof requested.maxRecords !== "number" || !Number.isSafeInteger(requested.maxRecords) || requested.maxRecords < 1 || requested.maxRecords > 65536)
+      throw new HostError("invalid_request", "Invalid durable execution configuration");
+    execution = Object.freeze({ mode: "durable", maxRecords: requested.maxRecords });
+  }
   return {
     identity: {
       deploymentId: identityName(identity.deploymentId, "deploymentId"),
@@ -120,6 +129,7 @@ export function parseHostConfig(value: unknown): HostConfig {
     thinkingLevel: thinkingLevel(config.thinkingLevel),
     authPath: absolute(config.authPath, "authPath"),
     modelsPath: absolute(config.modelsPath, "modelsPath"),
+    ...(execution === undefined ? {} : { execution }),
   };
 }
 

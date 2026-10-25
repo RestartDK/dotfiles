@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { parseCommandEvidence, parseCommandReceipt, parseCommandSpec, type CommandEvidence } from "./command-wire.js";
-import type { ExecutionEvent, ExecutionRecord, RecordedSdkCall } from "./execution-wire.js";
+import type { ExecutionEvent, ExecutionRecord, RecordedCommandInvocation } from "./execution-wire.js";
 
 type Event<K extends ExecutionEvent["kind"]> = Extract<ExecutionEvent, { kind: K }>;
 type Attempted = { readonly kind: "attempted"; readonly attempt: Event<"command.attempted"> };
@@ -40,7 +40,9 @@ function idle(state: ExecutionState): void {
   if (unresolvedEffects(state).length !== 0) throw new Error("Unresolved execution effects block new mutations");
 }
 
-function callKey(call: RecordedSdkCall): string { return JSON.stringify([call.conversationKey, call.taskKey, call.callId]); }
+function callKey(call: RecordedCommandInvocation): string {
+  return JSON.stringify("callId" in call ? ["tool", call.conversationKey, call.taskKey, call.callId] : ["task", call.conversationKey, call.taskKey]);
+}
 
 function bound(authorization: Event<"command.authorized">, evidence: CommandEvidence): void {
   const spec = parseCommandSpec(authorization.specJson);
