@@ -4,9 +4,11 @@ Hermes runs natively as a dedicated system user on Hatchi. The pinned upstream m
 
 ## Check credentials before deployment
 
-1. Confirm that Hatchi's read-only 1Password service account can retrieve `network.personalSecretReferences.opencodeApiKey`. This is the existing OpenCode Go API-key reference, not a new key or an environment-file field.
+1. Confirm that Hatchi's read-only 1Password service account can retrieve `network.hatchiHermesApiKeyReference`. It points to the `credential` field of the Homelab copy of the existing OpenCode Go key, not a new API key or an environment-file field.
 2. Confirm that `hatchiOnepasswordReferences.glancePassword` contains the normal Glance login password without surrounding whitespace. Hermes trims its configured password. Both applications use `daniel`, but their login pages, cookies, and signing keys are separate.
-3. If the Go key's vault is inaccessible, resolve its delivery before deployment. Do not grant broad personal-vault access just to start Hermes. A scoped Homelab reference to the existing key is an alternative, but changing that private reference requires separate review.
+3. Keep Hatchi's existing service account scoped to Homelab. Do not grant it access to the Developer vault to start Hermes.
+
+Pi keeps `personalSecretReferences.opencodeApiKey` in Developer. The Homelab and Developer items contain copies of the same Go API key. Update both items when rotating that key.
 
 Do not put credential values, environment files, or service-account tokens in Git or the Nix store. opnix retrieves the Go key into `/run/hatchi-onepassword/hermesGoKey`, owned by root with mode `0400`. It already retrieves the Glance password. systemd passes private copies through `LoadCredential`. Small launch scripts read those files, export the upstream environment variables, and execute the upstream commands. They do not create a persistent `.env` file. Only the dashboard receives the login-password credential; both Hermes services receive the Go key.
 
@@ -16,7 +18,7 @@ The model is `glm-5.3-flash` through the native `opencode-go` provider. OpenCode
 
 ## Deploy and sign in
 
-1. Complete the credential checks before an authorized deployment. Follow [the deployment workflow](deployment.md). Opening a PR does not deploy Hatchi.
+1. Complete the credential checks before merging or deploying. Follow [the deployment workflow](deployment.md). Opening a PR does not deploy Hatchi, but merging to main triggers automatic deployment after successful CI.
 2. After deployment, check `hermes-agent.service` and `hermes-backend.service` on Hatchi. Both depend on the existing secret-file service.
 3. Open Glance and select **hermes** under **Everything else**, or visit `https://hermes.<configured-domain>`.
 4. Sign in on Hermes's login page as `daniel` with the Glance password.
