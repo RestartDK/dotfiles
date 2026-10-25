@@ -72,7 +72,6 @@
       "fastfetch"
       "ffmpeg"
       "flyctl"
-      "fnm"
       "fzf"
       "gawk"
       "gh"
