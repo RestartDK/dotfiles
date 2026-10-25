@@ -12,6 +12,7 @@ if (configPath === undefined || process.send === undefined) throw new Error("Own
 const models = createModels();
 const faux = fauxProvider({ api: "host-command-fixture", provider: "host-command-fixture", models: [{ id: "idle", input: ["text"] }] });
 models.setProvider(faux.provider);
+if (process.argv[3] === "command-controls") faux.setResponses([fauxAssistantMessage("first completed seed"), fauxAssistantMessage("second completed seed")]);
 if (process.argv[3] === "file-hold") {
   const heldPath = process.argv[4];
   if (heldPath === undefined) throw new Error("Explicit held file required");
@@ -39,17 +40,23 @@ if (process.argv[3] === "hold-launch") {
 const openHarness = Harness.open;
 let inspectTasks: (() => Promise<unknown>) | undefined;
 let abortConversation: (() => Promise<void>) | undefined;
+let compactConversation: (() => Promise<string>) | undefined;
 Harness.open = async (storage, options, context) => {
-  const harness = await openHarness(storage, options, context);
+  const harness = await openHarness(storage, process.argv[3] === "command-controls" ? { ...options, settings: { ...options.settings, compaction: { ...options.settings?.compaction, enabled: false, keepRecentTokens: 0 } } } : options, context);
   inspectTasks = async () => ({ inspection: await harness.inspect(BACKGROUND_CONTEXT), tasks: (await storage.scanTasks({}, 128, undefined, BACKGROUND_CONTEXT)).items, providerCalls: faux.state.callCount });
-  abortConversation = async () => {
+  const boundConversation = async () => {
     const conversations = await storage.scanConversations({}, 2, undefined, BACKGROUND_CONTEXT);
     if (conversations.items.length !== 1 || conversations.items[0] === undefined) throw new Error("One actual SDK conversation expected");
     const conversation = await harness.conversation(conversations.items[0].id, BACKGROUND_CONTEXT);
     if (conversation === undefined) throw new Error("Actual SDK conversation missing");
+    return conversation;
+  };
+  abortConversation = async () => {
+    const conversation = await boundConversation();
     await conversation.abort(BACKGROUND_CONTEXT);
     await conversation.waitForIdle(BACKGROUND_CONTEXT);
   };
+  compactConversation = async () => String(await (await boundConversation()).compact(undefined, BACKGROUND_CONTEXT));
   if (process.argv[3] === "hold-scheduler") harness.resume = () => undefined;
   return harness;
 };
@@ -66,6 +73,10 @@ process.on("message", (message: unknown) => {
     if ("tasks" in message && message.tasks === true) {
       if (inspectTasks === undefined) throw new Error("SDK workspace unavailable");
       return inspectTasks();
+    }
+    if ("compact" in message && message.compact === true) {
+      if (compactConversation === undefined) throw new Error("SDK conversation unavailable");
+      return { taskKey: await compactConversation() };
     }
     if ("abort" in message && message.abort === true) {
       if (abortConversation === undefined) throw new Error("SDK conversation unavailable");
