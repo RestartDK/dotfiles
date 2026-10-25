@@ -37,6 +37,7 @@ export async function serveHost(
       maxFrameBytes: MAX_FRAME_BYTES,
       maxInFlight: 1,
       tools: ["read", "write", "edit"],
+      ...(host.nativeCommandOperations.length === 0 ? {} : { commandOperations: host.nativeCommandOperations }),
     });
     for await (const frame of frames(input)) {
       const request = parseEnvelope(frame);

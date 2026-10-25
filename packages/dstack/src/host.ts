@@ -13,6 +13,7 @@ import { executionRootBytes } from "./execution-wire.js";
 import { HostExecution, type HostCommandRuntime } from "./host-execution.js";
 import { hostCommandTask } from "./host-command-task.js";
 import { executionModels } from "./execution-models.js";
+import { unresolvedEffects } from "./execution-domain.js";
 import type { CommandAuthorizationInput, TrustedReconciliation } from "./execution-commands.js";
 import { WorkspacePaths } from "./workspace-paths.js";
 import { isDeepStrictEqual } from "node:util";
@@ -296,6 +297,10 @@ export class DurableHost {
     return active;
   }
 
+  get nativeCommandOperations(): readonly string[] {
+    return this.#execution?.nativeCommandOperations ?? [];
+  }
+
   handle(operation: HostOperation): Promise<unknown> {
     return this.request(() => this.dispatch(operation));
   }
@@ -308,41 +313,75 @@ export class DurableHost {
 
   command(request: TrustedHostCommandOperation): Promise<unknown> {
     const operation = structuredClone(request);
-    return this.request(async () => {
-      await this.assertOwnership(operation.workspaceId);
-      const commands = this.commandOwner(operation.workspaceId);
-      switch (operation.op) {
-        case "authorize": return commands.authorize(operation.authorization);
-        case "describe": return commands.describe(operation.intentId);
-        case "inspect": return commands.inspect(operation.intentId);
-        case "adopt": return commands.adopt(operation.intentId);
-        case "cancel": return commands.cancel(operation.intentId);
-        case "release": await commands.release(operation.intentId); return { released: true };
-        case "reconcile": return commands.reconcile(operation.reconciliation);
-        case "file.reconcile": {
-          const managed = this.#execution?.get(operation.workspaceId);
-          if (managed === undefined) throw new HostError("execution_required", "Managed journal unavailable");
-          await managed.journal.append({ kind: "file.reconciled", effectId: operation.effectId, actor: operation.actor, reference: operation.reference });
-          return { reconciled: true };
-        }
-        case "start": {
-          const current = await commands.describe(operation.intentId);
-          if (current.command.phase.kind !== "authorized") return current;
-          if (current.grant !== "live") throw new HostError("expired_grant", "Command source grant is expired or revoked; authorize a new intent");
-          await this.assertProgress(operation.workspaceId);
-          const task = this.#commandTasks.get(operation.workspaceId);
-          if (task === undefined) throw new HostError("execution_required", "Owned command task unavailable");
-          const owner = this.owner(operation.workspaceId);
-          const id = await owner.conversation.commit(tx => tx.createTask(task, { intentId: operation.intentId }, { ownership: { kind: "conversation" } }), context);
-          owner.harness.resume();
-          return { intentId: operation.intentId, taskKey: String(id), conversationKey: String(owner.conversation.id) };
-        }
+    return this.request(() => this.performCommand(operation));
+  }
+
+  private async performCommand(operation: TrustedHostCommandOperation): Promise<unknown> {
+    await this.assertOwnership(operation.workspaceId);
+    if (operation.op === "file.reconcile") {
+      const managed = this.#execution?.get(operation.workspaceId);
+      if (managed === undefined) throw new HostError("execution_required", "Managed journal unavailable");
+      await managed.journal.append({ kind: "file.reconciled", effectId: operation.effectId, actor: operation.actor, reference: operation.reference });
+      return { reconciled: true };
+    }
+    const commands = this.commandOwner(operation.workspaceId);
+    switch (operation.op) {
+      case "authorize": return commands.authorize(operation.authorization);
+      case "describe": return commands.describe(operation.intentId);
+      case "inspect": return commands.inspect(operation.intentId);
+      case "adopt": return commands.adopt(operation.intentId);
+      case "cancel": return commands.cancel(operation.intentId);
+      case "release": await commands.release(operation.intentId); return { released: true };
+      case "reconcile": return commands.reconcile(operation.reconciliation);
+      case "start": {
+        const current = await commands.describe(operation.intentId);
+        if (current.command.phase.kind !== "authorized") return current;
+        if (current.grant !== "live") throw new HostError("expired_grant", "Command source grant is expired or revoked; authorize a new intent");
+        await this.assertProgress(operation.workspaceId);
+        const task = this.#commandTasks.get(operation.workspaceId);
+        if (task === undefined) throw new HostError("execution_required", "Owned command task unavailable");
+        const owner = this.owner(operation.workspaceId);
+        const id = await owner.conversation.commit(tx => tx.createTask(task, { intentId: operation.intentId }, { ownership: { kind: "conversation" } }), context);
+        owner.harness.resume();
+        return { intentId: operation.intentId, taskKey: String(id), conversationKey: String(owner.conversation.id) };
       }
-    });
+      default: { const exhaustive: never = operation; throw new Error(`Unsupported command operation ${exhaustive}`); }
+    }
   }
 
   private async dispatch(operation: HostOperation): Promise<unknown> {
     switch (operation.op) {
+      case "execution.status": {
+        await this.assertOwnership(operation.workspaceId);
+        const managed = this.#execution?.get(operation.workspaceId);
+        if (managed === undefined) throw new HostError("execution_required", "Managed journal unavailable");
+        await this.#execution?.catalogue.assertBinding(managed.root);
+        const { records, state } = await managed.journal.snapshot();
+        return {
+          workspaceId: operation.workspaceId, rootId: managed.root.rootId, sequence: records.length,
+          unresolved: unresolvedEffects(state),
+          recentCommands: [...state.commands].slice(-32).map(([intentId, command]) => ({ intentId, phase: command.phase.kind })),
+          recentFiles: [...state.files].slice(-32).map(([effectId, file]) => ({ effectId, phase: file.phase.kind })),
+        };
+      }
+      case "command.authorize":
+        return this.performCommand({ op: "authorize", workspaceId: operation.workspaceId, authorization: { intentId: operation.intentId, ...operation.spec } });
+      case "command.start":
+        return this.performCommand({ op: "start", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.status":
+        return this.performCommand({ op: "describe", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.inspect":
+        return this.performCommand({ op: "inspect", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.adopt":
+        return this.performCommand({ op: "adopt", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.cancel":
+        return this.performCommand({ op: "cancel", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.release":
+        return this.performCommand({ op: "release", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.reconcile":
+        return this.performCommand({ op: "reconcile", workspaceId: operation.workspaceId, reconciliation: { intentId: operation.intentId, reference: operation.reference, containment: operation.containment, actor: "herdr-local-user" } });
+      case "file.reconcile":
+        return this.performCommand({ op: "file.reconcile", workspaceId: operation.workspaceId, effectId: operation.effectId, reference: operation.reference, actor: "herdr-local-user" });
       case "discover":
         return {
           identity: this.config.identity,

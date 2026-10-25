@@ -42,18 +42,22 @@ const outcome = Type.Union([
 ]);
 const receipt = Type.Object({ evidence, outcome, stdout: log, stderr: log }, closed);
 const claim = Type.Object({ evidence, context }, closed);
+const parameters = Type.Object({
+  argv: Type.Array(Type.String({ maxLength: 4096 }), { minItems: 1, maxItems: 128 }),
+  timeoutSeconds: Type.Integer({ minimum: 1, maximum: 3600 }),
+}, closed);
 const spec = Type.Object({
   version: Type.Literal(1), executionId: name, workspaceId: name, intentId: name,
   nonce: digest, unit: activation.properties.unit,
   cwd: Type.String({ pattern: "^/", maxLength: 4095 }),
-  argv: Type.Array(Type.String({ maxLength: 4096 }), { minItems: 1, maxItems: 128 }),
-  timeoutSeconds: Type.Integer({ minimum: 1, maximum: 3600 }),
+  ...parameters.properties,
   mode, environmentSha256: digest, context,
 }, closed);
 
 export type CommandCredentials = Static<typeof credentials>;
 export type CommandContext = Static<typeof context>;
 export type CommandSpec = Static<typeof spec>;
+export type CommandParameters = Static<typeof parameters>;
 export type CommandEvidence = Static<typeof evidence>;
 export type CommandClaim = Static<typeof claim>;
 export type CommandReceipt = Static<typeof receipt>;
@@ -90,14 +94,24 @@ export function parseCommandCredentials(bytes: string): CommandCredentials {
   return { uid: value.uid, gid: value.gid, groups: sorted };
 }
 
+function validArguments(argv: readonly string[]): boolean {
+  const first = argv[0];
+  return first !== undefined && first.startsWith("/")
+    && argv.every(arg => arg.isWellFormed() && !arg.includes("\0") && Buffer.byteLength(arg) <= 4096)
+    && argv.reduce((total, arg) => total + Buffer.byteLength(arg), 0) <= 16384;
+}
+
+export function parseCommandParameters(bytes: string): CommandParameters {
+  const parsed = parse(parameters, bytes, "command parameters");
+  if (!validArguments(parsed.argv)) throw new Error("Invalid command parameters");
+  return parsed;
+}
+
 export function parseCommandSpec(bytes: string): CommandSpec {
   const parsed = parse(spec, bytes, "command spec");
   identities(parsed);
   validateContext(parsed.context);
-  const first = parsed.argv[0];
-  if (first === undefined || !first.startsWith("/")
-    || parsed.argv.some((arg) => !arg.isWellFormed() || arg.includes("\0") || Buffer.byteLength(arg) > 4096)
-    || parsed.argv.reduce((total, arg) => total + Buffer.byteLength(arg), 0) > 16384
+  if (!validArguments(parsed.argv)
     || !parsed.cwd.isWellFormed() || parsed.cwd.includes("\0") || Buffer.byteLength(parsed.cwd) > 4095) {
     throw new Error("Invalid command spec");
   }

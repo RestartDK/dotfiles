@@ -1,9 +1,308 @@
+diff --git a/docs/next/api/herdr-api.schema.json b/docs/next/api/herdr-api.schema.json
+index e2553f7..6adedb6 100644
 --- a/docs/next/api/herdr-api.schema.json
 +++ b/docs/next/api/herdr-api.schema.json
-@@ -1759,6 +1759,124 @@
+@@ -1759,6 +1759,421 @@
            ],
            "type": "object"
          },
++        "DurableCommandContainment": {
++          "oneOf": [
++            {
++              "additionalProperties": false,
++              "properties": {
++                "kind": {
++                  "const": "manager",
++                  "type": "string"
++                }
++              },
++              "required": [
++                "kind"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "kind": {
++                  "const": "trusted-offline",
++                  "type": "string"
++                },
++                "reference": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "kind",
++                "reference"
++              ],
++              "type": "object"
++            }
++          ]
++        },
++        "DurableCommandOperation": {
++          "oneOf": [
++            {
++              "additionalProperties": false,
++              "properties": {
++                "op": {
++                  "const": "execution.status",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "op": {
++                  "const": "command.health",
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.authorize",
++                  "type": "string"
++                },
++                "spec": {
++                  "$ref": "#/schemas/request/$defs/DurableCommandSpec"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId",
++                "spec"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.start",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.status",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.inspect",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.adopt",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.cancel",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.release",
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "containment": {
++                  "$ref": "#/schemas/request/$defs/DurableCommandContainment"
++                },
++                "intentId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "command.reconcile",
++                  "type": "string"
++                },
++                "reference": {
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "intentId",
++                "reference",
++                "containment"
++              ],
++              "type": "object"
++            },
++            {
++              "additionalProperties": false,
++              "properties": {
++                "effectId": {
++                  "type": "string"
++                },
++                "op": {
++                  "const": "file.reconcile",
++                  "type": "string"
++                },
++                "reference": {
++                  "type": "string"
++                },
++                "workspaceId": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "op",
++                "workspaceId",
++                "effectId",
++                "reference"
++              ],
++              "type": "object"
++            }
++          ]
++        },
++        "DurableCommandSpec": {
++          "additionalProperties": false,
++          "properties": {
++            "argv": {
++              "items": {
++                "type": "string"
++              },
++              "maxItems": 128,
++              "minItems": 1,
++              "type": "array"
++            },
++            "timeoutSeconds": {
++              "format": "uint32",
++              "maximum": 3600,
++              "minimum": 1,
++              "type": "integer"
++            }
++          },
++          "required": [
++            "argv",
++            "timeoutSeconds"
++          ],
++          "type": "object"
++        },
 +        "DurableHostOperation": {
 +          "oneOf": [
 +            {
@@ -125,10 +424,18 @@
          "EmptyParams": {
            "type": "object"
          },
-@@ -4689,6 +4807,22 @@
-             },
-             "params": {
-               "$ref": "#/schemas/request/$defs/PingParams"
+@@ -4697,6 +5112,38 @@
+           ],
+           "type": "object"
+         },
++        {
++          "properties": {
++            "method": {
++              "const": "durable.host.v1",
++              "type": "string"
++            },
++            "params": {
++              "$ref": "#/schemas/request/$defs/DurableHostOperation"
 +            }
 +          },
 +          "required": [
@@ -140,18 +447,28 @@
 +        {
 +          "properties": {
 +            "method": {
-+              "const": "durable.host.v1",
++              "const": "durable.commands.v1",
 +              "type": "string"
 +            },
 +            "params": {
-+              "$ref": "#/schemas/request/$defs/DurableHostOperation"
-             }
-           },
-           "required": [
-@@ -9169,6 +9303,20 @@
++              "$ref": "#/schemas/request/$defs/DurableCommandOperation"
++            }
++          },
++          "required": [
++            "method",
++            "params"
++          ],
++          "type": "object"
++        },
+         {
+           "properties": {
+             "method": {
+@@ -9167,6 +9614,20 @@
+         },
+         "ResponseResult": {
            "oneOf": [
-             {
-               "properties": {
++            {
++              "properties": {
 +                "type": {
 +                  "const": "durable_host",
 +                  "type": "string"
@@ -164,14 +481,153 @@
 +              ],
 +              "type": "object"
 +            },
-+            {
-+              "properties": {
+             {
+               "properties": {
                  "capabilities": {
-                   "anyOf": [
-                     {
+diff --git a/src/api/schema/durable_commands.rs b/src/api/schema/durable_commands.rs
+new file mode 100644
+index 0000000..6de5f9a
+--- /dev/null
++++ b/src/api/schema/durable_commands.rs
+@@ -0,0 +1,133 @@
++use serde::{Deserialize, Serialize};
++
++pub const DURABLE_COMMAND_OPERATIONS: [&str; 10] = [
++    "execution.status",
++    "command.authorize",
++    "command.start",
++    "command.status",
++    "command.inspect",
++    "command.adopt",
++    "command.cancel",
++    "command.release",
++    "command.reconcile",
++    "file.reconcile",
++];
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
++#[serde(rename_all = "camelCase", deny_unknown_fields)]
++pub struct DurableCommandSpec {
++    #[schemars(length(min = 1, max = 128))]
++    pub argv: Vec<String>,
++    #[schemars(range(min = 1, max = 3600))]
++    pub timeout_seconds: u32,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
++#[serde(tag = "kind", deny_unknown_fields)]
++pub enum DurableCommandContainment {
++    #[serde(rename = "manager")]
++    Manager,
++    #[serde(rename = "trusted-offline")]
++    TrustedOffline { reference: String },
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
++#[serde(tag = "op", rename_all_fields = "camelCase", deny_unknown_fields)]
++pub enum DurableCommandOperation {
++    #[serde(rename = "execution.status")]
++    ExecutionStatus { workspace_id: String },
++    #[serde(rename = "command.health")]
++    Health,
++    #[serde(rename = "command.authorize")]
++    Authorize {
++        workspace_id: String,
++        intent_id: String,
++        spec: DurableCommandSpec,
++    },
++    #[serde(rename = "command.start")]
++    Start {
++        workspace_id: String,
++        intent_id: String,
++    },
++    #[serde(rename = "command.status")]
++    Status {
++        workspace_id: String,
++        intent_id: String,
++    },
++    #[serde(rename = "command.inspect")]
++    Inspect {
++        workspace_id: String,
++        intent_id: String,
++    },
++    #[serde(rename = "command.adopt")]
++    Adopt {
++        workspace_id: String,
++        intent_id: String,
++    },
++    #[serde(rename = "command.cancel")]
++    Cancel {
++        workspace_id: String,
++        intent_id: String,
++    },
++    #[serde(rename = "command.release")]
++    Release {
++        workspace_id: String,
++        intent_id: String,
++    },
++    #[serde(rename = "command.reconcile")]
++    Reconcile {
++        workspace_id: String,
++        intent_id: String,
++        reference: String,
++        containment: DurableCommandContainment,
++    },
++    #[serde(rename = "file.reconcile")]
++    FileReconcile {
++        workspace_id: String,
++        effect_id: String,
++        reference: String,
++    },
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::api::schema::{DurableHostOperation, Method};
++    use serde_json::json;
++
++    #[test]
++    fn durable_command_method_does_not_widen_the_published_workspace_contract() {
++        let operation = json!({"op":"command.start","workspaceId":"coding","intentId":"build-17"});
++        assert!(serde_json::from_value::<DurableHostOperation>(operation.clone()).is_err());
++        let method = serde_json::from_value::<Method>(
++            json!({"method":"durable.commands.v1","params":operation}),
++        )
++        .unwrap();
++        assert!(matches!(
++            method,
++            Method::DurableCommands(DurableCommandOperation::Start { .. })
++        ));
++    }
++
++    #[test]
++    fn durable_command_schema_rejects_caller_authority_and_start_arguments() {
++        let valid = json!({"op":"command.authorize","workspaceId":"coding","intentId":"build-17","spec":{"argv":["/tool", ""],"timeoutSeconds":60}});
++        assert!(serde_json::from_value::<DurableCommandOperation>(valid.clone()).is_ok());
++        for field in [
++            "actor",
++            "environment",
++            "rootId",
++            "sourceBootId",
++            "approval",
++            "captureEpoch",
++        ] {
++            let mut invalid = valid.clone();
++            invalid[field] = json!("caller-controlled");
++            assert!(serde_json::from_value::<DurableCommandOperation>(invalid).is_err());
++        }
++        let mut nested = valid;
++        nested["spec"]["environment"] = json!({});
++        assert!(serde_json::from_value::<DurableCommandOperation>(nested).is_err());
++        assert!(serde_json::from_value::<DurableCommandOperation>(json!({"op":"command.start","workspaceId":"coding","intentId":"build-17","spec":{"argv":["/tool"],"timeoutSeconds":60}})).is_err());
++    }
++}
+diff --git a/src/api/schema/response.rs b/src/api/schema/response.rs
+index e92e495..8f6a6e8 100644
 --- a/src/api/schema/response.rs
 +++ b/src/api/schema/response.rs
-@@ -42,6 +42,9 @@
+@@ -42,6 +42,9 @@ pub struct ErrorBody {
  #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
  #[serde(tag = "type", rename_all = "snake_case")]
  pub enum ResponseResult {
@@ -181,9 +637,11 @@
      Pong {
          version: String,
          protocol: u32,
+diff --git a/src/api/schema/server.rs b/src/api/schema/server.rs
+index 1adb62f..ef4f76a 100644
 --- a/src/api/schema/server.rs
 +++ b/src/api/schema/server.rs
-@@ -37,3 +37,32 @@
+@@ -37,3 +37,32 @@ pub struct ServerCapabilities {
      #[serde(default)]
      pub ssh_agent_registration: bool,
  }
@@ -216,34 +674,59 @@
 +        request_id: String,
 +    },
 +}
+diff --git a/src/api/schema.rs b/src/api/schema.rs
+index 439ed33..594951c 100644
 --- a/src/api/schema.rs
 +++ b/src/api/schema.rs
-@@ -47,6 +47,8 @@
+@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
+ pub mod agents;
+ pub mod commands;
+ pub mod common;
++pub mod durable_commands;
+ pub mod events;
+ pub mod integrations;
+ pub mod panes;
+@@ -17,6 +18,7 @@ pub mod worktrees;
+ pub use agents::*;
+ pub use commands::*;
+ pub use common::*;
++pub use durable_commands::*;
+ pub use events::*;
+ pub use integrations::*;
+ pub use panes::*;
+@@ -47,6 +49,10 @@ pub struct Request {
  pub enum Method {
      #[serde(rename = "ping")]
      Ping(PingParams),
 +    #[serde(rename = "durable.host.v1")]
 +    DurableHost(DurableHostOperation),
++    #[serde(rename = "durable.commands.v1")]
++    DurableCommands(DurableCommandOperation),
      #[serde(rename = "server.stop")]
      ServerStop(EmptyParams),
      #[serde(rename = "server.live_handoff")]
+diff --git a/src/api/server.rs b/src/api/server.rs
+index 0a4cfa6..93e9418 100644
 --- a/src/api/server.rs
 +++ b/src/api/server.rs
-@@ -604,6 +604,7 @@
+@@ -604,6 +604,8 @@ fn handle_request(
  pub(crate) fn api_method_name(method: &Method) -> &'static str {
      match method {
          Method::Ping(_) => "ping",
 +        Method::DurableHost(_) => "durable.host.v1",
++        Method::DurableCommands(_) => "durable.commands.v1",
          Method::ServerStop(_) => "server.stop",
          Method::ServerLiveHandoff(_) => "server.live_handoff",
          Method::ServerReloadConfig(_) => "server.reload_config",
+diff --git a/src/app/api.rs b/src/app/api.rs
+index dd87c50..3cfcbe4 100644
 --- a/src/app/api.rs
 +++ b/src/app/api.rs
-@@ -953,6 +953,13 @@
+@@ -953,6 +953,13 @@ impl App {
                      "SSH agent registration requires a persistent local JSON API connection",
                  );
              }
-+            Method::DurableHost(_) => {
++            Method::DurableHost(_) | Method::DurableCommands(_) => {
 +                return responses::encode_error(
 +                    request.id,
 +                    "durable_host_unavailable",
@@ -253,9 +736,11 @@
              Method::ServerLiveHandoff(_) => {
                  let response = ErrorResponse {
                      id: request.id,
+diff --git a/src/cli/api.rs b/src/cli/api.rs
+index 418072e..de3f9ef 100644
 --- a/src/cli/api.rs
 +++ b/src/cli/api.rs
-@@ -11,6 +11,7 @@
+@@ -11,6 +11,7 @@ pub(super) fn run_api_command(args: &[String]) -> std::io::Result<i32> {
      match subcommand {
          "schema" => api_schema(&args[1..]),
          "snapshot" => api_snapshot(&args[1..]),
@@ -263,12 +748,10 @@
          "help" | "--help" | "-h" => {
              print_api_help();
              Ok(0)
-@@ -51,6 +52,22 @@
-         }
-     }
+@@ -53,6 +54,36 @@ fn api_schema(args: &[String]) -> std::io::Result<i32> {
      Ok(0)
-+}
-+
+ }
+
 +fn api_durable(args: &[String]) -> std::io::Result<i32> {
 +    let [operation] = args else {
 +        eprintln!("usage: herdr api durable '<operation-json>'");
@@ -278,15 +761,31 @@
 +        eprintln!("durable operation exceeds byte limit");
 +        return Ok(2);
 +    }
-+    let operation = serde_json::from_str(operation)?;
 +    super::print_response(&super::send_request(&Request {
 +        id: "cli:api:durable".into(),
-+        method: Method::DurableHost(operation),
++        method: durable_method(operation)?,
 +    })?)
- }
-
++}
++
++fn durable_method(bytes: &str) -> std::io::Result<Method> {
++    let operation: serde_json::Value = serde_json::from_str(bytes)?;
++    let command = operation
++        .get("op")
++        .and_then(serde_json::Value::as_str)
++        .is_some_and(|name| {
++            name.starts_with("command.") || name == "file.reconcile" || name == "execution.status"
++        });
++    Ok(if command {
++        Method::DurableCommands(serde_json::from_value(operation)?)
++    } else {
++        Method::DurableHost(serde_json::from_value(operation)?)
++    })
++}
++
  fn api_snapshot(args: &[String]) -> std::io::Result<i32> {
-@@ -99,6 +116,7 @@
+     if !args.is_empty() {
+         eprintln!("usage: herdr api snapshot");
+@@ -99,6 +130,7 @@ fn schema_summary_text() -> std::io::Result<String> {
  fn print_api_help() {
      eprintln!("herdr api commands:");
      eprintln!("  herdr api snapshot");
@@ -294,9 +793,38 @@
      eprintln!("  herdr api schema [--json | --output PATH]");
  }
 
+@@ -108,6 +140,25 @@ fn print_api_schema_help() {
+
+ #[cfg(test)]
+ mod tests {
++    #[test]
++    fn durable_cli_selects_the_separately_versioned_command_method() {
++        use crate::api::schema::{DurableCommandOperation, DurableHostOperation, Method};
++        assert!(matches!(
++            super::durable_method(r#"{"op":"health"}"#).unwrap(),
++            Method::DurableHost(DurableHostOperation::Health)
++        ));
++        assert!(matches!(
++            super::durable_method(r#"{"op":"command.health"}"#).unwrap(),
++            Method::DurableCommands(DurableCommandOperation::Health)
++        ));
++        assert!(matches!(super::durable_method(r#"{"op":"file.reconcile","workspaceId":"coding","effectId":"file-1","reference":"operator checked"}"#).unwrap(), Method::DurableCommands(DurableCommandOperation::FileReconcile { .. })));
++        assert!(super::durable_method(
++            r#"{"op":"command.start","workspaceId":"coding","intentId":"build-17","actor":"admin"}"#
++        )
++        .is_err());
++        assert!(super::durable_method(r#"{"op":"command.shell"}"#).is_err());
++    }
++
+     #[test]
+     fn schema_summary_text_stays_human_sized() {
+         let text = super::schema_summary_text().unwrap();
+diff --git a/src/server/durable_host.rs b/src/server/durable_host.rs
+new file mode 100644
+index 0000000..cbfb370
 --- /dev/null
 +++ b/src/server/durable_host.rs
-@@ -0,0 +1,613 @@
+@@ -0,0 +1,682 @@
 +use std::io::{self, Read};
 +use std::path::PathBuf;
 +use std::process::Stdio;
@@ -312,7 +840,8 @@
 +use tokio::time::{timeout, Instant};
 +
 +use crate::api::schema::{
-+    DurableHostOperation, ErrorBody, ErrorResponse, ResponseResult, SuccessResponse,
++    DurableCommandOperation, DurableHostOperation, ErrorBody, ErrorResponse, ResponseResult,
++    SuccessResponse, DURABLE_COMMAND_OPERATIONS,
 +};
 +use crate::api::ApiRequestMessage;
 +
@@ -360,6 +889,8 @@
 +    max_frame_bytes: usize,
 +    max_in_flight: usize,
 +    tools: Vec<String>,
++    #[serde(default, skip_serializing_if = "Vec::is_empty")]
++    command_operations: Vec<String>,
 +}
 +
 +impl Ready {
@@ -372,6 +903,9 @@
 +            || self.max_frame_bytes != MAX_FRAME_BYTES
 +            || self.max_in_flight != 1
 +            || self.tools != ["read", "write", "edit"]
++            || !(self.command_operations.is_empty()
++                || self.command_operations == ["execution.status", "file.reconcile"]
++                || self.command_operations == DURABLE_COMMAND_OPERATIONS)
 +        {
 +            return Err(io::Error::other("durable host readiness contract mismatch"));
 +        }
@@ -389,9 +923,16 @@
 +    Stopped,
 +}
 +
++#[derive(Serialize)]
++#[serde(untagged)]
++enum Operation {
++    Workspace(DurableHostOperation),
++    Command(DurableCommandOperation),
++}
++
 +struct Pending {
 +    message: ApiRequestMessage,
-+    operation: DurableHostOperation,
++    operation: Operation,
 +    deadline: Instant,
 +}
 +
@@ -543,6 +1084,47 @@
 +            );
 +            return;
 +        }
++        self.enqueue(message, Operation::Workspace(operation));
++    }
++
++    pub(crate) fn handle_commands(
++        &self,
++        message: ApiRequestMessage,
++        operation: DurableCommandOperation,
++    ) {
++        let status = self
++            .status
++            .lock()
++            .unwrap_or_else(|error| error.into_inner());
++        let operations = match &*status {
++            Status::Ready { ready } => ready.command_operations.as_slice(),
++            _ => &[],
++        };
++        if matches!(operation, DurableCommandOperation::Health) {
++            respond(
++                message,
++                Ok(json!({
++                    "status": *status, "method": "durable.commands.v1",
++                    "operations": operations, "queueCapacity": QUEUE_CAPACITY,
++                })),
++            );
++            return;
++        }
++        if operations.is_empty() {
++            respond(
++                message,
++                Err(failure(
++                    "durable_commands_unavailable",
++                    "Managed command API is not enabled",
++                )),
++            );
++            return;
++        }
++        drop(status);
++        self.enqueue(message, Operation::Command(operation));
++    }
++
++    fn enqueue(&self, message: ApiRequestMessage, operation: Operation) {
 +        let status = self
 +            .status
 +            .lock()
@@ -627,7 +1209,7 @@
 +    }
 +}
 +
-+fn encode_request(id: &str, operation: &DurableHostOperation) -> io::Result<Vec<u8>> {
++fn encode_request(id: &str, operation: &impl Serialize) -> io::Result<Vec<u8>> {
 +    let mut frame = serde_json::to_vec(&json!({"v": VERSION, "id": id, "operation": operation}))?;
 +    if frame.len() > MAX_FRAME_BYTES {
 +        return Err(io::Error::other("host request exceeds byte limit"));
@@ -897,8 +1479,23 @@
 +            max_frame_bytes: MAX_FRAME_BYTES,
 +            max_in_flight: 1,
 +            tools: vec!["read".into(), "write".into(), "edit".into()],
++            command_operations: vec![],
 +        };
 +        ready.verify(&identity).unwrap();
++        assert!(serde_json::to_value(&ready)
++            .unwrap()
++            .get("commandOperations")
++            .is_none());
++        ready.command_operations = vec!["execution.status".into(), "file.reconcile".into()];
++        ready.verify(&identity).unwrap();
++        ready.command_operations = DURABLE_COMMAND_OPERATIONS
++            .iter()
++            .map(|name| (*name).into())
++            .collect();
++        ready.verify(&identity).unwrap();
++        ready.command_operations.push("command.shell".into());
++        assert!(ready.verify(&identity).is_err());
++        ready.command_operations.clear();
 +        ready.identity.domain = Domain::Personal;
 +        assert!(ready.verify(&identity).is_err());
 +        ready.identity = identity.clone();
@@ -910,9 +1507,11 @@
 +        assert!(!Guardian::default().enabled());
 +    }
 +}
+diff --git a/src/server/headless/bootstrap.rs b/src/server/headless/bootstrap.rs
+index 9522f15..5ad4c77 100644
 --- a/src/server/headless/bootstrap.rs
 +++ b/src/server/headless/bootstrap.rs
-@@ -84,6 +84,8 @@
+@@ -84,6 +84,8 @@ pub fn run_server() -> io::Result<()> {
              Err(err) => return Err(err),
          };
 
@@ -921,7 +1520,7 @@
          info!(
              api_socket = %api::socket_path().display(),
              client_socket = %client_socket_path().display(),
-@@ -133,6 +135,11 @@
+@@ -133,6 +135,11 @@ fn take_startup_cwd() -> Option<PathBuf> {
  #[cfg(unix)]
  fn run_handoff_import_server(socket_path: &Path, token: &str) -> io::Result<()> {
      let loaded_config = config::Config::load();
@@ -933,9 +1532,11 @@
      let mut received = crate::server::handoff::receive(socket_path, token)?;
      crate::server::handoff::log_import_result(received.manifest.panes.len());
 
+diff --git a/src/server/headless/lifecycle.rs b/src/server/headless/lifecycle.rs
+index 8c6587f..84219e0 100644
 --- a/src/server/headless/lifecycle.rs
 +++ b/src/server/headless/lifecycle.rs
-@@ -26,6 +26,9 @@
+@@ -26,6 +26,9 @@ impl HeadlessServer {
          &mut self,
          params: crate::api::schema::ServerLiveHandoffParams,
      ) -> io::Result<()> {
@@ -945,7 +1546,7 @@
          info!("starting live handoff");
          let import_exe = params.import_exe.as_deref().map(std::path::PathBuf::from);
          let socket_path = crate::server::handoff::handoff_socket_path();
-@@ -335,6 +338,7 @@
+@@ -335,6 +338,7 @@ impl HeadlessServer {
      /// close client connections, remove socket files, and clean up.
      pub(super) async fn complete_shutdown(&mut self) -> io::Result<()> {
          info!("completing server shutdown");
@@ -953,9 +1554,11 @@
          self.reject_late_client_connections().await;
 
          // Send ServerShutdown to all remaining clients.
+diff --git a/src/server/headless/tests/mod.rs b/src/server/headless/tests/mod.rs
+index 3ab7ec0..154d465 100644
 --- a/src/server/headless/tests/mod.rs
 +++ b/src/server/headless/tests/mod.rs
-@@ -99,6 +99,7 @@
+@@ -99,6 +99,7 @@ fn test_headless_server_with_event_hub(event_hub: api::EventHub) -> HeadlessServ
      let headless_size = app.state.headless_size;
 
      HeadlessServer {
@@ -963,7 +1566,7 @@
          app,
          #[cfg(unix)]
          api_tx: None,
-@@ -8333,3 +8334,22 @@
+@@ -8333,3 +8334,22 @@ fn no_handle_internal_event_bypass_in_module() {
          bypass_lines.join("\n  ")
      );
  }
@@ -986,9 +1589,11 @@
 +    assert_eq!(server.app.policy.persist_session, persistence);
 +    assert!(!server.handoff_in_progress);
 +}
+diff --git a/src/server/headless.rs b/src/server/headless.rs
+index cb2c619..945cd8d 100644
 --- a/src/server/headless.rs
 +++ b/src/server/headless.rs
-@@ -190,6 +190,7 @@
+@@ -190,6 +190,7 @@ enum AltScreenReadConflict {
 
  /// The headless server — runs the herdr event loop without a real terminal.
  pub struct HeadlessServer {
@@ -996,7 +1601,7 @@
      app: app::App,
      #[cfg(unix)]
      api_tx: Option<api::ApiRequestSender>,
-@@ -349,6 +350,7 @@
+@@ -349,6 +350,7 @@ impl HeadlessServer {
          #[cfg(not(unix))]
          let _ = api_tx;
          Ok(Self {
@@ -1004,7 +1609,7 @@
              app,
              #[cfg(unix)]
              api_tx,
-@@ -2918,6 +2920,12 @@
+@@ -2918,6 +2920,17 @@ impl HeadlessServer {
              return false;
          }
 
@@ -1013,13 +1618,20 @@
 +            self.durable_host.handle(msg, operation);
 +            return false;
 +        }
++        if let api::schema::Method::DurableCommands(operation) = &msg.request.method {
++            let operation = operation.clone();
++            self.durable_host.handle_commands(msg, operation);
++            return false;
++        }
 +
          let frozen_alt_screen_read = match self.alt_screen_read_conflict(&msg.request) {
              AltScreenReadConflict::None => None,
              AltScreenReadConflict::Frozen(snapshot) => Some(snapshot),
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index 481bdad..c96c237 100644
 --- a/src/server/mod.rs
 +++ b/src/server/mod.rs
-@@ -9,6 +9,7 @@
+@@ -9,6 +9,7 @@ pub(crate) mod client_shell_graphics;
  pub(crate) mod client_transport;
  pub(crate) mod clients;
  pub(crate) mod clipboard_image;

@@ -9,7 +9,7 @@ import type { CommandRuntime } from "./command-runtime.js";
 import { unresolvedEffects } from "./execution-domain.js";
 import { ExecutionJournal } from "./execution-journal.js";
 import { executionRootBytes, type ExecutionRoot } from "./execution-wire.js";
-import { HostError, type HostConfig, type HostMutation } from "#host-protocol";
+import { HOST_COMMAND_OPERATIONS, HostError, type HostConfig, type HostMutation } from "#host-protocol";
 
 export type ManagedWorkspace = {
   readonly root: ExecutionRoot;
@@ -34,6 +34,10 @@ export class HostExecution {
     readonly catalogue: ExecutionCatalogue,
     private readonly release: () => Promise<void>,
   ) {}
+
+  get nativeCommandOperations(): readonly string[] {
+    return this.options.commands === undefined ? ["execution.status", "file.reconcile"] : HOST_COMMAND_OPERATIONS;
+  }
 
   static async open(options: Options): Promise<HostExecution | undefined> {
     const path = join(options.config.stateRoot, "execution");

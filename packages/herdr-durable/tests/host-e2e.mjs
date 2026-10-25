@@ -72,14 +72,14 @@ const cli = async (...args) => {
   }
 };
 const call = (operation) => cli("api", "durable", JSON.stringify(operation));
-const rawCall = (operation) => new Promise((resolve, reject) => {
+const rawCall = (operation, method = "durable.host.v1") => new Promise((resolve, reject) => {
   const socket = createConnection(env.HERDR_SOCKET_PATH);
   let buffered = "";
   socket.setTimeout(8000, () => socket.destroy(new Error("API response deadline exceeded")));
   socket.once("error", reject);
   socket.once("connect", () => socket.write(`${JSON.stringify({
     id: "host-regression",
-    method: "durable.host.v1",
+    method,
     params: operation,
   })}\n`));
   socket.on("data", (data) => {
@@ -146,6 +146,99 @@ async function stop() {
     const childPid = Number(await readFile(join(root, "child.pid"), "utf8").catch(() => "0"));
     if (childPid) assert.throws(() => process.kill(childPid, 0), { code: "ESRCH" });
   }
+}
+async function nativeCommands() {
+  for (const key of ["DSTACK_COMMAND_HELPER", "DSTACK_SYSTEMD_RUN", "DSTACK_SYSTEMCTL", "DSTACK_BUSCTL"])
+    assert.ok(process.env[key]?.startsWith("/nix/store/"), `Pinned live command reference required: ${key}`);
+  const bus = process.env.DBUS_SESSION_BUS_ADDRESS || (process.env.XDG_RUNTIME_DIR && `unix:path=${process.env.XDG_RUNTIME_DIR}/bus`);
+  assert.ok(bus, "Original user-manager bus reference required");
+  env.DBUS_SESSION_BUS_ADDRESS = bus;
+  assert.ok(process.env.XDG_RUNTIME_DIR, "Original user-manager runtime reference required");
+  env.XDG_RUNTIME_DIR = process.env.XDG_RUNTIME_DIR;
+  await exec(process.env.DSTACK_SYSTEMCTL, ["--user", "show", "--property=Version", "--value"], { env, timeout: 5000 });
+  env.HERDR_DURABLE_HOST_CONFIG = configPath;
+  env.HERDR_DURABLE_HOST_EXECUTABLE = wrapper;
+  await writeFile(configPath, JSON.stringify({ ...config, stateRoot: join(root, "command-state"), execution: { mode: "durable", maxRecords: 256 } }));
+  await writeFile(wrapper, `#!/bin/sh\nprintf "%s\\n" "$$" > "${root}/child.pid"\nexec '${process.execPath}' '${fixture}' "$@" commands\n`, { mode: 0o700 });
+  const ready = await start();
+  assert.deepEqual(ready.status.ready.tools, ["read", "write", "edit"]);
+  const health = (await call({ op: "command.health" })).result.value;
+  assert.equal(health.method, "durable.commands.v1");
+  assert.deepEqual(health.operations, ["execution.status", "command.authorize", "command.start", "command.status", "command.inspect", "command.adopt", "command.cancel", "command.release", "command.reconcile", "file.reconcile"]);
+  const workspaceId = "native-commands";
+  const value = async operation => {
+    const response = await call({ workspaceId, ...operation });
+    assert.ok(response.result, JSON.stringify(response));
+    return response.result.value;
+  };
+  await value({ op: "create", requestId: "create-native", cwd });
+  const before = await value({ op: "execution.status" });
+  assert.equal(before.sequence, 0);
+  assert.deepEqual(before.unresolved, []);
+  const originalPid = await readFile(join(root, "child.pid"), "utf8");
+  const invalid = await rawCall({ op: "command.authorize", workspaceId, intentId: "invalid", spec: { argv: ["relative"], timeoutSeconds: 1 } }, "durable.commands.v1");
+  assert.equal(invalid.id, "host-regression");
+  assert.equal(invalid.error.code, "invalid_request");
+  assert.equal(await readFile(join(root, "child.pid"), "utf8"), originalPid);
+  assert.ok((await rawCall({ op: "command.start", workspaceId, intentId: "once" })).error, "Frozen workspace method must reject command variants");
+  assert.equal((await value({ op: "execution.status" })).sequence, 0);
+  const marker = join(cwd, "native-once.txt");
+  const script = "require('node:fs').writeFileSync(process.argv[1],'once',{flag:'wx',mode:384});";
+  const authorization = { op: "command.authorize", intentId: "once", spec: { argv: [process.execPath, "-e", script, marker], timeoutSeconds: 10 } };
+  let needsCleanup = false;
+  let started;
+  const failures = [];
+  try {
+  const authorized = await value(authorization);
+  const spec = JSON.parse(authorized.authorization.specJson);
+  needsCleanup = true;
+  started = await value({ op: "command.start", intentId: "once" });
+  assert.equal(typeof started.taskKey, "string");
+  assert.equal(typeof started.conversationKey, "string");
+  let observation;
+  for (const deadline = performance.now() + 20000; performance.now() < deadline;) {
+    observation = await value({ op: "command.inspect", intentId: "once" });
+    if (observation.outcome.kind === "recorded" && observation.containment.kind === "empty") break;
+    await delay(25);
+  }
+  assert.equal(observation.outcome.kind, "recorded");
+  assert.equal(observation.outcome.receipt.outcome.kind, "exit");
+  assert.equal(observation.outcome.receipt.outcome.code, 0);
+  assert.equal(observation.containment.kind, "empty");
+  const adopted = await value({ op: "command.adopt", intentId: "once" });
+  assert.equal(adopted.phase.kind, "adopted");
+  await value({ op: "command.release", intentId: "once" });
+  needsCleanup = false;
+  const custody = await exec(process.env.DSTACK_SYSTEMCTL, ["--user", "show", spec.unit, "--property=NFileDescriptorStore", "--value"], { env, timeout: 5000 });
+  assert.equal(custody.stdout.trim(), "0");
+  assert.equal((await value({ op: "command.start", intentId: "once" })).command.phase.kind, "adopted");
+  assert.ok((await call({ workspaceId, ...authorization, spec: { ...authorization.spec, argv: [process.execPath, "-e", "throw Error('changed')"] } })).error);
+  const settled = await value({ op: "execution.status" });
+  assert.equal(settled.sequence, 4);
+  assert.deepEqual(settled.unresolved, []);
+  assert.deepEqual(settled.recentCommands, [{ intentId: "once", phase: "adopted" }]);
+  assert.equal(await readFile(marker, "utf8"), "once");
+  } catch (error) { failures.push(error); }
+  if (needsCleanup) {
+    try {
+      const canceled = await value({ op: "command.cancel", intentId: "once" });
+      if (canceled.phase.kind !== "authorized") {
+        let observation;
+        for (const deadline = performance.now() + 20000; performance.now() < deadline;) {
+          observation = await value({ op: "command.inspect", intentId: "once" });
+          if (observation.outcome.kind === "recorded" && observation.containment.kind === "empty") break;
+          await delay(25);
+        }
+        assert.equal(observation.outcome.kind, "recorded", "Cleanup must retain unknown outcomes, never invent an exit");
+        assert.equal(observation.containment.kind, "empty", "Cleanup requires original empty containment");
+        assert.equal((await value({ op: "command.adopt", intentId: "once" })).phase.kind, "adopted");
+        await value({ op: "command.release", intentId: "once" });
+      }
+    } catch (error) { failures.push(error); }
+  }
+  if (failures.length) throw new AggregateError(failures, `Native command proof or original-custody cleanup failed; preserve ${root}`);
+  await stop();
+  console.log(JSON.stringify({ event: "pass", proof: "native-cli-command-lifecycle", root, realSdkTaskKey: started.taskKey, realSdkConversationKey: started.conversationKey, oneAttempt: true, originalCustodyReleased: true, modelCommandRegistered: false }));
 }
 async function requestBoundaryAndConfigPinning() {
   env.HERDR_DURABLE_HOST_CONFIG = configPath;
@@ -378,6 +471,7 @@ process.stdin.once("data", (data) => {
   await stop();
   console.log(JSON.stringify({ event: "pass", proof: "optional-host-unavailable-disabled", root }));
   await requestBoundaryAndConfigPinning();
+  if (process.env.HERDR_TEST_COMMANDS === "1") await nativeCommands();
 } finally {
   await stop();
   await writeFile(join(root, "server.log"), logs);

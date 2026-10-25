@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -58,6 +58,14 @@ function root(config: HostConfig, workspaceId: string) {
     return parseExecutionRoot(row.root_json);
   } finally { db.close(); }
 }
+async function submissionDone(host: DurableHost, requestId: string): Promise<void> {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    const result = object(await host.handle(parseOperation({ op: "status", workspaceId: "first", requestId })));
+    if (result.receipt !== null && object(result.receipt).status === "done") return;
+    await delay(20);
+  }
+  throw new Error(`Managed host submission did not settle: ${requestId}`);
+}
 async function refusesBeforeHarness(config: HostConfig) {
   const before = harnessOpens;
   await assert.rejects(DurableHost.open(config, models));
@@ -79,13 +87,7 @@ try {
   active = await DurableHost.open(config, models, { protectedPaths: [configPath] });
   await assert.rejects(DurableHost.open(config, models), /Another daemon owns this state directory/);
   await active.handle(parseOperation({ op: "submit", requestId: "files", workspaceId: "first", content: "exercise managed files" }));
-  let settled = false;
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    const result = object(await active.handle(parseOperation({ op: "status", workspaceId: "first", requestId: "files" })));
-    if (result.receipt !== null && object(result.receipt).status === "done") { settled = true; break; }
-    await delay(20);
-  }
-  assert.ok(settled, "Managed host submission must settle");
+  await submissionDone(active, "files");
   assert.equal(await readFile(join(cwd, "proof.txt"), "utf8"), "managed\n");
   assert.equal(await readFile(config.authPath, "utf8"), "private-fixture-sentinel");
   assert.equal(await readFile(configPath, "utf8"), "preserved-control");
@@ -102,6 +104,46 @@ try {
   await active.close(); active = undefined;
   const { execution: _disabled, ...disabled } = config;
   await refusesBeforeHarness(disabled);
+
+  const recovery = await fixture("file-reconcile");
+  const recoveryCwd = join(path, "file-reconcile");
+  const refusedFile = join(recoveryCwd, "refused.txt");
+  await writeFile(refusedFile, "preserved\n", { mode: 0o400 });
+  await chmod(refusedFile, 0o400);
+  const callsBeforeFailure = faux.state.callCount;
+  faux.setResponses([fauxAssistantMessage(fauxToolCall("write", { path: "refused.txt", content: "must not write\n" }), { stopReason: "toolUse" })]);
+  active = await DurableHost.open(recovery, models);
+  assert.deepEqual(active.nativeCommandOperations, ["execution.status", "file.reconcile"]);
+  await active.handle(parseOperation({ op: "submit", requestId: "native-write-refusal", workspaceId: "first", content: "exercise native failure and explicit recovery" }));
+  let effectId: string | undefined;
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    const status = object(await active.handle(parseOperation({ op: "execution.status", workspaceId: "first" })));
+    assert.ok(Array.isArray(status.unresolved));
+    if (status.unresolved.length !== 0) {
+      const pending = object(status.unresolved[0]);
+      assert.equal(pending.kind, "file");
+      assert.equal(typeof pending.effectId, "string");
+      if (typeof pending.effectId === "string") effectId = pending.effectId;
+      break;
+    }
+    await delay(20);
+  }
+  assert.ok(effectId, "Native mutation failure must retain its actual unresolved effect");
+  await active.close(); active = undefined;
+  assert.equal(await readFile(refusedFile, "utf8"), "preserved\n");
+  active = await DurableHost.open(recovery, models);
+  assert.equal(faux.state.callCount, callsBeforeFailure + 1, "Unresolved mutation and reopen must not dispatch another inference");
+  const blocked = object(await active.handle(parseOperation({ op: "execution.status", workspaceId: "first" })));
+  assert.deepEqual(blocked.unresolved, [{ kind: "file", effectId }]);
+  await active.handle(parseOperation({ op: "file.reconcile", workspaceId: "first", effectId, reference: "operator inspected preserved file after owned SDK close" }));
+  assert.deepEqual(object(await active.handle(parseOperation({ op: "execution.status", workspaceId: "first" }))).unresolved, []);
+  faux.setResponses([fauxAssistantMessage(fauxToolCall("write", { path: "after-reconcile.txt", content: "new approved turn\n" }), { stopReason: "toolUse" }), fauxAssistantMessage("Done.")]);
+  await active.handle(parseOperation({ op: "submit", requestId: "after-file-reconcile", workspaceId: "first", content: "explicit new input after reconciliation" }));
+  await submissionDone(active, "after-file-reconcile");
+  assert.equal(await readFile(join(recoveryCwd, "after-reconcile.txt"), "utf8"), "new approved turn\n");
+  assert.equal(await readFile(refusedFile, "utf8"), "preserved\n");
+  assert.deepEqual(object(await active.handle(parseOperation({ op: "execution.status", workspaceId: "first" }))).unresolved, []);
+  await active.close(); active = undefined;
 
   const missing = await fixture("missing-sdk");
   const sdk = join(store(missing, "second"), "conversation.sqlite");
@@ -139,7 +181,7 @@ try {
   await refusesBeforeHarness(catalogue);
   assert.ok((await lstat(`${index}.preserved`)).isFile());
 
-  process.stdout.write(`${JSON.stringify({ event: "pass", proof: "managed-host", path, actualSdkNativeMutation: true, actualSdkProtectedControlAndAuth: true, multipleWorkspacesPreparedBeforeHarness: true, missingExpectedSdkNotAllocated: true, disabledAndMissingPairedEvidenceRefused: true, modelCommandRegistered: false, commandOwnerIntegrated: false, actualProcessKill: false })}\n`);
+  process.stdout.write(`${JSON.stringify({ event: "pass", proof: "managed-host", path, actualSdkNativeMutation: true, actualSdkProtectedControlAndAuth: true, actualNativeFileFailureReopenedWithoutInference: true, explicitFileReconciliationWithoutCommandRuntime: true, multipleWorkspacesPreparedBeforeHarness: true, missingExpectedSdkNotAllocated: true, disabledAndMissingPairedEvidenceRefused: true, modelCommandRegistered: false, commandOwnerIntegrated: false, actualProcessKill: false })}\n`);
 } catch (error) { failures.push(error); }
 Harness.open = originalOpen;
 try { await active?.close(); } catch (error) { failures.push(error); }

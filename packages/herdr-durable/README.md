@@ -55,16 +55,64 @@ later layers. It does not modify installed config or start a live server.
 
 ## CLI and transport
 
-`herdr api durable '<operation-json>'` sends the optional `durable.host.v1` JSON
-method. First call `{"op":"health"}`. Its operations list is empty until version,
-fixed identity, frame limits, and file-only readiness match the child. Older
-servers reject the missing method without affecting other operations.
+`herdr api durable '<operation-json>'` selects `durable.host.v1` for workspace
+operations and the separate `durable.commands.v1` for `command.*`,
+`execution.status`, and `file.reconcile`. The published workspace operation enum
+has not changed. First call `{"op":"health"}`. Its operations list is empty until
+the child's version, identity, frame limits, and file-tool registrations match.
+Older servers reject a missing method without affecting other operations.
 
-Operations are `create` (`requestId`, `workspaceId`, `cwd`), `discover`, `snapshot`
-(`workspaceId`), `submit` (`requestId`, `workspaceId`, `content`), and `status`
-(`workspaceId`, `requestId`). `create` and `submit` require stable host-scoped
-request IDs. Responses use `result.value`; receipts are official Durable records.
-A caller disconnect does not cancel admitted work. There is no shell command tool.
+Workspace operations are `create` with `requestId`, `workspaceId`, and `cwd`,
+`discover`, `snapshot` with `workspaceId`, `submit` with `requestId`, `workspaceId`,
+and `content`, and `status` with `workspaceId` and `requestId`. Request IDs are
+stable and host-scoped. Responses use `result.value`; submission receipts are
+official Durable records. Disconnect detaches without cancelling admitted work.
+
+### Managed execution control
+
+Managed execution is opt-in through `"execution":{"mode":"durable","maxRecords":16384}`
+in the host config. Use a new private state root. Adding this setting does not
+upgrade an existing legacy workspace. The host pairs its catalogue, execution
+journals, and actual SDK documents before allowing workspace progress. Missing,
+partial, disabled, or inconsistent ownership evidence refuses reopening and stays
+on disk. There is no automatic repair or deletion.
+
+`{"op":"command.health"}` reports the separate method and advertised operations.
+Managed file-only hosts advertise `execution.status` and `file.reconcile`; a
+configured command runtime also advertises `command.authorize`, `command.start`,
+`command.status`, `command.inspect`, `command.adopt`, `command.cancel`,
+`command.release`, and `command.reconcile`. Legacy hosts advertise none of these.
+Model tools remain `read`, `write`, and `edit`. No model shell or command tool is
+registered.
+
+A trusted local caller authorizes an immutable intent, then starts that intent:
+
+```sh
+herdr api durable '{"op":"command.authorize","workspaceId":"coding","intentId":"build-17","spec":{"argv":["/absolute/bin/tool","arg"],"timeoutSeconds":60}}'
+herdr api durable '{"op":"command.start","workspaceId":"coding","intentId":"build-17"}'
+herdr api durable '{"op":"command.inspect","workspaceId":"coding","intentId":"build-17"}'
+```
+
+Only authorization accepts argv and timeout. The executable must be absolute.
+There are 1 to 128 arguments, at most 4096 UTF-8 bytes each and 16384 bytes total.
+Timeout is an integer from 1 to 3600 seconds. The owner binds cwd, environment,
+credentials, boot/capture identity, and live filesystem descriptors. Callers cannot
+supply those fields or a reconciliation actor. Reusing an intent with changed
+content refuses; repeated starts attach without launching another attempt.
+
+`execution.status` returns the root ID, journal sequence, unresolved effect IDs,
+and up to 32 command/file phase summaries in effect-creation order. It does not
+expose the root token. `file.reconcile` accepts `workspaceId`, an observed
+`effectId`, and an operator `reference`; it works without a command runtime.
+Reconciliation records the local audit label `herdr-local-user`, not authentication.
+It acknowledges uncertainty without inventing an exit or proving empty containment.
+Command adoption and namespace release require their separate original evidence.
+
+This is trusted same-user control, not authenticated browser ingress or an OS
+sandbox. Identity strings must be well-formed Unicode; paths are NUL-free and at
+most 4095 UTF-8 bytes. Older invalid pending admissions are retained and refused,
+not rewritten or silently migrated. Valid padded identities and U+0085 remain
+unchanged. A failed command lookup or missing manager does not prove non-execution.
 
 The guardian has a 16-request queue, one in-flight RPC, a two-second RPC deadline,
 a four-second pre-send expiry, and three process-start attempts per server boot.
@@ -92,3 +140,12 @@ and sockets. It uses a real Node Durable host with a faux provider, exercises th
 actual CLI, proves file/receipt recovery, and checks handoff refusal and optional
 backend failure. It stops its servers and preserves evidence directories.
 It does not establish production-model behavior or full six-layer acceptance.
+
+Set `HERDR_TEST_COMMANDS=1` and supply the pinned `DSTACK_COMMAND_HELPER`,
+`DSTACK_SYSTEMD_RUN`, `DSTACK_SYSTEMCTL`, and `DSTACK_BUSCTL` references to include
+the Native command lifecycle. Point `DSTACK_TEST_FIXTURE` at the matching package's
+`dist/tests/host-fixture.js`. This proof keeps the original user-manager bus and
+runtime directory while isolating its API/client sockets. It checks authorization,
+one actual SDK-owned attempt, bound receipt adoption, original empty containment,
+and FD-store release. It also checks correlated invalid requests and unchanged
+model tools. A passing lifecycle is not all failure-window acceptance.
