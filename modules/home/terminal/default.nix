@@ -10,8 +10,6 @@ let
   cfg = config.my.liveConfig;
   hasScattererInput = dotfilesInputs ? scatterer;
   herdrPackage = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system}.herdr;
-  terminalBrowserPackage =
-    dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.terminal-browser;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
   # Upstream's packages.plugin is a ready-to-link Herdr plugin root: the
   # store manifest invokes the built binary directly (no bash launcher, no
@@ -28,11 +26,7 @@ in
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       (lib.mkIf cfg.groups.terminalTools {
-        home.packages = [
-          tuicrPackage
-          terminalBrowserPackage
-        ];
-        home.sessionVariables.TERMINAL_BROWSER_NO_TELEMETRY = "1";
+        home.packages = [ tuicrPackage ];
         programs.btop = {
           enable = true;
           # Stylix owns the theme wherever the palette drives the host.
