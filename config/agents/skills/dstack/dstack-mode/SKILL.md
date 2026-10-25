@@ -46,7 +46,8 @@ Remaining triggers:
 - Task hinges on a past decision, a prior pi session, or "where did we land on X" → the **recall** skill rebuilds that context before you re-derive it.
 - Broken skill mid-task → fix it in its own PR. Don't block. Don't silently work around it.
 - Long, autonomous, or multi-phase work, or any task the user steps away from → a decision trail via the **show-me-your-work** skill.
-- Context about to compact, or an explicit pause → the **Pause safely** playbook. Resuming prior work → **Session pickup**.
+- An explicit user request to pause, go offline, restart Pi, or hand work over → the **Pause safely** playbook. Resuming after an interruption → **Session pickup**.
+- Context pressure or compaction → preserve important progress in the existing task record and continue the authorized task. Pi compacts older history automatically. Do not invoke Pause safely, commit WIP, cancel workers, tear down task resources, or end the run solely because of context pressure or compaction.
 - Anything that finishes (tests, builds, clippy, evals, CI suites, scripts) runs through the herdr tool's `run` with `wait: true` (one blocking call with a real completion check, exit code and tail) or `notify: true` (return now; a message arrives when it exits). Completion is the pane's foreground process group returning to the shell, never a sentinel regex. `watch` is for readiness patterns only (a server's listen line), and a match on the shell's echo of your own command is a failure, not a result. Bash `sleep` polling is blocked by the `pi-no-sleep` extension; a `STILL RUNNING` result is a status, so switch to `notify` and do other work.
 
 ## Principles
@@ -197,6 +198,6 @@ A large or cross-cutting effort, or work the user steps away from to trust later
 - **Babysit.** Driving a PR or a stack through merge and verified cleanup: conflicts, review threads, CI, approval waits, and resource teardown. `~/.agents/skills/dstack/dstack-mode/playbooks/babysit.md`.
 - **Shipping.** The authorized landing phase. Independently verify green work, then land the contiguous verified run through GitHub's native `gh stack merge` for stacks or `gh pr merge` for standalone PRs. Read `references/github-stacks.md` for setup and merge limits. `~/.agents/skills/dstack/dstack-mode/playbooks/shipping.md`.
 - **Session pickup.** Resuming or taking over a prior agent's in-flight work from a transcript, session file, or pushed branch. `~/.agents/skills/dstack/dstack-mode/playbooks/session-pickup.md`.
-- **Pause safely.** Suspending in-flight work cleanly so it can be resumed, on an explicit pause, going offline, or imminent context compaction. The complement to Session pickup. `~/.agents/skills/dstack/dstack-mode/playbooks/pause-safely.md`.
+- **Pause safely.** Suspending in-flight work cleanly on an explicit user request to pause, go offline, restart Pi, or hand work over. The complement to Session pickup. `~/.agents/skills/dstack/dstack-mode/playbooks/pause-safely.md`.
 - **Worktree and simulator cleanup.** Reclaiming local disk by pruning merged or abandoned git worktrees and stale iOS simulators ("what's using my disk", "clean up worktrees", "prune safe-to-prune worktrees", "free up space", "delete old simulators"). `~/.agents/skills/dstack/dstack-mode/playbooks/worktree-cleanup.md`.
 - **Opening a PR.** Invoked at the end of every other playbook. `~/.agents/skills/dstack/dstack-mode/playbooks/opening-a-pr.md`.
