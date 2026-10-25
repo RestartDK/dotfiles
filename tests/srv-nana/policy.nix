@@ -93,6 +93,7 @@ assert
     "1.1.1.1"
     "9.9.9.9"
   ];
+assert cfg.networking.networkmanager.dns == "none";
 pkgs.runCommand "srv-nana-policy" { } ''
   touch $out
 ''
