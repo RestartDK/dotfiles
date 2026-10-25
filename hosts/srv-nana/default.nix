@@ -52,7 +52,7 @@
   };
 
   my.secrets.keys.mangyApiKey = {
-    reference = "op://Developer/Chateau mangy api key/credential";
+    reference = network.personalSecretReferences.mangyApiKey;
     path = "${config.my.host.homeDirectory}/.opnix-mangy-api-key";
   };
 

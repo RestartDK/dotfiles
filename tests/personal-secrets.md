@@ -33,7 +33,7 @@ This configuration enables opnix on both the personal Mac and Twin Mac, plus Nan
 Nana also renders the mangy API key that scripted clients send as `x-api-key` to `https://mangy.chateauducipieres.com`. The key comes from mangy's own settings screen, so it has to be minted from a logged-in session and then stored once:
 
 1. Mint a key in mangy under settings, API keys.
-2. Store it in the `Developer` vault as an API Credential item named `Chateau mangy api key`. That name and its `credential` field are the reference `op://Developer/Chateau mangy api key/credential` that Nana's configuration declares.
+2. Store it in the `Developer` vault as an API Credential item named `Chateau mangy api key`. That name and its `credential` field are the reference `op://Developer/Chateau mangy api key/credential`, which `personalSecretReferences.mangyApiKey` in `dotfiles-private` holds for Nana's configuration.
 3. Restart the secret service with the command above and check that `~/.opnix-mangy-api-key` is nonempty, owned by your user, and mode `0400`.
 
 The item must live in a vault Nana's service account can read, which is the same `Developer` vault as the other personal keys.

@@ -101,7 +101,7 @@ assert builtins.all (
   && (
     mangyKey == null
     || (
-      mangyKey.reference == "op://Developer/Chateau mangy api key/credential"
+      mangyKey.reference == privateValues.personalSecretReferences.mangyApiKey
       && mangyKey.path == "${homeDir}/.opnix-mangy-api-key"
       && cfg.secretPaths.mangyApiKey == mangyKey.path
       && mangyKey.owner == userName
