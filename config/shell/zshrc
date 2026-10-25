@@ -119,18 +119,6 @@ path_append "/opt/homebrew/Caskroom/flutter/3.32.4/flutter/bin"
 
 [[ -n "${GOROOT:-}" ]] && path_prepend "$GOROOT/bin"
 
-# fnm config
-export FNM_VERSION_FILE_STRATEGY="local"
-export FNM_DIR="$HOME/.local/share/fnm"
-export FNM_LOGLEVEL="info"
-export FNM_NODE_DIST_MIRROR="https://nodejs.org/dist"
-export FNM_COREPACK_ENABLED="false"
-export FNM_RESOLVE_ENGINES="true"
-case "$(uname -m)" in
-  arm64|aarch64) export FNM_ARCH="arm64" ;;
-  x86_64|amd64) export FNM_ARCH="x64" ;;
-esac
-
 # editor config
 if command -v cursor >/dev/null 2>&1; then
   export EDITOR="cursor -w"
@@ -177,11 +165,6 @@ export POWERLINE_NERD_FONTS="${POWERLINE_NERD_FONTS:-1}"
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd _repo_env_prompt
 add-zsh-hook chpwd _repo_env_prompt
-if command -v fnm >/dev/null 2>&1; then
-  eval "$(fnm env --use-on-cd --shell zsh)"
-  add-zsh-hook -d chpwd _fnm_autoload_hook
-  repo_env_hooks+=(_fnm_autoload_hook)
-fi
 command -v rbenv >/dev/null 2>&1 && eval "$(rbenv init -)"
 command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"
 command -v thefuck >/dev/null 2>&1 && eval "$(thefuck --alias)"

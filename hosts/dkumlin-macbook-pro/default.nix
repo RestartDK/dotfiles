@@ -80,7 +80,6 @@
       "fastlane"
       "ffmpeg"
       "flyctl"
-      "fnm"
       "fzf"
       "gawk"
       "gh"

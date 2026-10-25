@@ -28,7 +28,7 @@ an unprepared command.
 `repo_env_hooks` is an ordered list of shell functions. Each function must block
 until its tools and exports are usable, update the current shell, and return
 nonzero on failure. The defaults run an explicitly selected provider and then
-direnv. fnm's directory hook is registered when installed.
+direnv.
 
 The direnv hook finds the applicable parent `.envrc`. It reloads on the first
 preparation even when the source shell inherited direnv's loaded-file marker.

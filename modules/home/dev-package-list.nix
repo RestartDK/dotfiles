@@ -37,7 +37,6 @@ with pkgs;
   yq
   btop
   starship
-  fnm
   bun
   go
   rustc

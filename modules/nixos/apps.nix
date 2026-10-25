@@ -38,7 +38,6 @@
     rsync
 
     nodejs
-    fnm
     bun
     go
     rustup
