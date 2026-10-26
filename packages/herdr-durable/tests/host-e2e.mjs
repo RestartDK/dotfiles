@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { access, mkdtemp, mkdir, writeFile, readFile, readlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -147,7 +148,7 @@ async function stop() {
     if (childPid) assert.throws(() => process.kill(childPid, 0), { code: "ESRCH" });
   }
 }
-async function nativeCommands() {
+async function nativeCommands(ownersAbsent) {
   for (const key of ["DSTACK_COMMAND_HELPER", "DSTACK_SYSTEMD_RUN", "DSTACK_SYSTEMCTL", "DSTACK_BUSCTL"])
     assert.ok(process.env[key]?.startsWith("/nix/store/"), `Pinned live command reference required: ${key}`);
   const bus = process.env.DBUS_SESSION_BUS_ADDRESS || (process.env.XDG_RUNTIME_DIR && `unix:path=${process.env.XDG_RUNTIME_DIR}/bus`);
@@ -183,7 +184,10 @@ async function nativeCommands() {
   assert.ok((await rawCall({ op: "command.start", workspaceId, intentId: "once" })).error, "Frozen workspace method must reject command variants");
   assert.equal((await value({ op: "execution.status" })).sequence, 0);
   const marker = join(cwd, "native-once.txt");
-  const script = "require('node:fs').writeFileSync(process.argv[1],'once',{flag:'wx',mode:384});";
+  const payloadReady = join(cwd, "payload-ready.txt"), ownersGone = join(cwd, "owners-gone.txt");
+  const script = ownersAbsent
+    ? `const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(payloadReady)},'ready',{flag:'wx',mode:384});const t=setInterval(()=>{if(fs.existsSync(${JSON.stringify(ownersGone)})){fs.writeFileSync(process.argv[1],'once',{flag:'wx',mode:384});clearInterval(t);}},10);`
+    : "require('node:fs').writeFileSync(process.argv[1],'once',{flag:'wx',mode:384});";
   const authorization = { op: "command.authorize", intentId: "once", spec: { argv: [process.execPath, "-e", script, marker], timeoutSeconds: 10 } };
   let needsCleanup = false;
   let started;
@@ -202,6 +206,36 @@ async function nativeCommands() {
     await delay(20);
   }
   assert.ok(["attempted", "activated"].includes(progress.recentCommands[0]?.phase));
+  if (ownersAbsent) {
+    const optionalBytes = async path => readFile(path, "utf8").catch(error => { if (error.code === "ENOENT") return undefined; throw error; });
+    for (const deadline = performance.now() + 5000; performance.now() < deadline;) {
+      if (await optionalBytes(payloadReady) === "ready") break;
+      await delay(20);
+    }
+    assert.equal(await readFile(payloadReady, "utf8"), "ready");
+    await stop();
+    assert.throws(() => process.kill(Number(originalPid), 0), { code: "ESRCH" });
+    await writeFile(ownersGone, "both owners exited", { flag: "wx", mode: 0o600 });
+    const receiptPath = join(root, "command-state", "execution", "workspaces", before.rootId, "commands", spec.executionId, "exit.json");
+    let rawReceipt;
+    for (const deadline = performance.now() + 12000; performance.now() < deadline;) {
+      const bytes = await optionalBytes(receiptPath);
+      if (bytes !== undefined) { assert.ok(Buffer.byteLength(bytes) <= 32768); rawReceipt = JSON.parse(bytes); break; }
+      await delay(20);
+    }
+    assert.ok(rawReceipt);
+    assert.deepEqual(rawReceipt.outcome, { kind: "exit", code: 0, cause: "normal" });
+    assert.equal(rawReceipt.evidence.executionId, spec.executionId);
+    assert.equal(rawReceipt.evidence.workspaceId, workspaceId);
+    assert.equal(rawReceipt.evidence.intentId, "once");
+    assert.equal(rawReceipt.evidence.nonce, spec.nonce);
+    assert.equal(rawReceipt.evidence.specSha256, createHash("sha256").update(JSON.stringify(spec)).digest("hex"));
+    assert.equal(rawReceipt.evidence.activation.unit, spec.unit);
+    await writeFile(join(root, "while-owners-absent.json"), JSON.stringify({ rawReceipt, oldNodePid: originalPid, oldNodeBoot: ready.status.ready.bootId, rustExited: true, nodeExited: true }, null, 2), { flag: "wx", mode: 0o600 });
+    const recovered = await start();
+    assert.notEqual(recovered.status.ready.bootId, ready.status.ready.bootId);
+    assert.notEqual(await readFile(join(root, "child.pid"), "utf8"), originalPid);
+  }
   let observation;
   for (const deadline = performance.now() + 20000; performance.now() < deadline;) {
     observation = await value({ op: "command.inspect", intentId: "once" });
@@ -212,8 +246,10 @@ async function nativeCommands() {
   assert.equal(observation.outcome.receipt.outcome.kind, "exit");
   assert.equal(observation.outcome.receipt.outcome.code, 0);
   assert.equal(observation.containment.kind, "empty");
-  assert.equal((await call({ op: "health" })).result.value.status.ready.bootId, ready.status.ready.bootId);
-  assert.equal(await readFile(join(root, "child.pid"), "utf8"), originalPid);
+  if (!ownersAbsent) {
+    assert.equal((await call({ op: "health" })).result.value.status.ready.bootId, ready.status.ready.bootId);
+    assert.equal(await readFile(join(root, "child.pid"), "utf8"), originalPid);
+  }
   const adopted = await value({ op: "command.adopt", intentId: "once" });
   assert.equal(adopted.phase.kind, "adopted");
   await value({ op: "command.release", intentId: "once" });
@@ -247,7 +283,7 @@ async function nativeCommands() {
   }
   if (failures.length) throw new AggregateError(failures, `Native command proof or original-custody cleanup failed; preserve ${root}`);
   await stop();
-  console.log(JSON.stringify({ event: "pass", proof: "native-cli-command-lifecycle", root, realSdkTaskKey: started.taskKey, realSdkConversationKey: started.conversationKey, oneAttempt: true, originalCustodyReleased: true, modelCommandRegistered: false }));
+  console.log(JSON.stringify({ event: "pass", proof: ownersAbsent ? "native-cli-command-finished-without-either-owner" : "native-cli-command-lifecycle", root, realSdkTaskKey: started.taskKey, realSdkConversationKey: started.conversationKey, oneAttempt: true, originalCustodyReleased: true, modelCommandRegistered: false }));
 }
 async function requestBoundaryAndConfigPinning() {
   env.HERDR_DURABLE_HOST_CONFIG = configPath;
@@ -480,7 +516,7 @@ process.stdin.once("data", (data) => {
   await stop();
   console.log(JSON.stringify({ event: "pass", proof: "optional-host-unavailable-disabled", root }));
   await requestBoundaryAndConfigPinning();
-  if (process.env.HERDR_TEST_COMMANDS === "1") await nativeCommands();
+  if (process.env.HERDR_TEST_COMMANDS === "1") await nativeCommands(process.env.HERDR_TEST_OWNERS_ABSENT === "1");
 } finally {
   await stop();
   await writeFile(join(root, "server.log"), logs);

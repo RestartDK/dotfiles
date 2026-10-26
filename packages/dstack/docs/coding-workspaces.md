@@ -47,6 +47,20 @@ The opt-in `dist/tests/host-downgrade-live.js` requires explicit `DSTACK_TEST_NO
 | Existing PR jobs and session-targeted wakes | Unchanged in the existing controller and native extension. |
 | Billing profile | Caller-owned. The manual live proof uses the exact configured `precise-code` route. |
 
+## Independent deployments
+
+The opt-in `dist/tests/host-domains-live.js` requires `DSTACK_TEST_NODE` and uses
+its packaged sibling `host-fixture.js`. It runs work and personal Node owners
+simultaneously, with distinct actual SQLite files and full managed bindings.
+The same workspace and request IDs complete independently. A third owner of the
+work store must refuse before startup; closing work must leave personal's actual
+nonempty snapshot and completed receipt unchanged. Both retain their own file
+result. Response schemas are checked at the test boundary, and all child handles
+have bounded, owned cleanup.
+
+This is local process/store independence, not authenticated client isolation,
+separate-host deployment, or a same-UID sandbox. It makes no paid model calls.
+
 ## Run the proofs
 
 Use the package's Node prerequisite. The Nix package supplies Node 24. No live service or database is needed.

@@ -171,3 +171,11 @@ requires inspection to finish without replacing the Node instance, followed by
 bound receipt adoption and original custody release. The normal workspace
 stall/restart-budget cases run unchanged. This tool is not a production launcher
 or part of generic CI, and the proof preserves the original user-manager bus.
+
+Set `HERDR_TEST_OWNERS_ABSENT=1` with `HERDR_TEST_COMMANDS=1` for the separate
+both-owner-absence case. The payload waits for a trusted marker. The proof stops
+the actual Rust server, awaits its exit and verifies Node has exited, then writes
+the marker. It reads a bound successful receipt before restarting either owner.
+Ordinary restart must adopt that receipt and release original empty custody
+without another attempt. This tests completion during owner absence after an
+ordinary stop, not an injected Rust SIGKILL. Failure preserves uncertain evidence.
