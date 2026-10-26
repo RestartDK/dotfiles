@@ -4,6 +4,7 @@ import { DurableHost } from "#durable-host";
 import { hostCommandRuntime } from "./host-runtime.js";
 import { loadHostConfig } from "#host-protocol";
 import { serveHost } from "#host-stdio";
+import { ClientServer } from "#client-http";
 
 process.umask(0o077);
 try {
@@ -26,10 +27,12 @@ try {
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
   try {
+    if (config.execution?.clients !== undefined) await ClientServer.open(host);
     await serveHost(host, process.stdin, process.stdout);
   } finally {
     process.removeListener("SIGTERM", stop);
     process.removeListener("SIGINT", stop);
+    await host.close();
   }
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);

@@ -1,9 +1,8 @@
 import { clientIdentifier, clientObject, clientText, clientWorkspaceId, ClientError, type ClientPermission } from "#client-authority";
 import type { WorkspaceId } from "./workspace-identity.js";
 
-export const CLIENT_VERSION = 1;
-export const MAX_CLIENT_REQUEST_BYTES = 128 * 1024;
-export const MAX_CLIENT_EVENT_BYTES = 8 * 1024 * 1024;
+import { CLIENT_VERSION, MAX_CLIENT_CONTENT_BYTES } from "./client-limits.js";
+export { CLIENT_VERSION, MAX_CLIENT_REQUEST_BYTES, MAX_CLIENT_EVENT_BYTES } from "./client-limits.js";
 
 export type ClientOperation =
   | { readonly op: "discover" }
@@ -29,7 +28,7 @@ export function parseClientOperation(value: unknown): ClientOperation {
       return { op: "snapshot", workspaceId: clientWorkspaceId(operation.workspaceId), ...(operation.cursor === undefined ? {} : { cursor: clientText(operation.cursor, 4096) }) };
     case "submit":
       clientObject(operation, ["op", "workspaceId", "requestId", "content"]);
-      return { op: "submit", workspaceId: clientWorkspaceId(operation.workspaceId), requestId: clientIdentifier(operation.requestId), content: clientText(operation.content, 64 * 1024) };
+      return { op: "submit", workspaceId: clientWorkspaceId(operation.workspaceId), requestId: clientIdentifier(operation.requestId), content: clientText(operation.content, MAX_CLIENT_CONTENT_BYTES) };
     case "status":
       clientObject(operation, ["op", "workspaceId", "requestId"]);
       return { op: "status", workspaceId: clientWorkspaceId(operation.workspaceId), requestId: clientIdentifier(operation.requestId) };
@@ -41,12 +40,20 @@ export function parseClientOperation(value: unknown): ClientOperation {
   }
 }
 
-export function parseClientEnvelope(value: unknown): ClientEnvelope {
+export function parseClientHeader(value: unknown): Omit<ClientEnvelope, "operation"> & { readonly operation: unknown } {
   const envelope = clientObject(value, ["v", "id", "operation"]);
   if (envelope.v !== CLIENT_VERSION) throw new ClientError("invalid_request", "Unsupported client protocol");
-  return { v: CLIENT_VERSION, id: clientIdentifier(envelope.id, 128), operation: parseClientOperation(envelope.operation) };
+  return { v: CLIENT_VERSION, id: clientIdentifier(envelope.id, 128), operation: envelope.operation };
 }
 
+export function parseClientEnvelope(value: unknown): ClientEnvelope {
+  const envelope = parseClientHeader(value);
+  return { ...envelope, operation: parseClientOperation(envelope.operation) };
+}
+
+export function clientPermission(operation: Extract<ClientOperation, { op: "discover" }>): undefined;
+export function clientPermission(operation: Exclude<ClientOperation, { op: "discover" }>): ClientPermission;
+export function clientPermission(operation: ClientOperation): ClientPermission | undefined;
 export function clientPermission(operation: ClientOperation): ClientPermission | undefined {
   switch (operation.op) {
     case "discover": return undefined;

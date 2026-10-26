@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Durable workspace · Herdr</title><link rel="stylesheet" href="/client.css"><script type="module" src="/client.js"></script></head>
+<body>
+<header><div><p class="eyebrow">HERDR / DURABLE</p><h1>Workspace console</h1></div><p id="identity">Not authenticated</p></header>
+<main>
+<aside aria-label="Connection and workspace">
+  <section><h2>Local credential</h2><label for="credential">Choose a private credential file</label><input id="credential" type="file" accept=".key,.json,application/json"><p class="hint">The bearer stays in this tab’s memory. No cookies or browser storage. Use an SSH forward with the same local and remote loopback port.</p><button id="logout" disabled>Forget credential</button></section>
+  <section><h2>Workspace</h2><label for="workspace">Authorized workspaces</label><select id="workspace" disabled><option value="">Authenticate first</option></select><p id="permissions" class="hint">No permissions loaded.</p><button id="open" disabled>Open configured workspace</button><p class="hint">Opening requires submit permission. This never chooses a cwd or authorizes a command.</p></section>
+  <section><h2>Explicit controls</h2><button id="abort" disabled>Stop ordinary SDK work</button><p class="hint">SDK abort is not business cancellation or an outcome receipt.</p><button id="execution" disabled>Inspect execution state</button><label for="intent">Existing intent ID</label><input id="intent" autocomplete="off" spellcheck="false"><button id="cancel" disabled>Request business cancel</button><p class="hint">Only an already authorized intent in this workspace. No new argv, approval or reconciliation.</p></section>
+</aside>
+<div class="workspace-body">
+  <p id="notice" class="notice" role="status" aria-live="polite">Choose a credential. Reconnect and controls are always explicit.</p>
+  <section><div class="section-heading"><h2>Submission</h2><button id="new-request">New request key</button></div><label for="request-key">Request key · retain this if the acknowledgment is lost</label><input id="request-key" maxlength="200" autocomplete="off" spellcheck="false"><label for="content">Message</label><textarea id="content" rows="5" autocomplete="off" placeholder="Content for the existing Durable owner"></textarea><div class="actions"><button id="submit" class="primary" disabled>Submit once</button><button id="status" disabled>Look up request status</button></div><p class="hint">A lost acknowledgment is not failed admission. Check the same key before manually retrying. No automatic retry or resume.</p><h3>Owner reply</h3><pre id="reply" tabindex="0">No request made.</pre></section>
+  <section><div class="section-heading"><h2>Committed observation</h2><span id="viewer-state">Detached</span></div><div class="actions"><button id="watch" disabled>Attach fresh snapshot</button><button id="detach" disabled>Detach viewer</button></div><p class="hint">Public committed SDK state, not raw provider tokens or a replay log. Detaching does not cancel work.</p><h3>Atomic baseline · refreshed on SDK overflow</h3><pre id="baseline" tabindex="0">No viewer attached.</pre><h3>Recent committed changes · rolling display, last 12 events</h3><pre id="changes" tabindex="0">No events.</pre></section>
+  <section><div class="section-heading"><h2>History</h2><div class="actions"><button id="history" disabled>Latest page</button><button id="older" disabled>Older page</button></div></div><p class="hint">20 entries per page. Cursor expiry or a Host restart requires a fresh first page, never a fabricated SDK ID.</p><pre id="history-view" tabindex="0">No history requested.</pre></section>
+</div>
+</main>
+<footer>One owner. Explicit admission. Unknown outcomes remain unknown.</footer>
+</body></html>

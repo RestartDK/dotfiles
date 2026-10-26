@@ -28,6 +28,8 @@
       ./package.json
       ./package-lock.json
       ./tsconfig.json
+      ./tsconfig.browser.json
+      ./web
       ./README.md
       ../../config/pi/agent/lib/dstack-jobs.ts
       ../../config/pi/agent/lib/dstack-watches.ts
@@ -39,7 +41,7 @@
   };
   sourceRoot = "source/packages/dstack";
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-1cAu1ABWRUsy15sIJW8DEP0scVf5Eftou+LWf1/rlxw=";
+  npmDepsHash = "sha256-FS885+7WXifoVVauvOPUh1K7WwQbVhSAzxZo3JJcXt8=";
   npmFlags = [ "--ignore-scripts" ];
   npmPackFlags = [ "--ignore-scripts" ];
   nativeBuildInputs = [
@@ -57,6 +59,7 @@
     DSTACK_TEST_NODE=${nodejs_24}/bin/node bun test tests ../../config/pi/agent/extensions/pi-jobs
     ${nodejs_24}/bin/node dist/cli.js --help
     ${nodejs_24}/bin/node dist/daemon.js --help
+    ${nodejs_24}/bin/node dist/client-cli.js --help
     runHook postCheck
   '';
   installPhase = ''
@@ -84,6 +87,8 @@
           ]
         }
     done
+    makeWrapper ${nodejs_24}/bin/node "$out/bin/dstack-client" \
+      --add-flags "$out/libexec/dstack/dist/client-cli.js"
     makeWrapper ${nodejs_24}/bin/node "$out/bin/dstack-host" \
       --add-flags "$out/libexec/dstack/dist/host-main.js" \
       --set DSTACK_FLOCK ${util-linux}/bin/flock \
