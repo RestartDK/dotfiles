@@ -195,6 +195,13 @@ async function nativeCommands() {
   started = await value({ op: "command.start", intentId: "once" });
   assert.equal(typeof started.taskKey, "string");
   assert.equal(typeof started.conversationKey, "string");
+  let progress;
+  for (const deadline = performance.now() + 5000; performance.now() < deadline;) {
+    progress = await value({ op: "execution.status" });
+    if (progress.recentCommands[0]?.phase !== "authorized") break;
+    await delay(20);
+  }
+  assert.ok(["attempted", "activated"].includes(progress.recentCommands[0]?.phase));
   let observation;
   for (const deadline = performance.now() + 20000; performance.now() < deadline;) {
     observation = await value({ op: "command.inspect", intentId: "once" });
@@ -205,6 +212,8 @@ async function nativeCommands() {
   assert.equal(observation.outcome.receipt.outcome.kind, "exit");
   assert.equal(observation.outcome.receipt.outcome.code, 0);
   assert.equal(observation.containment.kind, "empty");
+  assert.equal((await call({ op: "health" })).result.value.status.ready.bootId, ready.status.ready.bootId);
+  assert.equal(await readFile(join(root, "child.pid"), "utf8"), originalPid);
   const adopted = await value({ op: "command.adopt", intentId: "once" });
   assert.equal(adopted.phase.kind, "adopted");
   await value({ op: "command.release", intentId: "once" });
