@@ -14,12 +14,12 @@ import { createModels } from "@earendil-works/pi-ai";
 const path = await mkdtemp(join(tmpdir(), "dstack-catalogue-"));
 const cwd = join(path, "workspace"), stateRoot = join(path, "state");
 await mkdir(cwd, { mode: 0o700 });
-const config = parseHostConfig({ identity: { deploymentId: "catalogue-deployment", domain: "personal", nodeId: "catalogue-fixture" }, stateRoot, model: { provider: "not-called", modelId: "not-called" }, thinkingLevel: "high", authPath: join(path, "unused-auth.json"), modelsPath: join(path, "unused-models.json") });
+const config = parseHostConfig({ identity: { deploymentId: "catalogue-deployment", domain: "personal", nodeId: "catalogue-fixture" }, stateRoot, model: { provider: "not-called", modelId: "not-called" }, thinkingLevel: "high", authPath: join(path, "unused-auth.json"), modelsPath: join(path, "unused-models.json"), execution: { mode: "durable", maxRecords: 256 } });
 const host = await DurableHost.open(config, createModels()); await host.close();
 const db = new DatabaseSync(join(stateRoot, "host.sqlite"));
 db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL");
 const identity = config.identity;
-const evidence = join(stateRoot, "execution"); await mkdir(evidence, { mode: 0o700 });
+const evidence = join(stateRoot, "execution");
 const lease = await CommandDirectory.own({ path: evidence, lockCommand: { file: process.env.DSTACK_FLOCK ?? "flock", args: [] } });
 let catalogue: ExecutionCatalogue | undefined;
 const failures: unknown[] = [];
@@ -33,10 +33,17 @@ function operation(workspaceId: string, requestId = `create-${workspaceId}`) {
 }
 const filename = (workspaceId: string) => createHash("sha256").update(workspaceId).digest("hex") + ".json";
 try {
-  const directory = await lease.directory.child("catalogue", "new");
+  const directory = await lease.directory.child("catalogue", "existing");
   const options = { db, directory, identity };
-  catalogue = await ExecutionCatalogue.initialize(options);
+  catalogue = await ExecutionCatalogue.open(options);
   assert.equal((await catalogue.snapshot()).length, 0);
+  const binding = db.prepare("SELECT value FROM binding WHERE id=1").get()?.value; assert.ok(typeof binding === "string");
+  const stored: unknown = JSON.parse(binding); assert.ok(typeof stored === "object" && stored !== null);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("UPDATE binding SET value=? WHERE id=1").run(JSON.stringify({ ...stored, version: 1 }));
+    await assert.rejects(ExecutionCatalogue.open(options), /host index/);
+  } finally { db.exec("ROLLBACK"); }
   const alpha = root("alpha"), input = { ...alpha };
   const admitted = catalogue.admit({ root: input, operation: operation("alpha") });
   input.token = "f".repeat(64);

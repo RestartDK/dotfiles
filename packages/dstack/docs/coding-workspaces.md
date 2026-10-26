@@ -24,6 +24,16 @@ The subprocess proof explicitly kills its isolated stopped tool group before rec
 
 The owner selects WAL and `synchronous=FULL` before official SDK migrations, then checks the live connection. Missing managed markers still refuse reopen; stronger synchronization does not repair damaged partial state. The KVM check below covers abrupt guest-kernel loss, not bare-metal power loss, backup restoration, filesystem replication, or automatic takeover.
 
+## Managed host format
+
+`DurableHost` keeps legacy roots at host-binding version 1. New roots with durable execution ownership use host-binding version 2. The managed catalogue requires version 2. The workspace API, SDK documents, catalogue anchor, and execution journal retain their separate version 1 contracts.
+
+The file-only M2 host compares the exact host-binding bytes before opening any workspace. A version 2 root therefore refuses an ordinary downgrade even if the caller removes `execution` from the config. The current host also refuses a managed root in legacy mode. Legacy version 1 roots remain readable in legacy mode.
+
+There is no automatic upgrade of an existing version 1 root. Earlier unpublished managed experiments need their matching managed-host version for inspection. Preserve their evidence instead of rewriting the binding. This check does not protect against a same-user actor rewriting database contents or restoring all paired evidence coherently. No production backfill or row deletion occurs.
+
+The opt-in `dist/tests/host-downgrade-live.js` requires explicit `DSTACK_TEST_NODE` and `DSTACK_OLD_FIXTURE` Nix references. The latter selects the M2 `host-fixture.js` with its offline files model. The proof retains an actual unresolved native file effect, verifies old-binary refusal with the execution field omitted, and checks unchanged bytes and journal records. It also verifies legacy-root compatibility, blocked managed recovery, and refusal of a rolled-back managed binding. It does not call a paid model or start a real agent CLI.
+
 ## Native Pi compatibility
 
 | Native capability | This component |
