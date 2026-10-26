@@ -25,7 +25,7 @@ type Backend = {
   call(request: object): Promise<unknown>;
   event(name: string): Promise<Record<string, unknown>>;
 };
-async function start(mode: "hold-launch" | "hold-scheduler" | "normal"): Promise<Backend> {
+async function start(mode: "hold-launch" | "hold-before-launch" | "hold-scheduler" | "normal"): Promise<Backend> {
   const child = fork(fileURLToPath(new URL("./host-command-fixture.js", import.meta.url)), [configPath, mode], { execPath: node, stdio: ["ignore", "ignore", "pipe", "ipc"] });
   let errors = "", next = 0;
   child.stderr?.on("data", (chunk: Buffer) => { if (errors.length < 65536) errors += chunk.toString(); });
@@ -183,7 +183,60 @@ try {
   assert.equal(object(await command("describe", "unattempted")).grant, "revoked");
   unattemptedAuthorized = false;
   backend.child.disconnect(); assert.equal((await backend.exit).code, 0); backend = undefined;
-  const result = { path, helper, verdict: "composite-host-owned-command", originalInvocationId: original.activation.invocationId, realSdkTaskKey: task.taskKey, realSdkConversationKey: task.conversationKey, actualBackendSigkill: true, injectedLostPostLaunchAcknowledgment: true, receiptAdoptedWithoutReplay: true, oneDurableAttempt: true, originalCustodyReleased: true, actualBackendSigkillBeforeAttempt: true, expiredGrantNeverRecaptured: true, recoveredUnattemptedTaskFaulted: true, unattemptedSdkTaskKey: pendingTask.taskKey, modelCommandToolRegistered: false, providerGenerations: 0 };
+  backend = await start("hold-before-launch");
+  const neverLaunched = join(cwd, "must-not-launch.txt");
+  await backend.call({ command: { op: "authorize", workspaceId: "coding", authorization: { intentId: "before-launch", argv: [node, "-e", "require('node:fs').writeFileSync(process.argv[1],'replayed',{flag:'wx'})", neverLaunched], timeoutSeconds: 10 } } });
+  const beforeLaunchTask = object(await command("start", "before-launch"));
+  assert.ok(typeof beforeLaunchTask.taskKey === "string" && typeof beforeLaunchTask.conversationKey === "string");
+  const beforeLaunchHeld = await backend.event("before-launch-held");
+  const beforeLaunch = object(await backend.call({ tasks: true }));
+  assert.equal(beforeLaunch.providerCalls, 0);
+  const attemptDb = new DatabaseSync(join(stateRoot, "host.sqlite"), { readOnly: true });
+  try {
+    const events = attemptDb.prepare("SELECT record_json FROM herdr_execution_records ORDER BY sequence").all().map(row => object(object(JSON.parse(String(row.record_json))).event)).filter(event => event.intentId === "before-launch" || (event.kind === "command.authorized" && typeof event.specJson === "string" && parseCommandSpec(event.specJson).intentId === "before-launch"));
+    assert.deepEqual(events.map(event => event.kind), ["command.authorized", "command.attempted"]);
+    const beforeSpecJson = events[0]?.specJson; assert.ok(typeof beforeSpecJson === "string");
+    assert.equal(beforeLaunchHeld.executionId, parseCommandSpec(beforeSpecJson).executionId);
+    assert.deepEqual(events[1]?.sdk, { kind: "task", taskKey: beforeLaunchTask.taskKey, conversationKey: beforeLaunchTask.conversationKey });
+  } finally { attemptDb.close(); }
+  backend.child.kill("SIGKILL"); assert.equal((await backend.exit).signal, "SIGKILL"); backend = undefined;
+  backend = await start("normal");
+  for (let i = 0; i < 2; i++) {
+    const attached = object(await command("start", "before-launch"));
+    assert.equal(object(object(attached.command).phase).kind, "attempted");
+  }
+  const uncertain = object(await command("inspect", "before-launch"));
+  assert.equal(object(uncertain.outcome).kind, "unobserved"); assert.equal(object(uncertain.containment).kind, "unknown");
+  assert.equal(object(object(await command("adopt", "before-launch")).phase).kind, "attempted");
+  const recovery = object(await backend.call({ tasks: true })); assert.equal(recovery.providerCalls, 0); assert.ok(Array.isArray(recovery.tasks));
+  assert.equal(object(recovery.inspection).scheduling, "paused");
+  const recoveredAttempt = recovery.tasks.map(object).find(record => String(record.id) === beforeLaunchTask.taskKey);
+  assert.ok(recoveredAttempt !== undefined); assert.equal(object(recoveredAttempt.state).status, "pending");
+  assert.equal(object(await backend.call({ abort: true })).providerCalls, 0);
+  const afterAbort = object(await backend.call({ tasks: true })); assert.equal(afterAbort.providerCalls, 0); assert.ok(Array.isArray(afterAbort.tasks));
+  const joinedAttempt = afterAbort.tasks.map(object).find(record => String(record.id) === beforeLaunchTask.taskKey);
+  assert.ok(joinedAttempt !== undefined); const joinedState = object(joinedAttempt.state); assert.equal(joinedState.status, "terminal");
+  const joinedOutcome = object(joinedState.outcome);
+  if (joinedOutcome.status === "completed") assert.deepEqual(joinedOutcome.result, { intentId: "before-launch", phase: "attempted" });
+  else assert.equal(joinedOutcome.status, "aborted");
+  assert.deepEqual(await command("inspect", "before-launch"), uncertain);
+  assert.equal(object(object(object(await command("describe", "before-launch")).command).phase).kind, "attempted");
+  const progress = object(await backend.call({ operation: { op: "execution.status", workspaceId: "coding" } }));
+  assert.ok(Array.isArray(progress.unresolved)); assert.equal(progress.unresolved.length, 1);
+  await assert.rejects(backend.call({ operation: { op: "command.reconcile", workspaceId: "coding", intentId: "before-launch", reference: "Missing launch evidence is not empty containment", containment: { kind: "manager" } } }));
+  await backend.call({ operation: { op: "command.reconcile", workspaceId: "coding", intentId: "before-launch", reference: "Explicitly acknowledge the interrupted pre-launch attempt, without inventing a program outcome", containment: { kind: "trusted-offline", reference: "Source Node killed after durable attempt; missing activation is not release authority" } } });
+  await assert.rejects(command("release", "before-launch"));
+  assert.deepEqual(await command("inspect", "before-launch"), uncertain);
+  assert.equal(object(object(object(await command("start", "before-launch")).command).phase).kind, "reconciled");
+  await assert.rejects(readFile(neverLaunched), { code: "ENOENT" });
+  const finalDb = new DatabaseSync(join(stateRoot, "host.sqlite"), { readOnly: true });
+  try {
+    const events = finalDb.prepare("SELECT record_json FROM herdr_execution_records ORDER BY sequence").all().map(row => object(object(JSON.parse(String(row.record_json))).event)).filter(event => event.intentId === "before-launch" || (event.kind === "command.authorized" && typeof event.specJson === "string" && parseCommandSpec(event.specJson).intentId === "before-launch"));
+    assert.deepEqual(events.map(event => event.kind), ["command.authorized", "command.attempted", "command.reconciled"]);
+  } finally { finalDb.close(); }
+  assert.deepEqual(object(await backend.call({ operation: { op: "execution.status", workspaceId: "coding" } })).unresolved, []);
+  backend.child.disconnect(); assert.equal((await backend.exit).code, 0); backend = undefined;
+  const result = { path, helper, verdict: "composite-host-owned-command", originalInvocationId: original.activation.invocationId, realSdkTaskKey: task.taskKey, realSdkConversationKey: task.conversationKey, actualBackendSigkill: true, injectedLostPostLaunchAcknowledgment: true, receiptAdoptedWithoutReplay: true, oneDurableAttemptPerConsumedIntent: true, originalCustodyReleased: true, actualBackendSigkillBeforeAttempt: true, expiredGrantNeverRecaptured: true, recoveredUnattemptedTaskFaulted: true, unattemptedSdkTaskKey: pendingTask.taskKey, actualBackendSigkillAfterAttemptBeforeLaunch: true, beforeLaunchSdkTaskKey: beforeLaunchTask.taskKey, sdkAbortJoinedControlWithoutCancellingAttempt: true, offlineAcknowledgmentDidNotGrantRelease: true, modelCommandToolRegistered: false, providerGenerations: 0 };
   await writeFile(join(path, "result.json"), JSON.stringify(result, null, 2), { flag: "wx", mode: 0o600 });
   console.log(JSON.stringify(result));
 } catch (error) { failures.push(error); }

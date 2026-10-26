@@ -37,6 +37,12 @@ if (process.argv[3] === "hold-launch") {
     return evidence;
   };
 }
+if (process.argv[3] === "hold-before-launch") {
+  commands.runtime.launch = async input => {
+    process.send?.({ event: "before-launch-held", executionId: input.spec.executionId });
+    return new Promise<never>(() => undefined);
+  };
+}
 const openHarness = Harness.open;
 let inspectTasks: (() => Promise<unknown>) | undefined;
 let abortConversation: (() => Promise<void>) | undefined;
