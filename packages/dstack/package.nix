@@ -56,7 +56,10 @@
     runHook preCheck
     export HOME="$TMPDIR/home"
     mkdir -p "$HOME"
-    DSTACK_TEST_NODE=${nodejs_24}/bin/node bun test tests ../../config/pi/agent/extensions/pi-jobs
+    export DSTACK_TEST_NODE=${nodejs_24}/bin/node DSTACK_TEST_PYTHON=${lib.getExe python3}
+    export DSTACK_FLOCK=${util-linux}/bin/flock DSTACK_COMMAND_HELPER=${lib.getExe commandHelper}
+    export DSTACK_SYSTEMD_RUN=${systemd}/bin/systemd-run DSTACK_SYSTEMCTL=${systemd}/bin/systemctl DSTACK_BUSCTL=${systemd}/bin/busctl
+    bun test tests ../../config/pi/agent/extensions/pi-jobs
     ${nodejs_24}/bin/node dist/cli.js --help
     ${nodejs_24}/bin/node dist/daemon.js --help
     ${nodejs_24}/bin/node dist/client-cli.js --help

@@ -6,6 +6,7 @@ import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { DurableHost, type TrustedHostCommandOperation } from "#durable-host";
 import { parseHostConfig, parseOperation } from "#host-protocol";
 import { hostCommandRuntime } from "../src/host-runtime.js";
+import { ClientServer } from "#client-http";
 
 const configPath = process.argv[2];
 if (configPath === undefined || process.send === undefined) throw new Error("Owned proof fixture requires private config and IPC");
@@ -75,7 +76,9 @@ Harness.open = async (storage, options, context) => {
   return harness;
 };
 const host = await DurableHost.open(config, models, { commands, protectedPaths: [configPath] });
-process.send({ event: "ready" });
+const ingress = config.execution?.clients === undefined ? undefined : await ClientServer.open(host);
+const stat = ingress === undefined ? undefined : await readFile("/proc/self/stat", "utf8");
+process.send({ event: "ready", endpoint: ingress?.endpoint, ...(stat === undefined ? {} : { birthTicks: stat.slice(stat.lastIndexOf(")") + 2).trim().split(/\s+/)[19], bootId: (await readFile("/proc/sys/kernel/random/boot_id", "utf8")).trim() }) });
 let closing: Promise<void> | undefined;
 const close = () => closing ??= host.close();
 process.on("disconnect", () => { void close().then(() => process.exit(0), () => process.exit(1)); });

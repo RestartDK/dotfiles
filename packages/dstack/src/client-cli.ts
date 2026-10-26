@@ -116,8 +116,10 @@ async function main(): Promise<void> {
 
 process.umask(0o077);
 process.stdout.on("error", () => undefined);
+process.stderr.on("error", () => undefined);
 try { await main(); }
 catch (error) {
   const safe = error instanceof UsageError || error instanceof ClientError || error instanceof ClientReadError ? error.message : "Client connection or operation failed; acknowledgment may be unknown. No cancellation was sent";
-  process.stderr.write(`${safe}\n`); process.exitCode = 1;
+  setTimeout(() => process.exit(1), 1000);
+  process.stderr.write(`${safe}\n`, () => process.exit(1));
 }
