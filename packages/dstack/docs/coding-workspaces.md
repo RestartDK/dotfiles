@@ -50,13 +50,15 @@ DSTACK_TEST_NODE="$(command -v node)" bun test tests/conversation.test.ts
 
 The proofs import the shipped `dist/conversation.js` through `#coding-workspace`; they do not embed a separate copy of the owner. The automatic proofs use an offline provider and real tools, SQLite, Git directories, locks, and subprocesses. They test completed-result deduplication, binding mismatch, concurrent ownership, committed-generation recovery, unsafe-tool non-replay, checkpoint-close failure cleanup, and reopening after model changes. They retain `/tmp/dstack-conversation-*/proof.json` and restart `fixture.log` files.
 
-From the repository root, an opt-in check uses a private NixOS guest on x86_64 Linux with KVM and the Nix `kvm` and `nixos-test` system features:
+From the repository root, opt-in checks use private NixOS guests on x86_64 Linux with KVM and the Nix `kvm` and `nixos-test` system features:
 
 ```sh
-nix build .#dstack.tests.reboot
+nix build .#dstack.tests.reboot .#dstack.tests.manager
 ```
 
 The check starts and stops its own guest. It does not restart the host's user manager, copy credentials, or call a paid model. It checks a changed actual kernel boot UUID, preservation of the original receipt with unknown containment, refusal to signal a same-name replacement unit, expired source grants, and no replay. Explicit offline reconciliation must not grant namespace-release authority. The output retains `evidence/reboot-evidence.tar`, including `before-ready.json`, `result.json`, logs, and SQLite snapshots. UNIX socket files are not serialized as live authority.
+
+The manager check keeps the original source Node alive while restarting only the guest's user manager. It requires the same actual kernel boot UUID, preservation of the original receipt with unknown containment, and refusal to signal a same-name replacement unit. A grant whose opened descriptors remain live may execute only after an explicit start and acknowledgment of the old uncertainty. Offline acknowledgment still cannot authorize release of the original custody. The output retains `evidence/manager-evidence.tar`.
 
 The separate live proof makes real model requests through the configured profile. It uses `ModelRuntime` 1.1.0 for authentication, matched to Durable and pi-ai 1.1.0, without a fallback model. The 0.99.1 SDK has a separate nominal transcript type and cannot supply this `Models` interface. The development SDK update does not replace the installed native Pi executable or load its extensions into Durable. Its agent-core, codemode, and MCP dependencies are pinned to 1.1.0 too. Resolving their broad ranges to 1.4.0 caused a missing-export failure before any model call. It offers only read and write tools. It starts two separate owner processes, verifies real file results and persisted context, and checks the same provider-session identity after restart.
 

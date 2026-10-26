@@ -97,6 +97,11 @@
     dstack = finalAttrs.finalPackage;
     inherit commandHelper;
   };
+  passthru.tests.manager = callPackage ./tests/host-reboot.nix {
+    dstack = finalAttrs.finalPackage;
+    inherit commandHelper;
+    scenario = "manager";
+  };
   meta = {
     description = "Local durable PR monitoring with explicit repair authority";
     mainProgram = "dstack";
