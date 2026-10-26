@@ -14,7 +14,7 @@ const IdentitySchema = Type.Object({ deploymentId: Type.String(), domain: Type.U
 const AnchorSchema = Type.Object({
   version: Type.Literal(1), indexId: Type.String(), token: Type.String({ pattern: "^[0-9a-f]{64}$" }), identity: IdentitySchema,
 }, { additionalProperties: false });
-const HostBindingSchema = Type.Object({ ...IdentitySchema.properties, stateRoot: Type.String(), version: Type.Literal(2) }, { additionalProperties: false });
+const HostBindingSchema = Type.Object({ ...IdentitySchema.properties, stateRoot: Type.String(), version: Type.Union([Type.Literal(2), Type.Literal(3)]) }, { additionalProperties: false });
 type Anchor = Static<typeof AnchorSchema>;
 type Identity = HostIdentity;
 type Options = { readonly db: DatabaseSync; readonly directory: CommandDirectory; readonly identity: Identity };

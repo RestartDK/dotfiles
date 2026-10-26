@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai";
+import { ClientAuthority } from "#client-authority";
 import { CompactionTask, GenerationTask, ToolTask, createRegistry, defineExtension, hook } from "@earendil-works/pi-durable";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
@@ -51,12 +52,15 @@ export class DurableHost {
     private readonly db: DatabaseSync,
     private readonly unlock: () => Promise<void>,
     private readonly protectedPaths: readonly string[],
+    readonly clientAuthority: ClientAuthority | undefined,
   ) {}
 
   static async open(config: HostConfig, models: Models, options: { readonly protectedPaths?: readonly string[]; readonly commands?: HostCommandRuntime } = {}): Promise<DurableHost> {
     config = parseHostConfig(JSON.parse(JSON.stringify(config)));
     const protectedPaths = [...(options.protectedPaths ?? [])];
     const commands = options.commands === undefined ? undefined : { ...options.commands };
+    const clients = config.execution?.clients;
+    const clientAuthority = clients === undefined ? undefined : await ClientAuthority.open({ identity: config.identity, config: clients });
     await mkdir(config.stateRoot, { recursive: true, mode: 0o700 });
     const info = await lstat(config.stateRoot);
     if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0)
@@ -102,12 +106,13 @@ export class DurableHost {
         CREATE TABLE IF NOT EXISTS binding (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, cwd TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS admissions (id TEXT PRIMARY KEY, payload TEXT NOT NULL, admitted INTEGER NOT NULL DEFAULT 0);`);
-      const binding = JSON.stringify({ ...config.identity, stateRoot, version: config.execution === undefined ? 1 : 2 });
+      const version = config.execution === undefined ? 1 : config.execution.clients === undefined ? 2 : 3;
+      const binding = JSON.stringify({ ...config.identity, stateRoot, version });
       const stored = db.prepare("SELECT value FROM binding WHERE id=1").get();
       if (stored === undefined) db.prepare("INSERT INTO binding VALUES (1, ?)").run(binding);
       else if (stored.value !== binding)
         throw new HostError("binding_mismatch", "Host root identity differs");
-      host = new DurableHost({ ...config, stateRoot }, models, db, unlock, protectedPaths);
+      host = new DurableHost({ ...config, stateRoot }, models, db, unlock, protectedPaths, clientAuthority);
       const rows = db.prepare("SELECT id, cwd FROM workspaces ORDER BY id").all();
       if (rows.length > MAX_WORKSPACES) throw new HostError("capacity", "Host workspace limit reached");
       const expected = new Set(rows.map(row => {
@@ -120,6 +125,7 @@ export class DurableHost {
       host.#execution = await HostExecution.open({ config: host.config, db, commands });
       for (const row of rows) {
         if (typeof row.id !== "string" || typeof row.cwd !== "string") throw new Error("Invalid workspace index");
+        await host.assertConfiguredCwd(row.id, row.cwd);
         await host.prepareWorkspace(row.id, row.cwd, "existing");
       }
       for (const row of rows) {
@@ -153,6 +159,12 @@ export class DurableHost {
     }
   }
 
+  private async assertConfiguredCwd(workspaceId: string, cwd: string): Promise<void> {
+    const configured = this.config.execution?.clients?.workspaces.find(workspace => workspace.workspaceId === workspaceId);
+    if (configured !== undefined && await realpath(configured.cwd) !== cwd)
+      throw new HostError("binding_mismatch", "Configured client workspace cwd differs from its owner");
+  }
+
   private async prepareWorkspace(workspaceId: string, cwd: string, initialization: "new" | "existing"): Promise<PreparedCodingWorkspace> {
     if ((await realpath(cwd)) !== cwd)
       throw new HostError("binding_mismatch", "Canonical workspace cwd was retargeted");
@@ -161,7 +173,7 @@ export class DurableHost {
     if (this.#prepared.size >= MAX_WORKSPACES)
       throw new HostError("capacity", "Host workspace limit reached");
     const managed = this.#execution?.get(workspaceId);
-    const paths = await WorkspacePaths.open({ cwd, protectedPaths: [this.config.stateRoot, this.config.authPath, this.config.modelsPath, ...this.protectedPaths] });
+    const paths = await WorkspacePaths.open({ cwd, protectedPaths: [this.config.stateRoot, this.config.authPath, this.config.modelsPath, ...(this.config.execution?.clients?.grants.map(grant => grant.tokenFile) ?? []), ...this.protectedPaths] });
     const gate = () => this.assertProgress(workspaceId);
     const registry = createRegistry();
     registry.install(defineExtension({
@@ -419,6 +431,7 @@ export class DurableHost {
         if (existing === undefined) {
           if (operation.op === "create") {
             const cwd = await realpath(operation.cwd);
+            await this.assertConfiguredCwd(operation.workspaceId, cwd);
             if (!(await lstat(cwd)).isDirectory())
               throw new HostError("invalid_cwd", "Workspace cwd must be a directory");
             const stored = this.db

@@ -7,6 +7,7 @@ import { isAbsolute } from "node:path";
 import { isIdentityName, parseWorkspaceId, type WorkspaceId } from "./workspace-identity.js";
 import { parseCommandParameters, type CommandParameters } from "./command-wire.js";
 import type { TrustedReconciliation } from "./execution-commands.js";
+import { parseClientConfig, type ClientConfig } from "#client-authority";
 
 export const HOST_VERSION = 1;
 export const MAX_FRAME_BYTES = 256 * 1024;
@@ -26,7 +27,7 @@ export type HostConfig = {
   readonly thinkingLevel: ModelThinkingLevel;
   readonly authPath: string;
   readonly modelsPath: string;
-  readonly execution?: { readonly mode: "durable"; readonly maxRecords: number };
+  readonly execution?: { readonly mode: "durable"; readonly maxRecords: number; readonly clients?: ClientConfig };
 };
 
 export type HostMutation =
@@ -129,10 +130,15 @@ export function parseHostConfig(value: unknown): HostConfig {
   let execution: HostConfig["execution"];
   if (config.execution !== undefined) {
     const requested = object(config.execution);
-    fields(requested, ["mode", "maxRecords"]);
+    fields(requested, ["mode", "maxRecords", "clients"]);
     if (requested.mode !== "durable" || typeof requested.maxRecords !== "number" || !Number.isSafeInteger(requested.maxRecords) || requested.maxRecords < 1 || requested.maxRecords > 65536)
       throw new HostError("invalid_request", "Invalid durable execution configuration");
-    execution = Object.freeze({ mode: "durable", maxRecords: requested.maxRecords });
+    let clients: ClientConfig | undefined;
+    if (requested.clients !== undefined) {
+      try { clients = parseClientConfig(requested.clients); }
+      catch { throw new HostError("invalid_request", "Invalid authenticated client configuration"); }
+    }
+    execution = Object.freeze({ mode: "durable", maxRecords: requested.maxRecords, ...(clients === undefined ? {} : { clients }) });
   }
   return {
     identity: {
