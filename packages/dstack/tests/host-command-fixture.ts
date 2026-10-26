@@ -12,7 +12,13 @@ if (configPath === undefined || process.send === undefined) throw new Error("Own
 const models = createModels();
 const faux = fauxProvider({ api: "host-command-fixture", provider: "host-command-fixture", models: [{ id: "idle", input: ["text"] }] });
 models.setProvider(faux.provider);
-if (process.argv[3] === "command-controls") faux.setResponses([fauxAssistantMessage("first completed seed"), fauxAssistantMessage("second completed seed")]);
+if (process.argv[3] === "command-controls" || process.argv[3] === "hold-summary") faux.setResponses([fauxAssistantMessage("first completed seed"), fauxAssistantMessage("second completed seed")]);
+if (process.argv[3] === "hold-summary") {
+  models.completeSimple = async () => {
+    process.send?.({ event: "summary-held" });
+    return new Promise<never>(() => undefined);
+  };
+}
 if (process.argv[3] === "file-hold") {
   const heldPath = process.argv[4];
   if (heldPath === undefined) throw new Error("Explicit held file required");
@@ -47,8 +53,9 @@ const openHarness = Harness.open;
 let inspectTasks: (() => Promise<unknown>) | undefined;
 let abortConversation: (() => Promise<void>) | undefined;
 let compactConversation: (() => Promise<string>) | undefined;
+let waitConversation: (() => Promise<void>) | undefined;
 Harness.open = async (storage, options, context) => {
-  const harness = await openHarness(storage, process.argv[3] === "command-controls" ? { ...options, settings: { ...options.settings, compaction: { ...options.settings?.compaction, enabled: false, keepRecentTokens: 0 } } } : options, context);
+  const harness = await openHarness(storage, process.argv[3] === "command-controls" || process.argv[3] === "hold-summary" ? { ...options, settings: { ...options.settings, compaction: { ...options.settings?.compaction, enabled: false, keepRecentTokens: 0 } } } : options, context);
   inspectTasks = async () => ({ inspection: await harness.inspect(BACKGROUND_CONTEXT), tasks: (await storage.scanTasks({}, 128, undefined, BACKGROUND_CONTEXT)).items, providerCalls: faux.state.callCount });
   const boundConversation = async () => {
     const conversations = await storage.scanConversations({}, 2, undefined, BACKGROUND_CONTEXT);
@@ -63,6 +70,7 @@ Harness.open = async (storage, options, context) => {
     await conversation.waitForIdle(BACKGROUND_CONTEXT);
   };
   compactConversation = async () => String(await (await boundConversation()).compact(undefined, BACKGROUND_CONTEXT));
+  waitConversation = async () => { await (await boundConversation()).waitForIdle(BACKGROUND_CONTEXT); };
   if (process.argv[3] === "hold-scheduler") harness.resume = () => undefined;
   return harness;
 };
@@ -83,6 +91,11 @@ process.on("message", (message: unknown) => {
     if ("compact" in message && message.compact === true) {
       if (compactConversation === undefined) throw new Error("SDK conversation unavailable");
       return { taskKey: await compactConversation() };
+    }
+    if ("idle" in message && message.idle === true) {
+      if (waitConversation === undefined) throw new Error("SDK conversation unavailable");
+      await waitConversation();
+      return { providerCalls: faux.state.callCount };
     }
     if ("abort" in message && message.abort === true) {
       if (abortConversation === undefined) throw new Error("SDK conversation unavailable");
