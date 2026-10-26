@@ -821,10 +821,10 @@ index 418072e..de3f9ef 100644
          let text = super::schema_summary_text().unwrap();
 diff --git a/src/server/durable_host.rs b/src/server/durable_host.rs
 new file mode 100644
-index 0000000..cbfb370
+index 0000000..d7acab6
 --- /dev/null
 +++ b/src/server/durable_host.rs
-@@ -0,0 +1,682 @@
+@@ -0,0 +1,709 @@
 +use std::io::{self, Read};
 +use std::path::PathBuf;
 +use std::process::Stdio;
@@ -850,6 +850,7 @@ index 0000000..cbfb370
 +const QUEUE_CAPACITY: usize = 16;
 +const MAX_ATTEMPTS: u32 = 3;
 +const RPC_TIMEOUT: Duration = Duration::from_secs(2);
++const COMMAND_RPC_TIMEOUT: Duration = Duration::from_secs(60);
 +const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 +
 +#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -928,6 +929,15 @@ index 0000000..cbfb370
 +enum Operation {
 +    Workspace(DurableHostOperation),
 +    Command(DurableCommandOperation),
++}
++
++impl Operation {
++    fn rpc_timeout(&self) -> Duration {
++        match self {
++            Self::Workspace(_) => RPC_TIMEOUT,
++            Self::Command(_) => COMMAND_RPC_TIMEOUT,
++        }
++    }
 +}
 +
 +struct Pending {
@@ -1150,10 +1160,11 @@ index 0000000..cbfb370
 +            );
 +            return;
 +        };
++        let deadline = Instant::now() + operation.rpc_timeout() + RPC_TIMEOUT;
 +        let request = Pending {
 +            message,
 +            operation,
-+            deadline: Instant::now() + Duration::from_secs(4),
++            deadline,
 +        };
 +        if let Err(error) = requests.try_send(request) {
 +            let (request, code) = match error {
@@ -1372,7 +1383,7 @@ index 0000000..cbfb370
 +                                            respond(request.message, Err(failure("durable_host_ack_lost", "Host stopped; reconcile by request ID before retrying")));
 +                                            worker.close().await; set_status(&status, Status::Stopped); return;
 +                                        }
-+                                        result = timeout(RPC_TIMEOUT.min(request.deadline.saturating_duration_since(Instant::now())), worker.exchange(&id, &frame)) => result,
++                                        result = timeout(request.operation.rpc_timeout().min(request.deadline.saturating_duration_since(Instant::now())), worker.exchange(&id, &frame)) => result,
 +                                    };
 +                                    match result {
 +                                        Ok(Ok(response)) => respond(request.message, response),
@@ -1435,6 +1446,22 @@ index 0000000..cbfb370
 +#[cfg(test)]
 +mod tests {
 +    use super::*;
++
++    #[test]
++    fn durable_command_budget_preserves_workspace_deadlines() {
++        let workspace = Operation::Workspace(DurableHostOperation::Discover);
++        let command = Operation::Command(DurableCommandOperation::Inspect {
++            workspace_id: "coding".to_string(),
++            intent_id: "once".to_string(),
++        });
++        assert_eq!(workspace.rpc_timeout(), Duration::from_secs(2));
++        assert_eq!(
++            workspace.rpc_timeout() + RPC_TIMEOUT,
++            Duration::from_secs(4)
++        );
++        assert_eq!(command.rpc_timeout(), Duration::from_secs(60));
++        assert_eq!(command.rpc_timeout() + RPC_TIMEOUT, Duration::from_secs(62));
++    }
 +
 +    #[tokio::test]
 +    async fn durable_host_frames_are_bounded_and_require_newlines() {

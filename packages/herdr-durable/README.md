@@ -75,7 +75,10 @@ in the host config. Use a new private state root. Adding this setting does not
 upgrade an existing legacy workspace. The host pairs its catalogue, execution
 journals, and actual SDK documents before allowing workspace progress. Missing,
 partial, disabled, or inconsistent ownership evidence refuses reopening and stays
-on disk. There is no automatic repair or deletion.
+on disk. The host prepares every managed workspace before activating any Harness;
+a partial command authorization or orphan directory in one workspace therefore
+refuses the whole host, not just that workspace. Preserve all paired evidence.
+There is no supported quarantine-rename recovery, automatic repair, or deletion.
 
 `{"op":"command.health"}` reports the separate method and advertised operations.
 Managed file-only hosts advertise `execution.status` and `file.reconcile`; a
@@ -114,10 +117,19 @@ most 4095 UTF-8 bytes. Older invalid pending admissions are retained and refused
 not rewritten or silently migrated. Valid padded identities and U+0085 remain
 unchanged. A failed command lookup or missing manager does not prove non-execution.
 
-The guardian has a 16-request queue, one in-flight RPC, a two-second RPC deadline,
-a four-second pre-send expiry, and three process-start attempts per server boot.
-It never resends an RPC after acknowledgement loss. Query `status` and preserve the
-original request ID. Shutdown closes child stdin, waits up to ten seconds, then
+The guardian has a 16-request queue, one in-flight RPC, and three process-start
+attempts per server lifetime. Workspace RPCs retain their two-second budget and
+four-second request expiry. Command controls have a 60-second RPC budget and
+62-second expiry to cover bounded capture, manager inspection, and original
+custody release. Expiry starts at enqueue: expired queued requests are not sent,
+and each exchange is limited by both its RPC budget and remaining expiry. These
+control budgets do not change a command's approved payload timeout. A successful
+exchange does not reset the process-start budget.
+
+The ready frame's `bootId` identifies the Node process instance, not the kernel
+boot. Command evidence carries its separate actual kernel/source boot identity.
+The guardian never resends an RPC after acknowledgement loss. Query `status` and
+preserve the original request ID. Shutdown closes child stdin, waits up to ten seconds, then
 kills and reaps an unresponsive child. Forced shutdown is a crash, not proof that
 an ambiguous effect did not happen. Restart reconciles the durable admission journal.
 
@@ -149,3 +161,13 @@ runtime directory while isolating its API/client sockets. It checks authorizatio
 one actual SDK-owned attempt, bound receipt adoption, original empty containment,
 and FD-store release. It also checks correlated invalid requests and unchanged
 model tools. A passing lifecycle is not all failure-window acceptance.
+
+To include real manager-launch latency, build the opt-in test tool with
+`nix build .#herdr.testTools.delayedSystemdRun --no-link --print-out-paths` and set
+`DSTACK_SYSTEMD_RUN` to that executable for the same Native proof. It delays the
+real `systemd-run` by 2.75 seconds; it does not fabricate manager responses or
+command evidence. The proof waits for an actual attempted/activated phase, then
+requires inspection to finish without replacing the Node instance, followed by
+bound receipt adoption and original custody release. The normal workspace
+stall/restart-budget cases run unchanged. This tool is not a production launcher
+or part of generic CI, and the proof preserves the original user-manager bus.
