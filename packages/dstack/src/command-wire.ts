@@ -7,6 +7,7 @@ const decimal = Type.String({ pattern: "^(0|[1-9][0-9]{0,19})$" });
 const digest = Type.String({ pattern: "^[0-9a-f]{64}$" });
 const uint32 = Type.Integer({ minimum: 0, maximum: 4294967295 });
 const name = Type.String({ minLength: 1, maxLength: 128, pattern: "\\S" });
+const workspaceName = Type.String({ minLength: 1, maxLength: 200, pattern: "\\S" });
 const mode = Type.Literal("trusted-user-mapped-fs");
 const descriptor = Type.Object({ device: decimal, inode: decimal, mountId: decimal }, closed);
 const credentials = Type.Object({
@@ -26,7 +27,7 @@ const activation = Type.Object({
   }, closed),
 }, closed);
 const evidence = Type.Object({
-  version: Type.Literal(1), executionId: name, workspaceId: name, intentId: name,
+  version: Type.Literal(1), executionId: name, workspaceId: workspaceName, intentId: name,
   nonce: digest, specSha256: digest, activation, mode,
 }, closed);
 const log = Type.Object({
@@ -47,7 +48,7 @@ const parameters = Type.Object({
   timeoutSeconds: Type.Integer({ minimum: 1, maximum: 3600 }),
 }, closed);
 const spec = Type.Object({
-  version: Type.Literal(1), executionId: name, workspaceId: name, intentId: name,
+  version: Type.Literal(1), executionId: name, workspaceId: workspaceName, intentId: name,
   nonce: digest, unit: activation.properties.unit,
   cwd: Type.String({ pattern: "^/", maxLength: 4095 }),
   ...parameters.properties,
@@ -72,9 +73,10 @@ function parse<T extends TSchema>(schema: T, bytes: string, label: string): Stat
 }
 
 function identities(value: Pick<CommandEvidence, "executionId" | "workspaceId" | "intentId">): void {
-  if ([value.executionId, value.workspaceId, value.intentId].some(id =>
-    !isIdentityName(id) || !id.isWellFormed() || id.includes("\0") || Buffer.byteLength(id) > 128))
-    throw new Error("Invalid command identity");
+  for (const [id, limit] of [[value.executionId, 128], [value.workspaceId, 200], [value.intentId, 128]] satisfies readonly (readonly [string, number])[]) {
+    if (!isIdentityName(id) || !id.isWellFormed() || id.includes("\0") || Buffer.byteLength(id) > limit)
+      throw new Error("Invalid command identity");
+  }
 }
 
 function validateContext(value: CommandContext): void {

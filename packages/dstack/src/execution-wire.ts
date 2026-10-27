@@ -7,6 +7,7 @@ import { isIdentityName } from "./workspace-identity.js";
 
 const closed = { additionalProperties: false };
 const name = Type.String({ minLength: 1, maxLength: 128, pattern: "\\S" });
+const workspaceName = Type.String({ minLength: 1, maxLength: 200, pattern: "\\S" });
 const hash = Type.String({ pattern: "^[0-9a-f]{64}$" });
 const boot = Type.String({ pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" });
 const path = Type.String({ pattern: "^/", maxLength: 4095 });
@@ -27,7 +28,7 @@ const reconciliation = Type.Union([
 const root = Type.Object({
   version: Type.Literal(1), rootId: name, token: hash,
   workspace: Type.Object({
-    domain: Type.Union([Type.Literal("personal"), Type.Literal("work")]), nodeId: name, workspaceId: name, cwd: path,
+    domain: Type.Union([Type.Literal("personal"), Type.Literal("work")]), nodeId: workspaceName, workspaceId: workspaceName, cwd: path,
   }, closed),
 }, closed);
 const event = Type.Union([
@@ -79,7 +80,8 @@ function absolutePath(value: string): void {
 
 export function parseExecutionRoot(bytes: string): ExecutionRoot {
   const value = parse(root, bytes);
-  for (const id of [value.rootId, value.workspace.nodeId, value.workspace.workspaceId]) identity(id);
+  identity(value.rootId);
+  for (const id of [value.workspace.nodeId, value.workspace.workspaceId]) identity(id, 200);
   absolutePath(value.workspace.cwd);
   return value;
 }

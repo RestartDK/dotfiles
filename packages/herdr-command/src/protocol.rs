@@ -158,20 +158,20 @@ pub fn hex(value: &str, length: usize) -> bool {
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
-fn name(value: &str) -> bool {
+fn name(value: &str, limit: usize) -> bool {
     !value
         .trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
         .is_empty()
-        && value.len() <= 128
+        && value.len() <= limit
         && !value.contains('\0')
 }
 
 impl Spec {
     pub fn validate(&self) -> io::Result<()> {
         if self.version != 1
-            || !name(&self.execution_id)
-            || !name(&self.workspace_id)
-            || !name(&self.intent_id)
+            || !name(&self.execution_id, 128)
+            || !name(&self.workspace_id, 200)
+            || !name(&self.intent_id, 128)
             || !hex(&self.nonce, 64)
             || !hex(&self.environment_sha256, 64)
             || !self.unit.starts_with("hdj-")
@@ -227,23 +227,50 @@ mod tests {
     #[test]
     fn opaque_names_follow_ecmascript_whitespace_without_trimming() {
         for value in ["\u{85}", " padded "] {
-            assert!(name(value));
+            assert!(name(value, 128));
         }
         for value in ["\u{feff}", " \t\u{feff}\u{a0}"] {
-            assert!(!name(value));
+            assert!(!name(value, 128));
         }
     }
 
-    #[test]
-    fn cwd_fits_the_getcwd_buffer_including_nul() {
+    fn fixture_spec() -> Spec {
         let descriptor = serde_json::json!({"device":"1","inode":"2","mountId":"3"});
-        let mut spec: Spec = serde_json::from_value(serde_json::json!({
+        serde_json::from_value(serde_json::json!({
             "version":1,"executionId":"execution","workspaceId":"workspace","intentId":"intent",
             "nonce":"0".repeat(64),"unit":"hdj-codec.service","cwd":"/","argv":["/bin/true"],
             "timeoutSeconds":1,"mode":"trusted-user-mapped-fs","environmentSha256":"0".repeat(64),
             "context":{"root":descriptor,"cwd":descriptor,"net":descriptor,"mount":descriptor,"user":descriptor,
                 "credentials":{"uid":1000,"gid":100,"groups":[100]}}
-        })).unwrap();
+        })).unwrap()
+    }
+
+    #[test]
+    fn workspace_identity_keeps_200_bytes_without_widening_execution_or_intent() {
+        let mut spec = fixture_spec();
+        for value in [
+            "w".repeat(129),
+            "w".repeat(200),
+            format!("{}ab", "界".repeat(66)),
+        ] {
+            spec.workspace_id = value;
+            assert!(spec.validate().is_ok());
+        }
+        for value in ["w".repeat(201), "界".repeat(67), "bad\0name".to_string()] {
+            spec.workspace_id = value;
+            assert!(spec.validate().is_err());
+        }
+        spec.workspace_id = "workspace".to_string();
+        spec.execution_id = "e".repeat(129);
+        assert!(spec.validate().is_err());
+        spec.execution_id = "execution".to_string();
+        spec.intent_id = "i".repeat(129);
+        assert!(spec.validate().is_err());
+    }
+
+    #[test]
+    fn cwd_fits_the_getcwd_buffer_including_nul() {
+        let mut spec = fixture_spec();
         spec.cwd = format!("/{}", "x".repeat(4094));
         assert!(spec.validate().is_ok());
         spec.cwd.push('x');
