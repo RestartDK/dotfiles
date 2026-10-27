@@ -15,7 +15,7 @@ import { ExecutionRootDoc } from "./execution-binding.js";
 import { workspaceFileTools } from "./execution-files.js";
 import { executionRootBytes } from "./execution-wire.js";
 import { HostExecution, type HostCommandRuntime } from "./host-execution.js";
-import { hostCommandTask } from "./host-command-task.js";
+import { hostCommandCapability } from "./host-command-task.js";
 import { parseControlPaths } from "./host-protection.js";
 import { executionModels } from "./execution-models.js";
 import { unresolvedEffects } from "./execution-domain.js";
@@ -57,7 +57,7 @@ export class DurableHost {
   readonly #owners = new Map<string, CodingWorkspaceOwner>();
   readonly #prepared = new Map<string, PreparedCodingWorkspace>();
   #execution: HostExecution | undefined;
-  readonly #commandTasks = new Map<string, ReturnType<typeof hostCommandTask>>();
+  readonly #commandTasks = new Map<string, ReturnType<typeof hostCommandCapability>["task"]>();
   #closing: Promise<void> | null = null;
   #active: Promise<unknown> | null = null;
   #ingress: HostIngress | undefined;
@@ -202,15 +202,15 @@ export class DurableHost {
       hooks: [hook(GenerationTask, { beforeRequest: async () => { await gate(); return undefined; } }), hook(CompactionTask, { beforeCompact: async () => { await gate(); return undefined; } }), hook(ToolTask, { beforeTool: async () => { await gate(); return undefined; } })],
     }));
     if (managed?.commandOwner !== undefined) {
-      const task = hostCommandTask({
+      const capability = hostCommandCapability({
         assertBinding: async conversationKey => {
           await this.assertOwnership(workspaceId);
           if (String(this.owner(workspaceId).conversation.id) !== conversationKey) throw new HostError("execution_incomplete", "Command task belongs to another conversation");
         },
         owner: () => this.commandOwner(workspaceId),
       });
-      registry.install(defineExtension({ name: "herdr.command-owner", tasks: [task] }));
-      this.#commandTasks.set(workspaceId, task);
+      registry.install(capability.extension);
+      this.#commandTasks.set(workspaceId, capability.task);
     }
     const owner = await CodingWorkspaceOwner.prepare(
       {

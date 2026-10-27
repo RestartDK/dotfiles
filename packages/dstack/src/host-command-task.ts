@@ -1,15 +1,15 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { defineTask } from "@earendil-works/pi-durable";
+import { defineExtension, defineTask } from "@earendil-works/pi-durable";
 import type { ExecutionCommands } from "./execution-commands.js";
 import { isIdentityName } from "./workspace-identity.js";
 
 export const HOST_COMMAND_TASK = "herdr.command.consume";
 
-export function hostCommandTask(options: {
+export function hostCommandCapability(options: {
   readonly assertBinding: (conversationKey: string) => Promise<void>;
   readonly owner: () => ExecutionCommands;
 }) {
-  return defineTask<{ intentId: string }, { phase: "start" }, { intentId: string; phase: string }>({
+  const task = defineTask<{ intentId: string }, { phase: "start" }, { intentId: string; phase: string }>({
     name: HOST_COMMAND_TASK, version: 1,
     initial: () => ({ phase: "start" }),
     phases: {
@@ -25,4 +25,5 @@ export function hostCommandTask(options: {
       await runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), BACKGROUND_CONTEXT);
     },
   });
+  return { task, extension: defineExtension({ name: "herdr.command-owner", tasks: [task] }) };
 }
