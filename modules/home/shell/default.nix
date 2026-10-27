@@ -33,6 +33,18 @@ in
           env = goEnv;
         };
         home.sessionVariables = goEnv;
+        programs.direnv = {
+          enable = true;
+          enableZshIntegration = lib.mkDefault false;
+          config = {
+            global = {
+              hide_env_diff = true;
+              warn_timeout = "0s";
+              log_filter = "^direnv: (loading|using flake|export )";
+            };
+            whitelist.prefix = [ "${config.home.homeDirectory}/.herdr/worktrees/" ];
+          };
+        };
         programs.zsh = {
           enable = true;
           enableCompletion = true;
