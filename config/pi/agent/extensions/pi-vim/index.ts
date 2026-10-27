@@ -13,6 +13,7 @@ import {
   truncateToWidth,
   type TUI,
 } from "@earendil-works/pi-tui";
+import { ULTRAFAST_STATUS_KEY } from "../pi-ultrafast/state.ts";
 import { renderBar, renderStatusLine } from "./status-line.ts";
 import {
   countdown,
@@ -151,16 +152,18 @@ export default function piVim(pi: ExtensionAPI) {
 
   async function refreshUsage(ctx: ExtensionContext): Promise<void> {
     const generation = ++usageFetchGeneration;
-    const providerId = usageProviderId(ctx.model);
+    const model = ctx.model;
+    const providerId = usageProviderId(model);
     const source = providerId === undefined ? undefined : USAGE_SOURCES.get(providerId);
     if (providerId === undefined || source === undefined) {
       usageSnapshot = undefined;
       usageTui?.requestRender();
       return;
     }
-    const windows = await fetchUsageWindows(providerId, () =>
-      ctx.modelRegistry.getApiKeyForProvider(providerId),
-    );
+    const windows = await fetchUsageWindows(providerId, {
+      kind: model && ctx.modelRegistry.isUsingOAuth(model) ? "oauth" : "api-key",
+      resolve: () => ctx.modelRegistry.getApiKeyForProvider(providerId),
+    });
     if (generation !== usageFetchGeneration) return;
     usageSnapshot = { providerId, source, windows };
     usageTui?.requestRender();
@@ -262,7 +265,7 @@ export default function piVim(pi: ExtensionAPI) {
           const theme = ctx.ui.theme;
           const statuses = footerData.getExtensionStatuses();
           const otherStatuses = Array.from(statuses.entries())
-            .filter(([key]) => key !== "netns" && key !== "mcp")
+            .filter(([key]) => key !== "netns" && key !== "mcp" && key !== ULTRAFAST_STATUS_KEY)
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([, text]) => sanitizeStatus(text));
           const branch = footerData.getGitBranch();
@@ -319,6 +322,10 @@ export default function piVim(pi: ExtensionAPI) {
                 model: (model?.name ?? model?.id ?? "no-model").replace(/^Claude /, ""),
                 reasoning: model?.reasoning ?? false,
                 thinkingLevel: ctx.thinkingLevel ?? "off",
+                ultrafastMode:
+                  footerDataRef?.getExtensionStatuses().get(ULTRAFAST_STATUS_KEY) === "ultrafast"
+                    ? "on"
+                    : "off",
                 cwd: ctx.sessionManager.getCwd(),
                 contextPercent: context?.percent ?? null,
                 contextTokens: context?.tokens ?? null,

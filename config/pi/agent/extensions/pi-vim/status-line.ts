@@ -2,6 +2,7 @@ import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import type { UltrafastMode } from "../pi-ultrafast/state.ts";
 
 const SEGMENT_SEPARATOR = "";
 const FOLDER_ICON = "\u{F115}";
@@ -10,11 +11,23 @@ const PATH_COLOR = "#00afaf";
 const BAR_WIDTH = 12;
 const BAR_FILLED = "━";
 const BAR_EMPTY = "─";
+const ULTRAFAST_LETTERS = [
+  { letter: "u", dark: "#ff5f5f", light: "#bf1932" },
+  { letter: "l", dark: "#ff875f", light: "#ae4500" },
+  { letter: "t", dark: "#ffaf5f", light: "#8a6500" },
+  { letter: "r", dark: "#d7d75f", light: "#637000" },
+  { letter: "a", dark: "#87d75f", light: "#287c28" },
+  { letter: "f", dark: "#5fd7af", light: "#007b78" },
+  { letter: "a", dark: "#5fafd7", light: "#0067ae" },
+  { letter: "s", dark: "#8787ff", light: "#5942b7" },
+  { letter: "t", dark: "#d787ff", light: "#92328c" },
+];
 
 export interface StatusLineInput {
   model: string;
   reasoning: boolean;
   thinkingLevel: string;
+  ultrafastMode: UltrafastMode;
   cwd: string;
   contextPercent: number | null;
   contextTokens: number | null;
@@ -97,6 +110,12 @@ function buildLine(input: StatusLineInput, theme: Theme): string {
   if (input.reasoning && input.thinkingLevel !== "off") {
     const levelColor = THINKING_COLORS[input.thinkingLevel] ?? "dim";
     model += `${theme.fg("dim", " · ")}${theme.fg(levelColor, input.thinkingLevel)}`;
+  }
+  if (input.ultrafastMode === "on") {
+    const label = ULTRAFAST_LETTERS.map(({ letter, dark, light }) =>
+      hexFg(theme.appearance === "light" ? light : dark, letter),
+    ).join("");
+    model += `${theme.fg("dim", " · ")}${label}`;
   }
   segments.push(model);
 

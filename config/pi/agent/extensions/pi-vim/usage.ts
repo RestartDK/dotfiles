@@ -7,12 +7,15 @@ const FETCH_TIMEOUT_MS = 5_000;
 const AUTH_PATH = join(homedir(), ".pi", "agent", "auth.json");
 
 export type UsageLayout = "bars" | "compact";
-export type ApiKeyResolver = () => Promise<string | undefined>;
+export type UsageAuthentication = {
+  kind: "oauth" | "api-key";
+  resolve: () => Promise<string | undefined>;
+};
 export type UsageModel = Pick<Model<Api>, "provider" | "cost">;
 export type UsageSource = {
   label: string;
   layout: UsageLayout;
-  fetch: (getApiKey: ApiKeyResolver) => Promise<unknown>;
+  fetch: (auth: UsageAuthentication) => Promise<unknown>;
   decode: (body: unknown) => UsageWindow[];
 };
 
@@ -20,11 +23,6 @@ export type UsageWindow = {
   label: string;
   percent: number;
   resetAt: number | undefined;
-};
-
-type CodexCredentials = {
-  token: string;
-  accountId: string | undefined;
 };
 
 function field(value: unknown, key: string): unknown {
@@ -87,13 +85,6 @@ function claudeToken(): string | undefined {
   return nonEmptyString(field(authEntry("anthropic"), "access"));
 }
 
-function codexCredentials(): CodexCredentials | undefined {
-  const entry = authEntry("openai-codex");
-  const token = nonEmptyString(field(entry, "access"));
-  if (token === undefined) return undefined;
-  return { token, accountId: nonEmptyString(field(entry, "accountId")) };
-}
-
 async function requestBody(url: string, init: RequestInit): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -120,7 +111,7 @@ async function fetchClaudeUsage(): Promise<unknown> {
   });
 }
 
-function codexWindow(entry: unknown): UsageWindow | undefined {
+function openaiWindow(entry: unknown): UsageWindow | undefined {
   const seconds = number(field(entry, "limit_window_seconds"));
   if (seconds === undefined || seconds <= 0) return undefined;
   return {
@@ -130,20 +121,21 @@ function codexWindow(entry: unknown): UsageWindow | undefined {
   };
 }
 
-async function fetchCodexUsage(): Promise<unknown> {
-  const credentials = codexCredentials();
-  if (credentials === undefined) return undefined;
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${credentials.token}`,
-    Accept: "application/json",
-    "User-Agent": "pi-agent",
-  };
-  if (credentials.accountId !== undefined) headers["ChatGPT-Account-Id"] = credentials.accountId;
-  return requestBody("https://chatgpt.com/backend-api/wham/usage", { headers });
+async function fetchOpenAIUsage(auth: UsageAuthentication): Promise<unknown> {
+  if (auth.kind !== "oauth") return undefined;
+  const token = await auth.resolve();
+  if (!token || token.startsWith("sk-")) return undefined;
+  return requestBody("https://chatgpt.com/backend-api/wham/usage", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "User-Agent": "pi-agent",
+    },
+  });
 }
 
-async function fetchGoUsage(getApiKey: ApiKeyResolver): Promise<unknown> {
-  const key = await getApiKey();
+async function fetchGoUsage(auth: UsageAuthentication): Promise<unknown> {
+  const key = await auth.resolve();
   if (!key) return undefined;
   return requestBody("https://opencode.ai/zen/go/v1/usage", {
     headers: { Authorization: `Bearer ${key}` },
@@ -173,11 +165,11 @@ export const USAGE_SOURCES: ReadonlyMap<string, UsageSource> = new Map<string, U
     },
   ],
   [
-    "openai-codex",
+    "openai",
     {
       label: "gpt",
       layout: "bars",
-      fetch: fetchCodexUsage,
+      fetch: fetchOpenAIUsage,
       decode(body) {
         const rateLimit = field(body, "rate_limit");
         const windows: UsageWindow[] = [];
@@ -185,7 +177,7 @@ export const USAGE_SOURCES: ReadonlyMap<string, UsageSource> = new Map<string, U
           field(rateLimit, "primary_window"),
           field(rateLimit, "secondary_window"),
         ]) {
-          const window = codexWindow(entry);
+          const window = openaiWindow(entry);
           if (window !== undefined) windows.push(window);
         }
         return windows;
@@ -230,12 +222,12 @@ export const USAGE_SOURCES: ReadonlyMap<string, UsageSource> = new Map<string, U
 
 export async function fetchUsageWindows(
   providerId: string,
-  getApiKey: ApiKeyResolver,
+  auth: UsageAuthentication,
 ): Promise<UsageWindow[]> {
   const source = USAGE_SOURCES.get(providerId);
   if (source === undefined) return [];
   try {
-    return source.decode(await source.fetch(getApiKey));
+    return source.decode(await source.fetch(auth));
   } catch {
     return [];
   }

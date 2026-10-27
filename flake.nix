@@ -414,7 +414,7 @@
               }
               ''
                 export HOME=$TMPDIR
-                bun test ${./config/pi/agent/extensions/pi-vim}
+                bun test ${./config/pi/agent/extensions/pi-vim} ${./config/pi/agent/extensions/pi-ultrafast}
                 touch $out
               '';
           pi-coordination =
