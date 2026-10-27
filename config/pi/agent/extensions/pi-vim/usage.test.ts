@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { fetchUsageWindows, USAGE_SOURCES, usageProviderId, type UsageModel } from "./usage.ts";
 
 const resetsAt = "2030-01-01T00:00:00Z";
@@ -53,9 +53,9 @@ describe("usage decoding", () => {
     ]);
   });
 
-  test("Codex keeps percentage points and derives horizon labels from seconds", () => {
+  test("OpenAI keeps percentage points and derives horizon labels from seconds", () => {
     expect(
-      USAGE_SOURCES.get("openai-codex")?.decode({
+      USAGE_SOURCES.get("openai")?.decode({
         rate_limit: {
           primary_window: { used_percent: 1, limit_window_seconds: 18_000, reset_at: resetAt },
           secondary_window: {
@@ -73,6 +73,68 @@ describe("usage decoding", () => {
 });
 
 describe("usage fetching", () => {
+  test("OpenAI uses the active provider resolver, without Codex credentials", async () => {
+    const request = spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({
+        rate_limit: {
+          primary_window: { used_percent: 25, limit_window_seconds: 18000, reset_at: resetAt },
+        },
+      }),
+    );
+    try {
+      expect(
+        await fetchUsageWindows("openai", {
+          kind: "oauth",
+          resolve: async () => "openai-fixture-token",
+        }),
+      ).toEqual([{ label: "5h", percent: 25, resetAt }]);
+      expect(request).toHaveBeenCalledTimes(1);
+      const [url, init] = request.mock.calls[0] ?? [];
+      expect(url).toBe("https://chatgpt.com/backend-api/wham/usage");
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer openai-fixture-token");
+    } finally {
+      request.mockRestore();
+    }
+  });
+
+  test.each([
+    { provider: "openai-codex", kind: "oauth" },
+    { provider: "openai", kind: "api-key" },
+  ] satisfies Array<{ provider: string; kind: "oauth" | "api-key" }>)(
+    "$provider with $kind does not resolve credentials or fetch subscription usage",
+    async ({ provider, kind }) => {
+      const request = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({}));
+      let resolved = false;
+      try {
+        expect(
+          await fetchUsageWindows(provider, {
+            kind,
+            resolve: async () => {
+              resolved = true;
+              return "wrong-credential";
+            },
+          }),
+        ).toEqual([]);
+        expect(resolved).toBe(false);
+        expect(request).not.toHaveBeenCalled();
+      } finally {
+        request.mockRestore();
+      }
+    },
+  );
+
+  test("an API-key override cannot be sent to ChatGPT even with OAuth metadata", async () => {
+    const request = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({}));
+    try {
+      expect(
+        await fetchUsageWindows("openai", { kind: "oauth", resolve: async () => "sk-fixture" }),
+      ).toEqual([]);
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      request.mockRestore();
+    }
+  });
+
   test.each([
     {
       name: "missing key",
@@ -129,7 +191,9 @@ describe("usage fetching", () => {
         return Response.json(body, { status });
       }) as typeof fetch;
       try {
-        expect(await fetchUsageWindows(provider, async () => key)).toEqual(windows);
+        expect(
+          await fetchUsageWindows(provider, { kind: "api-key", resolve: async () => key }),
+        ).toEqual(windows);
         expect(requests).toHaveLength(calls);
         for (const request of requests) {
           expect(request.url).toBe("https://opencode.ai/zen/go/v1/usage");
@@ -143,14 +207,23 @@ describe("usage fetching", () => {
 
   test("resolver failures yield no usage", async () => {
     expect(
-      await fetchUsageWindows("opencode-go", async () => {
-        throw new Error("resolver failed");
+      await fetchUsageWindows("opencode-go", {
+        kind: "api-key",
+        resolve: async () => {
+          throw new Error("resolver failed");
+        },
       }),
     ).toEqual([]);
   });
 });
 
 describe("usage provider eligibility", () => {
+  test("OpenAI usage is enabled for openai, not openai-codex", () => {
+    const cost = { ...zeroCost, input: 1 };
+    expect(usageProviderId({ provider: "openai", cost })).toBe("openai");
+    expect(usageProviderId({ provider: "openai-codex", cost })).toBeUndefined();
+  });
+
   test.each([
     { name: "undefined model", model: undefined },
     { name: "unknown provider", model: { provider: "unknown", cost: { ...zeroCost, input: 1 } } },
