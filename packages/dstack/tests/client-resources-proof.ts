@@ -39,7 +39,7 @@ let endpoint = "";
 const authorization = `Bearer ${clientToken(credential)}`;
 function post(id: string, op: string, workspaceId = "coding"): Promise<Response> { return fetch(`${endpoint}/v1`, { method: "POST", headers: { "content-type": "application/json", authorization }, body: JSON.stringify({ v: 1, id, operation: { op, workspaceId, ...(op === "status" ? { requestId: "absent" } : {}) } }) }); }
 const cliCustody = `import json,os,signal,subprocess,sys
-child=subprocess.Popen(sys.argv[1:],stdin=subprocess.DEVNULL,close_fds=True)
+child=subprocess.Popen(sys.argv[1:],stdin=subprocess.DEVNULL,close_fds=True,pass_fds=(4,))
 fd=os.pidfd_open(child.pid,0)
 control=os.fdopen(3,'w',buffering=1)
 try:
@@ -83,17 +83,24 @@ async function closedStderr(): Promise<void> {
   assert.equal(await bounded(closed, "CLI broken stderr retirement"), 1);
   assert.equal(observed, "", "Broken stderr must not become an uncaught Node error");
 }
-async function cliViewer(action: "SIGINT" | "SIGTERM" | "wait" | "broken-output"): Promise<number> {
+async function cliViewer(action: "SIGINT" | "SIGTERM" | "wait" | "broken-output" | "SIGINT-paused"): Promise<number> {
   const python = process.env.DSTACK_TEST_PYTHON; assert.ok(python !== undefined && python.startsWith("/nix/store/"));
-  const child = spawn(python, ["-u", "-c", cliCustody, process.execPath, fileURLToPath(new URL("../client-cli.js", import.meta.url)), "watch", "--endpoint", endpoint, "--credential", tokenFile, "--workspace", "coding"], { stdio: ["pipe", "pipe", "pipe", "pipe"] });
-  const control = child.stdio[3]; assert.ok(control instanceof Readable); assert.ok(child.stdin !== null && child.stdout !== null && child.stderr !== null);
-  const lines = createInterface({ input: control })[Symbol.asyncIterator](), stdout = action === "wait" ? undefined : createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+  const paused = action === "SIGINT-paused", monitorFile = join(root, "native-write-monitor.cjs");
+  if (paused) await writeFile(monitorFile, 'const timer=setInterval(()=>{if(process.stdout.writableLength>=6*1024*1024&&process.getActiveResourcesInfo().includes("SimpleWriteWrap")){clearInterval(timer);require("node:fs").writeSync(4,JSON.stringify({nativeWritePending:true,queuedBytes:process.stdout.writableLength})+"\\n");}},1);timer.unref();', { flag: "wx", mode: 0o600 });
+  const child = spawn(python, ["-u", "-c", cliCustody, process.execPath, ...(paused ? ["--require", monitorFile] : []), fileURLToPath(new URL("../client-cli.js", import.meta.url)), "watch", "--endpoint", endpoint, "--credential", tokenFile, "--workspace", "coding"], { stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"] });
+  const control = child.stdio[3], monitor = child.stdio[4]; assert.ok(control instanceof Readable && monitor instanceof Readable); assert.ok(child.stdin !== null && child.stdout !== null && child.stderr !== null);
+  const lines = createInterface({ input: control })[Symbol.asyncIterator](), pending = createInterface({ input: monitor })[Symbol.asyncIterator](), stdout = action === "wait" || paused ? undefined : createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   let stderr = "", stderrBytes = 0; child.stderr.setEncoding("utf8"); child.stderr.on("data", (text: string) => { stderrBytes += Buffer.byteLength(text); stderr = (stderr + text).slice(0, 32768); });
   const exit = new Promise<number | null>((resolve, reject) => { child.once("error", reject); child.once("exit", resolve); });
   try {
     assert.equal(JSON.parse(String((await bounded(lines.next(), "CLI original pidfd readiness")).value)).originalPidfd, true);
     if (stdout !== undefined) assert.equal(JSON.parse(String((await bounded(stdout.next(), "Actual CLI atomic snapshot")).value)).type, "snapshot");
-    const start = performance.now(); child.stdin.end(`${action === "broken-output" ? "wait" : action}\n`);
+    if (paused) {
+      const native = JSON.parse(String((await bounded(pending.next(), "Actual native pending stdout write")).value));
+      assert.equal(native.nativeWritePending, true); assert.ok(typeof native.queuedBytes === "number" && native.queuedBytes >= 6 * 1024 * 1024);
+      await writeFile(join(root, "cli-SIGINT-paused-native.json"), JSON.stringify(native), { flag: "wx", mode: 0o600 });
+    }
+    const start = performance.now(); child.stdin.end(`${paused ? "SIGINT" : action === "broken-output" ? "wait" : action}\n`);
     if (action === "broken-output") {
       child.stdout.destroy();
       await owned().commit(async tx => { await tx.appendEntry(owned().id, { kind: "client.fixture", data: { text: "p".repeat(64 * 1024) } }); }, BACKGROUND_CONTEXT);
@@ -105,8 +112,9 @@ async function cliViewer(action: "SIGINT" | "SIGTERM" | "wait" | "broken-output"
     assert.equal(await bounded(exit, "CLI custody join"), 0, stderr); assert.ok(stderrBytes < 32768, "CLI stderr exceeded its diagnostic budget");
     if (action === "broken-output") { assert.match(stderr, /Client output ended/); return Math.round(performance.now() - start); }
     if (action === "wait") { assert.match(stderr, /Client output did not drain; viewer detached/); return Math.round(performance.now() - start); }
+    if (paused) { assert.match(stderr, /viewer detached|No cancellation was sent/); return Math.round(performance.now() - start); }
     assert.match(stderr, /No cancellation was sent/); process.stderr.write(`${JSON.stringify({ cliCase: action, exited: true })}\n`); return Math.round(performance.now() - start);
-  } finally { child.stdin.end(); child.stdout.destroy(); await bounded(exit, "CLI custody cleanup join", 18000); await stdout?.return?.(); await lines.return?.(); }
+  } finally { child.stdin.end(); child.stdout.destroy(); await bounded(exit, "CLI custody cleanup join", 18000); await stdout?.return?.(); await pending.return?.(); await lines.return?.(); }
 }
 try {
   await closedStderr();
@@ -119,6 +127,7 @@ try {
   assert.equal(expiry[0]?.kind, "event"); assert.deepEqual(expiry.at(-1), { kind: "end", reason: "retired" }, "Planned viewer expiry must send a truthful terminal frame");
   await cliViewer("SIGINT"); await cliViewer("SIGTERM"); await cliViewer("broken-output");
   await owned().commit(async tx => { await tx.appendEntry(owned().id, { kind: "client.fixture", data: { text: "x".repeat(6 * 1024 * 1024) } }); }, BACKGROUND_CONTEXT);
+  const pausedSigintMs = await cliViewer("SIGINT-paused"); assert.ok(pausedSigintMs <= CLIENT_RESOURCES.backpressureMs + 3000);
   const cliDrainMs = await cliViewer("wait"); assert.ok(cliDrainMs >= CLIENT_RESOURCES.backpressureMs - 500 && cliDrainMs <= CLIENT_RESOURCES.backpressureMs + 3000);
   Object.defineProperty(ServerResponse.prototype, "write", { configurable: true, get(this: ServerResponse) { if (captureSlow) { captureSlow = false; slowStarted = performance.now(); this.once("close", () => slowRequestClosed.resolve()); } return nativeWrite; } });
   captureSlow = true;
@@ -145,7 +154,7 @@ try {
     await owned().commit(async tx => { await tx.appendEntry(owned().id, { kind: "client.fixture", data: { text: "z".repeat(9 * 1024 * 1024) } }); }, BACKGROUND_CONTEXT);
     const terminal = await bounded(live.next(), "Oversized committed event refusal"); assert.ok(terminal.value?.kind === "error"); assert.equal(terminal.value.code, "view_too_large"); assert.equal((await live.next()).done, true);
     assert.equal(opens, 2); assert.equal(faux.state.callCount, 0);
-    const result = { proof: "client-resource-lifetimes", root, opens, providerCalls: faux.state.callCount, acceleratedActualViewerTimer: true, plannedExpiryRetired: true, actualPausedTcpReader: true, slowReaderRetirementMs: slowMs, cliOriginalPidfdSignals: ["SIGINT", "SIGTERM"], cliPausedStdoutRetirementMs: cliDrainMs, cliBrokenOutputRetired: true, closedStderrWithoutUncaught: true, concurrentStatusNotBusy: true, actualSdkEntryBytes: 18 * 1024 * 1024 + 64 * 1024, oversizedBaselineRefusedBeforeSse: true, oversizedCommittedEventRefused: true, sdkOverflowSnapshotAcceptance: false, failedViewerCapacityRetired: true, productionModel: false };
+    const result = { proof: "client-resource-lifetimes", root, opens, providerCalls: faux.state.callCount, acceleratedActualViewerTimer: true, plannedExpiryRetired: true, actualPausedTcpReader: true, slowReaderRetirementMs: slowMs, cliOriginalPidfdSignals: ["SIGINT", "SIGTERM"], cliPausedStdoutRetirementMs: cliDrainMs, actualNativePendingStdoutOriginalPidfdSigintMs: pausedSigintMs, cliBrokenOutputRetired: true, closedStderrWithoutUncaught: true, concurrentStatusNotBusy: true, actualSdkEntryBytes: 18 * 1024 * 1024 + 64 * 1024, oversizedBaselineRefusedBeforeSse: true, oversizedCommittedEventRefused: true, sdkOverflowSnapshotAcceptance: false, failedViewerCapacityRetired: true, productionModel: false };
     await writeFile(join(root, "result.json"), JSON.stringify(result, null, 2), { flag: "wx", mode: 0o600, flush: true }); process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally { slowResponse?.destroy(); slow.destroy(); }
 } finally {

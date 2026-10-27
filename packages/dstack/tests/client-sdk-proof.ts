@@ -98,6 +98,13 @@ try {
   await bounded(ownedConversation().waitForIdle(BACKGROUND_CONTEXT), "Detached completion");
   const done = await reply(clientToken(writer), { op: "status", workspaceId: "coding", requestId: "turn" });
   assert.equal(object(done.receipt).status, "done"); assert.equal(typeof object(done.receipt).id, "string");
+  const overflow = await watch(clientToken(reader)), replacement = Promise.withResolvers<ClientObservation["snapshot"]>();
+  for (let i = 0; i < 102; i += 1) await ownedConversation().commit(async tx => { await tx.appendEntry(ownedConversation().id, { kind: "client.overflow", data: { ordinal: i } }); }, BACKGROUND_CONTEXT);
+  overflow.start(async event => { if (event.type === "snapshot") replacement.resolve(event); });
+  const atomicReplacement = await bounded(replacement.promise, "Actual SDK watch overflow snapshot");
+  assert.ok(atomicReplacement.entries.filter(entry => entry.kind === "client.overflow").length >= 101);
+  assert.equal(Object.hasOwn(atomicReplacement, "seq"), false); assert.equal(Object.hasOwn(atomicReplacement, "sequence"), false);
+  await overflow.stop(); views.delete(overflow); assert.equal(faux.state.callCount, 1);
   const retried = await reply(clientToken(writer), { op: "submit", workspaceId: "coding", requestId: "turn", content: "Return the fixture response" });
   assert.equal(object(retried.receipt).id, object(admitted.receipt).id);
   await assert.rejects(reply(clientToken(writer), { op: "submit", workspaceId: "coding", requestId: "turn", content: "Changed payload" }), /Request ID is already bound/);
@@ -156,7 +163,7 @@ try {
   host.registerClientIngress({ seal() { shutdown.push("seal"); }, async close() { shutdown.push("drain"); } });
   await bounded(host.close(), "Host close with viewer"); host = undefined;
   assert.equal((await stopping.closed).reason, "stopped"); views.clear(); assert.deepEqual(shutdown, ["seal", "drain"]);
-  const result = { proof: "client-sdk-owner", root, opens, providerCalls: faux.state.callCount, events, deniedBeforeSdk: true, oneOwnerPerBoot: opens === 2, detachedGenerationCompleted: true, originalPublicCursorPaging: true, originalCursorTTLAndSlotEviction: true, restartExpiresCursor: true, rotationPreservesRequest: true, explicitOrdinarySdkAbort: true, hostClosesViewer: true, stopJoinsOwnedListener: true, httpAcceptance: false, productionModelAcceptance: false };
+  const result = { proof: "client-sdk-owner", root, opens, providerCalls: faux.state.callCount, events, deniedBeforeSdk: true, oneOwnerPerBoot: opens === 2, detachedGenerationCompleted: true, originalPublicCursorPaging: true, originalCursorTTLAndSlotEviction: true, actualSdkOverflowAtomicSnapshot: true, restartExpiresCursor: true, rotationPreservesRequest: true, explicitOrdinarySdkAbort: true, hostClosesViewer: true, stopJoinsOwnedListener: true, httpAcceptance: false, productionModelAcceptance: false };
   assert.equal(opens, 2); assert.equal(faux.state.callCount, 2);
   await writeFile(join(root, "result.json"), JSON.stringify(result, null, 2), { mode: 0o600, flag: "wx", flush: true }); process.stdout.write(`${JSON.stringify(result)}\n`);
 } finally { callbackReleased.resolve(); for (const view of views) await view.stop(); await host?.close(); Harness.open = originalOpen; }

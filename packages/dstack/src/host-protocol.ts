@@ -1,6 +1,7 @@
 import type { ModelRef } from "@earendil-works/pi-durable";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { createHash } from "node:crypto";
+import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import type { Readable, Writable } from "node:stream";
 import { isAbsolute } from "node:path";
@@ -158,9 +159,15 @@ export function parseHostConfig(value: unknown): HostConfig {
 export async function loadHostConfig(options: {
   readonly path: string;
   readonly expectedSha256: string | undefined;
+  readonly access?: "private-runtime";
 }): Promise<HostConfig> {
-  const file = await open(options.path, "r");
+  const file = await open(options.path, options.access === "private-runtime" ? constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK : "r");
   try {
+    if (options.access === "private-runtime") {
+      const info = await file.stat(), uid = process.getuid?.();
+      if (uid === undefined || uid === 0 || !info.isFile() || info.nlink !== 1 || info.uid !== uid || ![0o400, 0o600].includes(info.mode & 0o7777))
+        throw new HostError("unsafe_config", "Deployed Host configuration must be a private owned regular file");
+    }
     const bytes = Buffer.alloc(64 * 1024 + 1);
     let size = 0;
     while (size < bytes.length) {

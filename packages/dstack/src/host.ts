@@ -16,6 +16,7 @@ import { workspaceFileTools } from "./execution-files.js";
 import { executionRootBytes } from "./execution-wire.js";
 import { HostExecution, type HostCommandRuntime } from "./host-execution.js";
 import { hostCommandTask } from "./host-command-task.js";
+import { parseControlPaths } from "./host-protection.js";
 import { executionModels } from "./execution-models.js";
 import { unresolvedEffects } from "./execution-domain.js";
 import type { CommandAuthorizationInput, TrustedReconciliation } from "./execution-commands.js";
@@ -72,9 +73,11 @@ export class DurableHost {
     readonly clientAuthority: ClientAuthority | undefined,
   ) { this.#clientHistory = clientAuthority === undefined ? undefined : new ClientHistory(config.identity); }
 
-  static async open(config: HostConfig, models: Models, options: { readonly protectedPaths?: readonly string[]; readonly commands?: HostCommandRuntime } = {}): Promise<DurableHost> {
+  static async open(config: HostConfig, models: Models, options: { readonly protectedPaths?: readonly string[]; readonly controlPaths?: readonly string[]; readonly commands?: HostCommandRuntime } = {}): Promise<DurableHost> {
     config = parseHostConfig(JSON.parse(JSON.stringify(config)));
-    const protectedPaths = [...(options.protectedPaths ?? [])];
+    const controlPaths = options.controlPaths === undefined ? undefined : parseControlPaths(options.controlPaths);
+    if (controlPaths !== undefined && config.execution === undefined) throw new HostError("invalid_config", "Production control protection requires durable execution");
+    const protectedPaths = [...(options.protectedPaths ?? []), ...(controlPaths ?? [])];
     const commands = options.commands === undefined ? undefined : { ...options.commands };
     const clients = config.execution?.clients;
     const clientAuthority = clients === undefined ? undefined : await ClientAuthority.open({ identity: config.identity, config: clients });
@@ -123,8 +126,8 @@ export class DurableHost {
         CREATE TABLE IF NOT EXISTS binding (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, cwd TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS admissions (id TEXT PRIMARY KEY, payload TEXT NOT NULL, admitted INTEGER NOT NULL DEFAULT 0);`);
-      const version = config.execution === undefined ? 1 : config.execution.clients === undefined ? 2 : 3;
-      const binding = JSON.stringify({ ...config.identity, stateRoot, version });
+      const version = controlPaths !== undefined ? 4 : config.execution === undefined ? 1 : config.execution.clients === undefined ? 2 : 3;
+      const binding = JSON.stringify({ ...config.identity, stateRoot, version, ...(controlPaths === undefined ? {} : { controlPaths, clientMode: config.execution?.clients === undefined ? "native" : "authenticated" }) });
       const stored = db.prepare("SELECT value FROM binding WHERE id=1").get();
       if (stored === undefined) db.prepare("INSERT INTO binding VALUES (1, ?)").run(binding);
       else if (stored.value !== binding)

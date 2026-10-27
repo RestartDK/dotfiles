@@ -1,4 +1,6 @@
 import { join } from "node:path";
+import { homedir } from "node:os";
+import { productionControlPaths, requireDeploymentProtection } from "./host-protection.js";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { DurableHost } from "#durable-host";
 import { hostCommandRuntime } from "./host-runtime.js";
@@ -11,10 +13,15 @@ try {
   const configPath = process.argv[2];
   if (process.argv.length !== 3 || configPath === undefined)
     throw new Error("Usage: dstack-host <config.json>");
+  const mode = process.env.DSTACK_HOST_MODE;
+  if (mode !== undefined && mode !== "deployment") throw new Error("Invalid Host deployment mode");
   const config = await loadHostConfig({
     path: configPath,
     expectedSha256: process.env.HERDR_DURABLE_HOST_CONFIG_SHA256,
+    ...(mode === "deployment" ? { access: "private-runtime" } : {}),
   });
+  const controlPaths = productionControlPaths(process.env, homedir());
+  if (mode === "deployment") requireDeploymentProtection({ config, configPath, controlPaths });
   const models = await ModelRuntime.create({
     authPath: config.authPath,
     modelsPath: config.modelsPath,
@@ -22,7 +29,7 @@ try {
     allowModelNetwork: false,
     refreshOnCreate: false,
   });
-  const host = await DurableHost.open(config, models, { protectedPaths: [configPath], commands: config.execution === undefined ? undefined : await hostCommandRuntime() });
+  const host = await DurableHost.open(config, models, { protectedPaths: [configPath, ...controlPaths], ...(config.execution === undefined ? {} : { controlPaths }), commands: config.execution === undefined ? undefined : await hostCommandRuntime() });
   const stop = () => process.stdin.destroy();
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
