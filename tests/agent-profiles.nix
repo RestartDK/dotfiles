@@ -153,6 +153,10 @@ assert builtins.all (
     system,
   }:
   home.my.ai.profile == profile
+  && home.programs.direnv.enable
+  && !home.programs.direnv.enableZshIntegration
+  &&
+    home.programs.direnv.config.whitelist.prefix == [ "${home.home.homeDirectory}/.herdr/worktrees/" ]
   && pkgs.lib.hasPrefix "/nix/store/" home.xdg.configFile."dstack/models.json".source
   &&
     home.xdg.configFile."dstack/models.json".source

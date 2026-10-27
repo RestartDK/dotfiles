@@ -35,7 +35,9 @@ preparation even when the source shell inherited direnv's loaded-file marker.
 Direnv's own diff removes the previous project's exports. The launcher does not
 use `env -i`, clear caches, or copy the source project's exported environment.
 Terminal settings and credential-agent connections remain inherited.
-No environment file is automatically approved.
+The launcher never grants direnv approval. Home Manager trusts environment files
+under `~/.herdr/worktrees/`, including later edits; outside that tree, normal
+direnv approval rules apply.
 
 The supported Lorri adapter runs `lorri watch --once` before evaluating direnv.
 This handles a cold project cache where `lorri direnv` reports no completed
@@ -54,9 +56,9 @@ repo_env_providers+=(
 )
 ```
 
-Inspect and approve each new checkout's environment with direnv before launching
-work there. Selecting a provider authorizes its evaluation, not approval of the
-environment file. Other managers can replace or extend `repo_env_hooks`.
+Inspect and approve environments outside that tree before launching work there.
+Selecting a provider authorizes its evaluation, not approval of the environment
+file. Other managers can replace or extend `repo_env_hooks`.
 Loaders that swallow failures or detach background work cannot be made reliable
 by a generic launcher. Such loaders need a blocking adapter.
 
