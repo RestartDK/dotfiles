@@ -9,6 +9,10 @@
 let
   cfg = config.my.liveConfig;
   hasScattererInput = dotfilesInputs ? scatterer;
+  # Ghostty comes from the nixpkgs that llm-agents pins, which is unstable.
+  # The 26.05 pin trails upstream by a minor release.
+  ghostty =
+    dotfilesInputs.llm-agents.inputs.nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system}.ghostty;
   herdrPackage = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system}.herdr;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
   # Upstream's packages.plugin is a ready-to-link Herdr plugin root: the
@@ -55,7 +59,7 @@ in
           enable = true;
           # macOS gets Ghostty from the Homebrew cask; pkgs.ghostty is
           # Linux-only and refuses to evaluate on darwin.
-          package = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin null;
+          package = if pkgs.stdenv.hostPlatform.isDarwin then null else ghostty;
           # Stylix owns the theme, font and size on the Wayland desktop.
           settings = lib.mkMerge [
             {
