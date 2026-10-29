@@ -8,7 +8,7 @@ An owner binds one private store to `domain`, `nodeId`, `workspaceId`, and a can
 
 `conversation.sqlite` holds the conversation, submissions, tool results, and interrupted-task state. `conversation.lock` excludes concurrent processes across network namespaces. Directories containing `jobs.sqlite` are rejected. Existing PR and wake storage is unchanged. There is no migration, backfill, or row deletion.
 
-The caller supplies a `Models` catalog and an initial `ModelRef`. A reopen retains the stored agent choices and requires their model in that catalog. Credentials are not stored in the workspace binding. The caller owns model policy and credential selection.
+The caller supplies a `Models` catalog and an initial `ModelRef`. Optional `initialThinkingLevel` sets the reasoning level in the same creating commit, before resume. Omitting it keeps the SDK default. A reopen retains the stored agent choices, including thinking level, and requires their model in that catalog. Credentials are not stored in the workspace binding. The caller owns model policy and credential selection.
 
 The owner installs official `CodingTools` and uses `NodeExecutionEnv`. The caller must select `execution: "trusted-user"`. Immutable cwd prevents accidental retargeting, not file access outside the worktree. File tools and arbitrary commands still run as the Unix user. This is not a sandbox or a security boundary between work and personal code.
 

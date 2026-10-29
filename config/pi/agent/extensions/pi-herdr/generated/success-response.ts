@@ -6,6 +6,11 @@
 
 export type ResponseResult =
   | {
+      type: "durable_host";
+      value: unknown;
+      [k: string]: unknown;
+    }
+  | {
       capabilities?: ServerCapabilities | null;
       protocol: number;
       type: "pong";

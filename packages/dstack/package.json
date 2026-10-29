@@ -7,6 +7,18 @@
     "#coding-workspace": {
       "types": "./src/conversation.ts",
       "default": "./dist/conversation.js"
+    },
+    "#durable-host": {
+      "types": "./src/host.ts",
+      "default": "./dist/host.js"
+    },
+    "#host-stdio": {
+      "types": "./src/host-stdio.ts",
+      "default": "./dist/host-stdio.js"
+    },
+    "#host-protocol": {
+      "types": "./src/host-protocol.ts",
+      "default": "./dist/host-protocol.js"
     }
   },
   "engines": {
@@ -14,20 +26,21 @@
   },
   "bin": {
     "dstack": "dist/cli.js",
-    "dstackd": "dist/daemon.js"
+    "dstackd": "dist/daemon.js",
+    "dstack-host": "dist/host-main.js"
   },
   "scripts": {
-    "build": "tsc --noEmit && esbuild src/cli.ts src/daemon.ts src/server.ts src/worker-guard.ts src/conversation.ts --bundle --platform=node --format=esm --packages=external --outdir=dist && npm run build:conversation-proofs",
-    "build:conversation-proofs": "esbuild tests/conversation-proof.ts tests/conversation-fixture.ts tests/conversation-live.ts --bundle --platform=node --format=esm --packages=external --external:@earendil-works/pi-coding-agent --external:#coding-workspace --outdir=dist/tests",
+    "build": "tsc --noEmit && esbuild src/cli.ts src/daemon.ts src/server.ts src/worker-guard.ts src/conversation.ts src/host.ts src/host-main.ts src/host-stdio.ts src/host-protocol.ts --bundle --platform=node --format=esm --packages=external --external:@earendil-works/pi-coding-agent --external:#durable-host --external:#host-stdio --external:#host-protocol --outdir=dist && npm run build:conversation-proofs",
+    "build:conversation-proofs": "esbuild tests/conversation-proof.ts tests/conversation-fixture.ts tests/conversation-live.ts tests/host-fixture.ts tests/host-proof.ts --bundle --platform=node --format=esm --packages=external --external:@earendil-works/pi-coding-agent --external:#coding-workspace --external:#durable-host --external:#host-stdio --external:#host-protocol --outdir=dist/tests",
     "test": "bun test tests ../../config/pi/agent/extensions/pi-jobs"
   },
   "dependencies": {
     "@earendil-works/pi-durable": "1.1.0",
     "@earendil-works/chord": "1.1.0",
-    "@earendil-works/pi-ai": "1.1.0"
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "1.1.0",
     "@earendil-works/pi-tui": "1.1.0",
     "typebox": "1.3.27",
     "@types/node": "22.19.15",

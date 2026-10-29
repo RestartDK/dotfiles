@@ -14,6 +14,11 @@ export type Request = {
       [k: string]: unknown;
     }
   | {
+      method: "durable.host.v1";
+      params: DurableHostOperation;
+      [k: string]: unknown;
+    }
+  | {
       method: "server.stop";
       params: EmptyParams;
       [k: string]: unknown;
@@ -519,6 +524,34 @@ export type Request = {
       [k: string]: unknown;
     }
 );
+export type DurableHostOperation =
+  | {
+      op: "health";
+    }
+  | {
+      op: "discover";
+    }
+  | {
+      cwd: string;
+      op: "create";
+      requestId: string;
+      workspaceId: string;
+    }
+  | {
+      op: "snapshot";
+      workspaceId: string;
+    }
+  | {
+      content: string;
+      op: "submit";
+      requestId: string;
+      workspaceId: string;
+    }
+  | {
+      op: "status";
+      requestId: string;
+      workspaceId: string;
+    };
 export type ToastHerdrPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export type NotificationShowSound = "none" | "done" | "request";
 export type ReadSource = "visible" | "recent" | "recent_unwrapped" | "detection";

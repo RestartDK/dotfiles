@@ -1,6 +1,6 @@
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Models } from "@earendil-works/pi-ai";
+import type { ModelThinkingLevel, Models } from "@earendil-works/pi-ai";
 import {
   configure,
   createRegistry,
@@ -8,6 +8,7 @@ import {
   Harness,
   type Conversation,
   type ModelRef,
+  type Registry,
 } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -17,6 +18,7 @@ import { lstat, mkdir, open, realpath } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { acquireLock } from "./lock.js";
 import type { Command } from "./process.js";
+import { isIdentityName } from "./workspace-identity.js";
 
 export type CodingWorkspace = {
   readonly domain: "personal" | "work";
@@ -37,8 +39,10 @@ export type OpenCodingWorkspaceOptions = {
   readonly workspace: CodingWorkspace;
   readonly models: Models;
   readonly model: ModelRef;
+  readonly initialThinkingLevel?: ModelThinkingLevel;
   readonly execution: "trusted-user";
   readonly lockCommand: Command;
+  readonly registry?: Registry;
 };
 
 function parseWorkspace(value: unknown): CodingWorkspace {
@@ -48,11 +52,9 @@ function parseWorkspace(value: unknown): CodingWorkspace {
     !("domain" in value) ||
     (value.domain !== "personal" && value.domain !== "work") ||
     !("nodeId" in value) ||
-    typeof value.nodeId !== "string" ||
-    value.nodeId.trim().length === 0 ||
+    !isIdentityName(value.nodeId) ||
     !("workspaceId" in value) ||
-    typeof value.workspaceId !== "string" ||
-    value.workspaceId.trim().length === 0 ||
+    !isIdentityName(value.workspaceId) ||
     !("cwd" in value) ||
     typeof value.cwd !== "string" ||
     !isAbsolute(value.cwd)
@@ -158,8 +160,8 @@ export class CodingWorkspaceOwner {
       await privateDatabase(databasePath);
       const storage = await openNodeSqliteStorage(databasePath);
       closeStorage = () => storage.close(BACKGROUND_CONTEXT);
-      const registry = createRegistry();
-      registry.install(CodingTools);
+      const registry = options.registry ?? createRegistry();
+      if (options.registry === undefined) registry.install(CodingTools);
       const harness = await Harness.open(
         storage,
         {
@@ -194,7 +196,7 @@ export class CodingWorkspaceOwner {
           throw new Error("Coding workspace binding mismatch");
       }, context);
       const conversation = await harness.root(context, {
-        agent: { model: options.model, cwd },
+        agent: { model: options.model, thinkingLevel: options.initialThinkingLevel, cwd },
         init: () => {
           if (options.models.getModel(options.model.provider, options.model.modelId) === undefined)
             throw new Error("Coding model is not installed in the supplied Models");
