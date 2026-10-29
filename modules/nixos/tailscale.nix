@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
@@ -8,6 +9,10 @@
 let
   cfg = config.my.tailscale;
   host = config.my.host;
+  # Tailscale comes from the nixpkgs that llm-agents pins, which is unstable.
+  # The 26.05 pin trails upstream by six releases.
+  tailscale =
+    inputs.llm-agents.inputs.nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system}.tailscale;
   boolToString = value: if value then "true" else "false";
   tailscaleHostName = if cfg.hostName != null then cfg.hostName else config.networking.hostName;
   operator = if cfg.operator != null then cfg.operator else host.userName;
@@ -52,6 +57,7 @@ in
   config = {
     services.tailscale = {
       enable = true;
+      package = tailscale;
       useRoutingFeatures = "client";
     };
 
