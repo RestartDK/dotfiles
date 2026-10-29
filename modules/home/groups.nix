@@ -3,6 +3,7 @@
 {
   imports = [
     ./live-config-options.nix
+    ./herdr-durable.nix
     ./retire-checkout-links.nix
     ./shell
     ./editors

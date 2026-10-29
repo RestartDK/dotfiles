@@ -508,6 +508,10 @@
           ) self.deploy.nodes
           // {
             dstack = self.packages.${system}.dstack;
+            herdr-deployments = import ./tests/herdr-deployments.nix {
+              pkgs = pkgsFor system;
+              inherit self inputs;
+            };
             srv-nana-policy = import ./tests/srv-nana/policy.nix {
               pkgs = pkgsFor system;
               inherit self;

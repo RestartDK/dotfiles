@@ -49,9 +49,12 @@ is no automatic role-policy lookup or fallback in this packet.
 
 Use a different root and fixed identity for personal deployment. Root and database
 permissions must be private and user-owned. Billing/model profile selection is
-not authorization. This packet exposes only the existing local trusted-user JSON
-API; authenticated CLI/browser continuation and deployment authorization remain
-later layers. It does not modify installed config or start a live server.
+not authorization. The Native JSON API remains trusted same-user control.
+Authenticated CLI/browser clients and the default-disabled Home Manager registry
+are described in [Independent deployments](../dstack/docs/deployments.md).
+The example above is the legacy file-only mode. Managed authenticated deployments
+use a new private root and the stricter deployment contract. Nothing here modifies
+installed config or starts a live server.
 
 ## CLI and transport
 
@@ -152,6 +155,18 @@ and sockets. It uses a real Node Durable host with a faux provider, exercises th
 actual CLI, proves file/receipt recovery, and checks handoff refusal and optional
 backend failure. It stops its servers and preserves evidence directories.
 It does not establish production-model behavior or full six-layer acceptance.
+
+`tests/clients-e2e.mjs` exercises the production Host entrypoint with two real
+Rust-managed instances, private deployment-mode config and a shared HOME with
+separate XDG namespaces. Set `HERDR_TEST_BINARY` and `DSTACK_TEST_PACKAGE` to the
+matching Herdr and dstack outputs, plus the pinned runtime references listed below.
+It proves authenticated audience/principal/workspace isolation while an actual
+SDK-owned business command is active. SDK abort and original-pidfd CLI SIGINT
+must leave that command active; explicit authenticated cancellation must produce
+the original receipt and independently empty containment before adoption/release.
+The model endpoint is a task-private trap and must receive zero requests. The
+proof joins its original owners and preserves evidence. Uncertain cleanup retains
+custody instead of stopping owners or inventing a result.
 
 Set `HERDR_TEST_COMMANDS=1` and supply the pinned `DSTACK_COMMAND_HELPER`,
 `DSTACK_SYSTEMD_RUN`, `DSTACK_SYSTEMCTL`, and `DSTACK_BUSCTL` references to include
