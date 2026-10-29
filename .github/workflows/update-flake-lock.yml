@@ -20,6 +20,11 @@ jobs:
 
       - name: Install Determinate Nix
         uses: DeterminateSystems/determinate-nix-action@v3.21.9
+        with:
+          # The `private` input resolves through the GitHub API, so the cloud
+          # runner needs the token that the CI jobs get from their own conf.
+          extra-conf: |
+            access-tokens = github.com=${{ secrets.DOTFILES_PRIVATE_TOKEN }}
 
       - name: Update flake inputs
         run: ./bin/traitor update
