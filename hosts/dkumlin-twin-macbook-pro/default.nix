@@ -135,6 +135,7 @@
       "skim"
       "slack"
       "spotify"
+      "t3-code"
       "tailscale-app"
     ];
 
