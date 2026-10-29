@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import { link, mkdir, mkdtemp, rename, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "bun:test";
+import { WorkspacePaths } from "#workspace-paths";
+
+test("workspace file paths reject escapes, protected references and filesystem aliases", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dstack-paths-"));
+  const cwd = join(root, "workspace");
+  await mkdir(cwd, { mode: 0o700 });
+  await writeFile(join(cwd, "plain.txt"), "business");
+  await writeFile(join(cwd, "authorization.json"), "fake-authorization");
+  await writeFile(join(root, "outside-auth.json"), "fake-secret");
+  await symlink(join(cwd, "authorization.json"), join(root, "auth-reference"));
+  await symlink(join(cwd, "not-created", "future.json"), join(root, "future-reference"));
+  await symlink(join(root, "not-created"), join(root, "parent-reference"));
+  await symlink(join(cwd, "plain.txt"), join(cwd, "symlink.txt"));
+  await link(join(root, "outside-auth.json"), join(cwd, "hardlink.txt"));
+  const paths = await WorkspacePaths.open({ cwd, protectedPaths: [join(root, "auth-reference"), join(root, "future-reference")] });
+  assert.equal(await paths.check(join(cwd, "plain.txt"), "read"), join(cwd, "plain.txt"));
+  assert.equal(await paths.check(join(cwd, "new", "file.txt"), "write"), join(cwd, "new", "file.txt"));
+  await assert.rejects(paths.check(join(cwd, "..", "outside-auth.json"), "read"), /escapes/);
+  await assert.rejects(paths.check(join(cwd, "authorization.json"), "read"), /protected/);
+  await assert.rejects(paths.check(join(cwd, "not-created", "future.json"), "write"), /protected/);
+  await assert.rejects(paths.check(join(cwd, "not-created"), "write"), /protected/);
+  await assert.rejects(paths.check(join(cwd, "symlink.txt"), "read"), /symbolic/);
+  await assert.rejects(paths.check(join(cwd, "hardlink.txt"), "write"), /hard-linked/);
+  await assert.rejects(paths.check(join(cwd, "plain.txt", "child"), "write"), /parent/);
+  const malformed = `${cwd}/${String.fromCharCode(0xd800)}`;
+  assert.equal(malformed.isWellFormed(), false);
+  await assert.rejects(paths.check(malformed, "read"), /Invalid/);
+  await assert.rejects(paths.check(join(cwd, "nul\0"), "read"), /Invalid/);
+  await assert.rejects(paths.check("/" + "x".repeat(4095), "read"), /Invalid/);
+});
+
+test("protected aliases follow trusted reference rotation and dangling parent links", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dstack-paths-"));
+  const cwd = join(root, "workspace");
+  await mkdir(cwd, { mode: 0o700 });
+  await writeFile(join(cwd, "first.json"), "first");
+  await writeFile(join(cwd, "second.json"), "second");
+  const reference = join(root, "auth.json");
+  await symlink(join(cwd, "first.json"), reference);
+  await symlink(join(cwd, "future-parent"), join(root, "dangling-parent"));
+  const paths = await WorkspacePaths.open({ cwd, protectedPaths: [reference, join(root, "dangling-parent", "auth.json")] });
+  await assert.rejects(paths.check(join(cwd, "first.json"), "read"), /protected/);
+  await rename(reference, join(root, "previous-reference"));
+  await symlink(join(cwd, "second.json"), reference);
+  await assert.rejects(paths.check(join(cwd, "second.json"), "write"), /protected/);
+  await assert.rejects(paths.check(join(cwd, "future-parent", "auth.json"), "write"), /protected/);
+});

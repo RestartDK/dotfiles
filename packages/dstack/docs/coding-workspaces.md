@@ -22,7 +22,17 @@ An interrupted generation resumes from its committed task checkpoint. An interru
 
 The subprocess proof explicitly kills its isolated stopped tool group before recovery. It proves non-replay, not automatic cleanup of arbitrary commands after owner death. Stable long-command ownership belongs in the execution adapter.
 
-SQLite uses WAL with `synchronous=NORMAL`. Process-crash recovery does not prove power-loss durability, backup restoration, filesystem replication, or automatic takeover.
+The owner selects WAL and `synchronous=FULL` before official SDK migrations, then checks the live connection. Missing managed markers still refuse reopen; stronger synchronization does not repair damaged partial state. The KVM check below covers abrupt guest-kernel loss, not bare-metal power loss, backup restoration, filesystem replication, or automatic takeover.
+
+## Managed host format
+
+`DurableHost` keeps legacy roots at host-binding version 1. New roots with durable execution ownership use host-binding version 2. The managed catalogue requires version 2. The workspace API, SDK documents, catalogue anchor, and execution journal retain their separate version 1 contracts.
+
+The file-only M2 host compares the exact host-binding bytes before opening any workspace. A version 2 root therefore refuses an ordinary downgrade even if the caller removes `execution` from the config. The current host also refuses a managed root in legacy mode. Legacy version 1 roots remain readable in legacy mode.
+
+There is no automatic upgrade of an existing version 1 root. Earlier unpublished managed experiments need their matching managed-host version for inspection. Preserve their evidence instead of rewriting the binding. This check does not protect against a same-user actor rewriting database contents or restoring all paired evidence coherently. No production backfill or row deletion occurs.
+
+The opt-in `dist/tests/host-downgrade-live.js` requires explicit `DSTACK_TEST_NODE` and `DSTACK_OLD_FIXTURE` Nix references. The latter selects the M2 `host-fixture.js` with its offline files model. The proof retains an actual unresolved native file effect, verifies old-binary refusal with the execution field omitted, and checks unchanged bytes and journal records. It also verifies legacy-root compatibility, blocked managed recovery, and refusal of a rolled-back managed binding. It does not call a paid model or start a real agent CLI.
 
 ## Native Pi compatibility
 
@@ -37,6 +47,20 @@ SQLite uses WAL with `synchronous=NORMAL`. Process-crash recovery does not prove
 | Existing PR jobs and session-targeted wakes | Unchanged in the existing controller and native extension. |
 | Billing profile | Caller-owned. The manual live proof uses the exact configured `precise-code` route. |
 
+## Independent deployments
+
+The opt-in `dist/tests/host-domains-live.js` requires `DSTACK_TEST_NODE` and uses
+its packaged sibling `host-fixture.js`. It runs work and personal Node owners
+simultaneously, with distinct actual SQLite files and full managed bindings.
+The same workspace and request IDs complete independently. A third owner of the
+work store must refuse before startup; closing work must leave personal's actual
+nonempty snapshot and completed receipt unchanged. Both retain their own file
+result. Response schemas are checked at the test boundary, and all child handles
+have bounded, owned cleanup.
+
+This is local process/store independence, not authenticated client isolation,
+separate-host deployment, or a same-UID sandbox. It makes no paid model calls.
+
 ## Run the proofs
 
 Use the package's Node prerequisite. The Nix package supplies Node 24. No live service or database is needed.
@@ -49,6 +73,16 @@ DSTACK_TEST_NODE="$(command -v node)" bun test tests/conversation.test.ts
 ```
 
 The proofs import the shipped `dist/conversation.js` through `#coding-workspace`; they do not embed a separate copy of the owner. The automatic proofs use an offline provider and real tools, SQLite, Git directories, locks, and subprocesses. They test completed-result deduplication, binding mismatch, concurrent ownership, committed-generation recovery, unsafe-tool non-replay, checkpoint-close failure cleanup, and reopening after model changes. They retain `/tmp/dstack-conversation-*/proof.json` and restart `fixture.log` files.
+
+From the repository root, opt-in checks use private NixOS guests on x86_64 Linux with KVM and the Nix `kvm` and `nixos-test` system features:
+
+```sh
+nix build .#dstack.tests.reboot .#dstack.tests.manager
+```
+
+The check starts and stops its own guest. It does not restart the host's user manager, copy credentials, or call a paid model. It checks a changed actual kernel boot UUID, preservation of the original receipt with unknown containment, refusal to signal a same-name replacement unit, expired source grants, and no replay. Explicit offline reconciliation must not grant namespace-release authority. The output retains `evidence/reboot-evidence.tar`, including `before-ready.json`, `result.json`, logs, and SQLite snapshots. UNIX socket files are not serialized as live authority.
+
+The manager check keeps the original source Node alive while restarting only the guest's user manager. It requires the same actual kernel boot UUID, preservation of the original receipt with unknown containment, and refusal to signal a same-name replacement unit. A grant whose opened descriptors remain live may execute only after an explicit start and acknowledgment of the old uncertainty. Offline acknowledgment still cannot authorize release of the original custody. The output retains `evidence/manager-evidence.tar`.
 
 The separate live proof makes real model requests through the configured profile. It uses `ModelRuntime` 1.1.0 for authentication, matched to Durable and pi-ai 1.1.0, without a fallback model. The 0.99.1 SDK has a separate nominal transcript type and cannot supply this `Models` interface. The development SDK update does not replace the installed native Pi executable or load its extensions into Durable. Its agent-core, codemode, and MCP dependencies are pinned to 1.1.0 too. Resolving their broad ranges to 1.4.0 caused a missing-export failure before any model call. It offers only read and write tools. It starts two separate owner processes, verifies real file results and persisted context, and checks the same provider-session identity after restart.
 

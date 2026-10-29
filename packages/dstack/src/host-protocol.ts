@@ -5,6 +5,8 @@ import { open } from "node:fs/promises";
 import type { Readable, Writable } from "node:stream";
 import { isAbsolute } from "node:path";
 import { isIdentityName, parseWorkspaceId, type WorkspaceId } from "./workspace-identity.js";
+import { parseCommandParameters, type CommandParameters } from "./command-wire.js";
+import type { TrustedReconciliation } from "./execution-commands.js";
 
 export const HOST_VERSION = 1;
 export const MAX_FRAME_BYTES = 256 * 1024;
@@ -24,14 +26,29 @@ export type HostConfig = {
   readonly thinkingLevel: ModelThinkingLevel;
   readonly authPath: string;
   readonly modelsPath: string;
+  readonly execution?: { readonly mode: "durable"; readonly maxRecords: number };
 };
 
 export type HostMutation =
   | { op: "create"; requestId: string; workspaceId: WorkspaceId; cwd: string }
   | { op: "submit"; requestId: string; workspaceId: WorkspaceId; content: string };
 
+export type HostCommandOperation =
+  | { op: "execution.status"; workspaceId: WorkspaceId }
+  | { op: "command.authorize"; workspaceId: WorkspaceId; intentId: string; spec: CommandParameters }
+  | { op: "command.start" | "command.status" | "command.inspect" | "command.adopt" | "command.cancel" | "command.release"; workspaceId: WorkspaceId; intentId: string }
+  | ({ op: "command.reconcile"; workspaceId: WorkspaceId } & Omit<TrustedReconciliation, "actor">)
+  | { op: "file.reconcile"; workspaceId: WorkspaceId; effectId: string; reference: string };
+
+export const HOST_COMMAND_OPERATIONS = Object.freeze([
+  "execution.status",
+  "command.authorize", "command.start", "command.status", "command.inspect",
+  "command.adopt", "command.cancel", "command.release", "command.reconcile", "file.reconcile",
+] satisfies HostCommandOperation["op"][]);
+
 export type HostOperation =
   | HostMutation
+  | HostCommandOperation
   | { op: "discover" }
   | { op: "snapshot"; workspaceId: WorkspaceId }
   | { op: "status"; workspaceId: WorkspaceId; requestId: string };
@@ -67,9 +84,9 @@ function text(value: unknown, name: string, max = 200): string {
   return value;
 }
 
-function identityName(value: unknown, name: string): string {
-  const result = text(value, name);
-  if (!isIdentityName(result)) throw new HostError("invalid_request", `Invalid ${name}`);
+function identityName(value: unknown, name: string, max = 200): string {
+  const result = text(value, name, max);
+  if (!isIdentityName(result) || !result.isWellFormed()) throw new HostError("invalid_request", `Invalid ${name}`);
   return result;
 }
 
@@ -95,20 +112,28 @@ function thinkingLevel(value: unknown): ModelThinkingLevel {
 }
 
 function absolute(value: unknown, name: string): string {
-  const path = text(value, name, 4096);
-  if (!isAbsolute(path)) throw new HostError("invalid_request", `${name} must be absolute`);
+  const path = text(value, name, 4095);
+  if (!isAbsolute(path) || !path.isWellFormed()) throw new HostError("invalid_request", `${name} must be absolute`);
   return path;
 }
 
 export function parseHostConfig(value: unknown): HostConfig {
   const config = object(value);
-  fields(config, ["identity", "stateRoot", "model", "thinkingLevel", "authPath", "modelsPath"]);
+  fields(config, ["identity", "stateRoot", "model", "thinkingLevel", "authPath", "modelsPath", "execution"]);
   const identity = object(config.identity);
   fields(identity, ["deploymentId", "domain", "nodeId"]);
   if (identity.domain !== "work" && identity.domain !== "personal")
     throw new HostError("invalid_request", "Invalid host domain");
   const model = object(config.model);
   fields(model, ["provider", "modelId"]);
+  let execution: HostConfig["execution"];
+  if (config.execution !== undefined) {
+    const requested = object(config.execution);
+    fields(requested, ["mode", "maxRecords"]);
+    if (requested.mode !== "durable" || typeof requested.maxRecords !== "number" || !Number.isSafeInteger(requested.maxRecords) || requested.maxRecords < 1 || requested.maxRecords > 65536)
+      throw new HostError("invalid_request", "Invalid durable execution configuration");
+    execution = Object.freeze({ mode: "durable", maxRecords: requested.maxRecords });
+  }
   return {
     identity: {
       deploymentId: identityName(identity.deploymentId, "deploymentId"),
@@ -120,6 +145,7 @@ export function parseHostConfig(value: unknown): HostConfig {
     thinkingLevel: thinkingLevel(config.thinkingLevel),
     authPath: absolute(config.authPath, "authPath"),
     modelsPath: absolute(config.modelsPath, "modelsPath"),
+    ...(execution === undefined ? {} : { execution }),
   };
 }
 
@@ -147,6 +173,25 @@ export async function loadHostConfig(options: {
     return parseHostConfig(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(content)));
   } finally {
     await file.close();
+  }
+}
+
+function commandParameters(value: unknown): CommandParameters {
+  try { return parseCommandParameters(JSON.stringify(object(value))); }
+  catch { throw new HostError("invalid_request", "Invalid command parameters"); }
+}
+
+function reconciliationContainment(value: unknown): TrustedReconciliation["containment"] {
+  const containment = object(value);
+  switch (containment.kind) {
+    case "manager":
+      fields(containment, ["kind"]);
+      return { kind: "manager" };
+    case "trusted-offline":
+      fields(containment, ["kind", "reference"]);
+      return { kind: "trusted-offline", reference: identityName(containment.reference, "containment reference", 1024) };
+    default:
+      throw new HostError("invalid_request", "Invalid reconciliation containment");
   }
 }
 
@@ -181,6 +226,46 @@ export function parseOperation(value: unknown): HostOperation {
         op: "status",
         workspaceId: workspaceIdentifier(operation.workspaceId),
         requestId: identityName(operation.requestId, "requestId"),
+      };
+    case "execution.status":
+      fields(operation, ["op", "workspaceId"]);
+      return { op: "execution.status", workspaceId: workspaceIdentifier(operation.workspaceId) };
+    case "command.authorize":
+      fields(operation, ["op", "workspaceId", "intentId", "spec"]);
+      return {
+        op: "command.authorize",
+        workspaceId: workspaceIdentifier(operation.workspaceId),
+        intentId: identityName(operation.intentId, "intentId", 128),
+        spec: commandParameters(operation.spec),
+      };
+    case "command.start":
+    case "command.status":
+    case "command.inspect":
+    case "command.adopt":
+    case "command.cancel":
+    case "command.release":
+      fields(operation, ["op", "workspaceId", "intentId"]);
+      return {
+        op: operation.op,
+        workspaceId: workspaceIdentifier(operation.workspaceId),
+        intentId: identityName(operation.intentId, "intentId", 128),
+      };
+    case "command.reconcile":
+      fields(operation, ["op", "workspaceId", "intentId", "reference", "containment"]);
+      return {
+        op: "command.reconcile",
+        workspaceId: workspaceIdentifier(operation.workspaceId),
+        intentId: identityName(operation.intentId, "intentId", 128),
+        reference: identityName(operation.reference, "reference", 1024),
+        containment: reconciliationContainment(operation.containment),
+      };
+    case "file.reconcile":
+      fields(operation, ["op", "workspaceId", "effectId", "reference"]);
+      return {
+        op: "file.reconcile",
+        workspaceId: workspaceIdentifier(operation.workspaceId),
+        effectId: identityName(operation.effectId, "effectId", 128),
+        reference: identityName(operation.reference, "reference", 1024),
       };
     default:
       throw new HostError("invalid_request", "Unknown host operation");

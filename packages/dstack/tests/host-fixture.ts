@@ -11,6 +11,7 @@ import {
 import { DurableHost } from "#durable-host";
 import { serveHost } from "#host-stdio";
 import { loadHostConfig } from "#host-protocol";
+import { hostCommandRuntime } from "../src/host-runtime.js";
 
 const path = process.argv[2];
 assert.ok(path);
@@ -95,4 +96,5 @@ faux.setResponses(
 );
 const models = createModels();
 models.setProvider(faux.provider);
-await serveHost(await DurableHost.open(config, models), process.stdin, process.stdout);
+const commands = mode === "commands" ? await hostCommandRuntime() : undefined;
+await serveHost(await DurableHost.open(config, models, commands === undefined ? {} : { commands }), process.stdin, process.stdout);

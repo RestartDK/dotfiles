@@ -12,9 +12,12 @@
   openssh,
   pi,
   lib,
+  systemd,
+  callPackage,
+  commandHelper ? callPackage ../herdr-command { },
 }:
 
-(buildNpmPackage.override { nodejs = nodejs_24; }) {
+(buildNpmPackage.override { nodejs = nodejs_24; }) (finalAttrs: {
   pname = "dstack-jobs";
   version = "0.1.0";
   src = lib.fileset.toSource {
@@ -36,7 +39,7 @@
   };
   sourceRoot = "source/packages/dstack";
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-FzVVhO93Xy5tXjhWLTEHT2u9ehuKwRm4uADx9TDketQ=";
+  npmDepsHash = "sha256-1cAu1ABWRUsy15sIJW8DEP0scVf5Eftou+LWf1/rlxw=";
   npmFlags = [ "--ignore-scripts" ];
   npmPackFlags = [ "--ignore-scripts" ];
   nativeBuildInputs = [
@@ -83,12 +86,25 @@
     done
     makeWrapper ${nodejs_24}/bin/node "$out/bin/dstack-host" \
       --add-flags "$out/libexec/dstack/dist/host-main.js" \
-      --set DSTACK_FLOCK ${util-linux}/bin/flock
+      --set DSTACK_FLOCK ${util-linux}/bin/flock \
+      --set DSTACK_COMMAND_HELPER ${lib.getExe commandHelper} \
+      --set DSTACK_SYSTEMD_RUN ${systemd}/bin/systemd-run \
+      --set DSTACK_SYSTEMCTL ${systemd}/bin/systemctl \
+      --set DSTACK_BUSCTL ${systemd}/bin/busctl
     runHook postInstall
   '';
+  passthru.tests.reboot = callPackage ./tests/host-reboot.nix {
+    dstack = finalAttrs.finalPackage;
+    inherit commandHelper;
+  };
+  passthru.tests.manager = callPackage ./tests/host-reboot.nix {
+    dstack = finalAttrs.finalPackage;
+    inherit commandHelper;
+    scenario = "manager";
+  };
   meta = {
     description = "Local durable PR monitoring with explicit repair authority";
     mainProgram = "dstack";
     platforms = lib.platforms.linux;
   };
-}
+})

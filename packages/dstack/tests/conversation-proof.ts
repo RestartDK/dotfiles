@@ -19,6 +19,8 @@ import {
 } from "@earendil-works/pi-durable";
 import type { ReadToolInput, WriteToolInput } from "@earendil-works/pi-durable/tools";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
+import type { SqliteExecutor } from "@earendil-works/pi-durable/storage/sqlite";
+import { NodeSqliteDatabase } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { CodingWorkspaceDoc, CodingWorkspaceOwner } from "#coding-workspace";
 import {
   fixtureRuntime,
@@ -80,6 +82,17 @@ async function assertSqliteTranscript(databasePath: string, resultCount: number)
 }
 
 async function integrationProof(): Promise<void> {
+  const transaction = NodeSqliteDatabase.prototype.transaction;
+  let verifiedSqliteTransactions = 0;
+  NodeSqliteDatabase.prototype.transaction = async function<T>(this: NodeSqliteDatabase, callback: (executor: SqliteExecutor) => Promise<T>): Promise<T> {
+    const journal = await this.get<{ journal_mode: unknown }>("PRAGMA journal_mode");
+    const synchronization = await this.get<{ synchronous: unknown }>("PRAGMA synchronous");
+    assert.equal(journal?.journal_mode, "wal");
+    assert.ok(synchronization?.synchronous === 2 || synchronization?.synchronous === 3, "Every actual SDK transaction requires FULL SQLite synchronization");
+    verifiedSqliteTransactions++;
+    return transaction.bind(this)(callback);
+  };
+  try {
   const root = await fixtureDirectory();
   console.log(JSON.stringify({ event: "fixture", proof: "integration", root }));
   const context = withAbortSignal(AbortSignal.timeout(25_000), BACKGROUND_CONTEXT);
@@ -227,6 +240,7 @@ async function integrationProof(): Promise<void> {
     /must not have hard-linked aliases/,
   );
   assert.equal(await readFile(linkedTarget, "utf8"), "isolated hard-link sentinel");
+  assert.ok(verifiedSqliteTransactions > 0);
   const summary = {
     event: "pass",
     proof: "integration",
@@ -235,9 +249,11 @@ async function integrationProof(): Promise<void> {
     rootId,
     providerSessionId: provider.sessionId,
     submissionId: receipt.id,
+    verifiedSqliteTransactions,
   };
   await writeFile(join(root, "proof.json"), `${JSON.stringify(summary, null, 2)}\n`);
   console.log(JSON.stringify(summary));
+  } finally { NodeSqliteDatabase.prototype.transaction = transaction; }
 }
 
 async function closeFailureProof(): Promise<void> {

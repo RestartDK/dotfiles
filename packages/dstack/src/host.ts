@@ -1,18 +1,28 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai";
-import { createRegistry, defineExtension } from "@earendil-works/pi-durable";
-import { createEditTool, createReadTool, createWriteTool } from "@earendil-works/pi-durable/tools";
+import { CompactionTask, GenerationTask, ToolTask, createRegistry, defineExtension, hook } from "@earendil-works/pi-durable";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, realpath } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { CodingWorkspaceOwner } from "./conversation.js";
+import { CodingWorkspaceDoc, CodingWorkspaceOwner, type PreparedCodingWorkspace } from "./conversation.js";
+import { ExecutionRootDoc } from "./execution-binding.js";
+import { workspaceFileTools } from "./execution-files.js";
+import { executionRootBytes } from "./execution-wire.js";
+import { HostExecution, type HostCommandRuntime } from "./host-execution.js";
+import { hostCommandTask } from "./host-command-task.js";
+import { executionModels } from "./execution-models.js";
+import { unresolvedEffects } from "./execution-domain.js";
+import type { CommandAuthorizationInput, TrustedReconciliation } from "./execution-commands.js";
+import { WorkspacePaths } from "./workspace-paths.js";
+import { isDeepStrictEqual } from "node:util";
 import { acquireLock } from "./lock.js";
 import {
   HostError,
   MAX_PENDING_INPUTS,
   MAX_WORKSPACES,
+  parseHostConfig,
   parseOperation,
   type HostConfig,
   type HostMutation,
@@ -21,8 +31,17 @@ import {
 
 const context = BACKGROUND_CONTEXT;
 
+export type TrustedHostCommandOperation =
+  | { readonly op: "authorize"; readonly workspaceId: string; readonly authorization: CommandAuthorizationInput }
+  | { readonly op: "start" | "describe" | "inspect" | "adopt" | "cancel" | "release"; readonly workspaceId: string; readonly intentId: string }
+  | { readonly op: "reconcile"; readonly workspaceId: string; readonly reconciliation: TrustedReconciliation }
+  | { readonly op: "file.reconcile"; readonly workspaceId: string; readonly effectId: string; readonly actor: string; readonly reference: string };
+
 export class DurableHost {
   readonly #owners = new Map<string, CodingWorkspaceOwner>();
+  readonly #prepared = new Map<string, PreparedCodingWorkspace>();
+  #execution: HostExecution | undefined;
+  readonly #commandTasks = new Map<string, ReturnType<typeof hostCommandTask>>();
   #closing: Promise<void> | null = null;
   #active: Promise<unknown> | null = null;
 
@@ -31,9 +50,13 @@ export class DurableHost {
     private readonly models: Models,
     private readonly db: DatabaseSync,
     private readonly unlock: () => Promise<void>,
+    private readonly protectedPaths: readonly string[],
   ) {}
 
-  static async open(config: HostConfig, models: Models): Promise<DurableHost> {
+  static async open(config: HostConfig, models: Models, options: { readonly protectedPaths?: readonly string[]; readonly commands?: HostCommandRuntime } = {}): Promise<DurableHost> {
+    config = parseHostConfig(JSON.parse(JSON.stringify(config)));
+    const protectedPaths = [...(options.protectedPaths ?? [])];
+    const commands = options.commands === undefined ? undefined : { ...options.commands };
     await mkdir(config.stateRoot, { recursive: true, mode: 0o700 });
     const info = await lstat(config.stateRoot);
     if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0)
@@ -79,15 +102,28 @@ export class DurableHost {
         CREATE TABLE IF NOT EXISTS binding (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, cwd TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS admissions (id TEXT PRIMARY KEY, payload TEXT NOT NULL, admitted INTEGER NOT NULL DEFAULT 0);`);
-      const binding = JSON.stringify({ ...config.identity, stateRoot, version: 1 });
+      const binding = JSON.stringify({ ...config.identity, stateRoot, version: config.execution === undefined ? 1 : 2 });
       const stored = db.prepare("SELECT value FROM binding WHERE id=1").get();
       if (stored === undefined) db.prepare("INSERT INTO binding VALUES (1, ?)").run(binding);
       else if (stored.value !== binding)
         throw new HostError("binding_mismatch", "Host root identity differs");
-      host = new DurableHost({ ...config, stateRoot }, models, db, unlock);
-      for (const row of db.prepare("SELECT id, cwd FROM workspaces ORDER BY id").all()) {
-        if (typeof row.id !== "string" || typeof row.cwd !== "string")
-          throw new Error("Invalid workspace index");
+      host = new DurableHost({ ...config, stateRoot }, models, db, unlock, protectedPaths);
+      const rows = db.prepare("SELECT id, cwd FROM workspaces ORDER BY id").all();
+      if (rows.length > MAX_WORKSPACES) throw new HostError("capacity", "Host workspace limit reached");
+      const expected = new Set(rows.map(row => {
+        if (typeof row.id !== "string" || typeof row.cwd !== "string") throw new Error("Invalid workspace index");
+        return createHash("sha256").update(row.id).digest("hex");
+      }));
+      for (const name of await readdir(stateRoot))
+        if (/^[0-9a-f]{64}$/.test(name) && !expected.has(name))
+          throw new HostError("execution_incomplete", "Workspace state is orphaned from the host index");
+      host.#execution = await HostExecution.open({ config: host.config, db, commands });
+      for (const row of rows) {
+        if (typeof row.id !== "string" || typeof row.cwd !== "string") throw new Error("Invalid workspace index");
+        await host.prepareWorkspace(row.id, row.cwd, "existing");
+      }
+      for (const row of rows) {
+        if (typeof row.id !== "string" || typeof row.cwd !== "string") throw new Error("Invalid workspace index");
         await host.openWorkspace(row.id, row.cwd);
       }
       for (const row of db
@@ -98,6 +134,10 @@ export class DurableHost {
         if (operation.op !== "create" && operation.op !== "submit")
           throw new Error("Invalid journal operation");
         await host.apply(operation);
+      }
+      for (const [workspaceId, owner] of host.#owners) {
+        try { await host.assertProgress(workspaceId); owner.harness.resume(); }
+        catch (error) { if (!(error instanceof HostError && error.code === "effect_unresolved")) throw error; }
       }
       return host;
     } catch (error) {
@@ -113,21 +153,34 @@ export class DurableHost {
     }
   }
 
-  private async openWorkspace(workspaceId: string, cwd: string): Promise<CodingWorkspaceOwner> {
+  private async prepareWorkspace(workspaceId: string, cwd: string, initialization: "new" | "existing"): Promise<PreparedCodingWorkspace> {
     if ((await realpath(cwd)) !== cwd)
       throw new HostError("binding_mismatch", "Canonical workspace cwd was retargeted");
-    const existing = this.#owners.get(workspaceId);
+    const existing = this.#prepared.get(workspaceId);
     if (existing !== undefined) return existing;
-    if (this.#owners.size >= MAX_WORKSPACES)
+    if (this.#prepared.size >= MAX_WORKSPACES)
       throw new HostError("capacity", "Host workspace limit reached");
+    const managed = this.#execution?.get(workspaceId);
+    const paths = await WorkspacePaths.open({ cwd, protectedPaths: [this.config.stateRoot, this.config.authPath, this.config.modelsPath, ...this.protectedPaths] });
+    const gate = () => this.assertProgress(workspaceId);
     const registry = createRegistry();
-    registry.install(
-      defineExtension({
-        name: "herdr.files",
-        tools: [createReadTool(), createWriteTool(), createEditTool()],
-      }),
-    );
-    const owner = await CodingWorkspaceOwner.open(
+    registry.install(defineExtension({
+      ...workspaceFileTools({ paths, ownership: managed === undefined ? { kind: "legacy" } : { kind: "managed", journal: managed.journal, beforeMutation: gate } }),
+      name: "herdr.files",
+      hooks: [hook(GenerationTask, { beforeRequest: async () => { await gate(); return undefined; } }), hook(CompactionTask, { beforeCompact: async () => { await gate(); return undefined; } }), hook(ToolTask, { beforeTool: async () => { await gate(); return undefined; } })],
+    }));
+    if (managed?.commandOwner !== undefined) {
+      const task = hostCommandTask({
+        assertBinding: async conversationKey => {
+          await this.assertOwnership(workspaceId);
+          if (String(this.owner(workspaceId).conversation.id) !== conversationKey) throw new HostError("execution_incomplete", "Command task belongs to another conversation");
+        },
+        owner: () => this.commandOwner(workspaceId),
+      });
+      registry.install(defineExtension({ name: "herdr.command-owner", tasks: [task] }));
+      this.#commandTasks.set(workspaceId, task);
+    }
+    const owner = await CodingWorkspaceOwner.prepare(
       {
         workspace: {
           domain: this.config.identity.domain,
@@ -139,17 +192,49 @@ export class DurableHost {
           this.config.stateRoot,
           createHash("sha256").update(workspaceId).digest("hex"),
         ),
-        models: this.models,
+        models: executionModels(this.models, gate),
         model: this.config.model,
         initialThinkingLevel: this.config.thinkingLevel,
         registry,
         execution: "trusted-user",
+        startup: "deferred",
+        ...(managed === undefined ? {} : { management: { root: managed.root, initialization } }),
         lockCommand: { file: process.env.DSTACK_FLOCK || "flock", args: [] },
       },
       context,
     );
+    this.#prepared.set(workspaceId, owner);
+    return owner;
+  }
+
+  private async openWorkspace(workspaceId: string, cwd: string, initialization: "new" | "existing" = "existing"): Promise<CodingWorkspaceOwner> {
+    const existing = this.#owners.get(workspaceId);
+    if (existing !== undefined) return existing;
+    const prepared = await this.prepareWorkspace(workspaceId, cwd, initialization);
+    const owner = await prepared.open(context);
     this.#owners.set(workspaceId, owner);
     return owner;
+  }
+
+  private async assertProgress(workspaceId: string): Promise<void> {
+    await this.#execution?.assertProgress(workspaceId);
+    await this.assertOwnership(workspaceId);
+  }
+
+  private async assertOwnership(workspaceId: string): Promise<void> {
+    const managedBinding = this.#execution?.get(workspaceId);
+    if (managedBinding !== undefined) await this.#execution?.catalogue.assertBinding(managedBinding.root);
+    const owner = this.owner(workspaceId);
+    const marker = await owner.harness.snapshot(ExecutionRootDoc, context);
+    const managed = this.#execution?.get(workspaceId);
+    if (managed === undefined) {
+      if (marker?.rootJson !== undefined && marker.rootJson !== null)
+        throw new HostError("execution_required", "Managed coding workspace requires execution ownership");
+    } else {
+      const binding = await owner.harness.snapshot(CodingWorkspaceDoc, context);
+      if (marker?.rootJson !== executionRootBytes(managed.root) || !isDeepStrictEqual(binding?.workspace, managed.root.workspace))
+        throw new HostError("execution_incomplete", "Managed coding workspace binding is missing or changed");
+    }
   }
 
   private owner(workspaceId: string): CodingWorkspaceOwner {
@@ -175,6 +260,7 @@ export class DurableHost {
       return this.describe(owner);
     }
     const owner = this.owner(operation.workspaceId);
+    await this.assertProgress(operation.workspaceId);
     const submission = await owner.conversation.submit(
       {
         type: "input",
@@ -193,12 +279,12 @@ export class DurableHost {
     };
   }
 
-  handle(operation: HostOperation): Promise<unknown> {
+  private request<T>(operation: () => Promise<T>): Promise<T> {
     if (this.#closing !== null)
       return Promise.reject(new HostError("unavailable", "Host admission is sealed"));
     if (this.#active !== null)
       return Promise.reject(new HostError("busy", "Host already has an in-flight request"));
-    const active = this.dispatch(operation);
+    const active = operation();
     this.#active = active;
     void active.then(
       () => {
@@ -211,8 +297,91 @@ export class DurableHost {
     return active;
   }
 
+  get nativeCommandOperations(): readonly string[] {
+    return this.#execution?.nativeCommandOperations ?? [];
+  }
+
+  handle(operation: HostOperation): Promise<unknown> {
+    return this.request(() => this.dispatch(operation));
+  }
+
+  private commandOwner(workspaceId: string) {
+    const owner = this.#execution?.get(workspaceId)?.commandOwner;
+    if (owner === undefined) throw new HostError("execution_required", "Workspace has no configured command owner");
+    return owner;
+  }
+
+  command(request: TrustedHostCommandOperation): Promise<unknown> {
+    const operation = structuredClone(request);
+    return this.request(() => this.performCommand(operation));
+  }
+
+  private async performCommand(operation: TrustedHostCommandOperation): Promise<unknown> {
+    await this.assertOwnership(operation.workspaceId);
+    if (operation.op === "file.reconcile") {
+      const managed = this.#execution?.get(operation.workspaceId);
+      if (managed === undefined) throw new HostError("execution_required", "Managed journal unavailable");
+      await managed.journal.append({ kind: "file.reconciled", effectId: operation.effectId, actor: operation.actor, reference: operation.reference });
+      return { reconciled: true };
+    }
+    const commands = this.commandOwner(operation.workspaceId);
+    switch (operation.op) {
+      case "authorize": return commands.authorize(operation.authorization);
+      case "describe": return commands.describe(operation.intentId);
+      case "inspect": return commands.inspect(operation.intentId);
+      case "adopt": return commands.adopt(operation.intentId);
+      case "cancel": return commands.cancel(operation.intentId);
+      case "release": await commands.release(operation.intentId); return { released: true };
+      case "reconcile": return commands.reconcile(operation.reconciliation);
+      case "start": {
+        const current = await commands.describe(operation.intentId);
+        if (current.command.phase.kind !== "authorized") return current;
+        if (current.grant !== "live") throw new HostError("expired_grant", "Command source grant is expired or revoked; authorize a new intent");
+        await this.assertProgress(operation.workspaceId);
+        const task = this.#commandTasks.get(operation.workspaceId);
+        if (task === undefined) throw new HostError("execution_required", "Owned command task unavailable");
+        const owner = this.owner(operation.workspaceId);
+        const id = await owner.conversation.commit(tx => tx.createTask(task, { intentId: operation.intentId }, { ownership: { kind: "conversation" } }), context);
+        owner.harness.resume();
+        return { intentId: operation.intentId, taskKey: String(id), conversationKey: String(owner.conversation.id) };
+      }
+      default: { const exhaustive: never = operation; throw new Error(`Unsupported command operation ${exhaustive}`); }
+    }
+  }
+
   private async dispatch(operation: HostOperation): Promise<unknown> {
     switch (operation.op) {
+      case "execution.status": {
+        await this.assertOwnership(operation.workspaceId);
+        const managed = this.#execution?.get(operation.workspaceId);
+        if (managed === undefined) throw new HostError("execution_required", "Managed journal unavailable");
+        await this.#execution?.catalogue.assertBinding(managed.root);
+        const { records, state } = await managed.journal.snapshot();
+        return {
+          workspaceId: operation.workspaceId, rootId: managed.root.rootId, sequence: records.length,
+          unresolved: unresolvedEffects(state),
+          recentCommands: [...state.commands].slice(-32).map(([intentId, command]) => ({ intentId, phase: command.phase.kind })),
+          recentFiles: [...state.files].slice(-32).map(([effectId, file]) => ({ effectId, phase: file.phase.kind })),
+        };
+      }
+      case "command.authorize":
+        return this.performCommand({ op: "authorize", workspaceId: operation.workspaceId, authorization: { intentId: operation.intentId, ...operation.spec } });
+      case "command.start":
+        return this.performCommand({ op: "start", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.status":
+        return this.performCommand({ op: "describe", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.inspect":
+        return this.performCommand({ op: "inspect", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.adopt":
+        return this.performCommand({ op: "adopt", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.cancel":
+        return this.performCommand({ op: "cancel", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.release":
+        return this.performCommand({ op: "release", workspaceId: operation.workspaceId, intentId: operation.intentId });
+      case "command.reconcile":
+        return this.performCommand({ op: "reconcile", workspaceId: operation.workspaceId, reconciliation: { intentId: operation.intentId, reference: operation.reference, containment: operation.containment, actor: "herdr-local-user" } });
+      case "file.reconcile":
+        return this.performCommand({ op: "file.reconcile", workspaceId: operation.workspaceId, effectId: operation.effectId, reference: operation.reference, actor: "herdr-local-user" });
       case "discover":
         return {
           identity: this.config.identity,
@@ -264,6 +433,12 @@ export class DurableHost {
                 .get(MAX_WORKSPACES - 1) !== undefined
             )
               throw new HostError("capacity", "Host workspace limit reached");
+            if (this.#execution !== undefined && stored === undefined) {
+              await this.#execution.admit(operation, cwd);
+              await this.openWorkspace(operation.workspaceId, cwd, "new");
+              await this.assertProgress(operation.workspaceId);
+              return this.apply(operation);
+            }
             this.db.exec("BEGIN IMMEDIATE");
             try {
               if (stored === undefined)
@@ -279,6 +454,7 @@ export class DurableHost {
               throw error;
             }
           } else {
+            await this.assertProgress(operation.workspaceId);
             const inspection = await this.owner(operation.workspaceId).harness.inspect(context);
             if (inspection.submissions.length >= MAX_PENDING_INPUTS)
               throw new HostError("busy", "Workspace admission limit reached");
@@ -298,14 +474,13 @@ export class DurableHost {
       const results = await Promise.allSettled(
         [...this.#owners.values()].map((owner) => owner.close()),
       );
-      try {
-        this.db.close();
-      } finally {
-        await this.unlock();
+      const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+      for (const prepared of this.#prepared.values()) {
+        try { await prepared.close(); } catch (error) { errors.push(error); }
       }
-      const errors = results.flatMap((result) =>
-        result.status === "rejected" ? [result.reason] : [],
-      );
+      try { await this.#execution?.close(); } catch (error) { errors.push(error); }
+      try { this.db.close(); } catch (error) { errors.push(error); }
+      try { await this.unlock(); } catch (error) { errors.push(error); }
       if (errors.length) throw new AggregateError(errors, "Host workspace cleanup failed");
     })();
     return this.#closing;

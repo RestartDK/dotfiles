@@ -19,6 +19,11 @@ export type Request = {
       [k: string]: unknown;
     }
   | {
+      method: "durable.commands.v1";
+      params: DurableCommandOperation;
+      [k: string]: unknown;
+    }
+  | {
       method: "server.stop";
       params: EmptyParams;
       [k: string]: unknown;
@@ -552,6 +557,71 @@ export type DurableHostOperation =
       requestId: string;
       workspaceId: string;
     };
+export type DurableCommandOperation =
+  | {
+      op: "execution.status";
+      workspaceId: string;
+    }
+  | {
+      op: "command.health";
+    }
+  | {
+      intentId: string;
+      op: "command.authorize";
+      spec: DurableCommandSpec;
+      workspaceId: string;
+    }
+  | {
+      intentId: string;
+      op: "command.start";
+      workspaceId: string;
+    }
+  | {
+      intentId: string;
+      op: "command.status";
+      workspaceId: string;
+    }
+  | {
+      intentId: string;
+      op: "command.inspect";
+      workspaceId: string;
+    }
+  | {
+      intentId: string;
+      op: "command.adopt";
+      workspaceId: string;
+    }
+  | {
+      intentId: string;
+      op: "command.cancel";
+      workspaceId: string;
+    }
+  | {
+      intentId: string;
+      op: "command.release";
+      workspaceId: string;
+    }
+  | {
+      containment: DurableCommandContainment;
+      intentId: string;
+      op: "command.reconcile";
+      reference: string;
+      workspaceId: string;
+    }
+  | {
+      effectId: string;
+      op: "file.reconcile";
+      reference: string;
+      workspaceId: string;
+    };
+export type DurableCommandContainment =
+  | {
+      kind: "manager";
+    }
+  | {
+      kind: "trusted-offline";
+      reference: string;
+    };
 export type ToastHerdrPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export type NotificationShowSound = "none" | "done" | "request";
 export type ReadSource = "visible" | "recent" | "recent_unwrapped" | "detection";
@@ -925,6 +995,14 @@ export type PluginPanePlacement = "overlay" | "popup" | "split" | "tab" | "zoome
 
 export interface PingParams {
   [k: string]: unknown;
+}
+export interface DurableCommandSpec {
+  /**
+   * @minItems 1
+   * @maxItems 128
+   */
+  argv: [string, ...string[]];
+  timeoutSeconds: number;
 }
 export interface EmptyParams {
   [k: string]: unknown;

@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { DurableHost } from "#durable-host";
+import { hostCommandRuntime } from "./host-runtime.js";
 import { loadHostConfig } from "#host-protocol";
 import { serveHost } from "#host-stdio";
 
@@ -20,7 +21,7 @@ try {
     allowModelNetwork: false,
     refreshOnCreate: false,
   });
-  const host = await DurableHost.open(config, models);
+  const host = await DurableHost.open(config, models, { protectedPaths: [configPath], commands: config.execution === undefined ? undefined : await hostCommandRuntime() });
   const stop = () => process.stdin.destroy();
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
