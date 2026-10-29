@@ -140,6 +140,7 @@
       "mactex"
       "orbstack"
       "skim"
+      "t3-code"
     ];
 
     # Installed manually/vendor-managed on this Mac for now. Do not add these
