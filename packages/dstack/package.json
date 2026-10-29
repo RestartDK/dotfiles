@@ -63,6 +63,26 @@
     "#host-protocol": {
       "types": "./src/host-protocol.ts",
       "default": "./dist/host-protocol.js"
+    },
+    "#client-authority": {
+      "types": "./src/client-authority.ts",
+      "default": "./dist/client-authority.js"
+    },
+    "#client-protocol": {
+      "types": "./src/client-protocol.ts",
+      "default": "./dist/client-protocol.js"
+    },
+    "#client-wire": {
+      "types": "./src/client-wire.ts",
+      "default": "./dist/client-wire.js"
+    },
+    "#client-history": {
+      "types": "./src/client-history.ts",
+      "default": "./dist/client-history.js"
+    },
+    "#client-http": {
+      "types": "./src/client-http.ts",
+      "default": "./dist/client-http.js"
     }
   },
   "engines": {
@@ -71,11 +91,13 @@
   "bin": {
     "dstack": "dist/cli.js",
     "dstackd": "dist/daemon.js",
-    "dstack-host": "dist/host-main.js"
+    "dstack-host": "dist/host-main.js",
+    "dstack-client": "dist/client-cli.js"
   },
   "scripts": {
-    "build": "tsc --noEmit && esbuild src/cli.ts src/daemon.ts src/server.ts src/worker-guard.ts src/conversation.ts src/host.ts src/host-main.ts src/host-stdio.ts src/host-protocol.ts src/command-runtime.ts src/command-wire.ts src/command-store.ts src/execution-wire.ts src/execution-journal.ts src/execution-domain.ts src/execution-files.ts src/execution-commands.ts src/execution-binding.ts src/execution-catalogue.ts src/workspace-paths.ts --bundle --platform=node --format=esm --packages=external --external:typebox --external:@earendil-works/pi-coding-agent --external:#durable-host --external:#host-stdio --external:#host-protocol --outdir=dist && npm run build:conversation-proofs",
-    "build:conversation-proofs": "esbuild tests/conversation-proof.ts tests/conversation-fixture.ts tests/conversation-live.ts tests/host-fixture.ts tests/host-proof.ts tests/host-execution-proof.ts tests/host-command-fixture.ts tests/host-command-live.ts tests/host-command-admission-live.ts tests/host-file-crash-live.ts tests/host-command-controls-live.ts tests/host-helper-loss-live.ts tests/host-compaction-recovery-live.ts tests/host-downgrade-live.ts tests/host-domains-live.ts tests/command-proof.ts tests/execution-proof.ts tests/execution-files-proof.ts tests/execution-files-recovery.ts tests/execution-commands-proof.ts tests/execution-commands-live.ts tests/execution-binding-proof.ts tests/execution-catalogue-proof.ts --bundle --platform=node --format=esm --packages=external --external:typebox --external:@earendil-works/pi-coding-agent --external:#coding-workspace --external:#durable-host --external:#host-stdio --external:#host-protocol --external:#command-runtime --external:#command-wire --external:#command-store --external:#execution-wire --external:#execution-journal --external:#execution-files --external:#execution-commands --external:#execution-binding --external:#execution-catalogue --external:#workspace-paths --external:#execution-domain --outdir=dist/tests",
+    "build": "tsc --noEmit && npm run build:client && esbuild src/client-authority.ts src/client-protocol.ts src/client-wire.ts src/client-history.ts src/client-http.ts src/client-cli.ts src/cli.ts src/daemon.ts src/server.ts src/worker-guard.ts src/conversation.ts src/host.ts src/host-main.ts src/host-stdio.ts src/host-protocol.ts src/command-runtime.ts src/command-wire.ts src/command-store.ts src/execution-wire.ts src/execution-journal.ts src/execution-domain.ts src/execution-files.ts src/execution-commands.ts src/execution-binding.ts src/execution-catalogue.ts src/workspace-paths.ts --bundle --platform=node --format=esm --packages=external --external:typebox --external:@earendil-works/pi-coding-agent --external:#durable-host --external:#host-stdio --external:#host-protocol --external:#client-authority --external:#client-protocol --external:#client-wire --external:#client-history --external:#client-http --outdir=dist && npm run build:conversation-proofs",
+    "build:conversation-proofs": "esbuild tests/host-protection-live.ts tests/client-paused-recovery-live.ts tests/client-browser-fixture.ts tests/client-browser-live.ts tests/client-resources-proof.ts tests/client-http-bind-proof.ts tests/client-http-start-race-proof.ts tests/client-http-proof.ts tests/client-sdk-proof.ts tests/client-host-proof.ts tests/conversation-proof.ts tests/conversation-fixture.ts tests/conversation-live.ts tests/host-fixture.ts tests/host-proof.ts tests/host-execution-proof.ts tests/host-command-fixture.ts tests/host-command-live.ts tests/host-command-admission-live.ts tests/host-file-crash-live.ts tests/host-command-controls-live.ts tests/host-helper-loss-live.ts tests/host-compaction-recovery-live.ts tests/host-downgrade-live.ts tests/host-domains-live.ts tests/command-proof.ts tests/execution-proof.ts tests/execution-files-proof.ts tests/execution-files-recovery.ts tests/execution-commands-proof.ts tests/execution-commands-live.ts tests/execution-binding-proof.ts tests/execution-catalogue-proof.ts --bundle --platform=node --format=esm --packages=external --external:typebox --external:@earendil-works/pi-coding-agent --external:#coding-workspace --external:#durable-host --external:#host-stdio --external:#host-protocol --external:#client-authority --external:#client-protocol --external:#client-wire --external:#client-history --external:#client-http --external:#command-runtime --external:#command-wire --external:#command-store --external:#execution-wire --external:#execution-journal --external:#execution-files --external:#execution-commands --external:#execution-binding --external:#execution-catalogue --external:#workspace-paths --external:#execution-domain --outdir=dist/tests",
+    "build:client": "tsc --project tsconfig.browser.json && esbuild web/client.ts --bundle --platform=browser --format=esm --outfile=dist/client/client.js && cp web/index.html web/client.css dist/client/",
     "test": "bun test tests ../../config/pi/agent/extensions/pi-jobs"
   },
   "dependencies": {

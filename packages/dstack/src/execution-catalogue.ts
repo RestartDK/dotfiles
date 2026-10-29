@@ -9,12 +9,17 @@ import { requireDurableSqlite } from "./execution-sqlite.js";
 import { executionRootBytes, parseExecutionRoot, type ExecutionRoot } from "./execution-wire.js";
 import { MAX_WORKSPACES, parseOperation, type HostIdentity, type HostMutation } from "#host-protocol";
 import { isIdentityName } from "./workspace-identity.js";
+import { parseControlPaths } from "./host-protection.js";
 
 const IdentitySchema = Type.Object({ deploymentId: Type.String(), domain: Type.Union([Type.Literal("personal"), Type.Literal("work")]), nodeId: Type.String() }, { additionalProperties: false });
 const AnchorSchema = Type.Object({
   version: Type.Literal(1), indexId: Type.String(), token: Type.String({ pattern: "^[0-9a-f]{64}$" }), identity: IdentitySchema,
 }, { additionalProperties: false });
-const HostBindingSchema = Type.Object({ ...IdentitySchema.properties, stateRoot: Type.String(), version: Type.Literal(2) }, { additionalProperties: false });
+const HostBindingFields = { ...IdentitySchema.properties, stateRoot: Type.String() };
+const HostBindingSchema = Type.Union([
+  Type.Object({ ...HostBindingFields, version: Type.Union([Type.Literal(2), Type.Literal(3)]) }, { additionalProperties: false }),
+  Type.Object({ ...HostBindingFields, version: Type.Literal(4), clientMode: Type.Union([Type.Literal("native"), Type.Literal("authenticated")]), controlPaths: Type.Array(Type.String(), { minItems: 1, maxItems: 64 }) }, { additionalProperties: false }),
+]);
 type Anchor = Static<typeof AnchorSchema>;
 type Identity = HostIdentity;
 type Options = { readonly db: DatabaseSync; readonly directory: CommandDirectory; readonly identity: Identity };
@@ -39,6 +44,8 @@ function hostBinding(input: Options): string {
   const main = input.db.prepare("PRAGMA database_list").all().find(row => row.name === "main");
   if (!Check(HostBindingSchema, binding) || binding.deploymentId !== input.identity.deploymentId || binding.domain !== input.identity.domain || binding.nodeId !== input.identity.nodeId || !isAbsolute(binding.stateRoot) || !binding.stateRoot.isWellFormed() || binding.stateRoot.includes("\0") || main?.file !== join(binding.stateRoot, "host.sqlite") || !input.directory.path.startsWith(`${binding.stateRoot}${sep}`))
     throw new Error("Execution catalogue differs from its borrowed host index");
+  if (binding.version === 4 && JSON.stringify(parseControlPaths(binding.controlPaths)) !== JSON.stringify(binding.controlPaths))
+    throw new Error("Execution catalogue control protection is not canonical");
   if (input.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('workspaces','admissions')").all().length !== 2)
     throw new Error("Execution catalogue requires the host admission schema");
   return row.value;

@@ -1,6 +1,10 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai";
-import { CompactionTask, GenerationTask, ToolTask, createRegistry, defineExtension, hook } from "@earendil-works/pi-durable";
+import { ClientAuthority } from "#client-authority";
+import { clientPermission, type ClientOperation } from "#client-protocol";
+import { ClientHistory } from "#client-history";
+import { CLIENT_RESOURCES, clientEntry, clientEvent, clientSnapshot, clientSubmission, type ClientEvent } from "#client-wire";
+import { CompactionTask, GenerationTask, ToolTask, createRegistry, defineExtension, hook, watchEvents, type AgentEventStream } from "@earendil-works/pi-durable";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, realpath } from "node:fs/promises";
@@ -12,6 +16,7 @@ import { workspaceFileTools } from "./execution-files.js";
 import { executionRootBytes } from "./execution-wire.js";
 import { HostExecution, type HostCommandRuntime } from "./host-execution.js";
 import { hostCommandTask } from "./host-command-task.js";
+import { parseControlPaths } from "./host-protection.js";
 import { executionModels } from "./execution-models.js";
 import { unresolvedEffects } from "./execution-domain.js";
 import type { CommandAuthorizationInput, TrustedReconciliation } from "./execution-commands.js";
@@ -37,6 +42,17 @@ export type TrustedHostCommandOperation =
   | { readonly op: "reconcile"; readonly workspaceId: string; readonly reconciliation: TrustedReconciliation }
   | { readonly op: "file.reconcile"; readonly workspaceId: string; readonly effectId: string; readonly actor: string; readonly reference: string };
 
+export type ClientObservation = {
+  readonly snapshot: ReturnType<typeof clientSnapshot>;
+  readonly closed: AgentEventStream["closed"];
+  start(listener: (event: ClientEvent) => Promise<void>): void;
+  stop(): ReturnType<AgentEventStream["stop"]>;
+};
+export type ClientHostResult =
+  | { readonly kind: "reply"; readonly result: unknown }
+  | { readonly kind: "watch"; readonly observation: ClientObservation };
+export type HostIngress = { seal(): void; close(): Promise<void> };
+
 export class DurableHost {
   readonly #owners = new Map<string, CodingWorkspaceOwner>();
   readonly #prepared = new Map<string, PreparedCodingWorkspace>();
@@ -44,6 +60,9 @@ export class DurableHost {
   readonly #commandTasks = new Map<string, ReturnType<typeof hostCommandTask>>();
   #closing: Promise<void> | null = null;
   #active: Promise<unknown> | null = null;
+  #ingress: HostIngress | undefined;
+  readonly #clientWatches = new Map<ClientObservation, string>();
+  readonly #clientHistory: ClientHistory | undefined;
 
   private constructor(
     readonly config: HostConfig,
@@ -51,12 +70,17 @@ export class DurableHost {
     private readonly db: DatabaseSync,
     private readonly unlock: () => Promise<void>,
     private readonly protectedPaths: readonly string[],
-  ) {}
+    readonly clientAuthority: ClientAuthority | undefined,
+  ) { this.#clientHistory = clientAuthority === undefined ? undefined : new ClientHistory(config.identity); }
 
-  static async open(config: HostConfig, models: Models, options: { readonly protectedPaths?: readonly string[]; readonly commands?: HostCommandRuntime } = {}): Promise<DurableHost> {
+  static async open(config: HostConfig, models: Models, options: { readonly protectedPaths?: readonly string[]; readonly controlPaths?: readonly string[]; readonly commands?: HostCommandRuntime } = {}): Promise<DurableHost> {
     config = parseHostConfig(JSON.parse(JSON.stringify(config)));
-    const protectedPaths = [...(options.protectedPaths ?? [])];
+    const controlPaths = options.controlPaths === undefined ? undefined : parseControlPaths(options.controlPaths);
+    if (controlPaths !== undefined && config.execution === undefined) throw new HostError("invalid_config", "Production control protection requires durable execution");
+    const protectedPaths = [...(options.protectedPaths ?? []), ...(controlPaths ?? [])];
     const commands = options.commands === undefined ? undefined : { ...options.commands };
+    const clients = config.execution?.clients;
+    const clientAuthority = clients === undefined ? undefined : await ClientAuthority.open({ identity: config.identity, config: clients });
     await mkdir(config.stateRoot, { recursive: true, mode: 0o700 });
     const info = await lstat(config.stateRoot);
     if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0)
@@ -102,12 +126,13 @@ export class DurableHost {
         CREATE TABLE IF NOT EXISTS binding (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, cwd TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS admissions (id TEXT PRIMARY KEY, payload TEXT NOT NULL, admitted INTEGER NOT NULL DEFAULT 0);`);
-      const binding = JSON.stringify({ ...config.identity, stateRoot, version: config.execution === undefined ? 1 : 2 });
+      const version = controlPaths !== undefined ? 4 : config.execution === undefined ? 1 : config.execution.clients === undefined ? 2 : 3;
+      const binding = JSON.stringify({ ...config.identity, stateRoot, version, ...(controlPaths === undefined ? {} : { controlPaths, clientMode: config.execution?.clients === undefined ? "native" : "authenticated" }) });
       const stored = db.prepare("SELECT value FROM binding WHERE id=1").get();
       if (stored === undefined) db.prepare("INSERT INTO binding VALUES (1, ?)").run(binding);
       else if (stored.value !== binding)
         throw new HostError("binding_mismatch", "Host root identity differs");
-      host = new DurableHost({ ...config, stateRoot }, models, db, unlock, protectedPaths);
+      host = new DurableHost({ ...config, stateRoot }, models, db, unlock, protectedPaths, clientAuthority);
       const rows = db.prepare("SELECT id, cwd FROM workspaces ORDER BY id").all();
       if (rows.length > MAX_WORKSPACES) throw new HostError("capacity", "Host workspace limit reached");
       const expected = new Set(rows.map(row => {
@@ -120,6 +145,7 @@ export class DurableHost {
       host.#execution = await HostExecution.open({ config: host.config, db, commands });
       for (const row of rows) {
         if (typeof row.id !== "string" || typeof row.cwd !== "string") throw new Error("Invalid workspace index");
+        await host.assertConfiguredCwd(row.id, row.cwd);
         await host.prepareWorkspace(row.id, row.cwd, "existing");
       }
       for (const row of rows) {
@@ -153,6 +179,12 @@ export class DurableHost {
     }
   }
 
+  private async assertConfiguredCwd(workspaceId: string, cwd: string): Promise<void> {
+    const configured = this.config.execution?.clients?.workspaces.find(workspace => workspace.workspaceId === workspaceId);
+    if (configured !== undefined && await realpath(configured.cwd) !== cwd)
+      throw new HostError("binding_mismatch", "Configured client workspace cwd differs from its owner");
+  }
+
   private async prepareWorkspace(workspaceId: string, cwd: string, initialization: "new" | "existing"): Promise<PreparedCodingWorkspace> {
     if ((await realpath(cwd)) !== cwd)
       throw new HostError("binding_mismatch", "Canonical workspace cwd was retargeted");
@@ -161,7 +193,7 @@ export class DurableHost {
     if (this.#prepared.size >= MAX_WORKSPACES)
       throw new HostError("capacity", "Host workspace limit reached");
     const managed = this.#execution?.get(workspaceId);
-    const paths = await WorkspacePaths.open({ cwd, protectedPaths: [this.config.stateRoot, this.config.authPath, this.config.modelsPath, ...this.protectedPaths] });
+    const paths = await WorkspacePaths.open({ cwd, protectedPaths: [this.config.stateRoot, this.config.authPath, this.config.modelsPath, ...(this.config.execution?.clients?.grants.map(grant => grant.tokenFile) ?? []), ...this.protectedPaths] });
     const gate = () => this.assertProgress(workspaceId);
     const registry = createRegistry();
     registry.install(defineExtension({
@@ -297,6 +329,82 @@ export class DurableHost {
     return active;
   }
 
+  registerClientIngress(ingress: HostIngress): void {
+    if (this.#closing !== null || this.#ingress !== undefined || this.clientAuthority === undefined)
+      throw new HostError("unavailable", "Client ingress cannot attach to this host");
+    this.#ingress = ingress;
+  }
+
+  async client(options: { readonly token: string | undefined; readonly operation: ClientOperation }): Promise<ClientHostResult> {
+    if (this.clientAuthority === undefined) throw new HostError("unavailable", "Authenticated clients are not configured");
+    const access = this.clientAuthority.authenticate(options.token);
+    const operation = options.operation;
+    if (operation.op === "discover") {
+      if (this.#closing !== null) throw new HostError("unavailable", "Host admission is sealed");
+      return { kind: "reply", result: { identity: this.config.identity, principalId: access.principalId, workspaces: access.discover() } };
+    }
+    const configured = access.require({ workspaceId: operation.workspaceId, permission: clientPermission(operation) });
+    return this.request<ClientHostResult>(async () => {
+      switch (operation.op) {
+        case "open": {
+          await this.dispatch({ op: "create", workspaceId: operation.workspaceId, cwd: configured.cwd, requestId: access.requestId({ kind: "open", workspaceId: operation.workspaceId }) });
+          return { kind: "reply", result: { workspaceId: operation.workspaceId, conversationId: String(this.owner(operation.workspaceId).conversation.id) } };
+        }
+        case "submit": case "status": {
+          const requestId = access.requestId({ kind: "submit", workspaceId: operation.workspaceId, requestId: operation.requestId });
+          if (operation.op === "submit") await this.dispatch({ op: "submit", workspaceId: operation.workspaceId, requestId, content: operation.content });
+          await this.assertOwnership(operation.workspaceId);
+          const owner = this.owner(operation.workspaceId);
+          const receipt = await owner.harness.commit(tx => tx.submissionByRequest(owner.conversation.id, requestId), context);
+          return { kind: "reply", result: { workspaceId: operation.workspaceId, requestId: operation.requestId, receipt: receipt === undefined ? null : clientSubmission(receipt) } };
+        }
+        case "snapshot": {
+          const history = this.#clientHistory;
+          if (history === undefined) throw new HostError("unavailable", "Client history is unavailable");
+          const owner = this.owner(operation.workspaceId);
+          const scope = { principalId: access.principalId, workspaceId: operation.workspaceId, conversationId: String(owner.conversation.id) };
+          const cursor = history.read(operation.cursor, scope);
+          await this.assertOwnership(operation.workspaceId);
+          const page = await owner.conversation.entries({ order: "descending" }, 20, cursor, context);
+          const next = history.seal(page.next, scope);
+          return { kind: "reply", result: { workspaceId: operation.workspaceId, conversationId: scope.conversationId, entries: page.items.map(clientEntry), ...(next === undefined ? {} : { cursor: next }) } };
+        }
+        case "abort": {
+          await this.assertOwnership(operation.workspaceId);
+          await this.owner(operation.workspaceId).conversation.abort(context);
+          return { kind: "reply", result: { workspaceId: operation.workspaceId, ordinarySdkWorkStopped: true } };
+        }
+        case "watch": {
+          if (this.#clientWatches.size >= CLIENT_RESOURCES.hostWatches || [...this.#clientWatches.values()].filter(principal => principal === access.principalId).length >= CLIENT_RESOURCES.principalWatches)
+            throw new HostError("capacity", "Client observation limit reached");
+          await this.assertOwnership(operation.workspaceId);
+          const owner = this.owner(operation.workspaceId);
+          const stream = await watchEvents(owner.harness, owner.conversation.id, context);
+          try {
+            const snapshot = clientSnapshot(stream.snapshot);
+            let delivery: Promise<void> | undefined;
+            const join = async () => { if (delivery !== undefined) await Promise.allSettled([delivery]); };
+            const observation: ClientObservation = {
+              snapshot, closed: stream.closed,
+              async stop() { try { return await stream.stop(); } finally { await join(); } },
+              start: listener => stream.start(events => {
+                delivery = (async () => { for (const event of events) await listener(clientEvent(event)); })();
+                return delivery;
+              }),
+            };
+            this.#clientWatches.set(observation, access.principalId);
+            const retire = async () => { await join(); this.#clientWatches.delete(observation); };
+            void stream.closed.then(retire, retire);
+            return { kind: "watch", observation };
+          } catch (error) { await stream.stop(); throw error; }
+        }
+        case "execution.status": return { kind: "reply", result: await this.dispatch({ op: "execution.status", workspaceId: operation.workspaceId }) };
+        case "command.cancel": return { kind: "reply", result: await this.dispatch({ op: "command.cancel", workspaceId: operation.workspaceId, intentId: operation.intentId }) };
+        default: { const exhaustive: never = operation; throw new Error(`Unsupported client operation ${exhaustive}`); }
+      }
+    });
+  }
+
   get nativeCommandOperations(): readonly string[] {
     return this.#execution?.nativeCommandOperations ?? [];
   }
@@ -419,6 +527,7 @@ export class DurableHost {
         if (existing === undefined) {
           if (operation.op === "create") {
             const cwd = await realpath(operation.cwd);
+            await this.assertConfiguredCwd(operation.workspaceId, cwd);
             if (!(await lstat(cwd)).isDirectory())
               throw new HostError("invalid_cwd", "Workspace cwd must be a directory");
             const stored = this.db
@@ -470,11 +579,15 @@ export class DurableHost {
 
   close(): Promise<void> {
     this.#closing ??= (async () => {
+      const errors: unknown[] = [];
+      try { this.#ingress?.seal(); await this.#ingress?.close(); } catch (error) { errors.push(error); }
       await this.#active?.catch(() => undefined);
+      const viewers = await Promise.allSettled([...this.#clientWatches.keys()].map(stream => stream.stop()));
+      errors.push(...viewers.flatMap(result => result.status === "rejected" ? [result.reason] : []));
       const results = await Promise.allSettled(
         [...this.#owners.values()].map((owner) => owner.close()),
       );
-      const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+      errors.push(...results.flatMap((result) => result.status === "rejected" ? [result.reason] : []));
       for (const prepared of this.#prepared.values()) {
         try { await prepared.close(); } catch (error) { errors.push(error); }
       }
