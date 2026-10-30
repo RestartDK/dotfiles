@@ -33,10 +33,10 @@ Write one clear paragraph. Reviewers challenge whether the work achieves the int
 
 ## Step 3, Spawn Reviewers
 
-Launch all reviewers in one subagents call, one per entry in the active `interrogate-reviewers` panel shown by `/subagents`. Label reviewers A, B, C and onward to match the configured count.
+Launch all reviewers in one delegation call when the tool batches tasks, one per entry in the active `interrogate-reviewers` panel in the model policy. Label reviewers A, B, C and onward to match the configured count.
 
 For each reviewer:
-- spawn via the subagents tool
+- spawn with an available subagent tool
 - `role`: `interrogate-reviewers`, with an explicit `member` or zero-based `seat`
 - `tools`: `["read", "grep", "find", "ls"]`
 

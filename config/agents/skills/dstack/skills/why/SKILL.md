@@ -116,7 +116,7 @@ Aim for a complete **coverage map**, not a minimal one. A null result from an is
 Launch all matching investigators in a single message so they run concurrently. One investigator per category lets each specialize in one tool's query vocabulary and result shape. Don't ask one agent to cover multiple MCPs.
 
 Subagent config (each):
-- spawn via the subagents tool
+- spawn with an available subagent tool
 - `role`: `why-investigators`
 - `tools`: explicitly list the required tools. Investigators must not write files. Claude routes do not expose Pi MCP tools. The parent must collect MCP evidence for those workers, or report that category blocked; never silently omit a requested capability.
 
@@ -162,7 +162,7 @@ If your scope assessment suggests a single-commit trivial target where the PR de
 
 Spawn one synthesizer subagent:
 
-- spawn via the subagents tool
+- spawn with an available subagent tool
 - `role`: `why-synthesizer`
 - `tools`: explicitly list the required tools. The parent supplies MCP evidence for citation checks when the selected backend cannot expose those tools. Report gaps rather than changing the billing route.
 

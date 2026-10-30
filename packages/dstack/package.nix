@@ -30,8 +30,6 @@
       ../../config/pi/agent/lib/dstack-watches.ts
       ../../config/pi/agent/lib/model-policy.ts
       ../../config/pi/agent/extensions/pi-jobs
-      ../../config/pi/agent/extensions/pi-herdr/client.ts
-      ../../config/pi/agent/extensions/pi-herdr/generated
     ];
   };
   sourceRoot = "source/packages/dstack";

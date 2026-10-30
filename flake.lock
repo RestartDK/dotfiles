@@ -558,27 +558,6 @@
         "type": "github"
       }
     },
-    "lefthook-nix_2": {
-      "inputs": {
-        "nixpkgs": [
-          "scatterer",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1770377107,
-        "narHash": "sha256-/QEXSDeAo5RK81PtM0yDhmt9k3v1/pse/jsrT1yXNhU=",
-        "owner": "sudosubin",
-        "repo": "lefthook.nix",
-        "rev": "9cdaf7ce95ae77cbabc5b556bdd35d3cf0b849f5",
-        "type": "github"
-      },
-      "original": {
-        "owner": "sudosubin",
-        "repo": "lefthook.nix",
-        "type": "github"
-      }
-    },
     "llm-agents": {
       "inputs": {
         "bun2nix": "bun2nix",
@@ -1014,31 +993,8 @@
         "nixpkgs": "nixpkgs_5",
         "opnix": "opnix",
         "private": "private",
-        "scatterer": "scatterer",
         "stylix": "stylix",
         "treefmt-nix": "treefmt-nix_6"
-      }
-    },
-    "scatterer": {
-      "inputs": {
-        "lefthook-nix": "lefthook-nix_2",
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "treefmt-nix": "treefmt-nix_5"
-      },
-      "locked": {
-        "lastModified": 1790777947,
-        "narHash": "sha256-4fhrYmlcifToncxhEMuIKlxpbXe6Qqy/QPFZVP839qk=",
-        "owner": "RestartDK",
-        "repo": "scatterer",
-        "rev": "3344cb9f6f99239bf966c9bd7424560cf68121a9",
-        "type": "github"
-      },
-      "original": {
-        "owner": "RestartDK",
-        "repo": "scatterer",
-        "type": "github"
       }
     },
     "stylix": {
@@ -1282,27 +1238,6 @@
       "inputs": {
         "nixpkgs": [
           "nixos-anywhere",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1786901030,
-        "narHash": "sha256-WSFCsDSE5ffgD2MqzkM2CYjeFiKhRF/dJUN8uedb6YE=",
-        "owner": "numtide",
-        "repo": "treefmt-nix",
-        "rev": "27b3b12a8e6375f28ebe122f07d230ca5459bbfa",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "treefmt-nix",
-        "type": "github"
-      }
-    },
-    "treefmt-nix_5": {
-      "inputs": {
-        "nixpkgs": [
-          "scatterer",
           "nixpkgs"
         ]
       },

@@ -74,7 +74,7 @@ When the user needs an interactive tuicr pane and no active session exists:
 |-------------|--------|
 | `$TMUX` is set | Run `tuicr-wrapper.sh /path/to/repo` |
 | `$ZELLIJ` is set | Run `tuicr-wrapper-zellij.sh /path/to/repo` |
-| `$HERDR_ENV` is `1` | Invoke `daniel.scatterer.review-toggle`; fall back to `tuicr-wrapper-herdr.sh /path/to/repo` if that action is unavailable |
+| `$HERDR_ENV` is `1` | Run `tuicr-wrapper-herdr.sh /path/to/repo` |
 | None is set | Tell the user you are waiting for them to start `tuicr` in the repo, then attach with `tuicr review list` after they say it is ready |
 
 If more than one multiplexer marker is set, prefer the innermost multiplexer if
@@ -93,19 +93,8 @@ Wrapper paths are relative to this skill directory:
 <skill-directory>/tuicr-wrapper-herdr.sh /path/to/repo
 ```
 
-In Herdr, first run:
-
-```bash
-herdr plugin action invoke daniel.scatterer.review-toggle
-```
-
-This opens `tuicr --working-tree` in a managed right split named `Review` for
-the focused pane's repository. Do this only after confirming there is no
-relevant active Tuicr session, because the same action toggles an existing
-Review pane closed.
-If the Scatterer action is unavailable, use the Herdr wrapper instead. The
-wrapper requires `jq` to read pane IDs and completion results from Herdr's JSON
-responses.
+The Herdr wrapper requires `jq` to read pane IDs and completion results from
+Herdr's JSON responses.
 
 If your tool supports command timeouts, use a long timeout, such as 10 minutes,
 because the wrappers wait for the TUI to exit. Once the TUI creates its active

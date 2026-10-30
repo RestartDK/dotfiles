@@ -1,7 +1,6 @@
 {
   "extensions": [
-    "-extensions/pi-prompt/index.ts",
-    "-extensions/pi-coordination/index.ts"
+    "-extensions/pi-prompt/index.ts"
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": false,

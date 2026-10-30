@@ -17,16 +17,6 @@
           }
         ],
         "matcher": "*"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.claude/hooks/herdr-agent-state.sh blocked",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "PostToolUse": [
@@ -51,18 +41,6 @@
         "matcher": "*"
       }
     ],
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.claude/hooks/herdr-agent-state.sh working",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
-      }
-    ],
     "SessionEnd": [
       {
         "hooks": [
@@ -71,16 +49,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.claude/hooks/herdr-agent-state.sh release",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "SessionStart": [
@@ -91,16 +59,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.claude/hooks/herdr-agent-state.sh' session",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "Stop": [
@@ -111,16 +69,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.claude/hooks/herdr-agent-state.sh idle",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "UserPromptSubmit": [
@@ -131,16 +79,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.claude/hooks/herdr-agent-state.sh working",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
       }
     ],
     "SubagentStart": [

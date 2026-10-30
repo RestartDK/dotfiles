@@ -47,10 +47,12 @@ jobs:
         run: |
           nix build --no-link --print-build-logs \
             .#checks.x86_64-linux.quality \
-            .#checks.x86_64-linux.pi-coordination \
+            .#checks.x86_64-linux.retired-integrations \
             .#checks.x86_64-linux.pi-vim \
             .#checks.x86_64-linux.pi-todos \
             .#checks.x86_64-linux.skills \
+            .#checks.x86_64-linux.watch-pr \
+            .#checks.x86_64-linux.dstack \
             .#checks.x86_64-linux.personal-secrets \
             .#checks.x86_64-linux.agent-profiles \
             .#checks.x86_64-linux.srv-hatchi-policy \

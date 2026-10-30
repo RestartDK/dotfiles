@@ -35,7 +35,7 @@ Audit rule: every cited principle must name the decision it changed. A bare cita
 
 ## Subagent roles
 
-`/subagents` shows the active work or personal billing profile. Edit the selected source policy under `config/agents/model-profiles/`, not shared skills. Nix links it at `~/.config/dstack/models.json`.
+The selected policy file names the active work or personal billing profile. Edit its source under `config/agents/model-profiles/`, not shared skills. Nix links it at `~/.config/dstack/models.json`.
 
 Workers select `role`, such as `feature`, `precise-code` or `review`. Panels also select `member` or a zero-based `seat`. Results identify the actual backend/model after fallback. A policy error stops dispatch instead of choosing a default.
 

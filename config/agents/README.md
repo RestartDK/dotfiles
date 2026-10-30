@@ -5,7 +5,7 @@ Source of truth for the global agent configuration. Home Manager links these int
 | path | deploys to | holds |
 |---|---|---|
 | `skills/` | `~/.agents/skills`, `~/.claude/skills` | every global skill: `dstack` (the bundle), `.system` (Codex system skills), vendor installs, and one directory per authored skill |
-| `agents/` | `~/.agents/agents` | worker definitions for the `subagents` tool |
+| `agents/` | `~/.agents/agents` | worker definitions for delegate sessions |
 | `model-profiles/` | `~/.config/dstack/models.json` | per-profile role policy |
 | `.skill-lock.json` | `~/.agents/.skill-lock.json` | provenance for vendor installs made by `npx skills` |
 
