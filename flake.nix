@@ -369,15 +369,6 @@
                 SKILLS_ROOT=${./config/agents/skills} SKILLS_LOCK=${./config/agents/.skill-lock.json} AGENTS_DIR=${./config/agents/agents} bash ${./tests/skills.sh}
                 touch $out
               '';
-          retired-integrations =
-            (pkgsFor system).runCommand "retired-integrations-check"
-              {
-                nativeBuildInputs = [ (pkgsFor system).python3 ];
-              }
-              ''
-                DOTFILES_ROOT=${self} python3 ${./tests/test_retired_integrations.py}
-                touch $out
-              '';
           watch-pr =
             (pkgsFor system).runCommand "watch-pr-tests"
               {

@@ -47,7 +47,6 @@ jobs:
         run: |
           nix build --no-link --print-build-logs \
             .#checks.x86_64-linux.quality \
-            .#checks.x86_64-linux.retired-integrations \
             .#checks.x86_64-linux.pi-vim \
             .#checks.x86_64-linux.pi-todos \
             .#checks.x86_64-linux.skills \

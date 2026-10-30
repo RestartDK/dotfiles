@@ -1,5 +1,4 @@
 # secrets / machine-local state
-.audit/
 *.age
 *.key
 *.pem
