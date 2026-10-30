@@ -13,12 +13,11 @@ import {
   type AgentSession,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
-import { AuthStorage } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/auth-storage.js";
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
   type Model,
-} from "../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/index.js";
+} from "@earendil-works/pi-ai";
 import jobsExtension from "../../../config/pi/agent/extensions/pi-jobs/index.ts";
 import {
   callWatches,
@@ -224,7 +223,7 @@ try {
   });
   await resourceLoader.reload();
   const modelRuntime = await ModelRuntime.create({
-    credentials: AuthStorage.inMemory(),
+    authPath: join(root, "auth.json"),
     modelsPath: null,
     refreshOnCreate: false,
   });

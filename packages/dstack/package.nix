@@ -34,7 +34,7 @@
   };
   sourceRoot = "source/packages/dstack";
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-FdlLce/ulPs86ahwnu2SPfkIRXkadeCxd3icNZvr2Dg=";
+  npmDepsHash = "sha256-d6dOgM4dwEAE8MIVjOL3ptW8K/FtcVHi6/JD0niD0zM=";
   npmFlags = [ "--ignore-scripts" ];
   npmPackFlags = [ "--ignore-scripts" ];
   nativeBuildInputs = [
