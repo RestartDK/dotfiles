@@ -164,7 +164,7 @@ assert builtins.all (
   && !(home.home.file ? ".pi/agent/auth.json")
 ) owners;
 assert !(personalMcp.mcpServers ? figma);
-assert workMcp.mcpServers ? figma;
+assert !(workMcp.mcpServers ? figma);
 pkgs.runCommand "agent-profile-tests"
   {
     nativeBuildInputs = [
