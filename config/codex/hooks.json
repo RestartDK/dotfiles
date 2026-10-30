@@ -9,15 +9,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.codex/herdr-agent-state.sh blocked",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
       }
     ],
     "PreToolUse": [
@@ -26,15 +17,6 @@
           {
             "command": "[ -n \"$CMUX_SURFACE_ID\" ] && [ \"$CMUX_CODEX_HOOKS_DISABLED\" != \"1\" ] && command -v cmux >/dev/null 2>&1 && cmux hooks feed --source codex --event PreToolUse || echo '{}'",
             "timeout": 120000,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.codex/herdr-agent-state.sh working",
-            "timeout": 10,
             "type": "command"
           }
         ]
@@ -57,24 +39,6 @@
             "type": "command"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.codex/herdr-agent-state.sh idle",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/danielkumlin/.codex/herdr-agent-state.sh' session",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
       }
     ],
     "Stop": [
@@ -91,15 +55,6 @@
         "hooks": [
           {
             "command": "SUPERSET_AGENT_ID=codex $HOME/.superset/hooks/notify.sh",
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.codex/herdr-agent-state.sh idle",
-            "timeout": 10,
             "type": "command"
           }
         ]
@@ -130,15 +85,6 @@
         "hooks": [
           {
             "command": "SUPERSET_AGENT_ID=codex $HOME/.superset/hooks/notify.sh",
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash $HOME/.codex/herdr-agent-state.sh working",
-            "timeout": 10,
             "type": "command"
           }
         ]

@@ -34,7 +34,7 @@ For each candidate, read the first JSONL line and check that `message.content[0]
 
 ### 2. Spawn three reviewers in parallel
 
-One subagents call, three tasks, explicit `role:` on each. Reviewers may need MCP evidence for context lookups. Explicitly select their `tools`; the prompt forbids file writes. Claude routes cannot expose Pi MCP tools. The parent supplies that evidence or reports the gap, without changing the billing route.
+One delegation call with three tasks, explicit `role:` on each. Reviewers may need MCP evidence for context lookups. Explicitly select their `tools`; the prompt forbids file writes. Claude routes cannot expose Pi MCP tools. The parent supplies that evidence or reports the gap, without changing the billing route.
 
 | Lens | `role` | Prompt template |
 |---|---|---|
@@ -46,7 +46,7 @@ Pass each template verbatim, substituting the transcript path or digest where ma
 
 ### 3. Synthesize
 
-One subagents call, using `role: "reflect-synthesizer"`. The parent supplies MCP evidence needed for citation checks when the selected backend cannot expose those tools. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
+One delegation call, using `role: "reflect-synthesizer"`. The parent supplies MCP evidence needed for citation checks when the selected backend cannot expose those tools. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
 
 ### 4. Structural enforcement check
 

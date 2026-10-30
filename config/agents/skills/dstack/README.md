@@ -23,7 +23,7 @@ A repo adds `.agents/skills/dstack-<repo>/` with `references/` (principle carve-
 
 ## Model roles
 
-The host's `~/.config/dstack/models.json` selects routes. `/subagents` lists roles and panels. Shared skills contain role names only; see `models.md`.
+The host's `~/.config/dstack/models.json` selects routes and lists roles and panels. Shared skills contain role names only; see `models.md`.
 
 ## Deferred from pstack, deliberately
 

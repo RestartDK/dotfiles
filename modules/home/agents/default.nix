@@ -121,10 +121,6 @@ in
           source = ../../../config/codex/hooks.json;
           force = true;
         };
-        home.file.".codex/herdr-agent-state.sh" = {
-          source = ../../../config/codex/herdr-agent-state.sh;
-          force = true;
-        };
         home.file.".codex/rules/default.rules" = {
           source = ../../../config/codex/rules/default.rules;
           force = true;
@@ -134,10 +130,6 @@ in
       (lib.mkIf claude {
         home.file.".claude/settings.json" = {
           source = ../../../config/claude/settings.json;
-          force = true;
-        };
-        home.file.".claude/hooks/herdr-agent-state.sh" = {
-          source = ../../../config/claude/hooks/herdr-agent-state.sh;
           force = true;
         };
         home.file.".claude/hooks/usage-statusline.py" = {

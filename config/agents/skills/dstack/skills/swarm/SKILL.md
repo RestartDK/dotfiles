@@ -27,7 +27,7 @@ Open a todolist with one entry per phase before launching anything.
 
 ## Phase B: Fan out
 
-Spawn all N workers in one subagents call with their configured roles and panel selections.
+Spawn all N workers in one delegation call when the tool batches tasks, with their configured roles and panel selections.
 
 When a worker must start from a non-default pushed branch, give it its own worktree checked out at that branch.
 

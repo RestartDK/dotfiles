@@ -4,14 +4,12 @@ import {
   callJobs,
   jobLine,
   parseRequest,
-  socketPath,
   subscribeJobs,
   type JobRequest,
 } from "../../../config/pi/agent/lib/dstack-jobs.js";
 import { parsePr } from "./domain.js";
 import { watchLine } from "../../../config/pi/agent/lib/dstack-watches.js";
 import { wakeCommand } from "./wake-cli.js";
-import { herdrContext, openJobsPane, watchJobsPane } from "./herdr.js";
 
 const help = `dstack register --repo OWNER/REPO --pr N --source PATH --mode observe|drive
 dstack list
@@ -19,7 +17,6 @@ dstack status ID
 dstack stop ID
 dstack watch [ID] [--json]
 dstack attach [ID] [--json]
-dstack herdr [--notify]
 dstack wake create (--in 5m | --at ISO | --repo OWNER/REPO --pr N) --message TEXT [--session ID] [--deadline ISO] [--request-id KEY]
 dstack wake create --request-id KEY
 dstack wake list [--session ID]
@@ -29,33 +26,13 @@ dstack wake cancel ID
 Registration authorizes only the selected mode. Drive may repair and push the owning branch.
 Scoped worker tools are not an OS sandbox.
 Stop releases owned processes and retains data. Exiting a viewer never stops a job.
-Herdr opens or focuses an owned Jobs pane. --notify enables quiet blocker/terminal notifications in a new viewer.
 All non-viewer results are structured JSON. Configuration: DSTACK_SOCKET or DSTACK_STATE_DIR.`;
 const args = process.argv.slice(2);
 const command = args.shift();
 try {
   if (!command || command === "--help" || command === "help") console.log(help);
   else if (command === "wake") await wakeCommand(args);
-  else if (command === "herdr") {
-    if (args.length > 1 || (args.length === 1 && args[0] !== "--notify"))
-      throw new Error("Expected dstack herdr [--notify]");
-    const cli = process.argv[1];
-    if (!cli) throw new Error("Missing dstack executable path");
-    console.log(
-      JSON.stringify(
-        await openJobsPane({
-          ...herdrContext(),
-          jobsSocket: resolve(socketPath()),
-          node: process.execPath,
-          cli: resolve(cli),
-          notify: args[0] === "--notify",
-        }),
-      ),
-    );
-  } else if (command === "herdr-view") {
-    if (args.length) throw new Error("Jobs viewer takes no arguments");
-    await watchJobsPane(herdrContext());
-  } else if (command === "watch" || command === "attach") {
+  else if (command === "watch" || command === "attach") {
     const json = args.includes("--json");
     const ids = args.filter((arg) => arg !== "--json");
     if (ids.length > 1) throw new Error("Expected at most one job ID");

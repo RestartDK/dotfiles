@@ -64,11 +64,11 @@ by a generic launcher. Such loaders need a blocking adapter.
 
 ## Owned launches
 
-Herdr runs and worktree handoffs use one `LaunchAttempt` receipt. Its phases are
-reserved, shell startup, environment preparation, Pi or command startup, and
-transfer. Environment preparation has a ten-minute budget. Pi acknowledgement
-has a separate one-minute budget that starts after preparation. Generic commands
-are authorized after preparation and retain their normal command-wait timeout.
+A managed launch uses one receipt. Its phases are reserved, shell startup,
+environment preparation, Pi or command startup, and transfer. Environment
+preparation has a ten-minute budget. Pi acknowledgement has a separate
+one-minute budget that starts after preparation. Generic commands are
+authorized after preparation and retain their normal command-wait timeout.
 
 The supervisor owns a private process group with an unreaped group anchor.
 Interactive job control is disabled before shell startup so preparation stays in
@@ -91,20 +91,12 @@ reports recovery rather than killing a possibly accepted successor. A supervisio
 I/O failure follows the same arbitration and preserves accepted work until it
 exits. Inspect the reservation and its owner before manual recovery.
 
-New panes preserve the selected `SHELL`, `ZDOTDIR`, and Pi agent and session
-directories. They do not copy the source project's PATH or exported values.
-Managed panes defer preparation to `run`, so creation itself never claims
-the environment is ready. Cancellation retains the pane handle. An existing busy
-pane receives no launch input. Herdr's process inspection and input submission
-are separate API calls; another actor can still change a pane between them.
-Cleanup only targets the supervisor's group even in that case.
-
 Metadata-only receipts and phase timestamps are retained in private launch
 directories. Export values and pane contents are not copied into diagnostics.
 Provider errors remain visible in the destination terminal. Shared Nix or Lorri
 daemons are not stopped. A provider must keep its owned helpers in the launch
 process group; detached helpers are outside the cleanup contract. Run servers
-in the foreground with `notify: true`, not with a trailing `&`.
+in the foreground, not with a trailing `&`.
 
 ## Development
 
@@ -126,10 +118,9 @@ entrypoints. Installed commands use the Nix-built executable directly.
 
 ## Verification
 
-The isolated suite needs Rust, Python 3, zsh, direnv, and Node 22 with type
-transforms. Python is only the test harness. The suite makes no model calls.
-Publication-failure cases obstruct the actual receipt path rather than
-monkeypatching an implementation.
+The isolated suite needs Rust, Python 3, zsh, and direnv. Python is only the
+test harness. The suite makes no model calls. Publication-failure cases obstruct
+the actual receipt path rather than monkeypatching an implementation.
 
 ```sh
 cargo fmt --manifest-path packages/repo-exec/Cargo.toml -- --check
@@ -137,44 +128,4 @@ cargo clippy --locked --release --manifest-path packages/repo-exec/Cargo.toml --
 cargo test --locked --release --manifest-path packages/repo-exec/Cargo.toml
 cargo build --locked --release --manifest-path packages/repo-exec/Cargo.toml
 python3 -m unittest discover -s tests -p 'test_repo_env.py'
-cd config/pi/agent/extensions/pi-herdr
-npm ci --ignore-scripts
-npm test
-npm run typecheck
-npm run check-generated
 ```
-
-From this checkout inside Herdr, exercise the actual package ExtensionRunner,
-real panes, namespace selection, Pi's bash backend, cancellation, and failure.
-
-```sh
-node --experimental-transform-types tests/herdr-repo-env.ts
-```
-
-The slow option exceeds the old one-minute deadline. The Lorri option requires
-installed Lorri and Nix, and a nixpkgs store path. It first reproduces the cold
-failure, then selects the adapter and verifies that its exported tool works.
-
-```sh
-nixpkgs=$(nix eval --impure --raw --expr '(builtins.getFlake (toString ./.)).inputs.nixpkgs.outPath')
-node --experimental-transform-types tests/herdr-repo-env.ts \
-  --pi-cli --slow-seconds=65 --lorri-nixpkgs="$nixpkgs"
-```
-
-The optional `--pi-cli` check loads the production factory in the npm Pi CLI and
-invokes its registered tool callback with a real CLI session. It uses an isolated
-agent directory with no credentials. This checks loading and tool execution,
-not model selection of tools or interactive task continuation.
-
-The proof closes its own tabs and removes its fixture environments. It does not
-load real project secrets or call a model. To run checks through this revision's
-Herdr tool without changing the installed extension, use a dedicated idle pane
-with this checkout's launcher on PATH and its shell integration configured.
-
-```sh
-node --experimental-transform-types tests/herdr-runtime.ts PANE 'COMMAND' 600000
-```
-
-The runtime command exits with the command's recorded status and fails if Herdr
-cannot confirm the return to an idle shell. Interactive task continuation and
-macOS process behavior still require verification on their respective hosts.
