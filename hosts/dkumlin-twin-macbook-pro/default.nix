@@ -125,6 +125,7 @@
       "font-source-sans-3"
       "ghostty"
       "helium-browser"
+      "hex"
       "godot"
       "karabiner-elements"
       "linear"
@@ -159,6 +160,7 @@
         "/Applications/Helium.app"
         "/Applications/Ghostty.app"
         "/Applications/Obsidian.app"
+        "/Users/danielkumlin/Applications/Herdr.app"
       ];
       show-recents = false;
       tilesize = 51;

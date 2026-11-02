@@ -23,7 +23,7 @@ buildNpmPackage (finalAttrs: {
   npmFlags = [ "--legacy-peer-deps" ];
   npmPackFlags = [ "--ignore-scripts" ];
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-ZLstgisS7Z+zTAJVVuAy9Rf6kFCaR6UHMHceCikgA64=";
+  npmDepsHash = "sha256-J4gqNe8tRv9hAujyo+JwCD1f44KdcVFHsPzXcIifZV4=";
 
   dontNpmBuild = true;
 })

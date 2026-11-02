@@ -135,6 +135,7 @@
       "font-source-sans-3"
       "ghostty"
       "helium-browser"
+      "hex"
       "godot"
       "karabiner-elements"
       "mactex"

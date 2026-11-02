@@ -44,7 +44,7 @@ The right decomposition depends on the question. Use your judgment. Narrow quest
 
 Spawn all explorers in a single message:
 
-- spawn via the subagents tool
+- spawn with an available subagent tool
 - `role`: `how-explorer`
 - `tools`: `["read", "grep", "find", "ls"]`
 
@@ -63,7 +63,7 @@ Then proceed to Step 3.
 
 Spawn a single Task subagent that explores and explains in one pass:
 
-- spawn via the subagents tool
+- spawn with an available subagent tool
 - `role`: `how-explainer`
 - `tools`: `["read", "grep", "find", "ls"]`
 
@@ -75,7 +75,7 @@ Proceed to Step 4.
 
 Once all explorers return, spawn a single Task subagent to synthesize their findings into one coherent explanation:
 
-- spawn via the subagents tool
+- spawn with an available subagent tool
 - `role`: `how-explainer`
 - `tools`: `["read", "grep", "find", "ls"]`
 
@@ -112,8 +112,8 @@ Run the full explain flow above (Steps 1-4). You must understand the architectur
 After the explanation is complete, spawn one architectural critic per entry in the active `how-critics` panel, all in a single message.
 
 For each critic:
-- spawn via the subagents tool
-- `role`: `how-critics`, with an explicit `member` or zero-based `seat` from `/subagents`. The policy owns effort.
+- spawn with an available subagent tool
+- `role`: `how-critics`, with an explicit `member` or zero-based `seat` from the active model policy. The policy owns effort.
 - `tools`: `["read", "grep", "find", "ls"]`
 
 Report actual models and any fallback that reduced diversity.

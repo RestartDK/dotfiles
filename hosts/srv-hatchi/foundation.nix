@@ -59,6 +59,8 @@ in
   services.openssh.openFirewall = false;
   services.tailscale = {
     enable = true;
+    package =
+      inputs.llm-agents.inputs.nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system}.tailscale;
     openFirewall = false;
     extraSetFlags = [
       "--netfilter-mode=off"

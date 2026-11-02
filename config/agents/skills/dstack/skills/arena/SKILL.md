@@ -25,12 +25,12 @@ The N candidates will receive the same prompt, so the prompt is the contract. Ge
 
 1. State the artifact each candidate is producing.
 2. Derive the rubric. State what success looks like for *this* task, then turn it into 3-6 concrete gradeable criteria. Concrete: `Adds a --dry-run flag that skips writes`. Vague: `code is correct`. The rubric is the picker's tool in Phase D; candidates only see the task.
-3. Pick the runners with `role: "arena-runners"`, or the caller's panel role for architect work. Read the active panel in `/subagents` and select an explicit `member` or zero-based `seat` for each runner. Spawn more when the arena covers multiple design directions. Repeat a member when the work is generation-bound rather than judgment-sensitive.
+3. Pick the runners with `role: "arena-runners"`, or the caller's panel role for architect work. Read the active panel in the model policy and select an explicit `member` or zero-based `seat` for each runner. Spawn more when the arena covers multiple design directions. Repeat a member when the work is generation-bound rather than judgment-sensitive.
 4. Assign output paths. Each candidate writes to its own location (a git worktree where possible, otherwise `/tmp/arena-<slug>/candidate-<n>/`). N candidates writing to the same path is shared mutable state and fails the the **separate-before-serializing-shared-state** principle skill test.
 
 ## Phase B: Fan out
 
-Spawn all N subagents in one subagents call, each with the task, the path to the shared grounding, its own output path, and instructions to produce both the artifact and a short rationale.
+Spawn all N subagents in one delegation call when the tool batches tasks, each with the task, the path to the shared grounding, its own output path, and instructions to produce both the artifact and a short rationale.
 
 The rationale is mandatory. Without it, the parent cannot tell whether a candidate's structure is principled or accidental, which makes Phase E grafting unreliable. Each rationale names the alternatives the candidate considered and what it rejected.
 

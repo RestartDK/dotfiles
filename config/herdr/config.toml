@@ -69,58 +69,10 @@ reload_config = "prefix+shift+r"
 goto = "prefix+g"
 
 [[keys.command]]
-key = "prefix+shift+s"
-type = "plugin_action"
-command = "daniel.scatterer.apply-layout"
-description = "scatterer layout"
-
-[[keys.command]]
-key = "prefix+shift+g"
-type = "plugin_action"
-command = "daniel.scatterer.lazygit"
-description = "lazygit"
-
-[[keys.command]]
-key = "prefix+u"
-type = "plugin_action"
-command = "daniel.scatterer.review-toggle"
-description = "toggle Review pane"
-
-[[keys.command]]
-key = "prefix+shift+o"
-type = "shell"
-command = 'HERDR_ENV=1 HERDR_PANE_ID="$HERDR_ACTIVE_PANE_ID" HERDR_TAB_ID="$HERDR_ACTIVE_TAB_ID" HERDR_WORKSPACE_ID="$HERDR_ACTIVE_WORKSPACE_ID" dstack herdr'
-description = "open Jobs"
-
-[[keys.command]]
 key = "prefix+shift+f"
 type = "pane"
 command = "yazi"
 description = "yazi file manager"
-
-[[keys.command]]
-key = "ctrl+h"
-type = "plugin_action"
-command = "daniel.scatterer.nav-left"
-description = "navigate left (vim/herdr)"
-
-[[keys.command]]
-key = "ctrl+j"
-type = "plugin_action"
-command = "daniel.scatterer.nav-down"
-description = "navigate down (vim/herdr)"
-
-[[keys.command]]
-key = "ctrl+k"
-type = "plugin_action"
-command = "daniel.scatterer.nav-up"
-description = "navigate up (vim/herdr)"
-
-[[keys.command]]
-key = "ctrl+l"
-type = "plugin_action"
-command = "daniel.scatterer.nav-right"
-description = "navigate right (vim/herdr)"
 
 [experimental]
 kitty_graphics = true

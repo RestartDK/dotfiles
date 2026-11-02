@@ -44,6 +44,7 @@ with pkgs;
   rust-analyzer
   rustfmt
   clippy
+  tlaplus
   pkg-config
   openssl
   python3
@@ -81,6 +82,7 @@ with pkgs;
   stylua
 
   inputs.self.packages.${stdenv.hostPlatform.system}.fleet
+  inputs.self.packages.${stdenv.hostPlatform.system}.agent-desktop
 ]
 ++ lib.optionals stdenv.hostPlatform.isLinux [
   gcc

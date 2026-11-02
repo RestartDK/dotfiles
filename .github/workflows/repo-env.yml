@@ -8,7 +8,6 @@ on:
       - "bin/repo-*"
       - "packages/repo-exec/**"
       - "config/shell/**"
-      - "config/pi/agent/extensions/pi-herdr/**"
       - "tests/**"
       - ".github/workflows/repo-env.yml"
   push:
@@ -19,7 +18,6 @@ on:
       - "bin/repo-*"
       - "packages/repo-exec/**"
       - "config/shell/**"
-      - "config/pi/agent/extensions/pi-herdr/**"
       - "tests/**"
       - ".github/workflows/repo-env.yml"
 
@@ -54,14 +52,3 @@ jobs:
           cargo test --locked --release --manifest-path packages/repo-exec/Cargo.toml
           cargo build --locked --release --manifest-path packages/repo-exec/Cargo.toml
       - run: python3 -m unittest discover -s tests -p 'test_repo_env.py'
-      - run: npm ci --ignore-scripts
-        working-directory: config/pi/agent/extensions/pi-herdr
-      - run: npm test && npm run typecheck
-        working-directory: config/pi/agent/extensions/pi-herdr
-      - uses: DeterminateSystems/determinate-nix-action@v3.21.9
-        with:
-          extra-conf: |
-            extra-substituters = https://cache.numtide.com
-            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
-      - name: Check generated types against pinned Herdr
-        run: nix shell .#herdr --command npm --prefix config/pi/agent/extensions/pi-herdr run check-generated

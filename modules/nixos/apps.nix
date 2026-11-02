@@ -9,7 +9,6 @@
     neovim
     zsh
     starship
-    tailscale
     openssh
     gnupg
 

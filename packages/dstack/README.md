@@ -1,6 +1,6 @@
 # Local PR jobs pilot
 
-This Linux pilot keeps PR review and CI checks active after an interactive Pi session ends. A local daemon owns durable jobs. The CLI, Pi extension, and Herdr Jobs pane display the same state without model calls. The Home Manager service is optional and disabled by default.
+This Linux pilot keeps PR review and CI checks active after an interactive Pi session ends. A local daemon owns durable jobs. The CLI and Pi extension read the same state without model calls. The Home Manager service is optional and disabled by default.
 
 ## Commands
 
@@ -11,8 +11,6 @@ dstack register --repo OWNER/REPO --pr 123 --source /absolute/checkout --mode dr
 dstack list
 dstack status JOB_ID
 dstack attach JOB_ID
-dstack herdr
-dstack herdr --notify
 dstack stop JOB_ID
 ```
 
@@ -51,7 +49,7 @@ A pending result survives daemon restarts and has no delivery expiry. A closed o
 
 The receiver claims delivery durably, checks that the target is still idle, then sends one `dstack-wake` custom message with `triggerTurn: true`. It never uses the volatile busy queue. Each poll reconciles claimed deliveries before it considers pending wakes. An acknowledgement requires the matching receipt in both the native entries and the backing session file. Memory-only entries and failed file writes are not receipts. Sessions started with `--no-session` cannot create or claim durable wakes.
 
-Reconciliation examines all branches, so moving the active branch cannot replay a delivered scheduled event. Existing coordinator and Herdr completion receipts are unchanged.
+Reconciliation examines all branches, so moving the active branch cannot replay a delivered scheduled event.
 
 One durable claim per session excludes competing receivers. A lost acknowledgement is retried from the persisted receipt. A lost claim response, failed native send, session switch after claiming, or busy race after claiming remains `delivering` with replay blocked. Other wakes for that session cannot begin until the receipt is reconciled. There is no timeout-based claim takeover or forced reset API. Inspect the retained native session before deliberately scheduling replacement work in a new session.
 
@@ -65,7 +63,7 @@ Cancellation commits against canonical state and prevents injection until delive
 - 4000 UTF-8 bytes per message and 1000 checks per observation.
 - Only absolute timers and pinned PR checks. No arbitrary commands, process-exit triggers, shell polling, GitHub writes, or additional service.
 
-`dstack watch`, `dstack herdr`, and passive Pi context show bounded watch summaries alongside existing jobs. Offline views retain cached state and identify it as stale. Pi context filters watches to its current session and includes receiver diagnostics without adding a persistent widget. List, status, and viewers do not deliver messages.
+`dstack watch` and passive Pi context show bounded watch summaries alongside existing jobs. Offline views retain cached state and identify it as stale. Pi context filters watches to its current session and includes receiver diagnostics without adding a persistent widget. List, status, and viewers do not deliver messages.
 
 ## Runtime and packaging
 
@@ -96,7 +94,6 @@ The Nix source must include these cross-root sources during bundling:
 - `config/pi/agent/lib/dstack-jobs.ts` and `dstack-watches.ts`
 - `config/pi/agent/lib/model-policy.ts`
 - `config/pi/agent/extensions/pi-jobs/` for type checks and extension tests.
-- `config/pi/agent/extensions/pi-herdr/client.ts` and its generated protocol for Herdr navigation.
 
 All files in `dist`, including `worker-guard.js`, belong together. The native Pi executable must remain available through the immutable wrapper or `DSTACK_PI`.
 
@@ -134,16 +131,6 @@ Native workers have file tools only. Read-only triage cannot edit. Repair file t
 
 Background subscriptions refresh snapshots without requesting model turns. `before_agent_start` supplies relevant cached state for the current checkout and session and marks stale data explicitly. No persistent widget is installed. Session shutdown disconnects the subscription and stops that session's receiver; it does not cancel jobs or watches.
 
-## Herdr integration
-
-`prefix+shift+o` opens or focuses the Jobs pane. The native `prefix+o` notification shortcut stays unchanged. Concurrent opens share a private launch lock. Herdr starts the viewer through an argv layout command, not input sent to an unready shell.
-
-The viewer verifies its ownership before reuse. Sequenced metadata expires after 15 seconds without refresh. The display preserves its header and summarizes jobs that exceed the terminal viewport. Empty, blocked, terminal, and offline states remain distinct. Closing the pane only disconnects the viewer.
-
-`dstack herdr --notify` enables blocker and terminal notifications when it creates a new viewer. It does not change an existing viewer's notification setting. Initial attachment and stale cached snapshots do not notify.
-
-Home Manager installs the package for Linux Pi users. `services.dstackJobs.enable = true` adds the user service. This PR does not enable the option on any host.
-
 ## Limits
 
 This is not a security sandbox. Workers run as the current user and retain that user's environment and credentials. Tool guards reduce accidental scope violations; they do not isolate arbitrary native code, Git configuration, or hostile local processes. There is no GitHub App trigger or untrusted remote execution entry point.
@@ -158,7 +145,7 @@ The SQLite adapter uses WAL with `synchronous=NORMAL`. Process restart is covere
 
 ## Verification
 
-Use Node 24 and the runtime prerequisites above. Run commands in a dedicated Herdr work tab.
+Use Node 24 and the runtime prerequisites above. Run commands in a dedicated work checkout.
 
 ```sh
 cd packages/dstack
@@ -187,7 +174,5 @@ The proof registers a timer through the native tool, becomes idle, restarts its 
 `tests/namespace-proof.mjs` checks daemon exclusivity across real competing network namespaces. The terminal crash regression kills the daemon after the terminal document commit but before task completion. It waits for the recovered durable task to finish before checking that PR reopening caused no worker execution.
 
 `tests/native-eval.ts` runs a separate model evaluation through the configured `bug-fix` route. The tested work profile selected `pi/openai-codex/gpt-6.1-sol:xhigh`. Native triage and repair completed in isolated repositories. Fixture tests do not establish production-model behavior.
-
-Isolated real Herdr and Pi sessions verified Jobs pane reuse, the hotkey, stale metadata rejection, TTL expiry, narrow and wide output, offline state, and viewer disconnect. These UI checks used a private typed snapshot fixture.
 
 Independent Sol reviews covered authority, effect recovery, process ownership, and Jobs startup. Mimo and GLM review credentials were unavailable; no routes were substituted. Full `traitor check --no-build` was blocked by an existing private flake input returning 404. Targeted package and quality checks are separate from host activation; no live configuration was applied.

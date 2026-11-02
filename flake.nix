@@ -34,11 +34,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    scatterer = {
-      url = "github:RestartDK/scatterer";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # Private repo: the git fetcher uses git credentials instead of the
     # anonymous API.
     mangy = {
@@ -257,6 +252,7 @@
         // {
           inherit fleet traitor;
           repo-exec = pkgs.callPackage ./packages/repo-exec { };
+          agent-desktop = pkgs.callPackage ./packages/agent-desktop { };
           ha-devices = mkHaDevicesPackage pkgs;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
@@ -387,16 +383,6 @@
                 WATCH_PR_BIN=${./config/agents/skills/dstack/dstack-mode/scripts/watch-pr} bash ${./tests/watch-pr.sh}
                 touch $out
               '';
-          completion-delivery =
-            (pkgsFor system).runCommand "completion-delivery-tests"
-              {
-                nativeBuildInputs = [ (pkgsFor system).bun ];
-              }
-              ''
-                export HOME=$TMPDIR
-                bun test ${./config/pi/agent/lib}
-                touch $out
-              '';
           pi-todos =
             (pkgsFor system).runCommand "pi-todos-tests"
               {
@@ -415,22 +401,6 @@
               ''
                 export HOME=$TMPDIR
                 bun test ${./config/pi/agent/extensions/pi-vim} ${./config/pi/agent/extensions/pi-ultrafast}
-                touch $out
-              '';
-          pi-coordination =
-            (pkgsFor system).runCommand "pi-coordination-tests"
-              {
-                nativeBuildInputs = [
-                  (pkgsFor system).bun
-                ]
-                ++ nixpkgs.lib.optionals (pkgsFor system).stdenv.hostPlatform.isLinux [
-                  self.packages.${system}.dstack
-                  self.checks.${system}.watch-pr
-                ];
-              }
-              ''
-                export HOME=$TMPDIR
-                bun test ${./config/pi/agent/extensions/pi-coordination}
                 touch $out
               '';
           traitor-flake-tools =
