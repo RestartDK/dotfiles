@@ -45,19 +45,20 @@ const state = Type.Union([
     reason: Type.String(),
   }),
 ]);
-export const wakeParameters = Type.Union([
-  Type.Object({
-    op: Type.Literal("create"),
-    trigger: Type.Union([timer, Type.Object(checks)]),
-    deadline: Type.Integer({ minimum: 0 }),
-    message: Type.String({ minLength: 1, maxLength: 4000 }),
-  }),
-  Type.Object({ op: Type.Literal("list") }),
-  Type.Object({
-    op: Type.Union([Type.Literal("status"), Type.Literal("cancel")]),
-    id: Type.String(),
-  }),
-]);
+// Providers reject a tool schema that is not a top-level object, so per-op
+// required fields live in parseWatchRequest instead of the wire schema.
+export const wakeParameters = Type.Object({
+  op: Type.Union([
+    Type.Literal("create"),
+    Type.Literal("list"),
+    Type.Literal("status"),
+    Type.Literal("cancel"),
+  ]),
+  trigger: Type.Optional(Type.Union([timer, Type.Object(checks)])),
+  deadline: Type.Optional(Type.Integer({ minimum: 0 })),
+  message: Type.Optional(Type.String({ minLength: 1, maxLength: 4000 })),
+  id: Type.Optional(Type.String()),
+});
 export const wakeOutput = Type.Object({
   version: Type.Literal(1),
   now: Type.Integer(),

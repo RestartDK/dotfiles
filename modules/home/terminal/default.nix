@@ -10,6 +10,13 @@ let
   cfg = config.my.liveConfig;
   herdrPackage = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system}.herdr;
   tuicrPackage = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.tuicr;
+  # The Herdr app saves its config atomically, so a symlink at these paths is
+  # replaced on the first in-app save. Seed the tracked setup once instead.
+  herdrAppSeedFiles = [
+    "keys.json"
+    "settings.json"
+    "layouts/main-vim.json"
+  ];
 in
 {
   config = lib.mkIf cfg.enable (
@@ -72,25 +79,20 @@ in
       })
 
       (lib.mkIf cfg.groups.multiplexer {
-        home.packages = [ herdrPackage ];
-        xdg.configFile = {
-          "herdr/config.toml" = {
-            source = ../../../config/herdr/config.toml;
-            force = true;
-          };
-          "herdr/hostname-status.py" = {
-            source = ../../../config/herdr/hostname-status.py;
-            force = true;
-          };
-          "herdr/sounds/haki.mp3" = {
-            source = ../../../config/herdr/sounds/haki.mp3;
-            force = true;
-          };
-          "herdr/sounds/za-warudo.mp3" = {
-            source = ../../../config/herdr/sounds/za-warudo.mp3;
-            force = true;
-          };
-        };
+        # Herdr's TUI client is Linux-only here. On macOS the Herdr app owns
+        # the terminals and brings its own herdr-core.
+        home.packages = lib.optional (!pkgs.stdenv.hostPlatform.isDarwin) herdrPackage;
+
+        home.activation.herdrAppSeed = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin (
+          lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+            app_home="$HOME/.config/herdr-app"
+            ${lib.concatMapStrings (path: ''
+              if [ ! -e "$app_home/${path}" ]; then
+                run ${pkgs.coreutils}/bin/install -Dm 0644 "${../../../config/herdr-app}/${path}" "$app_home/${path}"
+              fi
+            '') herdrAppSeedFiles}
+          ''
+        );
       })
     ]
   );
