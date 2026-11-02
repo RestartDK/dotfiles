@@ -81,6 +81,7 @@ with pkgs;
   stylua
 
   inputs.self.packages.${stdenv.hostPlatform.system}.fleet
+  inputs.self.packages.${stdenv.hostPlatform.system}.agent-desktop
 ]
 ++ lib.optionals stdenv.hostPlatform.isLinux [
   gcc
