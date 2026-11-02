@@ -10,6 +10,8 @@ Use exploration for unresolved choices with materially different contracts or ow
 
 Design before implementing. Sketch types, function signatures, class shapes, and module boundaries with `not implemented` bodies and pseudocode. Synthesize across multiple model perspectives, then fill in code against the chosen sketch. If implementation proves the sketch wrong, throw it out and redesign.
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for arena candidates and independent judges. A delegated architect may coordinate further agents only when the parent explicitly assigns that responsibility and budget.
+
 ## Start
 
 Open a todolist with one entry per phase before starting. Autonomous mode without checkpoints needs the list to show phase position and keep phases from silently disappearing.

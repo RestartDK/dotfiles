@@ -47,3 +47,4 @@ for dir in "$skills"/*/; do
 done
 
 printf 'skills: %s vendored, %s authored, layout ok\n' "${#vendored[@]}" "$authored"
+python3 "${NATIVE_AGENTS_TEST:-$root/tests/native-agents.py}" "$skills/dstack" "$agents"

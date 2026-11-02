@@ -33,11 +33,11 @@ Catch the agent doing X → say Y. One phrase redirects better than a paragraph 
 
 Audit rule: every cited principle must name the decision it changed. A bare citation means it name-dropped; call it.
 
-## Subagent roles
+## Native agent roles
 
 The selected policy file names the active work or personal billing profile. Edit its source under `config/agents/model-profiles/`, not shared skills. Nix links it at `~/.config/dstack/models.json`.
 
-Workers select `role`, such as `feature`, `precise-code` or `review`. Panels also select `member` or a zero-based `seat`. Results identify the actual backend/model after fallback. A policy error stops dispatch instead of choosing a default.
+Workers use the [native hc contract](dstack-mode/references/native-agents.md). Select `role`, such as `feature`, `precise-code` or `review`, then resolve it to the interactive agent's CLI flags. Panels also select `member` or a zero-based `seat`. Results identify the actual backend/model after fallback. A policy error stops dispatch instead of choosing a default.
 
 ## Recipes and pitfalls
 

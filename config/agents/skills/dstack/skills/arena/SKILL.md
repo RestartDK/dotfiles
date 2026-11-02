@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Fan out N parallel attempts at the same task. Read every candidate end to end. Pick the strongest as the base. Graft the best ideas from the others into it. Verify the synthesized result.
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for candidates and the cross-judge. The policy roles below select their native commands.
+
 ## Start
 
 Open a todolist with one entry per phase before launching anything. The arena runs autonomously and the list keeps phases from silently disappearing.
@@ -30,7 +32,7 @@ The N candidates will receive the same prompt, so the prompt is the contract. Ge
 
 ## Phase B: Fan out
 
-Spawn all N subagents in one delegation call when the tool batches tasks, each with the task, the path to the shared grounding, its own output path, and instructions to produce both the artifact and a short rationale.
+Launch N fresh native hc candidates concurrently in separate terminals, each with the task, the path to the shared grounding, its own output path, and instructions to produce both the artifact and a short rationale.
 
 The rationale is mandatory. Without it, the parent cannot tell whether a candidate's structure is principled or accidental, which makes Phase E grafting unreliable. Each rationale names the alternatives the candidate considered and what it rejected.
 
