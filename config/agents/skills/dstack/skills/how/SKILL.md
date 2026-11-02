@@ -12,6 +12,8 @@ Two modes:
 1. **Explain** (default). Explore the codebase and produce a clear explanation
 2. **Critique.** Explain first, then spawn multiple models to independently identify architectural issues
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for every explorer, explainer, and critic below. Preserve the specified roles and tool scopes.
+
 ## Explain Mode
 
 ### Step 1. Understand the Question and Assess Complexity
@@ -42,9 +44,8 @@ Decompose the question into 2-4 parallel exploration angles, each a distinct sli
 
 The right decomposition depends on the question. Use your judgment. Narrow questions: 2 explorers is fine. Broad subsystems: up to 4.
 
-Spawn all explorers in a single message:
+Launch the explorers concurrently as separate native hc terminals:
 
-- spawn with an available subagent tool
 - `role`: `how-explorer`
 - `tools`: `["read", "grep", "find", "ls"]`
 
@@ -61,9 +62,8 @@ Then proceed to Step 3.
 
 ### Step 2b. Direct Explain (simple questions)
 
-Spawn a single Task subagent that explores and explains in one pass:
+Launch one native hc explainer that explores and explains in one pass:
 
-- spawn with an available subagent tool
 - `role`: `how-explainer`
 - `tools`: `["read", "grep", "find", "ls"]`
 
@@ -73,9 +73,8 @@ Proceed to Step 4.
 
 ### Step 3. Synthesize (complex questions only)
 
-Once all explorers return, spawn a single Task subagent to synthesize their findings into one coherent explanation:
+Once all explorers return, launch one native hc explainer to synthesize their findings into one coherent explanation:
 
-- spawn with an available subagent tool
 - `role`: `how-explainer`
 - `tools`: `["read", "grep", "find", "ls"]`
 
@@ -109,10 +108,9 @@ Run the full explain flow above (Steps 1-4). You must understand the architectur
 
 ### Step 2. Spawn Critics
 
-After the explanation is complete, spawn one architectural critic per entry in the active `how-critics` panel, all in a single message.
+After the explanation is complete, launch one native hc critic per entry in the active `how-critics` panel. Run them concurrently in separate terminals.
 
 For each critic:
-- spawn with an available subagent tool
 - `role`: `how-critics`, with an explicit `member` or zero-based `seat` from the active model policy. The policy owns effort.
 - `tools`: `["read", "grep", "find", "ls"]`
 

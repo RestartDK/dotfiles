@@ -10,6 +10,8 @@ When the task matches no playbook, design one. The deliverable before any code i
 
 Don't reinvent a playbook you already have. A focused single-unit task that matches Bug fix, Perf, Feature, Visual parity, Eval, or Multi-phase plan routes there. But a large or cross-cutting version of one (a migration across many call sites, an ambitious multi-part change), or work the user reviews after stepping away, belongs here even though a single-unit version would be a Feature. The rigor and the audit trail are the point.
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for scoped workers and independent judges. Preserve each routed workflow's role and panel selections.
+
 ## Start
 
 Open a todolist whose first item is to read the Principles section of the **dstack-mode** skill. Then add the phases below as todos.

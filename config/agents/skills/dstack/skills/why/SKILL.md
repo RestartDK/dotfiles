@@ -9,6 +9,8 @@ Investigate the motivation and intent behind code. Why was it built this way? Wh
 
 Companion to the `how` skill. `how` answers what the code does and how it works. `why` answers what forces led to its shape.
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for investigators and the synthesizer. Preserve the specified roles and required evidence-tool access.
+
 ## How this skill works
 
 Historical context spreads across seven evidence categories: source control history, issue or ticket tracking, long-form documents, real-time team chat, infrastructure observability, error or exception tracking, and product analytics warehouses. You cannot predict from the question alone which one holds the answer, so the skill enumerates available MCPs at run time, maps each to a category, queries all seven in parallel, then synthesizes with explicit confidence calibration. Null results from searched categories are first-class evidence about how the decision was made; report them alongside positive findings. The default is coverage, not minimalism.
@@ -113,10 +115,9 @@ Source control is always available through git and `gh`. For the other six, clas
 
 Aim for a complete **coverage map**, not a minimal one. A null result from an issue tracker is evidence the decision was not ticketed, a useful fact in itself. Document the null, don't skip the search.
 
-Launch all matching investigators in a single message so they run concurrently. One investigator per category lets each specialize in one tool's query vocabulary and result shape. Don't ask one agent to cover multiple MCPs.
+Launch matching investigators concurrently in separate native hc terminals. One investigator per category lets each specialize in one tool's query vocabulary and result shape. Don't ask one agent to cover multiple MCPs.
 
-Subagent config (each):
-- spawn with an available subagent tool
+Native agent selection for each investigator:
 - `role`: `why-investigators`
 - `tools`: explicitly list the required tools. Investigators must not write files. Claude routes do not expose Pi MCP tools. The parent must collect MCP evidence for those workers, or report that category blocked; never silently omit a requested capability.
 
@@ -160,9 +161,7 @@ If your scope assessment suggests a single-commit trivial target where the PR de
 
 ## Step 4. Synthesize
 
-Spawn one synthesizer subagent:
-
-- spawn with an available subagent tool
+Launch one native hc synthesizer:
 - `role`: `why-synthesizer`
 - `tools`: explicitly list the required tools. The parent supplies MCP evidence for citation checks when the selected backend cannot expose those tools. Report gaps rather than changing the billing route.
 

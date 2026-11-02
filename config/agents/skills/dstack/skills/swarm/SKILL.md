@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Fan out N parallel workers. They may cover separate slices, race the same brief, or mix both. The parent waits, aggregates, and returns one report.
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for every worker, preserving the role, panel selection, and isolated output assigned below.
+
 ## Start
 
 Open a todolist with one entry per phase before launching anything.
@@ -27,7 +29,7 @@ Open a todolist with one entry per phase before launching anything.
 
 ## Phase B: Fan out
 
-Spawn all N workers in one delegation call when the tool batches tasks, with their configured roles and panel selections.
+Launch N fresh native hc workers concurrently in separate terminals, with their configured roles and panel selections.
 
 When a worker must start from a non-default pushed branch, give it its own worktree checked out at that branch.
 

@@ -1,6 +1,6 @@
 ---
 name: dstack-mode
-description: Daniel's agent style for concise, verified, well-typed work with deliberate subagents. The router for all dstack playbooks, principles, and skills. Use for /dstack, dstack, or any non-trivial engineering task in this style.
+description: Daniel's agent style for concise, verified, well-typed work with deliberate native hc agents. The router for all dstack playbooks, principles, and skills. Use for /dstack, dstack, or any non-trivial engineering task in this style.
 ---
 
 # dstack mode
@@ -129,11 +129,11 @@ Verify delivery too: the intended PR topology, each PR checkout/workspace, and a
 
 **No is an acceptable answer.** Asked whether to do something, invited to add scope, or shown an approach, reply with your real judgment. Decline, push back, or say "this doesn't earn its place" when true. Agreement is not the default, candor over sycophancy.
 
-## Subagents
+## Native agents
 
 **Scale delegation to the work and obey the tool contract.** A small concrete change can have one owner. Use read-only scouts for independent unknowns and an independent reviewer for high-risk work; a review is not a second implementation. Do not turn every function boundary into a panel. Never bypass a stricter tool permission or claim that a skipped review ran.
 
-**Delegate only with a tool this session actually has.** When a subagent tool is available, hand it the `dstack-agent` definition (`~/.agents/agents/dstack-agent.md`) so every delegate inherits this mode, and `comment-sicko` for its review. Without one, do the work directly or report the review as unavailable; never claim a delegation or a review that did not run, and do not invent a native replacement for a missing tool. Every managed spawn selects a `role`, never a raw `model` or `thinking` override. Panels also select an explicit `member` or zero-based `seat`. The global `${XDG_CONFIG_HOME:-~/.config}/dstack/models.json` policy owns roles, providers, effort and fallback. Missing or invalid policy blocks dispatch. Never substitute a provider or inherit the parent model.
+**Delegate through native `hc` agents.** Read and follow the [native agent contract](references/native-agents.md) for every worker, reviewer, explorer, judge, and synthesizer. Launch fresh interactive sessions with `hc run --bg`, never the Pi subagents extension or print mode. Append `~/.agents/agents/dstack-agent.md` to inherit this mode, and also `comment-sicko.md` for its review. Resolve each workflow's role and explicit panel member or zero-based seat through the host model policy before constructing CLI flags. The policy owns providers, models, effort, and fallback. Missing hc, invalid policy, or an unavailable route blocks delegation. Do bounded work directly when permitted, but never call self-review independent review. No nested agents unless the parent explicitly assigns them.
 
 **Model roles** resolve through the host policy, not these shared skills.
 

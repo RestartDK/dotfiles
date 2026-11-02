@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Mine the current conversation for durable learnings, then route them into skill edits.
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for the three reviewers and synthesizer. Preserve their roles and scoped evidence access.
+
 ## When to invoke
 
 - The user said "reflect" or "/reflect".
@@ -34,7 +36,7 @@ For each candidate, read the first JSONL line and check that `message.content[0]
 
 ### 2. Spawn three reviewers in parallel
 
-One delegation call with three tasks, explicit `role:` on each. Reviewers may need MCP evidence for context lookups. Explicitly select their `tools`; the prompt forbids file writes. Claude routes cannot expose Pi MCP tools. The parent supplies that evidence or reports the gap, without changing the billing route.
+Launch three fresh native hc reviewers concurrently in separate terminals, using the explicit roles below. Reviewers may need MCP evidence for context lookups. Explicitly select their tools; the prompt forbids file writes. Claude routes cannot expose Pi MCP tools. The parent supplies that evidence or reports the gap, without changing the billing route.
 
 | Lens | `role` | Prompt template |
 |---|---|---|
@@ -42,11 +44,11 @@ One delegation call with three tasks, explicit `role:` on each. Reviewers may ne
 | Tooling | `reflect-tooling` | `references/tooling-reviewer.md` |
 | Divergent | `reflect-divergent` | `references/divergent-reviewer.md` |
 
-Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in their subagent response body.
+Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return bounded findings through their terminal response or `hc send`. The parent saves them before cleanup.
 
 ### 3. Synthesize
 
-One delegation call, using `role: "reflect-synthesizer"`. The parent supplies MCP evidence needed for citation checks when the selected backend cannot expose those tools. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
+Launch one fresh native hc synthesizer using `role: "reflect-synthesizer"`. The parent supplies MCP evidence needed for citation checks when the selected backend cannot expose those tools. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
 
 ### 4. Structural enforcement check
 

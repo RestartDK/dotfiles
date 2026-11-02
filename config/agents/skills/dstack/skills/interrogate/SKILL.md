@@ -10,6 +10,8 @@ Spawn one reviewer per configured model to adversarially review code changes. Ea
 
 The deliverable is a synthesized verdict. Do NOT auto-apply changes.
 
+Use the [native hc contract](../../dstack-mode/references/native-agents.md) for reviewer launch, model resolution, report collection, and cleanup.
+
 ## Step 1, Determine Scope
 
 Identify what to review from context:
@@ -33,10 +35,9 @@ Write one clear paragraph. Reviewers challenge whether the work achieves the int
 
 ## Step 3, Spawn Reviewers
 
-Launch all reviewers in one delegation call when the tool batches tasks, one per entry in the active `interrogate-reviewers` panel in the model policy. Label reviewers A, B, C and onward to match the configured count.
+Launch reviewers concurrently in separate native hc terminals, one per entry in the active `interrogate-reviewers` panel in the model policy. Label reviewers A, B, C and onward to match the configured count.
 
 For each reviewer:
-- spawn with an available subagent tool
 - `role`: `interrogate-reviewers`, with an explicit `member` or zero-based `seat`
 - `tools`: `["read", "grep", "find", "ls"]`
 

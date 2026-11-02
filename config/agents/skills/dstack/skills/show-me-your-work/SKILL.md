@@ -64,7 +64,7 @@ Fix the log, not the story. If the work diverged from what a row claims, the row
 
 ## Cross-model review of the trail
 
-Before handing back, you must spawn a subagent on a different model family from the one that did the work. Self-review is not a substitute; the point is fresh eyes you cannot bring yourself. The subagent reads the audit trail and the run's transcript, then flags what the user should pay attention to. Not a redo of the work, a scan for what's suboptimal or risky.
+Before handing back, launch an independent reviewer through the [native hc contract](../../dstack-mode/references/native-agents.md). Resolve the `review` role, or an explicit `interrogate-reviewers` panel member when a different family is needed. Require a different model family from the one that did the work. Do not override the policy to obtain diversity. If no permitted different-family route is available, report cross-model review as blocked rather than treating a same-family review as equivalent. Self-review is not independent review. The reviewer reads the audit trail and the in-scope run transcript, then flags what the user should inspect. This is a risk scan, not a redo of the work.
 
 - Decisions logged with weak or absent evidence.
 - Verification steps skipped or claimed without proof in the transcript.
