@@ -159,7 +159,6 @@
         "/Applications/Linear.app"
         "/Applications/Helium.app"
         "/Applications/Ghostty.app"
-        "/Applications/Obsidian.app"
         "/Users/danielkumlin/Applications/Herdr.app"
       ];
       show-recents = false;
