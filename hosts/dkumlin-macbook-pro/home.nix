@@ -1,4 +1,4 @@
-{ ... }:
+{ config, ... }:
 
 {
   imports = [
@@ -14,6 +14,21 @@
   home.stateVersion = "26.05";
 
   my.ai.profile = "personal";
+
+  # The Herdr app rewrites keys.json, settings.json and layouts while it runs,
+  # so these stay live links into the checkout instead of store copies.
+  xdg.configFile = {
+    "herdr-app/keys.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.config/dotfiles/config/herdr-app/keys.json";
+    "herdr-app/settings.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.config/dotfiles/config/herdr-app/settings.json";
+    "herdr-app/layouts/main-vim.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.config/dotfiles/config/herdr-app/layouts/main-vim.json";
+    "herdr-app/sounds/haki.mp3".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.config/dotfiles/config/herdr-app/sounds/haki.mp3";
+    "herdr-app/sounds/za-warudo.mp3".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.config/dotfiles/config/herdr-app/sounds/za-warudo.mp3";
+  };
 
   my.liveConfig = {
     enable = true;

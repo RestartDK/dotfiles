@@ -72,25 +72,9 @@ in
       })
 
       (lib.mkIf cfg.groups.multiplexer {
-        home.packages = [ herdrPackage ];
-        xdg.configFile = {
-          "herdr/config.toml" = {
-            source = ../../../config/herdr/config.toml;
-            force = true;
-          };
-          "herdr/hostname-status.py" = {
-            source = ../../../config/herdr/hostname-status.py;
-            force = true;
-          };
-          "herdr/sounds/haki.mp3" = {
-            source = ../../../config/herdr/sounds/haki.mp3;
-            force = true;
-          };
-          "herdr/sounds/za-warudo.mp3" = {
-            source = ../../../config/herdr/sounds/za-warudo.mp3;
-            force = true;
-          };
-        };
+        # Herdr's TUI client is Linux-only here. On macOS the Herdr app owns
+        # the terminals and brings its own herdr-core.
+        home.packages = lib.optional (!pkgs.stdenv.hostPlatform.isDarwin) herdrPackage;
       })
     ]
   );
