@@ -44,6 +44,7 @@ with pkgs;
   rust-analyzer
   rustfmt
   clippy
+  tlaplus
   pkg-config
   openssl
   python3
