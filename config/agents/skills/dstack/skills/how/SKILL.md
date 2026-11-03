@@ -123,7 +123,7 @@ Read `references/critic-prompt.md` for the prompt template. Each critic gets:
 
 ### Step 3. Lead Judgment
 
-Same framework as the interrogate skill. You're a pragmatic lead, not an aggregator.
+You're a pragmatic lead, not an aggregator.
 
 Categorize findings:
 - **Act on.** Architectural problems worth fixing now

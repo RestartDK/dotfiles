@@ -50,7 +50,6 @@ const roles = [
   "arena-runners",
   "arena-cross-judge",
   "architect-runners",
-  "interrogate-reviewers",
 ];
 const human = {
   id: "T1",

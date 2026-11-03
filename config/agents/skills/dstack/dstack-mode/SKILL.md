@@ -25,7 +25,7 @@ Remaining triggers:
 - Any code → name the data shape first, and choose its organizing structure per **principle-model-the-domain**.
 - An unresolved design choice with materially different shapes → the **architect** skill before implementing. A small fix or mechanical extension with a known shape needs a brief local design, not an architecture panel. Record the scope and reason for skipping exploration.
 - Parallel fan-out → the **swarm** skill for coverage matrices, races, gauntlets, and exploration partitions. Use **arena** for design or code bakeoffs with base selection and grafting.
-- Contested design or high implementation risk → the **interrogate** skill before shipping. Risk includes authorization, secrets, money, concurrency, lifecycle/recovery, compatibility, and broad cross-layer changes. Agreement on the design does not remove implementation risk. Use only delegation allowed by the active tool contract; report a blocked independent review instead of inventing one.
+- Contested design or high implementation risk → an independent review before shipping. Risk includes authorization, secrets, money, concurrency, lifecycle/recovery, compatibility, and broad cross-layer changes. Agreement on the design does not remove implementation risk. Use only delegation allowed by the active tool contract; report a blocked independent review instead of inventing one.
 - Nontrivial multi-step → write the throughput checkpoint (Feature step 3).
 - Any prose surface → the **unslop** skill. Your reply is a prose surface; write it per **Writing the reply**.
 - Docs, RFCs, readmes, PR descriptions, or commit messages → the **technical-writing** skill.
