@@ -97,27 +97,23 @@ let
       profile = "personal";
       system = "aarch64-darwin";
       skillsSource = ../config/agents/skills;
-      claude = true;
     }
     {
       home = macHome "dkumlin-twin-macbook-pro";
       profile = "personal";
       system = "aarch64-darwin";
       skillsSource = ../config/agents/skills;
-      claude = true;
     }
     {
       home = cobb;
       profile = "work";
       system = "x86_64-linux";
       skillsSource = ../config/agents/skills;
-      claude = false;
     }
   ];
 in
 assert builtins.all (
   {
-    claude,
     home,
     profile,
     skillsSource,
@@ -138,7 +134,13 @@ assert builtins.all (
   && pkgs.lib.hasPrefix "/nix/store/" home.home.file.".agents/agents".source
   && home.home.file.".agents/agents".source == ../config/agents/agents
   && home.home.file.".agents/agents".recursive == true
-  && (home.home.file ? ".claude/skills") == claude
+  # Claude Code only discovers ~/.claude/skills/<name>/SKILL.md, so every skill,
+  # including the ones nested in the dstack bundle, is its own flat link.
+  && !(home.home.file ? ".claude/skills")
+  && home.home.file.".claude/skills/dstack-mode".source == ../config/agents/skills/dstack/dstack-mode
+  && builtins.all (name: builtins.pathExists (home.home.file.${name}.source + "/SKILL.md")) (
+    builtins.filter (pkgs.lib.hasPrefix ".claude/skills/") (builtins.attrNames home.home.file)
+  )
   && !(home.home.file ? ".pi/agent/skills")
   && !(home.home.file ? ".codex/skills")
   && !(home.xdg.configFile ? "opencode/skills")
