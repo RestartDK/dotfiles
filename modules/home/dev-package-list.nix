@@ -12,8 +12,17 @@
 
 let
   llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  # llm-agents installs OpenCode v2 as `opencode2` so it can coexist with v1.
+  # Publish it under the v1 binary name, which every caller here already uses.
+  opencode = pkgs.linkFarm "opencode-${llmAgents.opencode2.version}" [
+    {
+      name = "bin/opencode";
+      path = "${llmAgents.opencode2}/bin/opencode2";
+    }
+  ];
   availableAgentPackages = {
-    inherit (llmAgents) agent-browser codex opencode;
+    inherit (llmAgents) agent-browser codex;
+    inherit opencode;
     "claude-code" = llmAgents.claude-code;
     "pi-coding-agent" = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.pi;
   };
