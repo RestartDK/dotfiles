@@ -11,7 +11,7 @@ callers = [
     *(
         bundle / "skills" / name / "SKILL.md"
         for name in (
-            "how", "why", "interrogate", "no-comments", "architect", "arena", "swarm",
+            "how", "why", "no-comments", "architect", "arena", "swarm",
             "reflect", "recall", "automate-me", "show-me-your-work",
             "figure-it-out", "run-evals",
         )

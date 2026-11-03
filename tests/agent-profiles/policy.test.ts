@@ -90,7 +90,6 @@ describe("profile routing", () => {
       "arena-runners": work ? ["sol", "deepseek"] : ["deepseek"],
       "arena-cross-judge": work ? ["sol"] : ["glm"],
       "architect-runners": work ? ["sol", "glm"] : ["deepseek"],
-      "interrogate-reviewers": work ? ["sol", "glm"] : ["glm"],
     };
     for (const [role, members] of Object.entries(panels)) {
       expect(selected.roles.get(role)).toEqual({ kind: "panel", members });

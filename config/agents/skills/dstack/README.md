@@ -5,7 +5,7 @@ Daniel's engineering stack: principles, primitives, playbooks, agents, and scrip
 ## Layers
 
 1. **Principles** (`principle-*/`). 25 always-on rules; 21 adapted from pstack, 4 mine (`concise`, `self-explaining-code`, `design-system-first`, `show-me`). Never invoked directly; their names are the steering vocabulary. Cited only with the decision they changed.
-2. **Primitives** (`skills/`). General workflows that grow over time: how, why, recall, architect, arena, swarm, interrogate, unslop, bro, teach, technical-writing, tdd, figure-it-out, reflect, show-me-your-work, automate-me, blast-radius, no-comments, typescript-best-practices.
+2. **Primitives** (`skills/`). General workflows that grow over time: how, why, recall, architect, arena, swarm, unslop, bro, teach, technical-writing, tdd, figure-it-out, reflect, show-me-your-work, automate-me, blast-radius, no-comments, typescript-best-practices.
 3. **Applications** (`skills/`, migrated personal skills + each repo's `.agents/skills/`). Specific jobs that cite primitives.
 4. **Playbooks** (`dstack-mode/playbooks/`, 15). Task-shaped sequences composing the layers. Steps are copied verbatim into todos; skips carry `skip: <reason>`.
 5. **Agents** (source in `config/agents/agents/`, deployed to `~/.agents/agents/`). Native interactive `hc` sessions append `dstack-agent` to inherit the mode and `comment-sicko` for comment review. Follow the [native agent contract](dstack-mode/references/native-agents.md).

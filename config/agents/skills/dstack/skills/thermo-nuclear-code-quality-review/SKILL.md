@@ -6,8 +6,6 @@ disable-model-invocation: true
 
 # Thermo-Nuclear Code Quality Review
 
-dstack wiring: run as one lens under the **interrogate** primitive when the design is contested; standalone for single-diff quality reviews.
-
 Use this skill for an unusually strict review focused on implementation quality, maintainability, abstraction quality, and codebase health.
 
 Review the original request alongside the diff. Limit restructuring to the requested behavior, correctness, or material complexity introduced by this change. Unrelated cleanup is separate work, not an acceptance blocker.

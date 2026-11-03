@@ -64,7 +64,6 @@ const requiredRoles = [
   "arena-runners",
   "arena-cross-judge",
   "architect-runners",
-  "interrogate-reviewers",
 ];
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

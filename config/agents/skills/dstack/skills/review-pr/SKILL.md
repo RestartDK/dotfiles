@@ -5,7 +5,7 @@ description: Review a coworker's GitHub pull request given a PR number or GitHub
 
 # Review Pull Request
 
-dstack wiring: for contested designs, escalate to the **interrogate** primitive; PR mechanics live in `dstack-mode/playbooks/opening-a-pr.md`.
+PR mechanics live in `dstack-mode/playbooks/opening-a-pr.md`.
 
 Review a coworker's pull request end to end: resolve the PR reference, fetch the diff and context, apply the full review standard, and produce coworker-facing review feedback.
 

@@ -128,10 +128,6 @@
     "architect-runners": {
       "kind": "panel",
       "members": ["sol", "glm"]
-    },
-    "interrogate-reviewers": {
-      "kind": "panel",
-      "members": ["sol", "glm"]
     }
   },
   "providers": ["openrouter", "openai", "ollama"]
