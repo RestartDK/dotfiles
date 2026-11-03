@@ -31,6 +31,27 @@ let
   # whole tree an input to the produced derivation, which uncaches every host
   # on every commit.
   configPath = relative: ../../../. + "/${relative}";
+  # Claude Code only discovers ~/.claude/skills/<name>/SKILL.md, one level deep,
+  # so the skills nested in the dstack bundle are linked flat beside the rest.
+  sharedSkills = ../../../config/agents/skills;
+  skillsIn =
+    root:
+    map
+      (name: {
+        inherit name;
+        path = root + "/${name}";
+      })
+      (
+        lib.filter (name: builtins.pathExists (root + "/${name}/SKILL.md")) (
+          builtins.attrNames (builtins.readDir root)
+        )
+      );
+  claudeSkills =
+    skillsIn sharedSkills
+    ++ skillsIn (sharedSkills + "/dstack")
+    ++ skillsIn (sharedSkills + "/dstack/skills");
+  claudeSkillNames = map (skill: skill.name) claudeSkills;
+  claudeSkillsEnabled = (claude && agentSkillsEnabled) || cfg.groups.claudeSkills;
   piSettings = builtins.fromJSON (
     builtins.readFile (pkgs.copyPathToStore (configPath cfg.piSettingsFile))
   );
@@ -136,11 +157,29 @@ in
           source = ../../../config/claude/hooks/usage-statusline.py;
           force = true;
         };
-        home.file.".claude/skills" = lib.mkIf agentSkillsEnabled {
-          source = ../../../config/agents/skills;
-          recursive = true;
-          force = true;
-        };
+      })
+
+      (lib.mkIf claudeSkillsEnabled {
+        assertions = [
+          {
+            assertion = lib.allUnique claudeSkillNames;
+            message = "Shared skills collide once flattened into ~/.claude/skills: ${
+              toString (
+                lib.unique (lib.filter (name: lib.count (n: n == name) claudeSkillNames > 1) claudeSkillNames)
+              )
+            }";
+          }
+        ];
+        home.file = builtins.listToAttrs (
+          map (skill: {
+            name = ".claude/skills/${skill.name}";
+            value = {
+              source = skill.path;
+              recursive = true;
+              force = true;
+            };
+          }) claudeSkills
+        );
       })
 
       (lib.mkIf opencode {

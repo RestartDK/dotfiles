@@ -48,6 +48,8 @@
       ghostty = true;
       multiplexer = true;
       pi = true;
+      # The consumer installs Claude Code but links no skills for it.
+      claudeSkills = true;
 
       # The consumer owns Codex, Claude, opencode, and the shared agent trees.
       agents = false;
