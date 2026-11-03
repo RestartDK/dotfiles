@@ -53,6 +53,7 @@
       agentSkills = lib.mkEnableOption "shared AI agent skills config";
       codex = lib.mkEnableOption "Codex config";
       claude = lib.mkEnableOption "Claude config";
+      claudeSkills = lib.mkEnableOption "shared AI agent skills linked into ~/.claude/skills";
       opencode = lib.mkEnableOption "OpenCode config";
       pi = lib.mkEnableOption "Pi config";
       macos = lib.mkEnableOption "macOS-specific app config";

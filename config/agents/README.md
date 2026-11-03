@@ -4,7 +4,7 @@ Source of truth for the global agent configuration. Home Manager links these int
 
 | path | deploys to | holds |
 |---|---|---|
-| `skills/` | `~/.agents/skills`, `~/.claude/skills` | every global skill: `dstack` (the bundle), `.system` (Codex system skills), vendor installs, and one directory per authored skill |
+| `skills/` | `~/.agents/skills`, and flat into `~/.claude/skills/<name>` | every global skill: `dstack` (the bundle), `.system` (Codex system skills), vendor installs, and one directory per authored skill |
 | `agents/` | `~/.agents/agents` | worker definitions for delegate sessions |
 | `model-profiles/` | `~/.config/dstack/models.json` | per-profile role policy |
 | `.skill-lock.json` | `~/.agents/.skill-lock.json` | provenance for vendor installs made by `npx skills` |
@@ -12,6 +12,7 @@ Source of truth for the global agent configuration. Home Manager links these int
 ## Rules
 
 - A global skill is a directory with a `SKILL.md`. The only other top-level entries allowed in `skills/` are `dstack` and `.system`.
+- Claude Code only reads `~/.claude/skills/<name>/SKILL.md`, so Home Manager links every top-level skill, every `dstack/<name>`, and every `dstack/skills/<name>` there side by side. Those names must stay unique; activation fails on a collision. `.system` stays Codex-only.
 - Vendor installs are tracked in `.skill-lock.json`. Authored skills are not listed there.
 - Repo-specific skills live in the repo at `<repo>/.agents/skills/`, never here.
 - Agent definitions are real files in `agents/`, not symlinks into the bundle.
