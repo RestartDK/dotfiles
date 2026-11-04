@@ -228,7 +228,6 @@
       privateValues = import inputs.private;
       homeSpecialArgs = {
         inherit inputs;
-        dotfilesInputs = inputs;
         network = privateValues;
       };
       hatchiPkgsModule = {
@@ -615,6 +614,7 @@
               useUserPackages = true;
               backupFileExtension = "hm-backup";
               extraSpecialArgs = homeSpecialArgs;
+              sharedModules = [ { _module.args.dotfilesInputs = inputs; } ];
               users.dkumlin = import ./hosts/srv-nana/home.nix;
             };
           }
@@ -637,6 +637,7 @@
               useUserPackages = true;
               backupFileExtension = "hm-backup";
               extraSpecialArgs = homeSpecialArgs;
+              sharedModules = [ { _module.args.dotfilesInputs = inputs; } ];
               users.danielkumlin = import ./hosts/dkumlin-macbook-pro/home.nix;
             };
           }
@@ -659,6 +660,7 @@
               useUserPackages = true;
               backupFileExtension = "hm-backup";
               extraSpecialArgs = homeSpecialArgs;
+              sharedModules = [ { _module.args.dotfilesInputs = inputs; } ];
               users.danielkumlin = import ./hosts/dkumlin-twin-macbook-pro/home.nix;
             };
           }

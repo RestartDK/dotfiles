@@ -5,7 +5,8 @@
 }:
 let
   cfg = config.my.secrets;
-  consumerPaths = {
+  # Each consumer names the key whose runtime path it writes into a my.* option.
+  consumers = {
     piKeyFile = [
       "my"
       "ai"
@@ -17,30 +18,37 @@ let
       "opencodeKeyFile"
     ];
   };
-  wiring = lib.concatMap (
-    kind:
-    let
-      keyName = cfg.consumers.${kind};
-    in
-    lib.optional (cfg.keys ? ${keyName}) (
-      lib.setAttrByPath (consumerPaths.${kind}
-        or (throw "my.secrets: unknown consumer '${kind}', expected one of ${lib.concatStringsSep ", " (lib.attrNames consumerPaths)}")
-      ) cfg.paths.${keyName}
-    )
-  ) (lib.attrNames cfg.consumers);
+  wiring = lib.concatLists (
+    lib.mapAttrsToList (
+      name: target:
+      let
+        keyName = cfg.consumers.${name};
+      in
+      lib.optional (keyName != null && cfg.keys ? ${keyName}) (
+        lib.setAttrByPath target cfg.paths.${keyName}
+      )
+    ) consumers
+  );
 in
 {
-  options.my.secrets.consumers = lib.mkOption {
-    type = lib.types.attrsOf lib.types.str;
-    default = { };
-    description = "Consumers keyed by kind that read a declared key. piKeyFile and piOpencodeKeyFile point my.ai.openrouterKeyFile and my.ai.opencodeKeyFile at the named key.";
+  options.my.secrets.consumers = {
+    piKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Key whose runtime file my.ai.openrouterKeyFile points at.";
+    };
+    piOpencodeKeyFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Key whose runtime file my.ai.opencodeKeyFile points at.";
+    };
   };
 
   config = {
-    assertions = lib.mapAttrsToList (kind: keyName: {
+    assertions = lib.mapAttrsToList (name: keyName: {
       assertion = cfg.keys ? ${keyName};
-      message = "my.secrets.consumers.${kind} reads undeclared key '${keyName}'";
-    }) cfg.consumers;
+      message = "my.secrets.consumers.${name} reads undeclared key '${keyName}'";
+    }) (lib.filterAttrs (_: keyName: keyName != null) cfg.consumers);
 
     home-manager.users.${cfg.userName} = lib.mkIf (wiring != [ ]) (lib.mkMerge wiring);
   };

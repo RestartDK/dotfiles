@@ -44,9 +44,9 @@ in
     backupFileExtension = "hm-backup";
     extraSpecialArgs = {
       inherit inputs;
-      dotfilesInputs = inputs;
       inherit network;
     };
+    sharedModules = [ { _module.args.dotfilesInputs = inputs; } ];
     users.${config.my.host.userName} = import ./home.nix;
   };
   users.users.root.openssh.authorizedKeys.keys = config.my.host.rootAuthorizedKeys ++ [

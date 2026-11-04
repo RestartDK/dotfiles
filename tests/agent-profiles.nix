@@ -29,7 +29,6 @@ let
           home =
             (inputs.home-manager.lib.homeManagerConfiguration {
               inherit pkgs;
-              extraSpecialArgs.dotfilesInputs = inputs;
               modules = [
                 ../modules/home/live-config-options.nix
                 ../modules/home/shell
