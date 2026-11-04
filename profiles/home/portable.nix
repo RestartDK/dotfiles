@@ -31,8 +31,8 @@
   # The consumer installs its own agent CLIs, and there is no dotfiles checkout
   # here for the checkout tools to operate on.
   my.devTools = {
-    agents = [ ];
-    checkoutTools = [ ];
+    agents.enable = false;
+    checkoutTools.enable = false;
   };
 
   home.enableNixpkgsReleaseCheck = false;

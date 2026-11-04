@@ -21,121 +21,91 @@ let
 in
 {
   options.my.devTools = {
-    cli = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = with pkgs; [
-        eza
-        fd
-        ripgrep
-        fzf
-        direnv
-        bat
-        jq
-        yq
-        btop
-        starship
-        zoxide
-        file
-        unzip
-        gnumake
-        lazygit
-        gh
-        (yazi.override {
-          _7zz = _7zz-rar;
-        })
-      ];
-      description = "Shell and repository CLI tools.";
+    agents.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Install the agent CLIs: agent-browser, codex, claude-code, opencode, and pi.";
     };
-    languages = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = with pkgs; [
-        bun
-        go
-        rustc
-        cargo
-        rust-analyzer
-        rustfmt
-        clippy
-        pkg-config
-        openssl
-        python3
-        uv
-        poetry
-        nodejs
-        pnpm
-        tlaplus
-      ];
-      description = "Language runtimes and compilers.";
-    };
-    editors = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = with pkgs; [
-        neovim
-        tree-sitter
-        nixd
-        nixfmt
-        deadnix
-        statix
-        stylua
-        taplo
-        actionlint
-        shellcheck
-        shfmt
-        oxlint
-        oxfmt
-      ];
-      description = "Editor, formatting, and lint tooling.";
-    };
-    media = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = with pkgs; [
-        ffmpeg
-        _7zz-rar
-        poppler-utils
-        resvg
-        imagemagick
-      ];
-      description = "Media and document tooling.";
-    };
-    agents = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = [
-        llmAgents.agent-browser
-        llmAgents.codex
-        llmAgents.claude-code
-        opencode
-        self.pi
-      ];
-      description = "Agent CLIs installed on this machine.";
-    };
-    repoTools = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = [
-        self.fleet
-        self.agent-desktop
-      ];
-      description = "Repository commands installed on this machine.";
-    };
-    checkoutTools = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = [ self.traitor ];
-      description = "Tools that operate on a dotfiles checkout.";
-    };
-    extra = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
-      default = [ ];
-      description = "Host-specific packages.";
+    checkoutTools.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Install tools that operate on a dotfiles checkout, such as traitor.";
     };
   };
 
+  # Host-specific packages go in the host's own `home.packages`, which merges
+  # with this list.
   config.home.packages =
-    cfg.cli
-    ++ cfg.languages
-    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.gcc ]
-    ++ cfg.editors
-    ++ cfg.media
-    ++ cfg.agents
-    ++ cfg.repoTools
-    ++ cfg.checkoutTools
-    ++ cfg.extra;
+    with pkgs;
+    [
+      eza
+      fd
+      ripgrep
+      fzf
+      direnv
+      bat
+      jq
+      yq
+      btop
+      starship
+      bun
+      go
+      rustc
+      cargo
+      rust-analyzer
+      rustfmt
+      clippy
+      tlaplus
+      pkg-config
+      openssl
+      python3
+      uv
+      poetry
+      lazygit
+      gh
+      (yazi.override {
+        _7zz = _7zz-rar;
+      })
+      file
+      ffmpeg
+      _7zz-rar
+      poppler-utils
+      zoxide
+      resvg
+      imagemagick
+
+      neovim
+      nixd
+      nixfmt
+      deadnix
+      statix
+      actionlint
+      shellcheck
+      shfmt
+      oxlint
+      oxfmt
+      taplo
+      gnumake
+      nodejs
+      pnpm
+      tree-sitter
+      unzip
+      stylua
+
+      self.fleet
+      self.agent-desktop
+    ]
+    ++ lib.optionals stdenv.hostPlatform.isLinux [
+      gcc
+    ]
+    ++ lib.optionals cfg.agents.enable [
+      llmAgents.agent-browser
+      llmAgents.codex
+      llmAgents.claude-code
+      opencode
+      self.pi
+    ]
+    ++ lib.optionals cfg.checkoutTools.enable [
+      self.traitor
+    ];
 }
