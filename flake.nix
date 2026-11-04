@@ -451,6 +451,10 @@
             pkgs = pkgsFor system;
             inherit self inputs;
           };
+          dev-tools = import ./tests/dev-tools.nix {
+            pkgs = pkgsFor system;
+            inherit self inputs;
+          };
           personal-secrets = import ./tests/personal-secrets.nix {
             pkgs = pkgsFor system;
             inherit self inputs privateValues;

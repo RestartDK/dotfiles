@@ -1,17 +1,12 @@
 {
-  dotfilesInputs,
   network,
-  pkgs,
   ...
 }:
 
 {
-  xdg.enable = true;
+  imports = [ ./dev-tools.nix ];
 
-  home.packages = import ./dev-package-list.nix {
-    inherit pkgs;
-    inputs = dotfilesInputs;
-  };
+  xdg.enable = true;
 
   programs.git = {
     enable = true;

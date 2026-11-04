@@ -1,6 +1,4 @@
 {
-  dotfilesInputs,
-  pkgs,
   ...
 }:
 
@@ -9,6 +7,7 @@
     ../../modules/home/groups.nix
     ../../modules/home/cobb-vscode-netns.nix
     ../../modules/home/pi-opencode-netns-wrapper.nix
+    ../../modules/home/dev-tools.nix
   ];
 
   # The consumer owns identity, the AI profile, and the host gate. This module
@@ -29,10 +28,11 @@
     source "${../../config/shell/agent-refresh.zsh}"
   '';
 
-  home.packages = import ../../modules/home/dev-package-list.nix {
-    inherit pkgs;
-    inputs = dotfilesInputs;
-    agentPackageNames = [ ];
+  # The consumer installs its own agent CLIs, and there is no dotfiles checkout
+  # here for the checkout tools to operate on.
+  my.devTools = {
+    agents = [ ];
+    checkoutTools = [ ];
   };
 
   home.enableNixpkgsReleaseCheck = false;
