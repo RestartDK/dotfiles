@@ -10,14 +10,6 @@ let
   cfg = config.my.devTools;
   self = dotfilesInputs.self.packages.${pkgs.stdenv.hostPlatform.system};
   llmAgents = dotfilesInputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
-  # llm-agents installs OpenCode v2 as `opencode2` so it can coexist with v1.
-  # Publish it under the v1 binary name, which every caller here already uses.
-  opencode = pkgs.linkFarm "opencode-${llmAgents.opencode2.version}" [
-    {
-      name = "bin/opencode";
-      path = "${llmAgents.opencode2}/bin/opencode2";
-    }
-  ];
 in
 {
   options.my.devTools = {
@@ -102,7 +94,7 @@ in
       llmAgents.agent-browser
       llmAgents.codex
       llmAgents.claude-code
-      opencode
+      self.opencode
       self.pi
     ]
     ++ lib.optionals cfg.checkoutTools.enable [
