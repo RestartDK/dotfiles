@@ -253,6 +253,9 @@
           inherit fleet traitor;
           repo-exec = pkgs.callPackage ./packages/repo-exec { };
           agent-desktop = pkgs.callPackage ./packages/agent-desktop { };
+          opencode = pkgs.callPackage ./packages/opencode {
+            opencode2 = inputs.llm-agents.packages.${system}.opencode2;
+          };
           ha-devices = mkHaDevicesPackage pkgs;
           deploy-rs = inputs.deploy-rs.packages.${system}.default;
           home-manager = inputs.home-manager.packages.${system}.default;
@@ -448,6 +451,10 @@
                 touch $out
               '';
           agent-profiles = import ./tests/agent-profiles.nix {
+            pkgs = pkgsFor system;
+            inherit self inputs;
+          };
+          dev-tools = import ./tests/dev-tools.nix {
             pkgs = pkgsFor system;
             inherit self inputs;
           };

@@ -102,7 +102,7 @@ High-churn config (Neovim, Pi, agent plugins, terminal config) should generally 
 
 ### Add user packages
 
-- Shared developer/user packages: `modules/home/dev-package-list.nix` or `modules/home/dev-packages.nix`.
+- Shared developer/user packages: `modules/home/dev-tools.nix`, which the dotfiles hosts reach through `modules/home/dev-packages.nix`.
 - Host-specific user packages: the relevant `hosts/<host>/home.nix`.
 - Do not add random host-only tools globally unless Daniel asks.
 
