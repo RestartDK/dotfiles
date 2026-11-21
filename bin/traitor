@@ -20,6 +20,7 @@ Commands:
   nana                   Rebuild srv-nana explicitly
   mac                    Rebuild dkumlin-macbook-pro explicitly
   work-mac               Rebuild dkumlin-twin-macbook-pro explicitly
+  framework              Rebuild dkumlin-framework explicitly
   path                   Print resolved dotfiles path
   help                   Show this help
 
@@ -554,6 +555,9 @@ mac)
   ;;
 work-mac)
   FLAKE_HOST=dkumlin-twin-macbook-pro run_rebuild switch "$@"
+  ;;
+framework)
+  FLAKE_HOST=dkumlin-framework run_rebuild switch "$@"
   ;;
 *)
   echo "traitor: unknown command: $cmd" >&2

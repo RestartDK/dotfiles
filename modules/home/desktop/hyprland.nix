@@ -1,10 +1,13 @@
 {
   lib,
+  osConfig,
   ...
 }:
 
 let
   inherit (lib.generators) mkLuaInline;
+
+  nvidia = lib.elem "nvidia" osConfig.services.xserver.videoDrivers;
 
   exec = command: mkLuaInline ''hl.dsp.exec_cmd("${command}")'';
 
@@ -96,6 +99,8 @@ in
             "24"
           ];
         }
+      ]
+      ++ lib.optionals nvidia [
         {
           _args = [
             "LIBVA_DRIVER_NAME"
@@ -108,6 +113,8 @@ in
             "nvidia"
           ];
         }
+      ]
+      ++ [
         {
           _args = [
             "ELECTRON_OZONE_PLATFORM_HINT"

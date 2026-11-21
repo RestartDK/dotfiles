@@ -52,6 +52,7 @@ let
   offenders = lib.concatMap offendersInHost [
     "srv-nana"
     "srv-hatchi"
+    "dkumlin-framework"
   ];
 
   describe =
