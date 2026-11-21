@@ -10,6 +10,9 @@
     stylix.url = "github:nix-community/stylix/release-26.05";
     stylix.inputs.nixpkgs.follows = "nixpkgs";
 
+    nixos-hardware.url = "github:NixOS/nixos-hardware";
+    nixos-hardware.inputs.nixpkgs.follows = "nixpkgs";
+
     disko.url = "github:nix-community/disko/ff8702b4de27f72b4c78573dfb89ec74e36abdf1";
     disko.inputs.nixpkgs.follows = "nixpkgs";
     nixos-anywhere.url = "github:nix-community/nixos-anywhere/9df41112343713520ba071674cf8e45e91c25845";
@@ -616,6 +619,28 @@
               backupFileExtension = "hm-backup";
               extraSpecialArgs = homeSpecialArgs;
               users.dkumlin = import ./hosts/srv-nana/home.nix;
+            };
+          }
+        ];
+      };
+
+      nixosConfigurations.dkumlin-framework = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        specialArgs = {
+          inherit inputs;
+          network = privateValues;
+        };
+        modules = [
+          ./hosts/dkumlin-framework
+          inputs.stylix.nixosModules.stylix
+          home-manager.nixosModules.home-manager
+          {
+            home-manager = {
+              useGlobalPkgs = true;
+              useUserPackages = true;
+              backupFileExtension = "hm-backup";
+              extraSpecialArgs = homeSpecialArgs;
+              users.dkumlin = import ./hosts/dkumlin-framework/home.nix;
             };
           }
         ];
